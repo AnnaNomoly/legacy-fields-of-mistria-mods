@@ -81,8 +81,11 @@ static const char* const GML_SCRIPT_DESERIALIZE_INVENTORY = "gml_Script_deserial
 static const char* const GML_SCRIPT_GET_TREASURE_FROM_DISTRIBUTION = "gml_Script_get_treasure_from_distribution";
 static const char* const GML_SCRIPT_CRAFTING_MENU_INITIALIZE = "gml_Script_initialize@CraftingMenu@CraftingMenu";
 static const char* const GML_SCRIPT_CRAFTING_MENU_CLOSE = "gml_Script_on_close@CraftingMenu@CraftingMenu";
+static const char* const GML_SCRIPT_JOURNAL_MENU_INITIALIZE = "gml_Script_initialize@JournalMenu@JournalMenu";
+static const char* const GML_SCRIPT_JOURNAL_MENU_CLOSE = "gml_Script_on_close@JournalMenu@JournalMenu";
 static const char* const GML_SCRIPT_VERTIGO_DRAW_WITH_COLOR = "gml_Script_vertigo_draw_with_color";
 static const char* const GML_SCRIPT_SCENE_AUDIO_PLAYER_PLAY = "gml_Script_play@SceneAudioPlayer@SceneAudioPlayer";
+static const char* const GML_SCRIPT_FIND_NPC_BLIP_NOISE = "gml_Script_find_npc_blip_noise";
 static const char* const GML_SCRIPT_SAVE_GAME = "gml_Script_save_game";
 static const char* const DISABLE_DUNGEON_LIFT_JSON_KEY = "disable_dungeon_lift"; // Controls the dungeon lift
 static const char* const RESTRICT_PERKS_JSON_KEY = "restrict_perks"; // Determines if perks are restricted in the dungeon
@@ -1494,6 +1497,7 @@ static bool localize_mod_text = false;
 static bool game_is_active = false;
 static bool unlock_recipes = true;
 static bool crafting_menu_open = false;
+static bool journal_menu_open = false;
 static bool drop_biome_reward = false;
 static bool biome_reward_disabled = false;
 static bool dread_beast_configured = false;
@@ -3946,6 +3950,11 @@ void ModifySaplingAttackPatterns(RValue monster, int monster_id)
 			g_ModuleInterface->CallBuiltin("array_set", { windup, 1, 1 }); // 55
 			StructVariableSet(config_clone, "windup", windup);
 
+			if (monster_id == monster_name_to_id_map["sapling_pink"])
+			{
+				StructVariableSet(config_clone, "hyper_armor", 3);
+			}
+
 			StructVariableSet(monster, "config", config_clone);
 			StructVariableSet(monster, "__deep_dungeon__custom_attack_pattern", 0);
 		}
@@ -4213,9 +4222,7 @@ void ModifyTomeAttackPatterns(RValue monster)
 			StructVariableSet(config_clone, "steering", 0.8); // 0.6
 			StructVariableSet(config_clone, "charge_up_time", 1); // 100
 			StructVariableSet(config_clone, "idle_override_len", 1); // 60
-			//StructVariableSet(config_clone, "on_hit_knockback", 0); // 6
 			StructVariableSet(config_clone, "wind_attack_duration", 60); // 135
-			//StructVariableSet(config_clone, "get_up_attack_radius", 128); // 64
 			StructVariableSet(config_clone, "stun_star_duration", 1); // 60
 			StructVariableSet(config_clone, "stun_blink_duration", 1); // 180
 			StructVariableSet(config_clone, "blink_timing", 1); // 60
@@ -4236,17 +4243,14 @@ void ModifyRockStackAttackPatterns(RValue monster)
 			RValue config = monster.GetMember("config");
 			RValue config_clone = g_ModuleInterface->CallBuiltin("variable_clone", { config });
 
-			StructVariableSet(config_clone, "damage", 1);//config_clone.GetMember("damage").ToDouble() * 2);
+			StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
 			StructVariableSet(config_clone, "speed", 10); // 1.5
 			StructVariableSet(config_clone, "aggro_radius", 624); // 256
 			StructVariableSet(config_clone, "air_speed", 10); // 1.25
 			StructVariableSet(config_clone, "air_speed_starting", 10); // 0
-			//StructVariableSet(config_clone, "air_speed_acceleration", 0.25); // 0.02
 			StructVariableSet(config_clone, "air_speed_max", 10); // 0.02
 			StructVariableSet(config_clone, "rising_duration", 10); // 30
-			//StructVariableSet(config_clone, "fall_acceleration", 0.6); // 0.3
 			StructVariableSet(config_clone, "fall_speed", 15); // 5 // 1
-			//StructVariableSet(config_clone, "whistle_frame", 400); // 100
 			StructVariableSet(config_clone, "hop_threshold", 9999); // 48
 
 			RValue fell_stall = g_ModuleInterface->CallBuiltin("array_create", { 2 });
@@ -4278,59 +4282,21 @@ void ModifyGriffinStatueAttackPatterns(RValue monster)
 		if (StructVariableExists(monster, "config"))
 		{
 			RValue config = monster.GetMember("config");
-
-			//==========================================================================
-			if (config.m_Kind == VALUE_OBJECT)
-			{
-				g_ModuleInterface->Print(CM_AQUA, "config:");
-				struct_field_names = {};
-				g_ModuleInterface->EnumInstanceMembers(config, GetStructFieldNames);
-				for (int j = 0; j < struct_field_names.size(); j++)
-				{
-					std::string field_name = struct_field_names[j];
-					RValue field = *config.GetRefMember(field_name);
-					if (field.m_Kind == VALUE_OBJECT)
-					{
-						g_ModuleInterface->Print(CM_AQUA, "%s: OBJECT", field_name.c_str());
-						g_ModuleInterface->EnumInstanceMembers(field, EnumFunction);
-						g_ModuleInterface->Print(CM_WHITE, "------------------------------");
-					}
-					else if (field.m_Kind == VALUE_ARRAY)
-					{
-						RValue array_length = g_ModuleInterface->CallBuiltin("array_length", { field });
-						g_ModuleInterface->Print(CM_AQUA, "%s: ARRAY (length == %d)", field_name.c_str(), static_cast<int>(array_length.m_Real));
-						for (int k = 0; k < array_length.m_Real; k++)
-						{
-							//INT64 == 956
-							RValue array_element = g_ModuleInterface->CallBuiltin("array_get", { field, k });
-							int temp = 5;
-						}
-					}
-					else if (field.m_Kind == VALUE_INT32)
-						g_ModuleInterface->Print(CM_AQUA, "%s: INT32 == %d", field_name.c_str(), field.m_i32);
-					else if (field.m_Kind == VALUE_INT64)
-						g_ModuleInterface->Print(CM_AQUA, "%s: INT64 == %d", field_name.c_str(), field.m_i64);
-					else if (field.m_Kind == VALUE_REAL)
-						g_ModuleInterface->Print(CM_AQUA, "%s: REAL == %f", field_name.c_str(), field.m_Real);
-					else if (field.m_Kind == VALUE_BOOL)
-						g_ModuleInterface->Print(CM_AQUA, "%s: BOOL == %s", field_name.c_str(), field.m_Real == 0 ? "false" : "true");
-					else if (field.m_Kind == VALUE_STRING)
-						g_ModuleInterface->Print(CM_AQUA, "%s: STRING == %s", field_name.c_str(), field.ToString().c_str());
-					else if (field.m_Kind == VALUE_REF)
-						g_ModuleInterface->Print(CM_AQUA, "%s: REFERENCE", field_name.c_str());
-					else if (field.m_Kind == VALUE_NULL)
-						g_ModuleInterface->Print(CM_AQUA, "%s: NULL", field_name.c_str());
-					else if (field.m_Kind == VALUE_UNDEFINED)
-						g_ModuleInterface->Print(CM_AQUA, "%s: UNDEFINED", field_name.c_str());
-					else if (field.m_Kind == VALUE_UNSET)
-						g_ModuleInterface->Print(CM_AQUA, "%s: UNSET", field_name.c_str());
-					else
-						g_ModuleInterface->Print(CM_AQUA, "%s: OTHER", field_name.c_str());
-				}
-			}
-			//==========================================================================
-
 			RValue config_clone = g_ModuleInterface->CallBuiltin("variable_clone", { config });
+
+			StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+			StructVariableSet(config_clone, "aggro_radius", 624); // 360
+			StructVariableSet(config_clone, "speed", 10); // 0.6
+			StructVariableSet(config_clone, "stomp_frames", 24); // 6
+			StructVariableSet(config_clone, "bonus_damage", 13); // 5
+			StructVariableSet(config_clone, "tumble_hit_reduction", 0.4); // 0.75
+			StructVariableSet(config_clone, "tumble_hit_speed_reduction", 10); // 1
+			StructVariableSet(config_clone, "tumble_hit_speed", 10); // 6
+			StructVariableSet(config_clone, "tumble_spd_reduction", 0.4); // 0.2
+			StructVariableSet(config_clone, "move_speed", 3); // NOTE: use 5 or 10 for boss fights
+			StructVariableSet(config_clone, "chase_rate", 5); // 20
+			StructVariableSet(config_clone, "jump_speed_gain", 1); // 0.25
+			StructVariableSet(config_clone, "gravity_gain", 1); // 0.25
 
 			StructVariableSet(monster, "config", config_clone);
 			StructVariableSet(monster, "__deep_dungeon__custom_attack_pattern", 0);
@@ -4346,15 +4312,15 @@ void ModifyDreadBeastAttackPatterns(bool is_boss_battle, RValue monster)
 	if (monster_id == monster_name_to_id_map["stalagmite"] || monster_id == monster_name_to_id_map["stalagmite_green"] || monster_id == monster_name_to_id_map["stalagmite_purple"])
 		ModifyStalagmiteAttackPatterns(is_boss_battle, monster);
 	if (monster_id == monster_name_to_id_map["sapling"] || monster_id == monster_name_to_id_map["sapling_cool"] || monster_id == monster_name_to_id_map["sapling_blue"] || monster_id == monster_name_to_id_map["sapling_purple"] || monster_id == monster_name_to_id_map["sapling_orange"] || monster_id == monster_name_to_id_map["sapling_pink"])
-		ModifySaplingAttackPatterns(monster, monster_id); // TODO: Make sure sapling pink is working
+		ModifySaplingAttackPatterns(monster, monster_id);
 	if (monster_id == monster_name_to_id_map["mushroom"] || monster_id == monster_name_to_id_map["mushroom_green"] || monster_id == monster_name_to_id_map["mushroom_blue"] || monster_id == monster_name_to_id_map["mushroom_purple"])
 		ModifyShroomAttackPatterns(monster);
 	if (monster_id == monster_name_to_id_map["enchantern"] || monster_id == monster_name_to_id_map["enchantern_blue"])
 		ModifyEnchanternAttackPatterns(monster);
 	if (monster_id == monster_name_to_id_map["spirit"] || monster_id == monster_name_to_id_map["spirit_purple"])
-		ModifySpiritAttackPatterns(monster, monster_id); // TODO: Make the purple one behave like the red one?
+		ModifySpiritAttackPatterns(monster, monster_id);
 	if (monster_id == monster_name_to_id_map["cat"] || monster_id == monster_name_to_id_map["cat_void"])
-		ModifyCatAttackPatterns(monster, monster_id); // TODO
+		ModifyCatAttackPatterns(monster, monster_id);
 	if (monster_id == monster_name_to_id_map["bat"] || monster_id == monster_name_to_id_map["bat_blue"])
 		ModifyBatAttackPatterns(monster);
 	if (monster_id == monster_name_to_id_map["tome"])
@@ -4891,6 +4857,20 @@ RValue GetDynamicItemSprite(int item_id)
 
 RValue GetDynamicUiSprite(std::string sprite_name)
 {
+	// OnDungeonRoomStart Conversation Sprite Overrides
+	if (!journal_menu_open) // floor_start_time == current_time_in_seconds
+	{
+		// Priestess Portrait Replacement
+		if (sprite_name.contains("spr_portrait_seridia") && !sprite_name.contains("flashback"))
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_portrait_seridia_flashback_priestess_closed_eyes" });
+		// Heart Insert Icon Conversation Replacement
+		else if (sprite_name == "spr_ui_dialogue_namebar_heartinsert")
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_dialogue_namebar_circleinsert" });
+		// Heart & Circle Icon Conversation Replacement
+		else if (sprite_name.contains("spr_ui_dialogue_heart_") || sprite_name.contains("spr_ui_dialogue_circle_"))
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_dialogue_circle_purple" });
+	}
+
 	// Full Restore (Spell Icon)
 	if (sprite_name == "spr_ui_journal_magic_restore_spell_icon_main")
 	{
@@ -5345,7 +5325,7 @@ void SpawnDreadBeast(CInstance* Self, CInstance* Other)
 			possible_dread_beast_monsters = { "rockclod_green", "sapling_purple", "mushroom_blue", "stalagmite_green", "bat_blue" };
 		else if (floor_number < 80)
 			possible_dread_beast_monsters = { "rockclod_red", "sapling_orange", "mushroom_purple", "stalagmite_purple", "spirit", "cat" };
-		else // TODO: Make sure this is all Ruins monster variants
+		else
 			possible_dread_beast_monsters = { "sapling_pink", "spirit_purple", "cat_void", "rock_stack", "tome", "griffin_statue" }; // TODO: "rockclod_purple" if/when implemented
 
 		std::uniform_int_distribution<size_t> random_dread_beast_distribution(0, possible_dread_beast_monsters.size() - 1);
@@ -5369,6 +5349,7 @@ void SelectDreadBeast(CInstance* Self, CInstance* Other)
 	initial_floor_monsters.erase(std::remove(initial_floor_monsters.begin(), initial_floor_monsters.end(), monster_name_to_id_map["rock_stack_lava"]), initial_floor_monsters.end());
 	initial_floor_monsters.erase(std::remove(initial_floor_monsters.begin(), initial_floor_monsters.end(), monster_name_to_id_map["sapling_orange_mini"]), initial_floor_monsters.end());
 	initial_floor_monsters.erase(std::remove(initial_floor_monsters.begin(), initial_floor_monsters.end(), monster_name_to_id_map["silverclod"]), initial_floor_monsters.end());
+	initial_floor_monsters.erase(std::remove(initial_floor_monsters.begin(), initial_floor_monsters.end(), monster_name_to_id_map["rockclod_purple"]), initial_floor_monsters.end()); // TODO: don't remove if/when implemented (MONSTER NOT IMPLEMENTED)
 
 	if (initial_floor_monsters.size() > 0)
 	{
@@ -5959,6 +5940,7 @@ void ResetStaticFields(bool returned_to_title_screen)
 	}
 
 	crafting_menu_open = false;
+	journal_menu_open = false;
 	drop_biome_reward = false;
 	biome_reward_disabled = false;
 	dread_beast_configured = false;
@@ -6826,7 +6808,10 @@ RValue& GmlScriptSpawnMonsterCallback(
 			int activation_threshold = 100;
 			for (int i = 0; i < sigil_of_silence_count; i++)
 			{
-				activation_threshold /= 3;
+				if(ari_current_gm_room == "rm_mines_ruins_arena3")
+					activation_threshold /= 5;
+				else
+					activation_threshold /= 3;
 			}
 
 			bool activate = false;
@@ -6836,6 +6821,7 @@ RValue& GmlScriptSpawnMonsterCallback(
 				activate = true;
 
 			sigil_of_silence_count++;
+
 			if (activate)
 				return Result;
 		}
@@ -8067,6 +8053,12 @@ RValue& GmlScriptGetLocalizerCallback(
 
 	if (game_is_active)
 	{
+		if (AriCurrentGmRoomIsDungeonFloor() && Arguments[0]->ToString() == "npcs/seridia/name")
+		{
+			Result = RValue("Priestess");
+			return Result;
+		}
+
 		// Orbs
 		// TODO: Other orbs when added
 		if (crafting_menu_open && (Arguments[0]->ToString() == TIDE_CAVERNS_ORB_DESCRIPTION_LOCALIZED_TEXT_KEY || Arguments[0]->ToString() == DEEP_EARTH_ORB_DESCRIPTION_LOCALIZED_TEXT_KEY || Arguments[0]->ToString() == LAVA_CAVES_ORB_DESCRIPTION_LOCALIZED_TEXT_KEY))
@@ -8355,7 +8347,7 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 	dread_beast_monster_id = -1;
 	dread_beasts_configured = 0;
 	boss_monsters_configured = 0;
-	if (active_offerings.empty())
+	if (active_offerings.empty() && ari_current_gm_room != "rm_mines_entry" && ari_current_gm_room != "rm_priestess_quarters" && !ari_current_gm_room.contains("seal") && !ari_current_gm_room.contains("ritual") && !ari_current_gm_room.contains("treasure"))
 	{
 		static thread_local std::mt19937 random_generator(std::random_device{}());
 		std::uniform_int_distribution<size_t> zero_to_ninety_nine_distribution(0, 99);
@@ -8400,7 +8392,7 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 	if (CountEquippedClassArmor()[Classes::ROGUE] > 0)
 		active_sigils.insert(Sigils::CONCEALMENT);
 
-	if (ari_current_gm_room != "rm_mines_entry" && !ari_current_gm_room.contains("seal") && !ari_current_gm_room.contains("ritual") && !ari_current_gm_room.contains("treasure"))
+	if (ari_current_gm_room != "rm_mines_entry" && ari_current_gm_room != "rm_priestess_quarters" && !ari_current_gm_room.contains("seal") && !ari_current_gm_room.contains("ritual") && !ari_current_gm_room.contains("treasure"))
 	{
 		GenerateFloorTraps();
 
@@ -9071,6 +9063,48 @@ RValue& GmlScriptCraftingMenuCloseCallback(
 	return Result;
 }
 
+RValue& GmlScriptJournalMenuInitializeCallback(
+	IN CInstance* Self,
+	IN CInstance* Other,
+	OUT RValue& Result,
+	IN int ArgumentCount,
+	IN RValue** Arguments
+)
+{
+	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_JOURNAL_MENU_INITIALIZE));
+	original(
+		Self,
+		Other,
+		Result,
+		ArgumentCount,
+		Arguments
+	);
+
+	journal_menu_open = true;
+	return Result;
+}
+
+RValue& GmlScriptJournalMenuCloseCallback(
+	IN CInstance* Self,
+	IN CInstance* Other,
+	OUT RValue& Result,
+	IN int ArgumentCount,
+	IN RValue** Arguments
+)
+{
+	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_JOURNAL_MENU_CLOSE));
+	original(
+		Self,
+		Other,
+		Result,
+		ArgumentCount,
+		Arguments
+	);
+
+	journal_menu_open = false;
+	return Result;
+}
+
 RValue& GmlScriptVertigoDrawWithColorCallback(
 	IN CInstance* Self,
 	IN CInstance* Other,
@@ -9116,7 +9150,7 @@ RValue& GmlScriptSceneAudioPlayerPlayCallback(
 	if (!script_name_to_reference_map.contains(GML_SCRIPT_SCENE_AUDIO_PLAYER_PLAY))
 		script_name_to_reference_map[GML_SCRIPT_SCENE_AUDIO_PLAYER_PLAY] = { Self, Other };
 
-	if (game_is_active && configuration.randomize_dungeon_music && AriCurrentGmRoomIsDungeonFloor())
+	if (game_is_active && configuration.randomize_dungeon_music && AriCurrentGmRoomIsDungeonFloor() && floor_number != 91)
 	{
 		static thread_local std::mt19937 random_generator(std::random_device{}());
 		std::uniform_int_distribution<size_t> game_music_distribution(0, MUSIC_INTERNAL_NAMES.size() - 1);
@@ -9132,6 +9166,33 @@ RValue& GmlScriptSceneAudioPlayerPlayCallback(
 		Arguments
 	);
 
+	return Result;
+}
+
+RValue& GmlScriptFindNpcBlipNoiseCallback(
+	IN CInstance* Self,
+	IN CInstance* Other,
+	OUT RValue& Result,
+	IN int ArgumentCount,
+	IN RValue** Arguments
+)
+{
+	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_FIND_NPC_BLIP_NOISE));
+	original(
+		Self,
+		Other,
+		Result,
+		ArgumentCount,
+		Arguments
+	);
+
+	if (AriCurrentGmRoomIsDungeonFloor())
+	{
+		std::string audio_asset_name = Result.ToString();
+		if (audio_asset_name == "SoundEffects/NPCs/Vocal/TextBlipSeridiaHuman" || audio_asset_name == "SoundEffects/NPCs/Vocal/TextBlipPriestess")
+			Result = "SoundEffects/NPCs/Vocal/TextBlipHeadPriestess";
+	}
+	
 	return Result;
 }
 
@@ -9915,7 +9976,7 @@ void CreateHookGmlScriptGetEquipmentBonusFrom(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_EQUIPMENT_BONUS_FROM);
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_EQUIPMENT_BONUS_FROM);
 	}
 
 	status = MmCreateHook(
@@ -9928,7 +9989,7 @@ void CreateHookGmlScriptGetEquipmentBonusFrom(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_EQUIPMENT_BONUS_FROM);
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_EQUIPMENT_BONUS_FROM);
 	}
 }
 
@@ -9942,7 +10003,7 @@ void CreateHookGmlScriptHudShouldShow(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_HUD_SHOULD_SHOW);
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_HUD_SHOULD_SHOW);
 	}
 
 	status = MmCreateHook(
@@ -9955,7 +10016,7 @@ void CreateHookGmlScriptHudShouldShow(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_HUD_SHOULD_SHOW);
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_HUD_SHOULD_SHOW);
 	}
 }
 
@@ -9969,7 +10030,7 @@ void CreateHookGmlScriptOnDrawGui(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ON_DRAW_GUI);
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ON_DRAW_GUI);
 	}
 
 	status = MmCreateHook(
@@ -9982,7 +10043,7 @@ void CreateHookGmlScriptOnDrawGui(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ON_DRAW_GUI);
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ON_DRAW_GUI);
 	}
 }
 
@@ -9996,7 +10057,7 @@ void CreateHookGmlScriptDisplayResize(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_DISPLAY_RESIZE);
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_DISPLAY_RESIZE);
 	}
 
 	status = MmCreateHook(
@@ -10009,7 +10070,7 @@ void CreateHookGmlScriptDisplayResize(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_DISPLAY_RESIZE);
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_DISPLAY_RESIZE);
 	}
 }
 
@@ -10023,7 +10084,7 @@ void CreateHookGmlScriptGetUiIcon(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_ITEM_UI_ICON);
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_ITEM_UI_ICON);
 	}
 
 	status = MmCreateHook(
@@ -10036,7 +10097,7 @@ void CreateHookGmlScriptGetUiIcon(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_ITEM_UI_ICON);
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_ITEM_UI_ICON);
 	}
 }
 
@@ -10050,7 +10111,7 @@ void CreateHookGmlScriptUpdateToolbarMenu(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_UPDATE_TOOLBAR_MENU);
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_UPDATE_TOOLBAR_MENU);
 	}
 
 	status = MmCreateHook(
@@ -10063,7 +10124,7 @@ void CreateHookGmlScriptUpdateToolbarMenu(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_UPDATE_TOOLBAR_MENU);
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_UPDATE_TOOLBAR_MENU);
 	}
 }
 
@@ -10256,6 +10317,60 @@ void CreateHookGmlScriptCraftingMenuClose(AurieStatus& status)
 	}
 }
 
+void CreateHookGmlScriptJournalMenuInitialize(AurieStatus& status)
+{
+	CScript* gml_script_journal_menu_initialize = nullptr;
+	status = g_ModuleInterface->GetNamedRoutinePointer(
+		GML_SCRIPT_JOURNAL_MENU_INITIALIZE,
+		(PVOID*)&gml_script_journal_menu_initialize
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_JOURNAL_MENU_INITIALIZE);
+	}
+
+	status = MmCreateHook(
+		g_ArSelfModule,
+		GML_SCRIPT_JOURNAL_MENU_INITIALIZE,
+		gml_script_journal_menu_initialize->m_Functions->m_ScriptFunction,
+		GmlScriptJournalMenuInitializeCallback,
+		nullptr
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_JOURNAL_MENU_INITIALIZE);
+	}
+}
+
+void CreateHookGmlScriptJournalMenuClose(AurieStatus& status)
+{
+	CScript* gml_script_journal_menu_close = nullptr;
+	status = g_ModuleInterface->GetNamedRoutinePointer(
+		GML_SCRIPT_JOURNAL_MENU_CLOSE,
+		(PVOID*)&gml_script_journal_menu_close
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_JOURNAL_MENU_CLOSE);
+	}
+
+	status = MmCreateHook(
+		g_ArSelfModule,
+		GML_SCRIPT_JOURNAL_MENU_CLOSE,
+		gml_script_journal_menu_close->m_Functions->m_ScriptFunction,
+		GmlScriptJournalMenuCloseCallback,
+		nullptr
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_JOURNAL_MENU_CLOSE);
+	}
+}
+
 void CreateHookGmlScriptVertigoDrawWithColor(AurieStatus& status)
 {
 	CScript* gml_script_vertigo_draw_with_color = nullptr;
@@ -10310,6 +10425,33 @@ void CreateHookGmlScriptSceneAudioPlayerPlay(AurieStatus& status)
 	}
 }
 
+void CreateHookGmlScriptFindNpcBlipNoise(AurieStatus& status)
+{
+	CScript* gml_script_find_npc_blip_noise = nullptr;
+	status = g_ModuleInterface->GetNamedRoutinePointer(
+		GML_SCRIPT_FIND_NPC_BLIP_NOISE,
+		(PVOID*)&gml_script_find_npc_blip_noise
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_FIND_NPC_BLIP_NOISE);
+	}
+
+	status = MmCreateHook(
+		g_ArSelfModule,
+		GML_SCRIPT_FIND_NPC_BLIP_NOISE,
+		gml_script_find_npc_blip_noise->m_Functions->m_ScriptFunction,
+		GmlScriptFindNpcBlipNoiseCallback,
+		nullptr
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_FIND_NPC_BLIP_NOISE);
+	}
+}
+
 void CreateHookGmlScriptSaveGame(AurieStatus& status)
 {
 	CScript* gml_script_save_game = nullptr;
@@ -10320,7 +10462,7 @@ void CreateHookGmlScriptSaveGame(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SAVE_GAME);
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SAVE_GAME);
 	}
 
 	status = MmCreateHook(
@@ -10333,7 +10475,7 @@ void CreateHookGmlScriptSaveGame(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SAVE_GAME);
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SAVE_GAME);
 	}
 }
 
@@ -10347,7 +10489,7 @@ void CreateHookGmlScriptGetUnifiedTime(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_UNIFIED_TIME);
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_UNIFIED_TIME);
 	}
 
 	status = MmCreateHook(
@@ -10360,7 +10502,7 @@ void CreateHookGmlScriptGetUnifiedTime(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_UNIFIED_TIME);
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_UNIFIED_TIME);
 	}
 }
 
@@ -10372,8 +10514,6 @@ EXPORTED AurieStatus ModuleInitialize(
 	UNREFERENCED_PARAMETER(ModulePath);
 
 	AurieStatus status = AURIE_SUCCESS;
-
-	Sigils x = Sigils::RAGE;
 
 	status = ObGetInterface(
 		"YYTK_Main",
@@ -10665,6 +10805,20 @@ EXPORTED AurieStatus ModuleInitialize(
 		return status;
 	}
 
+	CreateHookGmlScriptJournalMenuInitialize(status);
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return status;
+	}
+
+	CreateHookGmlScriptJournalMenuClose(status);
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return status;
+	}
+
 	CreateHookGmlScriptVertigoDrawWithColor(status);
 	if (!AurieSuccess(status))
 	{
@@ -10673,6 +10827,13 @@ EXPORTED AurieStatus ModuleInitialize(
 	}
 
 	CreateHookGmlScriptSceneAudioPlayerPlay(status);
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return status;
+	}
+
+	CreateHookGmlScriptFindNpcBlipNoise(status);
 	if (!AurieSuccess(status))
 	{
 		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
