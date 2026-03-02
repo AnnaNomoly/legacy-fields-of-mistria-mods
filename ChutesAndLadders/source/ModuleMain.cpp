@@ -17,6 +17,7 @@ static const std::string LADDER_SPAWNED_LOCALIZATION_KEY = "mods/ChutesAndLadder
 static const std::string LADDER_NOT_SPAWNED_LOCALIZATION_KEY = "mods/ChutesAndLadders/ladder_not_spawned";
 static const std::string INVALID_LOCATION_LOCALIZATION_KEY = "mods/ChutesAndLadders/invalid_location";
 static const std::string LOST_TO_HISTORY_PERK_NAME = "lost_to_history";
+static const char* const GML_SCRIPT_MOVE_ARI = "gml_Script_move_ari";
 static const char* const GML_SCRIPT_SPAWN_LADDER = "gml_Script_spawn_ladder@DungeonRunner@DungeonRunner";
 static const char* const GML_SCRIPT_CREATE_NOTIFICATION = "gml_Script_create_notification";
 static const char* const GML_SCRIPT_ON_ROOM_START = "gml_Script_on_room_start@WeatherManager@Weather";
@@ -853,24 +854,24 @@ RValue& GmlScriptOnRoomStartCallback(
 		RValue layer_exists = g_ModuleInterface->CallBuiltin("layer_exists", { "Impl_Ritual" });
 		if (RValueAsBool(layer_exists))
 		{
-			RValue obj_dungeon_ritual_altar_index = g_ModuleInterface->CallBuiltin("asset_get_index", { "obj_dungeon_ritual_altar" });
-			double x = 192.0;
-			double y = 224.0;
-			std::string layer_name = "Impl_Ritual";
-			g_ModuleInterface->CallBuiltin("instance_create_layer", { x, y, RValue(layer_name), obj_dungeon_ritual_altar_index });
+			//RValue obj_dungeon_ritual_altar_index = g_ModuleInterface->CallBuiltin("asset_get_index", { "obj_dungeon_ritual_altar" });
+			//double x = 192.0;
+			//double y = 224.0;
+			//std::string layer_name = "Impl_Ritual";
+			//g_ModuleInterface->CallBuiltin("instance_create_layer", { x, y, RValue(layer_name), obj_dungeon_ritual_altar_index });
 			create_ritual_altar = false;
 			
 			// Meteor fall prep
 			meteor_fall = true;
 
-			RValue spr_mines_level3_lavabubbles_1 = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_mines_level3_lavabubbles_1" });
-			RValue spr_mines_level3_lavabubbles_2 = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_mines_level3_lavabubbles_2" });
-			RValue spr_mines_level3_lavabubbles_3 = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_mines_level3_lavabubbles_3" });
-			RValue spr_meteor_effect = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_meteor_effect" });
+			//RValue spr_mines_level3_lavabubbles_1 = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_mines_level3_lavabubbles_1" });
+			//RValue spr_mines_level3_lavabubbles_2 = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_mines_level3_lavabubbles_2" });
+			//RValue spr_mines_level3_lavabubbles_3 = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_mines_level3_lavabubbles_3" });
+			//RValue spr_meteor_effect = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_meteor_effect" });
 
-			g_ModuleInterface->CallBuiltin("sprite_assign", { spr_mines_level3_lavabubbles_1, spr_meteor_effect });
-			g_ModuleInterface->CallBuiltin("sprite_assign", { spr_mines_level3_lavabubbles_2, spr_meteor_effect });
-			g_ModuleInterface->CallBuiltin("sprite_assign", { spr_mines_level3_lavabubbles_3, spr_meteor_effect });
+			//g_ModuleInterface->CallBuiltin("sprite_assign", { spr_mines_level3_lavabubbles_1, spr_meteor_effect });
+			//g_ModuleInterface->CallBuiltin("sprite_assign", { spr_mines_level3_lavabubbles_2, spr_meteor_effect });
+			//g_ModuleInterface->CallBuiltin("sprite_assign", { spr_mines_level3_lavabubbles_3, spr_meteor_effect });
 
 			// spr_debris
 			//RValue spr_rain_splash = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_rain_splash" });
@@ -952,11 +953,17 @@ RValue& GmlScriptOnBeginStepCallback(
 	IN RValue** Arguments
 )
 {
-	if (meteors.size() == 5 && meteors[4].is_active)
+	if (meteors.size() == 1 && meteors[0].is_active)
 	{
-		RValue spr_circle_aoe = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_circle_aoe_32px" }); // "spr_circle_aoe"
-		g_ModuleInterface->CallBuiltin("variable_instance_set", { meteors[4].instance, "sprite_index", spr_circle_aoe });
+		RValue dragons_gaze = g_ModuleInterface->CallBuiltin("asset_get_index", { "dragons_gaze" });
+		g_ModuleInterface->CallBuiltin("variable_instance_set", { meteors[0].instance, "sprite_index", dragons_gaze });
 	}
+
+	//if (meteors.size() == 5 && meteors[4].is_active)
+	//{
+	//	RValue spr_circle_aoe = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_circle_aoe_32px" }); // "spr_circle_aoe"
+	//	g_ModuleInterface->CallBuiltin("variable_instance_set", { meteors[4].instance, "sprite_index", spr_circle_aoe });
+	//}
 
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_ON_BEGIN_STEP));
 	original(
@@ -1061,61 +1068,70 @@ RValue& GmlScriptGetMinutesCallback(
 		int current_time_in_seconds = time.ToInt64();
 
 		// TESTING - DEBUG
-		// obj_signpost
-		// 192, 160
 		RValue instance_layer_exists = g_ModuleInterface->CallBuiltin("layer_exists", { "Instances" });
 		if (instance_layer_exists.ToBoolean())
 		{
 			if (meteors.size() == 0)
 			{
-				RValue obj_lavabubble = g_ModuleInterface->CallBuiltin("asset_get_index", { "obj_lavabubble" }); // "obj_lavabubble"
-				double x = 192.0 + 8;
-				double y = 160.0 + 8;
-				RValue instance = g_ModuleInterface->CallBuiltin("instance_create_layer", { x, y, RValue("Instances"), obj_lavabubble });
-				
-				Meteor meteor = Meteor(x, y, current_time_in_seconds, 600, true, instance);
-				meteors.push_back(meteor);
-			}
-			else if (meteors.size() == 1 && current_time_in_seconds >= meteors[0].spawned_time + 150)
-			{
-				RValue obj_lavabubble = g_ModuleInterface->CallBuiltin("asset_get_index", { "obj_lavabubble" }); // "obj_lavabubble"
-				double x = 272.0 + 8;
-				double y = 240.0 + 8;
-				RValue instance = g_ModuleInterface->CallBuiltin("instance_create_layer", { x, y, RValue("Instances"), obj_lavabubble });
-
-				Meteor meteor = Meteor(x, y, current_time_in_seconds, 600, true, instance);
-				meteors.push_back(meteor);
-			}
-			else if (meteors.size() == 2 && current_time_in_seconds >= meteors[1].spawned_time + 150)
-			{
-				RValue obj_lavabubble = g_ModuleInterface->CallBuiltin("asset_get_index", { "obj_lavabubble" }); // "obj_lavabubble"
-				double x = 192.0 + 8;
-				double y = 304.0 + 8;
-				RValue instance = g_ModuleInterface->CallBuiltin("instance_create_layer", { x, y, RValue("Instances"), obj_lavabubble });
-
-				Meteor meteor = Meteor(x, y, current_time_in_seconds, 600, true, instance);
-				meteors.push_back(meteor);
-			}
-			else if (meteors.size() == 3 && current_time_in_seconds >= meteors[2].spawned_time + 150)
-			{
-				RValue obj_lavabubble = g_ModuleInterface->CallBuiltin("asset_get_index", { "obj_lavabubble" }); // "obj_lavabubble"
-				double x = 128.0 + 8;
-				double y = 240.0 + 8;
-				RValue instance = g_ModuleInterface->CallBuiltin("instance_create_layer", { x, y, RValue("Instances"), obj_lavabubble });
-
-				Meteor meteor = Meteor(x, y, current_time_in_seconds, 600, true, instance);
-				meteors.push_back(meteor);
-			}
-			else if (meteors.size() == 4 && current_time_in_seconds >= meteors[3].spawned_time + 150)
-			{
-				RValue obj_lavabubble = g_ModuleInterface->CallBuiltin("asset_get_index", { "obj_lavabubble" }); // "obj_lavabubble"
+				RValue obj_lavabubble = g_ModuleInterface->CallBuiltin("asset_get_index", { "obj_assetobject" }); // "obj_lavabubble"
 				double x = 192.0 + 8;
 				double y = 240.0 + 8;
 				RValue instance = g_ModuleInterface->CallBuiltin("instance_create_layer", { x, y, RValue("Instances"), obj_lavabubble });
 
-				Meteor meteor = Meteor(x, y, current_time_in_seconds, 1800, true, instance);
+				Meteor meteor = Meteor(x, y, current_time_in_seconds, 600, true, instance);
 				meteors.push_back(meteor);
 			}
+
+			//if (meteors.size() == 0)
+			//{
+			//	RValue obj_lavabubble = g_ModuleInterface->CallBuiltin("asset_get_index", { "obj_lavabubble" }); // "obj_lavabubble"
+			//	double x = 192.0 + 8;
+			//	double y = 160.0 + 8;
+			//	RValue instance = g_ModuleInterface->CallBuiltin("instance_create_layer", { x, y, RValue("Instances"), obj_lavabubble });
+			//	
+			//	Meteor meteor = Meteor(x, y, current_time_in_seconds, 600, true, instance);
+			//	meteors.push_back(meteor);
+			//}
+			//else if (meteors.size() == 1 && current_time_in_seconds >= meteors[0].spawned_time + 150)
+			//{
+			//	RValue obj_lavabubble = g_ModuleInterface->CallBuiltin("asset_get_index", { "obj_lavabubble" }); // "obj_lavabubble"
+			//	double x = 272.0 + 8;
+			//	double y = 240.0 + 8;
+			//	RValue instance = g_ModuleInterface->CallBuiltin("instance_create_layer", { x, y, RValue("Instances"), obj_lavabubble });
+
+			//	Meteor meteor = Meteor(x, y, current_time_in_seconds, 600, true, instance);
+			//	meteors.push_back(meteor);
+			//}
+			//else if (meteors.size() == 2 && current_time_in_seconds >= meteors[1].spawned_time + 150)
+			//{
+			//	RValue obj_lavabubble = g_ModuleInterface->CallBuiltin("asset_get_index", { "obj_lavabubble" }); // "obj_lavabubble"
+			//	double x = 192.0 + 8;
+			//	double y = 304.0 + 8;
+			//	RValue instance = g_ModuleInterface->CallBuiltin("instance_create_layer", { x, y, RValue("Instances"), obj_lavabubble });
+
+			//	Meteor meteor = Meteor(x, y, current_time_in_seconds, 600, true, instance);
+			//	meteors.push_back(meteor);
+			//}
+			//else if (meteors.size() == 3 && current_time_in_seconds >= meteors[2].spawned_time + 150)
+			//{
+			//	RValue obj_lavabubble = g_ModuleInterface->CallBuiltin("asset_get_index", { "obj_lavabubble" }); // "obj_lavabubble"
+			//	double x = 128.0 + 8;
+			//	double y = 240.0 + 8;
+			//	RValue instance = g_ModuleInterface->CallBuiltin("instance_create_layer", { x, y, RValue("Instances"), obj_lavabubble });
+
+			//	Meteor meteor = Meteor(x, y, current_time_in_seconds, 600, true, instance);
+			//	meteors.push_back(meteor);
+			//}
+			//else if (meteors.size() == 4 && current_time_in_seconds >= meteors[3].spawned_time + 150)
+			//{
+			//	RValue obj_lavabubble = g_ModuleInterface->CallBuiltin("asset_get_index", { "obj_lavabubble" }); // "obj_lavabubble"
+			//	double x = 192.0 + 8;
+			//	double y = 240.0 + 8;
+			//	RValue instance = g_ModuleInterface->CallBuiltin("instance_create_layer", { x, y, RValue("Instances"), obj_lavabubble });
+
+			//	Meteor meteor = Meteor(x, y, current_time_in_seconds, 1800, true, instance);
+			//	meteors.push_back(meteor);
+			//}
 
 			//RValue sprite = g_ModuleInterface->CallBuiltin(
 			//	"asset_get_index",
