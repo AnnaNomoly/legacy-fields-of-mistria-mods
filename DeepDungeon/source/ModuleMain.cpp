@@ -108,6 +108,11 @@ static const char* const CURSED_ARMOR_DROP_CHANCE_MODIFIER_JSON_KEY = "cursed_ar
 static const char* const SOUL_STONE_DROP_CHANCE_JSON_KEY = "soul_stone_drop_chance"; // Controls soul stone drop rate
 static const char* const LIFT_KEY_DROP_CHANCE_JSON_KEY = "lift_key_drop_chance"; // Controls lift key drop rates
 static const char* const ENABLE_BOSS_FIGHT_RESTRICTIONS_JSON_KEY = "enable_boss_fight_restrictions"; // Controls if sigils and spells are restricted during boss fights
+static const char* const CONFUSING_TRAP_DURATION_SECONDS_JSON_KEY = "confusing_trap_duration_seconds"; // Controls the duration in seconds for confusing traps
+static const char* const DISORIENTING_TRAP_DURATION_SECONDS_JSON_KEY = "disorienting_trap_duration_seconds"; // Controls the duration in seconds for disorienting traps
+static const char* const EXPLODING_TRAP_DAMAGE_PERCENT_JSON_KEY = "exploding_trap_damage_percent"; // Controls the health percentage damage for exploding traps
+static const char* const INHIBITING_TRAP_DURATION_SECONDS_JSON_KEY = "inhibiting_trap_duration_seconds"; // Controls the duration in seconds for inhibiting traps
+static const char* const LURING_TRAP_MONSTER_SPAWN_COUNT_JSON_KEY = "luring_trap_monster_spawn_count"; // Controls the number of monsters spawned for luring traps
 static const std::string SIGIL_OF_ALTERATION_NAME = "sigil_of_alteration";
 static const std::string SIGIL_OF_CONCEALMENT_NAME = "sigil_of_concealment";
 static const std::string SIGIL_OF_FORTIFICATION_NAME = "sigil_of_fortification";
@@ -1245,46 +1250,56 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 640 + 8, 320 + 8 },
 		{ 608 + 8, 608 + 8 },
 	}},
-	//{ "", {
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//}},
-	//{ "", {
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//}},
-	//{ "", {
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//}},
-	//{ "", {
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//}},
-	//{ "", {
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//}},
+	{ "rm_mines_ruins_basic1", {
+		{ 432 + 8, 224 + 8 },
+		{ 528 + 8, 208 + 8 },
+		{ 224 + 8, 544 + 8 },
+		{ 400 + 8, 528 + 8 },
+		{ 480 + 8, 384 + 8 },
+		{ 480 + 8, 608 + 8 },
+		{ 592 + 8, 512 + 8 },
+		{ 704 + 8, 528 + 8 },
+	}},
+	{ "rm_mines_ruins_85", {
+		{ 576 + 8, 192 + 8 },
+		{ 320 + 8, 560 + 8 },
+		{ 448 + 8, 528 + 8 },
+		{ 480 + 8, 384 + 8 },
+		{ 592 + 8, 352 + 8 },
+		{ 688 + 8, 384 + 8 },
+		{ 672 + 8, 528 + 8 },
+		{ 848 + 8, 528 + 8 },
+	}},
+	{ "rm_mines_ruins_large_switch", {
+		{ 480 + 8, 176 + 8 },
+		{ 448 + 8, 400 + 8 },
+		{ 496 + 8, 544 + 8 },
+		{ 640 + 8, 544 + 8 },
+		{ 720 + 8, 304 + 8 },
+		{ 784 + 8, 544 + 8 },
+		{ 832 + 8, 256 + 8 },
+		{ 880 + 8, 480 + 8 },
+	}},
+	{ "rm_mines_ruins_81", {
+		{ 176 + 8, 304 + 8 },
+		{ 272 + 8, 352 + 8 },
+		{ 448 + 8, 336 + 8 },
+		{ 544 + 8, 352 + 8 },
+		{ 608 + 8, 400 + 8 },
+		{ 704 + 8, 336 + 8 },
+		{ 880 + 8, 304 + 8 },
+		{ 960 + 8, 352 + 8 },
+	}},
+	{ "rm_mines_ruins_95", {
+		{ 576 + 8, 192 + 8 },
+		{ 304 + 8, 528 + 8 },
+		{ 448 + 8, 544 + 8 },
+		{ 560 + 8, 496 + 8 },
+		{ 608 + 8, 416 + 8 },
+		{ 720 + 8, 544 + 8 },
+		{ 864 + 8, 512 + 8 },
+		{ 576 + 8, 656 + 8 },
+	}},
 	//{ "", {
 	//	{ 0 + 8, 0 + 8 },
 	//	{ 0 + 8, 0 + 8 },
