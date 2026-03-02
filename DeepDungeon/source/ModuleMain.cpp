@@ -1447,11 +1447,18 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 	//}},
 };
 
+// TODO: Add new songs when updated
 static const std::vector<std::string> MUSIC_INTERNAL_NAMES = {
+	"Music/Crystal Tracks/BarleyMoon",
+	"Music/Crystal Tracks/CrystalCaves",
+	"Music/Crystal Tracks/PinkTwintails",
 	"Music/Events/DragonCutscene",
+	"Music/Events/LightAndShadow",
 	"Music/Events/SharedLight",
+	"Music/Events/ShootingStarNight",
 	"Music/Events/TheSeal",
 	"Music/Events/ThemeOfDarkness",
+	"Music/Events/TsukihotaruFinale",
 	"Music/Location Tracks/AnimalFestival",
 	"Music/Location Tracks/Bathhouse",
 	"Music/Location Tracks/Blacksmith",
@@ -1466,27 +1473,35 @@ static const std::vector<std::string> MUSIC_INTERNAL_NAMES = {
 	"Music/Location Tracks/MinesEntry",
 	"Music/Location Tracks/Player Home/Day",
 	"Music/Location Tracks/Player Home/Night",
+	"Music/Location Tracks/SeridiaVoidRoom",
 	"Music/Location Tracks/ShootingStarFestival",
 	"Music/Location Tracks/SpringFestival",
+	"Music/Location Tracks/TheFinalSeal",
+	"Music/Location Tracks/VoidSeal",
+	"Music/Menu Tracks/Tsukihotaru",
 	"Music/Npc Tracks/Adeline",
 	"Music/Npc Tracks/Balor",
-	"Music/Npc Tracks/Caldarus/Caldarus",
-	"Music/Npc Tracks/Celine/Celine",
+	"Music/Npc Tracks/Caldarus",
+	"Music/Npc Tracks/Celine",
 	"Music/Npc Tracks/Eiland",
 	"Music/Npc Tracks/Hayden",
 	"Music/Npc Tracks/Juniper",
 	"Music/Npc Tracks/March",
 	"Music/Npc Tracks/Reina",
 	"Music/Npc Tracks/Ryis",
+	"Music/Npc Tracks/Seridia",
 	"Music/Npc Tracks/Valen",
 	"Music/Playlists/MinesDeepEarth",
 	"Music/Playlists/MinesLavaCaves",
 	"Music/Playlists/MinesTideCaverns",
 	"Music/Playlists/MinesUpper",
+	"Music/Playlists/MinesRuins",
 	"Music/Playlists/Spring",
+	"Music/Playlists/Spring Rain",
 	"Music/Playlists/Summer",
 	"Music/Playlists/Fall",
 	"Music/Playlists/Winter",
+	"Music/Playlists/Winter Snow"
 };
 
 static YYTKInterface* g_ModuleInterface = nullptr;
@@ -4204,7 +4219,6 @@ void ModifyBatAttackPatterns(RValue monster)
 	}
 }
 
-// TODO
 void ModifyTomeAttackPatterns(RValue monster)
 {
 	RValue custom_attack_pattern_exists = g_ModuleInterface->CallBuiltin("struct_exists", { monster, "__deep_dungeon__custom_attack_pattern" });
