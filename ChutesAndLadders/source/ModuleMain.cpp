@@ -17,16 +17,21 @@ static const std::string LADDER_SPAWNED_LOCALIZATION_KEY = "mods/ChutesAndLadder
 static const std::string LADDER_NOT_SPAWNED_LOCALIZATION_KEY = "mods/ChutesAndLadders/ladder_not_spawned";
 static const std::string INVALID_LOCATION_LOCALIZATION_KEY = "mods/ChutesAndLadders/invalid_location";
 static const std::string LOST_TO_HISTORY_PERK_NAME = "lost_to_history";
+static const char* const GML_SCRIPT_GET_MAX_HEALTH = "gml_Script_get_max_health@Ari@Ari";
+static const char* const GML_SCRIPT_GET_HEALTH = "gml_Script_get_health@Ari@Ari";
+static const char* const GML_SCRIPT_SET_HEALTH = "gml_Script_set_health@Ari@Ari";
+static const char* const GML_SCRIPT_MODIFY_HEALTH = "gml_Script_modify_health@Ari@Ari";
 static const char* const GML_SCRIPT_MOVE_ARI = "gml_Script_move_ari";
 static const char* const GML_SCRIPT_SPAWN_LADDER = "gml_Script_spawn_ladder@DungeonRunner@DungeonRunner";
 static const char* const GML_SCRIPT_CREATE_NOTIFICATION = "gml_Script_create_notification";
+static const char* const GML_SCRIPT_ARI_FACE_DIR = "gml_Script_face_dir@gml_Object_obj_ari_Create_0";
 static const char* const GML_SCRIPT_ON_ROOM_START = "gml_Script_on_room_start@WeatherManager@Weather";
 static const char* const GML_SCRIPT_GET_WEATHER = "gml_Script_get_weather@WeatherManager@Weather";
 static const char* const GML_SCRIPT_SETUP_MAIN_SCREEN = "gml_Script_setup_main_screen@TitleMenu@TitleMenu";
 static const char* const GML_SCRIPT_ON_BEGIN_STEP = "gml_Script_on_begin_step@Anchor@Anchor";
 static const char* const GML_SCRIPT_ON_DRAW_GUI = "gml_Script_on_draw_gui@Display@Display";
 static const char* const GML_SCRIPT_GET_MINUTES = "gml_Script_update@Clock@Clock";
-static const char* const GML_SCRIPT_ERROR = "gml_Script_error";
+static const char* const GML_SCRIPT_CHECK_VALUE = "gml_Script_check_value@Input@Input";
 static const char* const GML_SCRIPT_GO_TO_ROOM = "gml_Script_goto_gm_room";
 static const int DEFAULT_RITUAL_CHAMBER_ADDITIONAL_SPAWN_CHANCE = 0;
 static const bool DEFAULT_SPAWN_LADDER_AT_PLAYER_POSITION = true;
@@ -161,7 +166,9 @@ static std::string activation_button = DEFAULT_ACTIVATION_BUTTON;
 static std::string ari_current_gm_room = "";
 static int ari_x = -1;
 static int ari_y = -1;
+static double ari_facing_dir = -1;
 static bool teleport_ari = false;
+static double meteor_sprite_speed = 0.7;
 static bool ari_is_teleporting = false;
 static bool create_ritual_altar = false;
 static bool meteor_fall = false;
@@ -172,7 +179,12 @@ static std::map<std::string, bool> active_perk_map = {};
 static std::map<std::string, int> location_name_to_id_map = {};
 static std::map<std::string, int64_t> perk_name_to_id_map = {};
 static std::map<std::string, uint64_t> notification_name_to_last_display_time_map = {};
+static std::map<std::string, std::vector<CInstance*>> script_name_to_reference_map; // Vector<CInstance*> holds references to Self and Other for each script.
 
+static enum class Trap {
+	GAZE,
+	METEOR
+};
 static struct Meteor {
 	int x;
 	int y;
@@ -180,6 +192,7 @@ static struct Meteor {
 	int duration;
 	bool is_active;
 	RValue instance;
+	Trap trap;
 };
 static std::vector<Meteor> meteors = {};
 
@@ -259,6 +272,52 @@ void LoadLocationIds()
 
 	if (location_name_to_id_map.size() == 0)
 		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to load location IDs!", MOD_NAME, VERSION);
+}
+
+std::pair<int, int> GetVector(int x1, int y1, int x2, int y2)
+{
+	return { x2 - x1, y2 - y1 };
+}
+
+double GetDistance(int x1, int y1, int x2, int y2)
+{
+	return std::sqrt(std::pow(x2 - x1, 2) + std::pow(y2 - y1, 2));
+}
+
+int CalculateMeteorDamage(double distance)
+{
+	const double lethalRadius = 32.0;
+	const double maxDistance = 256.0;
+
+	if (distance <= lethalRadius)
+		return 100;
+
+	if (distance >= maxDistance)
+		return 1;
+
+	// Normalize distance outside lethal zone
+	double t = (distance - lethalRadius) / (maxDistance - lethalRadius);
+
+	// Exponential falloff (adjust exponent for feel)
+	const double exponent = 2.5;
+	double damage = 100.0f * std::pow(1.0f - t, exponent);
+
+	return max(1, static_cast<int>(damage));
+}
+
+bool FacingTrap(int ariX, int ariY, int trapX, int trapY)
+{
+	static constexpr double PI = 3.14159265358979323846;
+
+	std::pair<int, int> v = GetVector(ariX, ariY, trapX, trapY);
+	double rad = ari_facing_dir * PI / 180.0;
+
+	double forwardX = cos(rad);
+	double forwardY = -sin(rad);
+
+	float dot = forwardX * v.first + forwardY * v.second;
+	bool inFrontHalfPlane = dot >= 0.0f;
+	return inFrontHalfPlane;
 }
 
 uint64_t GetCurrentSystemTime() {
@@ -679,6 +738,47 @@ void CreateOrLoadConfigFile()
 	}
 }
 
+void ModifyHealth(CInstance* Self, CInstance* Other, int value)
+{
+	CScript* gml_script_modify_health = nullptr;
+	g_ModuleInterface->GetNamedRoutinePointer(
+		GML_SCRIPT_MODIFY_HEALTH,
+		(PVOID*)&gml_script_modify_health
+	);
+
+	RValue result;
+	RValue health_modifier = value;
+	RValue* health_modifier_ptr = &health_modifier;
+
+	gml_script_modify_health->m_Functions->m_ScriptFunction(
+		Self,
+		Other,
+		result,
+		1,
+		{ &health_modifier_ptr }
+	);
+}
+
+RValue GetMaxHealth(CInstance* Self, CInstance* Other)
+{
+	CScript* gml_script_get_max_health = nullptr;
+	g_ModuleInterface->GetNamedRoutinePointer(
+		GML_SCRIPT_GET_MAX_HEALTH,
+		(PVOID*)&gml_script_get_max_health
+	);
+
+	RValue result;
+	gml_script_get_max_health->m_Functions->m_ScriptFunction(
+		Self,
+		Other,
+		result,
+		0,
+		nullptr
+	);
+
+	return result;
+}
+
 void CreateNotification(std::string notification_localization_str, CInstance* Self, CInstance* Other)
 {
 	uint64_t current_system_time = GetCurrentSystemTime();
@@ -783,6 +883,12 @@ void ObjectCallback(
 
 	if (game_is_active)
 	{
+		CInstance* global_instance = nullptr;
+		g_ModuleInterface->GetGlobalInstance(&global_instance);
+
+		if (!script_name_to_reference_map.contains("obj_ari"))
+			script_name_to_reference_map["obj_ari"] = { global_instance->GetRefMember("__ari")->ToInstance(), self };
+
 		// Track player position.
 		RValue x;
 		g_ModuleInterface->GetBuiltin("x", self, NULL_INDEX, x);
@@ -793,14 +899,33 @@ void ObjectCallback(
 		ari_y = y.ToDouble();
 
 		// Track active perks.
-		CInstance* global_instance = nullptr;
-		g_ModuleInterface->GetGlobalInstance(&global_instance);
-
-		if (PerkActive(global_instance->GetMember("__ari").ToInstance(), self, LOST_TO_HISTORY_PERK_NAME))
-			active_perk_map[LOST_TO_HISTORY_PERK_NAME] = true;
-		else
-			active_perk_map[LOST_TO_HISTORY_PERK_NAME] = false;
+		//if (PerkActive(global_instance->GetMember("__ari").ToInstance(), self, LOST_TO_HISTORY_PERK_NAME))
+		active_perk_map[LOST_TO_HISTORY_PERK_NAME] = true;
+		//else
+		//	active_perk_map[LOST_TO_HISTORY_PERK_NAME] = false;
 	}
+}
+
+RValue& GmlScriptAriFaceDirCallback(
+	IN CInstance* Self,
+	IN CInstance* Other,
+	OUT RValue& Result,
+	IN int ArgumentCount,
+	IN RValue** Arguments
+)
+{
+	ari_facing_dir = Arguments[0]->ToDouble();
+
+	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_ARI_FACE_DIR));
+	original(
+		Self,
+		Other,
+		Result,
+		ArgumentCount,
+		Arguments
+	);
+
+	return Result;
 }
 
 RValue& GmlScriptOnRoomStartCallback(
@@ -921,7 +1046,12 @@ RValue& GmlScriptSetupMainScreenCallback(
 	create_ritual_altar = false;
 	ari_x = -1;
 	ari_y = -1;
+	ari_facing_dir = -1;
 	active_perk_map = {};
+	meteors.clear();
+	meteor_fall = false;
+	meteor_sprite_speed = 0.7;
+	script_name_to_reference_map = {};
 
 	if (load_on_start)
 	{
@@ -953,11 +1083,37 @@ RValue& GmlScriptOnBeginStepCallback(
 	IN RValue** Arguments
 )
 {
-	if (meteors.size() == 1 && meteors[0].is_active)
+	for (int i = 0; i < meteors.size(); i++)
 	{
-		RValue dragons_gaze = g_ModuleInterface->CallBuiltin("asset_get_index", { "dragons_gaze" });
-		g_ModuleInterface->CallBuiltin("variable_instance_set", { meteors[0].instance, "sprite_index", dragons_gaze });
+		if (meteors[i].is_active)
+		{
+			if (meteors[i].trap == Trap::GAZE)
+			{
+				RValue spr_trap_gaze = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_trap_gaze" });
+				g_ModuleInterface->CallBuiltin("variable_instance_set", { meteors[i].instance, "sprite_index", spr_trap_gaze });
+				g_ModuleInterface->CallBuiltin("variable_instance_set", { meteors[i].instance, "image_speed", 1.0 });
+			}
+			else if (meteors[i].trap == Trap::METEOR)
+			{
+				RValue spr_trap_meteor = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_trap_meteor" });
+				g_ModuleInterface->CallBuiltin("variable_instance_set", { meteors[i].instance, "sprite_index", spr_trap_meteor });
+				g_ModuleInterface->CallBuiltin("variable_instance_set", { meteors[i].instance, "image_speed", meteor_sprite_speed });
+			}
+		}
 	}
+
+	//if (meteors.size() >= 1 && meteors[0].is_active)
+	//{
+	//	if(meteors[0].trap == Trap::GAZE)
+	//		
+	//	else if
+	//	
+	//}
+	//else if (meteors.size() >= 2 && meteors[1].is_active)
+	//{
+	//	RValue spr_trap_meteor = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_trap_meteor" });
+	//	g_ModuleInterface->CallBuiltin("variable_instance_set", { meteors[0].instance, "sprite_index", spr_trap_meteor });
+	//}
 
 	//if (meteors.size() == 5 && meteors[4].is_active)
 	//{
@@ -1014,20 +1170,20 @@ RValue& GmlScriptOnDrawGuiCallback(
 		{
 			if (meteors[i].is_active)
 			{
-				if(i <= 3)
-					g_ModuleInterface->CallBuiltin("variable_instance_set", { meteors[i].instance, "image_speed", 1.0});
-				//else
+				//if(meteors[i].trap == Trap::GAZE)
+				//	g_ModuleInterface->CallBuiltin("variable_instance_set", { meteors[i].instance, "image_speed", 1.0});
+				//if (meteors[i].trap == Trap::METEOR)
 				//	g_ModuleInterface->CallBuiltin("variable_instance_set", { meteors[i].instance, "image_speed", 0.35});
 			}
 		}
 
-		for (Meteor meteor : meteors)
-		{
-			if (meteor.is_active)
-			{
-				
-			}
-		}
+		//for (Meteor meteor : meteors)
+		//{
+		//	if (meteor.is_active)
+		//	{
+		//		
+		//	}
+		//}
 	}
 
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_ON_DRAW_GUI));
@@ -1073,12 +1229,22 @@ RValue& GmlScriptGetMinutesCallback(
 		{
 			if (meteors.size() == 0)
 			{
-				RValue obj_lavabubble = g_ModuleInterface->CallBuiltin("asset_get_index", { "obj_assetobject" }); // "obj_lavabubble"
+				RValue obj_assetobject = g_ModuleInterface->CallBuiltin("asset_get_index", { "obj_assetobject" }); // "obj_lavabubble"
 				double x = 192.0 + 8;
-				double y = 240.0 + 8;
-				RValue instance = g_ModuleInterface->CallBuiltin("instance_create_layer", { x, y, RValue("Instances"), obj_lavabubble });
+				double y = 144.0 + 8;
+				RValue instance = g_ModuleInterface->CallBuiltin("instance_create_layer", { x, y, RValue("Instances"), obj_assetobject });
 
-				Meteor meteor = Meteor(x, y, current_time_in_seconds, 600, true, instance);
+				Meteor meteor = Meteor(x, y, current_time_in_seconds, 600, true, instance, Trap::GAZE);
+				meteors.push_back(meteor);
+			}
+			if (meteors.size() == 1)
+			{
+				RValue obj_assetobject = g_ModuleInterface->CallBuiltin("asset_get_index", { "obj_assetobject" }); // "obj_lavabubble"
+				double x = 192.0 + 8;
+				double y = 352.0 + 8;
+				RValue instance = g_ModuleInterface->CallBuiltin("instance_create_layer", { x, y, RValue("Instances"), obj_assetobject });
+
+				Meteor meteor = Meteor(x, y, current_time_in_seconds, 600, true, instance, Trap::METEOR);
 				meteors.push_back(meteor);
 			}
 
@@ -1144,17 +1310,33 @@ RValue& GmlScriptGetMinutesCallback(
 			//);
 		}
 
-		for (Meteor meteor : meteors)
+		for (Meteor& meteor : meteors)
 		{
 			if (meteor.is_active && current_time_in_seconds >= meteor.spawned_time + meteor.duration)
 			{
 				meteor.is_active = false;
 
+				if (meteor.trap == Trap::METEOR)
+				{
+					double distance = GetDistance(ari_x, ari_y, meteor.x, meteor.y);
+					double modifier = CalculateMeteorDamage(distance) / 100.0;
+
+					double adjusted_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToDouble() * modifier;
+					ModifyHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], -1 * adjusted_health);
+				}
+
+				if (meteor.trap == Trap::GAZE)
+				{
+					bool facing_trap = FacingTrap(ari_x, ari_y, meteor.x, meteor.y);
+					if (facing_trap)
+						CreateNotification("mods/ExamplePlugin/gaze/pass", Self, Other);
+					else
+						CreateNotification("mods/ExamplePlugin/gaze/fail", Self, Other);
+				}
+
 				RValue meteor_instance_exists = g_ModuleInterface->CallBuiltin("instance_exists", { meteor.instance } );
 				if (meteor_instance_exists.ToBoolean())
-				{
 					g_ModuleInterface->CallBuiltin("instance_destroy", { meteor.instance } );
-				}
 			}
 		}
 	}
@@ -1170,24 +1352,25 @@ RValue& GmlScriptErrorCallback(
 	IN RValue** Arguments
 )
 {
-	std::string error = Arguments[0]->ToString();
-	if (error == "Failed to spawn a ladder in the dungeon!")
-	{
-		return Result;
-	}
-	else
-	{
-		const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_ERROR));
-		original(
-			Self,
-			Other,
-			Result,
-			ArgumentCount,
-			Arguments
-		);
+	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_CHECK_VALUE));
+	original(
+		Self,
+		Other,
+		Result,
+		ArgumentCount,
+		Arguments
+	);
 
-		return Result;
-	}
+
+	//if (game_is_active)
+	//{
+	//	if (Arguments[0]->ToInt64() == 3)
+	//		Result = true;
+	//	else
+	//		Result = false;
+	//}
+
+	return Result;
 }
 
 RValue& GmlScriptGoToRoomCallback(
@@ -1258,6 +1441,33 @@ void CreateObjectCallback(AurieStatus& status)
 	if (!AurieSuccess(status))
 	{
 		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook (EVENT_OBJECT_CALL)!", MOD_NAME, VERSION);
+	}
+}
+
+void CreateHookGmlScriptAriFaceDir(AurieStatus& status)
+{
+	CScript* gml_script_ari_face_dir = nullptr;
+	status = g_ModuleInterface->GetNamedRoutinePointer(
+		GML_SCRIPT_ARI_FACE_DIR,
+		(PVOID*)&gml_script_ari_face_dir
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ARI_FACE_DIR);
+	}
+
+	status = MmCreateHook(
+		g_ArSelfModule,
+		GML_SCRIPT_ARI_FACE_DIR,
+		gml_script_ari_face_dir->m_Functions->m_ScriptFunction,
+		GmlScriptAriFaceDirCallback,
+		nullptr
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ARI_FACE_DIR);
 	}
 }
 
@@ -1429,18 +1639,18 @@ void CreateHookGmlScriptError(AurieStatus& status)
 {
 	CScript* gml_script_error = nullptr;
 	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_ERROR,
+		GML_SCRIPT_CHECK_VALUE,
 		(PVOID*)&gml_script_error
 	);
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ERROR);
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_CHECK_VALUE);
 	}
 
 	status = MmCreateHook(
 		g_ArSelfModule,
-		GML_SCRIPT_ERROR,
+		GML_SCRIPT_CHECK_VALUE,
 		gml_script_error->m_Functions->m_ScriptFunction,
 		GmlScriptErrorCallback,
 		nullptr
@@ -1448,7 +1658,7 @@ void CreateHookGmlScriptError(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ERROR);
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_CHECK_VALUE);
 	}
 }
 
@@ -1495,6 +1705,13 @@ EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path&
 	g_ModuleInterface->Print(CM_LIGHTAQUA, "[%s %s] - Plugin starting...", MOD_NAME, VERSION);
 	
 	CreateObjectCallback(status);
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return status;
+	}
+
+	CreateHookGmlScriptAriFaceDir(status);
 	if (!AurieSuccess(status))
 	{
 		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
