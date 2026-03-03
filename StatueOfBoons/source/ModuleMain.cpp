@@ -9,7 +9,7 @@ using namespace YYTK;
 using json = nlohmann::json;
 
 static const char* const MOD_NAME = "StatueOfBoons";
-static const char* const VERSION = "1.1.2";
+static const char* const VERSION = "2.0.0";
 static const char* const MANA_COST_KEY = "mana_cost"; // Used in mod config file
 static const char* const ESSENCE_COST_KEY = "essence_cost"; // Used in mod config file
 static const char* const PREVIOUS_BOONS_LIMIT_KEY = "previous_boons_limit"; // Used in mod config file
@@ -104,6 +104,7 @@ static const int DEFAULT_PREVIOUS_BOONS_LIMIT = 7;
 
 static YYTKInterface* g_ModuleInterface = nullptr;
 static CInstance* global_instance = nullptr;
+static AurieStatus status = AURIE_SUCCESS;
 static bool load_on_start = true;
 static bool game_is_active = false;
 static bool once_per_save_load = true;
@@ -304,11 +305,11 @@ void LoadObjectIds(CInstance* Self, CInstance* Other)
 			{ &object_id_ptr }
 		);
 
-		if (result.m_Kind == VALUE_STRING)
+		if (result.IsString()) // switch to type checking methods in v5
 			object_id_to_name_map[i] = result.ToString();
 	}
 
-	g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Loaded %d objects!", MOD_NAME, VERSION, static_cast<int>(object_id_to_name_map.size()));
+	DbgPrintEx(LOG_SEVERITY_TRACE, "[%s %s] - Loaded %d objects!", MOD_NAME, VERSION, static_cast<int>(object_id_to_name_map.size()));
 }
 
 void LoadObjectItemData()
@@ -522,7 +523,7 @@ void PrintError(std::exception_ptr eptr)
 		}
 	}
 	catch (const std::exception& e) {
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Error: %s", MOD_NAME, VERSION, e.what());
+		DbgPrintEx(LOG_SEVERITY_ERROR, "[%s %s] - Error: %s", MOD_NAME, VERSION, e.what());
 	}
 }
 
@@ -543,11 +544,11 @@ void WriteModSaveFile()
 			std::ofstream out_stream(mod_folder + "\\" + save_prefix + ".json");
 			out_stream << std::setw(4) << mod_save_data << std::endl;
 			out_stream.close();
-			g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Successfully saved the mod file!", MOD_NAME, VERSION);
+			DbgPrintEx(LOG_SEVERITY_INFO, "[%s %s] - Successfully saved the mod file!", MOD_NAME, VERSION);
 		}
 		catch (...)
 		{
-			g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - An error occurred writing the mod file.", MOD_NAME, VERSION);
+			DbgPrintEx(LOG_SEVERITY_ERROR, "[%s %s] - An error occurred writing the mod file.", MOD_NAME, VERSION);
 
 			eptr = std::current_exception();
 			PrintError(eptr);
@@ -568,12 +569,12 @@ void ReadModSaveFile()
 			previous_boons = mod_save_data[PREVIOUS_BOONS_KEY];
 			dragon_fairy_location = mod_save_data[DRAGON_FAIRY_LOCATION_KEY];
 			dragon_fairy_caught = mod_save_data[DRAGON_FAIRY_CAUGHT_KEY];
-			g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Successfully loaded the mod file!", MOD_NAME, VERSION);
+			DbgPrintEx(LOG_SEVERITY_INFO, "[%s %s] - Successfully loaded the mod file!", MOD_NAME, VERSION);
 		}
 	}
 	catch (...)
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - An error occurred reading the mod file.", MOD_NAME, VERSION);
+		DbgPrintEx(LOG_SEVERITY_ERROR, "[%s %s] - An error occurred reading the mod file.", MOD_NAME, VERSION);
 
 		eptr = std::current_exception();
 		PrintError(eptr);
@@ -596,9 +597,9 @@ void LogDefaultConfigValues()
 	essence_cost = DEFAULT_ESSENCE_COST;
 	previous_boons_limit = DEFAULT_PREVIOUS_BOONS_LIMIT;
 
-	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Using DEFAULT \"%s\" value: %d!", MOD_NAME, VERSION, MANA_COST_KEY, DEFAULT_MANA_COST);
-	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Using DEFAULT \"%s\" value: %d!", MOD_NAME, VERSION, ESSENCE_COST_KEY, DEFAULT_ESSENCE_COST);
-	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Using DEFAULT \"%s\" value: %d!", MOD_NAME, VERSION, PREVIOUS_BOONS_LIMIT_KEY, DEFAULT_PREVIOUS_BOONS_LIMIT);
+	DbgPrintEx(LOG_SEVERITY_WARNING, "[%s %s] - Using DEFAULT \"%s\" value: %d!", MOD_NAME, VERSION, MANA_COST_KEY, DEFAULT_MANA_COST);
+	DbgPrintEx(LOG_SEVERITY_WARNING, "[%s %s] - Using DEFAULT \"%s\" value: %d!", MOD_NAME, VERSION, ESSENCE_COST_KEY, DEFAULT_ESSENCE_COST);
+	DbgPrintEx(LOG_SEVERITY_WARNING, "[%s %s] - Using DEFAULT \"%s\" value: %d!", MOD_NAME, VERSION, PREVIOUS_BOONS_LIMIT_KEY, DEFAULT_PREVIOUS_BOONS_LIMIT);
 }
 
 void CreateOrLoadModConfigFile()
@@ -612,7 +613,7 @@ void CreateOrLoadModConfigFile()
 		std::string mod_data_folder = current_dir + "\\mod_data";
 		if (!std::filesystem::exists(mod_data_folder))
 		{
-			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - The \"mod_data\" directory was not found. Creating directory: %s", MOD_NAME, VERSION, mod_data_folder.c_str());
+			DbgPrintEx(LOG_SEVERITY_WARNING, "[%s %s] - The \"mod_data\" directory was not found. Creating directory: %s", MOD_NAME, VERSION, mod_data_folder.c_str());
 			std::filesystem::create_directory(mod_data_folder);
 		}
 
@@ -620,7 +621,7 @@ void CreateOrLoadModConfigFile()
 		std::string statue_of_boons_folder = mod_data_folder + "\\StatueOfBoons";
 		if (!std::filesystem::exists(statue_of_boons_folder))
 		{
-			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - The \"StatueOfBoons\" directory was not found. Creating directory: %s", MOD_NAME, VERSION, statue_of_boons_folder.c_str());
+			DbgPrintEx(LOG_SEVERITY_WARNING, "[%s %s] - The \"StatueOfBoons\" directory was not found. Creating directory: %s", MOD_NAME, VERSION, statue_of_boons_folder.c_str());
 			std::filesystem::create_directory(statue_of_boons_folder);
 		}
 
@@ -639,8 +640,8 @@ void CreateOrLoadModConfigFile()
 				// Check if the json_object is empty.
 				if (json_object.empty())
 				{
-					g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - No values found in mod configuration file: %s!", MOD_NAME, VERSION, config_file.c_str());
-					g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Add your desired values to the configuration file, otherwise defaults will be used.", MOD_NAME, VERSION);
+					DbgPrintEx(LOG_SEVERITY_ERROR, "[%s %s] - No values found in mod configuration file: %s!", MOD_NAME, VERSION, config_file.c_str());
+					DbgPrintEx(LOG_SEVERITY_WARNING, "[%s %s] - Add your desired values to the configuration file, otherwise defaults will be used.", MOD_NAME, VERSION);
 					LogDefaultConfigValues();
 				}
 				else
@@ -651,20 +652,20 @@ void CreateOrLoadModConfigFile()
 						mana_cost = json_object[MANA_COST_KEY];
 						if (mana_cost < 0 || mana_cost > 16)
 						{
-							g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Invalid \"%s\" value (%d) in mod configuration file: %s", MOD_NAME, VERSION, MANA_COST_KEY, mana_cost, config_file.c_str());
-							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - This value MUST be a valid integer between 0 and 16 (inclusive)!", MOD_NAME, VERSION);
-							g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %d!", MOD_NAME, VERSION, MANA_COST_KEY, DEFAULT_MANA_COST);
+							DbgPrintEx(LOG_SEVERITY_ERROR, "[%s %s] - Invalid \"%s\" value (%d) in mod configuration file: %s", MOD_NAME, VERSION, MANA_COST_KEY, mana_cost, config_file.c_str());
+							DbgPrintEx(LOG_SEVERITY_WARNING, "[%s %s] - This value MUST be a valid integer between 0 and 16 (inclusive)!", MOD_NAME, VERSION);
+							DbgPrintEx(LOG_SEVERITY_INFO, "[%s %s] - Using DEFAULT \"%s\" value: %d!", MOD_NAME, VERSION, MANA_COST_KEY, DEFAULT_MANA_COST);
 							mana_cost = DEFAULT_MANA_COST;
 						}
 						else
 						{
-							g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using CUSTOM \"%s\" value: %d!", MOD_NAME, VERSION, MANA_COST_KEY, mana_cost);
+							DbgPrintEx(LOG_SEVERITY_INFO, "[%s %s] - Using CUSTOM \"%s\" value: %d!", MOD_NAME, VERSION, MANA_COST_KEY, mana_cost);
 						}
 					}
 					else
 					{
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, MANA_COST_KEY, config_file.c_str());
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %d!", MOD_NAME, VERSION, MANA_COST_KEY, DEFAULT_MANA_COST);
+						DbgPrintEx(LOG_SEVERITY_WARNING, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, MANA_COST_KEY, config_file.c_str());
+						DbgPrintEx(LOG_SEVERITY_INFO, "[%s %s] - Using DEFAULT \"%s\" value: %d!", MOD_NAME, VERSION, MANA_COST_KEY, DEFAULT_MANA_COST);
 						mana_cost = DEFAULT_MANA_COST;
 					}
 
@@ -674,20 +675,20 @@ void CreateOrLoadModConfigFile()
 						essence_cost = json_object[ESSENCE_COST_KEY];
 						if (essence_cost < 0 || essence_cost > 1000)
 						{
-							g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Invalid \"%s\" value (%d) in mod configuration file: %s", MOD_NAME, VERSION, ESSENCE_COST_KEY, essence_cost, config_file.c_str());
-							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - This value MUST be a valid integer between 0 and 1000 (inclusive)!", MOD_NAME, VERSION);
-							g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %d!", MOD_NAME, VERSION, ESSENCE_COST_KEY, DEFAULT_ESSENCE_COST);
+							DbgPrintEx(LOG_SEVERITY_ERROR, "[%s %s] - Invalid \"%s\" value (%d) in mod configuration file: %s", MOD_NAME, VERSION, ESSENCE_COST_KEY, essence_cost, config_file.c_str());
+							DbgPrintEx(LOG_SEVERITY_WARNING, "[%s %s] - This value MUST be a valid integer between 0 and 1000 (inclusive)!", MOD_NAME, VERSION);
+							DbgPrintEx(LOG_SEVERITY_INFO, "[%s %s] - Using DEFAULT \"%s\" value: %d!", MOD_NAME, VERSION, ESSENCE_COST_KEY, DEFAULT_ESSENCE_COST);
 							essence_cost = DEFAULT_ESSENCE_COST;
 						}
 						else
 						{
-							g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using CUSTOM \"%s\" value: %d!", MOD_NAME, VERSION, ESSENCE_COST_KEY, essence_cost);
+							DbgPrintEx(LOG_SEVERITY_INFO, "[%s %s] - Using CUSTOM \"%s\" value: %d!", MOD_NAME, VERSION, ESSENCE_COST_KEY, essence_cost);
 						}
 					}
 					else
 					{
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, ESSENCE_COST_KEY, config_file.c_str());
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %d!", MOD_NAME, VERSION, ESSENCE_COST_KEY, DEFAULT_ESSENCE_COST);
+						DbgPrintEx(LOG_SEVERITY_WARNING, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, ESSENCE_COST_KEY, config_file.c_str());
+						DbgPrintEx(LOG_SEVERITY_INFO, "[%s %s] - Using DEFAULT \"%s\" value: %d!", MOD_NAME, VERSION, ESSENCE_COST_KEY, DEFAULT_ESSENCE_COST);
 						essence_cost = DEFAULT_ESSENCE_COST;
 					}
 
@@ -697,20 +698,20 @@ void CreateOrLoadModConfigFile()
 						previous_boons_limit = json_object[PREVIOUS_BOONS_LIMIT_KEY];
 						if (previous_boons_limit < 0 || previous_boons_limit > 7)
 						{
-							g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Invalid \"%s\" value (%d) in mod configuration file: %s", MOD_NAME, VERSION, PREVIOUS_BOONS_LIMIT_KEY, previous_boons_limit, config_file.c_str());
-							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - This value MUST be a valid integer between 0 and 7 (inclusive)!", MOD_NAME, VERSION);
-							g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %d!", MOD_NAME, VERSION, PREVIOUS_BOONS_LIMIT_KEY, DEFAULT_PREVIOUS_BOONS_LIMIT);
+							DbgPrintEx(LOG_SEVERITY_ERROR, "[%s %s] - Invalid \"%s\" value (%d) in mod configuration file: %s", MOD_NAME, VERSION, PREVIOUS_BOONS_LIMIT_KEY, previous_boons_limit, config_file.c_str());
+							DbgPrintEx(LOG_SEVERITY_WARNING, "[%s %s] - This value MUST be a valid integer between 0 and 7 (inclusive)!", MOD_NAME, VERSION);
+							DbgPrintEx(LOG_SEVERITY_INFO, "[%s %s] - Using DEFAULT \"%s\" value: %d!", MOD_NAME, VERSION, PREVIOUS_BOONS_LIMIT_KEY, DEFAULT_PREVIOUS_BOONS_LIMIT);
 							previous_boons_limit = DEFAULT_PREVIOUS_BOONS_LIMIT;
 						}
 						else
 						{
-							g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using CUSTOM \"%s\" value: %d!", MOD_NAME, VERSION, PREVIOUS_BOONS_LIMIT_KEY, previous_boons_limit);
+							DbgPrintEx(LOG_SEVERITY_INFO, "[%s %s] - Using CUSTOM \"%s\" value: %d!", MOD_NAME, VERSION, PREVIOUS_BOONS_LIMIT_KEY, previous_boons_limit);
 						}
 					}
 					else
 					{
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, PREVIOUS_BOONS_LIMIT_KEY, config_file.c_str());
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %d!", MOD_NAME, VERSION, PREVIOUS_BOONS_LIMIT_KEY, DEFAULT_PREVIOUS_BOONS_LIMIT);
+						DbgPrintEx(LOG_SEVERITY_WARNING, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, PREVIOUS_BOONS_LIMIT_KEY, config_file.c_str());
+						DbgPrintEx(LOG_SEVERITY_INFO, "[%s %s] - Using DEFAULT \"%s\" value: %d!", MOD_NAME, VERSION, PREVIOUS_BOONS_LIMIT_KEY, DEFAULT_PREVIOUS_BOONS_LIMIT);
 						previous_boons_limit = DEFAULT_PREVIOUS_BOONS_LIMIT;
 					}
 				}
@@ -722,8 +723,8 @@ void CreateOrLoadModConfigFile()
 				eptr = std::current_exception();
 				PrintError(eptr);
 
-				g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to parse JSON from configuration file: %s", MOD_NAME, VERSION, config_file.c_str());
-				g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Make sure the file is valid JSON!", MOD_NAME, VERSION);
+				DbgPrintEx(LOG_SEVERITY_ERROR, "[%s %s] - Failed to parse JSON from configuration file: %s", MOD_NAME, VERSION, config_file.c_str());
+				DbgPrintEx(LOG_SEVERITY_WARNING, "[%s %s] - Make sure the file is valid JSON!", MOD_NAME, VERSION);
 				LogDefaultConfigValues();
 			}
 
@@ -733,7 +734,7 @@ void CreateOrLoadModConfigFile()
 		{
 			in_stream.close();
 
-			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - The \"StatueOfBoons.json\" file was not found. Creating file: %s", MOD_NAME, VERSION, config_file.c_str());
+			DbgPrintEx(LOG_SEVERITY_WARNING, "[%s %s] - The \"StatueOfBoons.json\" file was not found. Creating file: %s", MOD_NAME, VERSION, config_file.c_str());
 
 			json default_config_json = CreateModConfigJson(true);
 			std::ofstream out_stream(config_file);
@@ -756,7 +757,7 @@ void CreateOrLoadModConfigFile()
 		eptr = std::current_exception();
 		PrintError(eptr);
 
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - An error occurred loading the mod configuration file.", MOD_NAME, VERSION);
+		DbgPrintEx(LOG_SEVERITY_ERROR, "[%s %s] - An error occurred loading the mod configuration file.", MOD_NAME, VERSION);
 		LogDefaultConfigValues();
 	}
 }
@@ -770,7 +771,7 @@ void FindStatueOfBoonsPositions()
 	CRoom* current_room = nullptr;
 	if (!AurieSuccess(g_ModuleInterface->GetCurrentRoomData(current_room)))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get data for the current room!", MOD_NAME, VERSION);
+		DbgPrintEx(LOG_SEVERITY_ERROR, "[%s %s] - Failed to get data for the current room!", MOD_NAME, VERSION);
 		return;
 	}
 
@@ -1637,7 +1638,7 @@ void CreateObjectCallback(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook (EVENT_OBJECT_CALL)!", MOD_NAME, VERSION);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to hook (EVENT_OBJECT_CALL)!", MOD_NAME, VERSION);
 	}
 }
 
@@ -1651,7 +1652,7 @@ void CreateHookGmlScriptGetFishingCelebrationData(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_FISHING_CELEBRATION_DATA);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_FISHING_CELEBRATION_DATA);
 	}
 
 	status = MmCreateHook(
@@ -1665,7 +1666,7 @@ void CreateHookGmlScriptGetFishingCelebrationData(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_FISHING_CELEBRATION_DATA);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_FISHING_CELEBRATION_DATA);
 	}
 }
 
@@ -1679,7 +1680,7 @@ void CreateHookGmlScriptGetDivingCelebrationData(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_DIVING_CELEBRATION_DATA);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_DIVING_CELEBRATION_DATA);
 	}
 
 	status = MmCreateHook(
@@ -1693,7 +1694,7 @@ void CreateHookGmlScriptGetDivingCelebrationData(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_DIVING_CELEBRATION_DATA);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_DIVING_CELEBRATION_DATA);
 	}
 }
 
@@ -1707,7 +1708,7 @@ void CreateHookGmlScriptGiveItem(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GIVE_ARI_ITEM);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GIVE_ARI_ITEM);
 	}
 
 	status = MmCreateHook(
@@ -1721,7 +1722,7 @@ void CreateHookGmlScriptGiveItem(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GIVE_ARI_ITEM);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GIVE_ARI_ITEM);
 	}
 }
 
@@ -1735,7 +1736,7 @@ void CreateHookGmlScriptGetMoveSpeed(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_MOVE_SPEED);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_MOVE_SPEED);
 	}
 
 	status = MmCreateHook(
@@ -1748,7 +1749,7 @@ void CreateHookGmlScriptGetMoveSpeed(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_MOVE_SPEED);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_MOVE_SPEED);
 	}
 }
 
@@ -1762,7 +1763,7 @@ void CreateHookGmlScriptInteract(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_INTERACT);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_INTERACT);
 	}
 
 	status = MmCreateHook(
@@ -1775,7 +1776,7 @@ void CreateHookGmlScriptInteract(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_INTERACT);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_INTERACT);
 	}
 }
 
@@ -1789,7 +1790,7 @@ void CreateHookGmlScriptGetWeather(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_WEATHER);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_WEATHER);
 	}
 
 	status = MmCreateHook(
@@ -1802,7 +1803,7 @@ void CreateHookGmlScriptGetWeather(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_WEATHER);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_WEATHER);
 	}
 }
 
@@ -1816,7 +1817,7 @@ void CreateHookGmlScriptShowRoomTitle(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SHOW_ROOM_TITLE);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SHOW_ROOM_TITLE);
 	}
 
 	status = MmCreateHook(
@@ -1829,7 +1830,7 @@ void CreateHookGmlScriptShowRoomTitle(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SHOW_ROOM_TITLE);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SHOW_ROOM_TITLE);
 	}
 }
 
@@ -1843,7 +1844,7 @@ void CreateHookGmlScriptOnRoomStart(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ON_ROOM_START);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ON_ROOM_START);
 	}
 
 	status = MmCreateHook(
@@ -1856,7 +1857,7 @@ void CreateHookGmlScriptOnRoomStart(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ON_ROOM_START);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ON_ROOM_START);
 	}
 }
 
@@ -1870,7 +1871,7 @@ void CreateHookGmlScriptCreateBug(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_CREATE_BUG);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_CREATE_BUG);
 	}
 
 	status = MmCreateHook(
@@ -1883,7 +1884,7 @@ void CreateHookGmlScriptCreateBug(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_CREATE_BUG);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_CREATE_BUG);
 	}
 }
 
@@ -1897,7 +1898,7 @@ void CreateHookGmlScriptAddHeartPoints(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ADD_HEART_POINTS);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ADD_HEART_POINTS);
 	}
 
 	status = MmCreateHook(
@@ -1910,7 +1911,7 @@ void CreateHookGmlScriptAddHeartPoints(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ADD_HEART_POINTS);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ADD_HEART_POINTS);
 	}
 }
 
@@ -1924,7 +1925,7 @@ void CreateHookGmlScriptModifyStamina(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_MODIFY_STAMINA);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_MODIFY_STAMINA);
 	}
 
 	status = MmCreateHook(
@@ -1937,7 +1938,7 @@ void CreateHookGmlScriptModifyStamina(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_MODIFY_STAMINA);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_MODIFY_STAMINA);
 	}
 }
 
@@ -1951,7 +1952,7 @@ void CreateHookGmlScriptTryLocationIdToString(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_TRY_LOCATION_ID_TO_STRING);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_TRY_LOCATION_ID_TO_STRING);
 	}
 
 	status = MmCreateHook(
@@ -1964,7 +1965,7 @@ void CreateHookGmlScriptTryLocationIdToString(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_TRY_LOCATION_ID_TO_STRING);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_TRY_LOCATION_ID_TO_STRING);
 	}
 }
 
@@ -1978,7 +1979,7 @@ void CreateHookGmlScriptEndDay(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_END_DAY);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_END_DAY);
 	}
 
 	status = MmCreateHook(
@@ -1991,7 +1992,7 @@ void CreateHookGmlScriptEndDay(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_END_DAY);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_END_DAY);
 	}
 }
 
@@ -2005,7 +2006,7 @@ void CreateHookGmlScriptWriteFurnitureToLocation(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_WRITE_FURNITURE_TO_LOCATION);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_WRITE_FURNITURE_TO_LOCATION);
 	}
 
 	status = MmCreateHook(
@@ -2018,7 +2019,7 @@ void CreateHookGmlScriptWriteFurnitureToLocation(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_WRITE_FURNITURE_TO_LOCATION);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_WRITE_FURNITURE_TO_LOCATION);
 	}
 }
 
@@ -2032,7 +2033,7 @@ void CreateHookGmlScriptEraseObjectRenderer(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ERASE_OBJECT_RENDERER);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ERASE_OBJECT_RENDERER);
 	}
 
 	status = MmCreateHook(
@@ -2045,7 +2046,7 @@ void CreateHookGmlScriptEraseObjectRenderer(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ERASE_OBJECT_RENDERER);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ERASE_OBJECT_RENDERER);
 	}
 }
 
@@ -2059,7 +2060,7 @@ void CreateHookGmlScriptGetLocalizer(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_LOCALIZER);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_LOCALIZER);
 	}
 
 	status = MmCreateHook(
@@ -2072,7 +2073,7 @@ void CreateHookGmlScriptGetLocalizer(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_LOCALIZER);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_LOCALIZER);
 	}
 }
 
@@ -2086,7 +2087,7 @@ void CreateHookGmlScriptPlayText(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_PLAY_TEXT);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_PLAY_TEXT);
 	}
 
 	status = MmCreateHook(
@@ -2100,7 +2101,7 @@ void CreateHookGmlScriptPlayText(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_PLAY_TEXT);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_PLAY_TEXT);
 	}
 }
 
@@ -2114,7 +2115,7 @@ void CreateHookGmlScriptPlayConversation(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_PLAY_CONVERSATION);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_PLAY_CONVERSATION);
 	}
 
 	status = MmCreateHook(
@@ -2128,7 +2129,7 @@ void CreateHookGmlScriptPlayConversation(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_PLAY_CONVERSATION);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_PLAY_CONVERSATION);
 	}
 }
 
@@ -2142,7 +2143,7 @@ void CreateHookGmlScriptSetupMainScreen(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SETUP_MAIN_SCREEN);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SETUP_MAIN_SCREEN);
 	}
 
 	status = MmCreateHook(
@@ -2155,7 +2156,7 @@ void CreateHookGmlScriptSetupMainScreen(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SETUP_MAIN_SCREEN);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SETUP_MAIN_SCREEN);
 	}
 }
 
@@ -2169,7 +2170,7 @@ void CreateHookGmlScriptSaveGame(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SAVE_GAME);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SAVE_GAME);
 	}
 
 	status = MmCreateHook(
@@ -2182,7 +2183,7 @@ void CreateHookGmlScriptSaveGame(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SAVE_GAME);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SAVE_GAME);
 	}
 }
 
@@ -2196,7 +2197,7 @@ void CreateHookGmlScriptLoadGame(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_LOAD_GAME);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_LOAD_GAME);
 	}
 
 	status = MmCreateHook(
@@ -2209,183 +2210,202 @@ void CreateHookGmlScriptLoadGame(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_LOAD_GAME);
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_LOAD_GAME);
 	}
 }
 
-EXPORTED AurieStatus ModuleInitialize(
-	IN AurieModule* Module,
-	IN const fs::path& ModulePath
+void RunnerInitCallback(
+	IN FunctionWrapper<void(int)>& wrapper
 )
 {
-	UNREFERENCED_PARAMETER(ModulePath);
-
-	AurieStatus status = AURIE_SUCCESS;
-	
-	status = ObGetInterface(
-		"YYTK_Main", 
-		(AurieInterfaceBase*&)(g_ModuleInterface)
-	);
-
-	if (!AurieSuccess(status))
-		return AURIE_MODULE_DEPENDENCY_NOT_RESOLVED;
-
-	g_ModuleInterface->Print(CM_LIGHTAQUA, "[%s %s] - Plugin starting...", MOD_NAME, VERSION);
-
-	CreateObjectCallback(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
 	CreateHookGmlScriptGetFishingCelebrationData(status);
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
+		DbgPrintEx(LOG_SEVERITY_ERROR, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return;
 	}
 
 	CreateHookGmlScriptGetDivingCelebrationData(status);
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
+		DbgPrintEx(LOG_SEVERITY_ERROR, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return;
 	}
 
 	CreateHookGmlScriptGiveItem(status);
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
+		DbgPrintEx(LOG_SEVERITY_ERROR, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return;
 	}
 
 	CreateHookGmlScriptGetMoveSpeed(status);
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
+		DbgPrintEx(LOG_SEVERITY_ERROR, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return;
 	}
 
 	CreateHookGmlScriptInteract(status);
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
+		DbgPrintEx(LOG_SEVERITY_ERROR, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return;
 	}
 
 	CreateHookGmlScriptGetWeather(status);
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
+		DbgPrintEx(LOG_SEVERITY_ERROR, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return;
 	}
 
 	CreateHookGmlScriptShowRoomTitle(status);
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
+		DbgPrintEx(LOG_SEVERITY_ERROR, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return;
 	}
 
 	CreateHookGmlScriptOnRoomStart(status);
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
+		DbgPrintEx(LOG_SEVERITY_ERROR, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return;
 	}
 
 	CreateHookGmlScriptCreateBug(status);
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
+		DbgPrintEx(LOG_SEVERITY_ERROR, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return;
 	}
 
 	CreateHookGmlScriptAddHeartPoints(status);
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
+		DbgPrintEx(LOG_SEVERITY_ERROR, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return;
 	}
 
 	CreateHookGmlScriptModifyStamina(status);
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
+		DbgPrintEx(LOG_SEVERITY_ERROR, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return;
 	}
 
 	CreateHookGmlScriptTryLocationIdToString(status);
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
+		DbgPrintEx(LOG_SEVERITY_ERROR, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return;
 	}
 
 	CreateHookGmlScriptEndDay(status);
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
+		DbgPrintEx(LOG_SEVERITY_ERROR, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return;
 	}
 
 	CreateHookGmlScriptWriteFurnitureToLocation(status);
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
+		DbgPrintEx(LOG_SEVERITY_ERROR, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return;
 	}
 
 	CreateHookGmlScriptEraseObjectRenderer(status);
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
+		DbgPrintEx(LOG_SEVERITY_ERROR, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return;
 	}
 
 	CreateHookGmlScriptGetLocalizer(status);
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
+		DbgPrintEx(LOG_SEVERITY_ERROR, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return;
 	}
 
 	CreateHookGmlScriptPlayText(status);
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
+		DbgPrintEx(LOG_SEVERITY_ERROR, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return;
 	}
 
 	CreateHookGmlScriptPlayConversation(status);
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
+		DbgPrintEx(LOG_SEVERITY_ERROR, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return;
 	}
 
 	CreateHookGmlScriptSetupMainScreen(status);
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
+		DbgPrintEx(LOG_SEVERITY_ERROR, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return;
 	}
 
 	CreateHookGmlScriptSaveGame(status);
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
+		DbgPrintEx(LOG_SEVERITY_ERROR, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return;
 	}
 
 	CreateHookGmlScriptLoadGame(status);
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		DbgPrintEx(LOG_SEVERITY_ERROR, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return;
+	}
+
+	DbgPrintEx(LOG_SEVERITY_DEBUG, "[%s %s] - Plugin started!", MOD_NAME, VERSION);
+}
+
+void CreateRunnerInitCallback(AurieStatus& status)
+{
+	status = g_ModuleInterface->CreateCallback(
+		g_ArSelfModule,
+		EVENT_RUNNER_INIT,
+		RunnerInitCallback,
+		0
+	);
+
+	if (!AurieSuccess(status))
+	{
+		DbgPrintEx(LOG_SEVERITY_CRITICAL, "[%s %s] - Failed to hook (EVENT_RUNNER_INIT)!", MOD_NAME, VERSION);
+	}
+}
+
+EXPORTED AurieStatus ModulePreInitialize(
+	IN AurieModule* Module,
+	IN const fs::path& ModulePath
+)
+{
+	UNREFERENCED_PARAMETER(ModulePath);
+	g_ModuleInterface = YYTK::GetInterface();
+
+	DbgPrintEx(LOG_SEVERITY_DEBUG, "[%s %s] - Plugin starting...", MOD_NAME, VERSION);
+
+	CreateObjectCallback(status);
+	if (!AurieSuccess(status))
+	{
+		DbgPrintEx(LOG_SEVERITY_ERROR, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
 		return status;
 	}
 
-	g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Plugin started!", MOD_NAME, VERSION);
+	CreateRunnerInitCallback(status);
+	if (!AurieSuccess(status))
+	{
+		DbgPrintEx(LOG_SEVERITY_ERROR, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return status;
+	}
+
 	return AURIE_SUCCESS;
 }
