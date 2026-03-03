@@ -1065,6 +1065,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 256 + 8, 192 + 8 },
 		{ 304 + 8, 240 + 8 },
 		{ 384 + 8, 256 + 8 },
+		{ 272 + 8, 368 + 8 },
 	}},
 	{ "rm_mines_lava_generic", {
 		{ 256 + 8, 560 + 8 },
@@ -1073,6 +1074,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 816 + 8, 512 + 8 },
 		{ 448 + 8, 288 + 8 },
 		{ 496 + 8, 208 + 8 },
+		{ 192 + 8, 464 + 8 },
 	}},
 	{ "rm_mines_lava_world", {
 		{ 192 + 8, 160 + 8 },
@@ -1081,6 +1083,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 208 + 8, 448 + 8 },
 		{ 432 + 8, 352 + 8 },
 		{ 496 + 8, 464 + 8 },
+		{ 416 + 8, 256 + 8 }, 
 	}},
 	{ "rm_mines_lava_elements", {
 		{ 352 + 8, 576 + 8 },
@@ -1089,6 +1092,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 368 + 8, 352 + 8 },
 		{ 448 + 8, 368 + 8 },
 		{ 368 + 8, 192 + 8 },
+		{ 368 + 8, 288 + 8 },
 	}},
 	{ "rm_mines_lava_arena", {
 		{ 400 + 8, 384 + 8 },
@@ -1097,6 +1101,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 160 + 8, 576 + 8 },
 		{ 384 + 8, 640 + 8 },
 		{ 544 + 8, 576 + 8 },
+		{ 336 + 8, 320 + 8 },
 	}},
 	{ "rm_mines_lava_61", {
 		{ 144 + 8, 224 + 8 },
@@ -1105,6 +1110,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 304 + 8, 352 + 8 },
 		{ 272 + 8, 432 + 8 },
 		{ 368 + 8, 416 + 8 },
+		{ 464 + 8, 336 + 8 },
 	}},
 	{ "rm_mines_lava_65", {
 		{ 384 + 8, 176 + 8 },
@@ -1113,6 +1119,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 464 + 8, 432 + 8 },
 		{ 528 + 8, 416 + 8 },
 		{ 624 + 8, 288 + 8 },
+		{ 560 + 8, 192 + 8 },
 	}},
 	{ "rm_mines_lava_70", {
 		{ 384 + 8, 208 + 8 },
@@ -1121,6 +1128,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 592 + 8, 288 + 8 },
 		{ 656 + 8, 208 + 8 },
 		{ 576 + 8, 160 + 8 },
+		{ 592 + 8, 384 + 8 },
 	}},
 	{ "rm_mines_lava_75", {
 		{ 544 + 8, 144 + 8 },
@@ -1129,6 +1137,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 448 + 8, 320 + 8 },
 		{ 560 + 8, 352 + 8 },
 		{ 640 + 8, 208 + 8 },
+		{ 480 + 8, 400 + 8 },
 	}},
 	{ "rm_mines_lava_switch1", {
 		{ 352 + 8, 384 + 8 },
@@ -1137,6 +1146,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 768 + 8, 528 + 8 },
 		{ 768 + 8, 368 + 8 },
 		{ 784 + 8, 288 + 8 },
+		{ 528 + 8, 304 + 8 },
 	}},
 	{ "rm_mines_lava_switch2", {
 		{ 256 + 8, 480 + 8 },
@@ -1145,6 +1155,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 544 + 8, 400 + 8 },
 		{ 528 + 8, 336 + 8 },
 		{ 416 + 8, 256 + 8 },
+		{ 656 + 8, 400 + 8 },
 	}},
 	{ "rm_mines_lava_switch3", {
 		{ 272 + 8, 192 + 8 },
@@ -1153,6 +1164,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 544 + 8, 416 + 8 },
 		{ 464 + 8, 496 + 8 },
 		{ 272 + 8, 560 + 8 },
+		{ 256 + 8, 288 + 8 },
 	}},
 	{ "rm_mines_lava_switch4", {
 		{ 464 + 8, 192 + 8 },
@@ -1161,6 +1173,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 448 + 8, 368 + 8 },
 		{ 576 + 8, 432 + 8 },
 		{ 320 + 8, 592 + 8 },
+		{ 368 + 8, 496 + 8 },
 	}},
 	{ "rm_mines_lava_switch5", {
 		{ 512 + 8, 144 + 8 },
@@ -1169,6 +1182,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 720 + 8, 384 + 8 },
 		{ 672 + 8, 544 + 8 },
 		{ 528 + 8, 656 + 8 },
+		{ 496 + 8, 80 + 8 },
 	}},
 	{ "rm_mines_lava_basic1", {
 		{ 768 + 8, 176 + 8 },
@@ -1177,6 +1191,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 720 + 8, 432 + 8 },
 		{ 800 + 8, 480 + 8 },
 		{ 224 + 8, 512 + 8 },
+		{ 624 + 8, 368 + 8 },
 	}},
 	{ "rm_mines_lava_basic2", {
 		{ 336 + 8, 240 + 8 },
@@ -1185,6 +1200,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 432 + 8, 384 + 8 },
 		{ 240 + 8, 656 + 8 },
 		{ 800 + 8, 400 + 8 },
+		{ 336 + 8, 368 + 8 },
 	}},
 	{ "rm_mines_lava_basic3", {
 		{ 320 + 8, 240 + 8 },
@@ -1193,6 +1209,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 352 + 8, 480 + 8 },
 		{ 288 + 8, 656 + 8 },
 		{ 368 + 8, 640 + 8 },
+		{ 224 + 8, 384 + 8 },
 	}},
 	{ "rm_mines_lava_basic4", {
 		{ 432 + 8, 400 + 8 },
@@ -1201,14 +1218,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 784 + 8, 160 + 8 },
 		{ 752 + 8, 400 + 8 },
 		{ 736 + 8, 592 + 8 },
-	}},
-	{ "", {
-		{ 0 + 8, 0 + 8 },
-		{ 0 + 8, 0 + 8 },
-		{ 0 + 8, 0 + 8 },
-		{ 0 + 8, 0 + 8 },
-		{ 0 + 8, 0 + 8 },
-		{ 0 + 8, 0 + 8 },
+		{ 528 + 8, 160 + 8 },
 	}},
 	{ "rm_mines_lava_basic5", {
 		{ 304 + 8, 304 + 8 },
@@ -1217,6 +1227,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 544 + 8, 400 + 8 },
 		{ 544 + 8, 560 + 8 },
 		{ 736 + 8, 288 + 8 },
+		{ 688 + 8, 432 + 8 },
 	}},
 	{ "rm_mines_lava_shrine1", {
 		{ 272 + 8, 416 + 8 },
@@ -1225,6 +1236,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 672 + 8, 368 + 8 },
 		{ 752 + 8, 352 + 8 },
 		{ 848 + 8, 272 + 8 },
+		{ 544 + 8, 416 + 8 },
 	}},
 	{ "rm_mines_lava_shrine2", {
 		{ 288 + 8, 224 + 8 },
@@ -1233,6 +1245,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 608 + 8, 208 + 8 },
 		{ 688 + 8, 208 + 8 },
 		{ 720 + 8, 336 + 8 },
+		{ 752 + 8, 544 + 8 },
 	}},
 	{ "rm_mines_lava_shrine3", {
 		{ 256 + 8, 176 + 8 },
@@ -1241,6 +1254,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 176 + 8, 464 + 8 },
 		{ 336 + 8, 512 + 8 },
 		{ 272 + 8, 560 + 8 },
+		{ 352 + 8, 144 + 8 },
 	}},
 	{ "rm_mines_lava_shrine4", {
 		{ 288 + 8, 160 + 8 },
@@ -1249,6 +1263,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 464 + 8, 336 + 8 },
 		{ 640 + 8, 320 + 8 },
 		{ 608 + 8, 608 + 8 },
+		{ 464 + 8, 592 + 8 },
 	}},
 	{ "rm_mines_ruins_basic1", {
 		{ 432 + 8, 224 + 8 },
