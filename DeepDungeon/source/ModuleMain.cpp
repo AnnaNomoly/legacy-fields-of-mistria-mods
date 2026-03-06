@@ -90,6 +90,7 @@ static const char* const GML_SCRIPT_FIND_NPC_BLIP_NOISE = "gml_Script_find_npc_b
 static const char* const GML_SCRIPT_SAVE_GAME = "gml_Script_save_game";
 static const char* const GML_SCRIPT_ARI_FACE_DIR = "gml_Script_face_dir@gml_Object_obj_ari_Create_0";
 static const char* const GML_SCRIPT_ON_BEGIN_STEP = "gml_Script_on_begin_step@Anchor@Anchor";
+static const char* const GML_SCRIPT_RECIPE_GENERATE_INFUSIONS = "gml_Script_generate_infusions@Recipe@Recipe";
 static const char* const DISABLE_DUNGEON_LIFT_JSON_KEY = "disable_dungeon_lift"; // Controls the dungeon lift
 static const char* const RESTRICT_PERKS_JSON_KEY = "restrict_perks"; // Determines if perks are restricted in the dungeon
 static const char* const RESTRICT_ITEMS_JSON_KEY = "restrict_items"; // Determines if items are restricted in the dungeon
@@ -9744,6 +9745,38 @@ RValue& GmlScriptOnBeginStepCallback(
 	return Result;
 }
 
+RValue& GmlScriptRecipeGenerateInfusionsCallback(
+	IN CInstance* Self,
+	IN CInstance* Other,
+	OUT RValue& Result,
+	IN int ArgumentCount,
+	IN RValue** Arguments
+)
+{
+	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_RECIPE_GENERATE_INFUSIONS));
+	original(
+		Self,
+		Other,
+		Result,
+		ArgumentCount,
+		Arguments
+	);
+
+	if (StructVariableExists(Self, "item_id"))
+	{
+		int item_id = Self->GetMember("item_id").ToInt64();
+		if (item_id_to_sigil_map.contains(item_id))
+		{
+			RValue empty_array = g_ModuleInterface->CallBuiltin("array_create", { 0 });
+			*Result.GetRefMember("__count") = 0;
+			*Result.GetRefMember("__internal_size") = 0;
+			*Result.GetRefMember("__buffer") = empty_array;
+		}
+	}
+
+	return Result;
+}
+
 RValue& GmlScriptGetUnifiedTimeCallback(
 	IN CInstance* Self,
 	IN CInstance* Other,
@@ -11055,6 +11088,33 @@ void CreateHookGmlScriptOnBeginStep(AurieStatus& status)
 	}
 }
 
+void CreateHookGmlScriptRecipeGenerateInfusions(AurieStatus& status)
+{
+	CScript* gml_script_recipe_generate_infusions = nullptr;
+	status = g_ModuleInterface->GetNamedRoutinePointer(
+		GML_SCRIPT_RECIPE_GENERATE_INFUSIONS,
+		(PVOID*)&gml_script_recipe_generate_infusions
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_RECIPE_GENERATE_INFUSIONS);
+	}
+
+	status = MmCreateHook(
+		g_ArSelfModule,
+		GML_SCRIPT_RECIPE_GENERATE_INFUSIONS,
+		gml_script_recipe_generate_infusions->m_Functions->m_ScriptFunction,
+		GmlScriptRecipeGenerateInfusionsCallback,
+		nullptr
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_RECIPE_GENERATE_INFUSIONS);
+	}
+}
+
 void CreateHookGmlScriptGetUnifiedTime(AurieStatus& status)
 {
 	CScript* gml_script_get_unified_time = nullptr;
@@ -11431,6 +11491,13 @@ EXPORTED AurieStatus ModuleInitialize(
 	}
 
 	CreateHookGmlScriptOnBeginStep(status);
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return status;
+	}
+
+	CreateHookGmlScriptRecipeGenerateInfusions(status);
 	if (!AurieSuccess(status))
 	{
 		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
