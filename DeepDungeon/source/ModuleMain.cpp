@@ -3843,16 +3843,8 @@ void ModifyRockClodAttackPatterns(bool is_boss_battle, RValue monster)
 			Patterns pattern = magic_enum::enum_value<Patterns>(random_pattern_distribution(random_generator));
 			if (is_boss_battle)
 			{
-				if (boss_monsters_configured < 2)
-				{
-					pattern = Patterns::SPIN;
-					boss_monsters_configured++;
-				}
-				else
-				{
-					pattern = Patterns::SPLIT;
-					boss_monsters_configured++;
-				}
+				pattern = Patterns::WALL;
+				boss_monsters_configured++;
 			}
 
 			if (pattern == Patterns::WALL)
@@ -3874,32 +3866,46 @@ void ModifyRockClodAttackPatterns(bool is_boss_battle, RValue monster)
 			else if (pattern == Patterns::SPIN)
 			{
 				// Rotates 18-degrees at a time while shooting 5 pellets in a small cone
+				double attack_sequence = 20;
+				double attack_legion = 3; // 5
+				double attack_sequence_turn = 18;
+				double split_distance = 20; // 5
+				double split_depth = 2;
+				double split_angle = 40;
+
 				StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
 				StructVariableSet(config_clone, "launcher", false);
-				StructVariableSet(config_clone, "attack_sequence", 20.0);
-				StructVariableSet(config_clone, "attack_legion", 5.0);
-				StructVariableSet(config_clone, "attack_sequence_turn", 18.0);
+				StructVariableSet(config_clone, "attack_sequence", attack_sequence);
+				StructVariableSet(config_clone, "attack_legion", attack_legion);
+				StructVariableSet(config_clone, "attack_sequence_turn", attack_sequence_turn);
 				StructVariableSet(config_clone, "attack_sequence_image_speed", 3.0);
 				StructVariableSet(config_clone, "projectile_speed", 3.0);
-				StructVariableSet(config_clone, "split_distance", 5.0);
-				StructVariableSet(config_clone, "split_depth", 2.0);
-				StructVariableSet(config_clone, "split_angle", 40.0);
+				StructVariableSet(config_clone, "split_distance", split_distance);
+				StructVariableSet(config_clone, "split_depth", split_depth);
+				StructVariableSet(config_clone, "split_angle", split_angle);
 				StructVariableSet(monster, "config", config_clone);
 				StructVariableSet(monster, "__deep_dungeon__custom_attack_pattern", 0);
 			}
 			else if (pattern == Patterns::SPLIT)
 			{
 				// Shoots a single pellet that then splits into many that repeatedly split
+				double attack_sequence = 3;
+				double attack_legion = 1;
+				double attack_sequence_turn = -1;
+				double split_distance = 20;
+				double split_depth = 5;
+				double split_angle = 20;
+
 				StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
 				StructVariableSet(config_clone, "launcher", false);
-				StructVariableSet(config_clone, "attack_sequence", 5.0);
-				StructVariableSet(config_clone, "attack_legion", 1.0);
-				StructVariableSet(config_clone, "attack_sequence_turn", -1.0);
+				StructVariableSet(config_clone, "attack_sequence", attack_sequence);
+				StructVariableSet(config_clone, "attack_legion", attack_legion);
+				StructVariableSet(config_clone, "attack_sequence_turn", attack_sequence_turn);
 				StructVariableSet(config_clone, "attack_sequence_image_speed", -1.0);
 				StructVariableSet(config_clone, "projectile_speed", 3.0);
-				StructVariableSet(config_clone, "split_distance", 20.0);
-				StructVariableSet(config_clone, "split_depth", 5.0);
-				StructVariableSet(config_clone, "split_angle", 20.0);
+				StructVariableSet(config_clone, "split_distance", split_distance);
+				StructVariableSet(config_clone, "split_depth", split_depth);
+				StructVariableSet(config_clone, "split_angle", split_angle);
 				StructVariableSet(monster, "config", config_clone);
 				StructVariableSet(monster, "__deep_dungeon__custom_attack_pattern", 0);
 			}
@@ -7540,13 +7546,17 @@ RValue& GmlScriptDamageCallback(
 		RValue target = Arguments[0]->GetMember("target");
 		if (target.ToInt64() != 1) // Everything not Ari
 		{
-			std::uniform_int_distribution<size_t> zero_to_two_distribution(0, 2);
-			int random = zero_to_two_distribution(random_generator);
-			if (random == 0) // 33% chance to miss
+			if (!StructVariableExists(*Arguments[0], "__deep_dungeon__distortion_applied"))
 			{
-				*Arguments[0]->GetRefMember("damage") = 0.0;
-				*Arguments[0]->GetRefMember("critical") = false;
-				*Arguments[0]->GetRefMember("knockback") = false;
+				std::uniform_int_distribution<size_t> zero_to_two_distribution(0, 2);
+				int random = zero_to_two_distribution(random_generator);
+				if (random == 0) // 33% chance to miss
+				{
+					*Arguments[0]->GetRefMember("damage") = 0.0;
+					*Arguments[0]->GetRefMember("critical") = false;
+					*Arguments[0]->GetRefMember("knockback") = false;
+				}
+				StructVariableSet(*Arguments[0], "__deep_dungeon__distortion_applied", true);
 			}
 		}
 	}
