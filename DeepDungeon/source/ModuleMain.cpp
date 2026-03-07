@@ -391,7 +391,7 @@ static enum class FloorEnchantments {
 };
 
 static enum class Offerings {
-	DREAD, // TODO: Effect exists, need to apply it to a monster being spawned.
+	DREAD,
 	INNER_FIRE,
 	LEECH,
 	PERIL,
@@ -3438,7 +3438,7 @@ void ScaleMistpoolWeapon(bool in_dungeon)
 
 	if (in_dungeon)
 	{
-		int damage = (floor_number / 4) + 3; // TODO: Make sure this is scaling correctly with code change
+		int damage = (floor_number / 4) + 3;
 		*sword_scrap_metal->GetRefMember("damage") = damage;
 	}
 	else
@@ -3455,7 +3455,7 @@ void ScaleMistpoolArmor(bool in_dungeon)
 
 		if (in_dungeon)
 		{
-			int defense = floor_number / 20; // TODO: Make sure this is scaling correctly with code change
+			int defense = floor_number / 20;
 			*mistpool_armor_piece->GetRefMember("defense") = defense;
 		}
 		else
@@ -3517,7 +3517,7 @@ void ScaleClassArmor(bool in_dungeon)
 
 		if (in_dungeon)
 		{
-			int defense = floor_number / 20; // TODO: Make sure this is scaling correctly with code change
+			int defense = floor_number / 20;
 			*class_armor_piece->GetRefMember("defense") = defense;
 		}
 		else
@@ -3941,26 +3941,6 @@ void ModifyStalagmiteAttackPatterns(bool is_boss_battle, RValue monster)
 			Modes mode = Modes::CHECKERBOARD;
 			StructVariableSet(monster, "__deep_dungeon__attack_pattern_mode", magic_enum::enum_name(mode));
 			boss_monsters_configured++;
-
-			// TODO: Use these if a way to spawn multiple stalagmites on a floor is discovered
-			//if (boss_monsters_configured == 0)
-			//{
-			//	Modes mode = Modes::DONUT_PB;
-			//	StructVariableSet(monster, "__deep_dungeon__attack_pattern_mode", magic_enum::enum_name(mode));
-			//	boss_monsters_configured++;
-			//}
-			//else if (boss_monsters_configured == 1)
-			//{
-			//	Modes mode = Modes::CROSS_X;
-			//	StructVariableSet(monster, "__deep_dungeon__attack_pattern_mode", magic_enum::enum_name(mode));
-			//	boss_monsters_configured++;
-			//}
-			//else if (boss_monsters_configured == 2)
-			//{
-			//	Modes mode = Modes::CHECKERBOARD;
-			//	StructVariableSet(monster, "__deep_dungeon__attack_pattern_mode", magic_enum::enum_name(mode));
-			//	boss_monsters_configured++;
-			//}
 		}
 		else
 		{
@@ -6657,7 +6637,6 @@ void ObjectCallback(
 		// Drain (Dark Knight Set Bonus)
 		if (class_name_to_set_bonus_effect_value_map[Classes::DARK_KNIGHT][ManagedSetBonuses::DRAIN] > 0)
 		{
-			//int drain_multiplier = class_name_to_set_bonus_effect_value_map[Classes::DARK_KNIGHT][ManagedSetBonuses::DRAIN];
 			int max_health = GetMaxHealth(global_instance->GetRefMember("__ari")->ToInstance(), self).ToInt64(); // TODO: Make this is accounting for HP_PENALTY
 			int recovery = max_health * GetDarkKnightDrainPotency();
 
