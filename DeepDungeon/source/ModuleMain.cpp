@@ -1,3 +1,4 @@
+//#include <math.h>
 #include <random>
 #include <complex>
 #include <fstream>
@@ -27,7 +28,7 @@ struct pair_hash {
 };
 
 static const char* const MOD_NAME = "DeepDungeon";
-static const char* const VERSION = "0.8.1";
+static const char* const VERSION = "0.9.0";
 static const char* const GML_SCRIPT_GET_LOCALIZER = "gml_Script_get@Localizer@Localizer";
 static const char* const GML_SCRIPT_SPAWN_LADDER = "gml_Script_spawn_ladder@DungeonRunner@DungeonRunner";
 static const char* const GML_SCRIPT_CREATE_NOTIFICATION = "gml_Script_create_notification";
@@ -81,9 +82,15 @@ static const char* const GML_SCRIPT_DESERIALIZE_INVENTORY = "gml_Script_deserial
 static const char* const GML_SCRIPT_GET_TREASURE_FROM_DISTRIBUTION = "gml_Script_get_treasure_from_distribution";
 static const char* const GML_SCRIPT_CRAFTING_MENU_INITIALIZE = "gml_Script_initialize@CraftingMenu@CraftingMenu";
 static const char* const GML_SCRIPT_CRAFTING_MENU_CLOSE = "gml_Script_on_close@CraftingMenu@CraftingMenu";
+static const char* const GML_SCRIPT_JOURNAL_MENU_INITIALIZE = "gml_Script_initialize@JournalMenu@JournalMenu";
+static const char* const GML_SCRIPT_JOURNAL_MENU_CLOSE = "gml_Script_on_close@JournalMenu@JournalMenu";
 static const char* const GML_SCRIPT_VERTIGO_DRAW_WITH_COLOR = "gml_Script_vertigo_draw_with_color";
 static const char* const GML_SCRIPT_SCENE_AUDIO_PLAYER_PLAY = "gml_Script_play@SceneAudioPlayer@SceneAudioPlayer";
+static const char* const GML_SCRIPT_FIND_NPC_BLIP_NOISE = "gml_Script_find_npc_blip_noise";
 static const char* const GML_SCRIPT_SAVE_GAME = "gml_Script_save_game";
+static const char* const GML_SCRIPT_ARI_FACE_DIR = "gml_Script_face_dir@gml_Object_obj_ari_Create_0";
+static const char* const GML_SCRIPT_ON_BEGIN_STEP = "gml_Script_on_begin_step@Anchor@Anchor";
+static const char* const GML_SCRIPT_RECIPE_GENERATE_INFUSIONS = "gml_Script_generate_infusions@Recipe@Recipe";
 static const char* const DISABLE_DUNGEON_LIFT_JSON_KEY = "disable_dungeon_lift"; // Controls the dungeon lift
 static const char* const RESTRICT_PERKS_JSON_KEY = "restrict_perks"; // Determines if perks are restricted in the dungeon
 static const char* const RESTRICT_ITEMS_JSON_KEY = "restrict_items"; // Determines if items are restricted in the dungeon
@@ -105,6 +112,16 @@ static const char* const CURSED_ARMOR_DROP_CHANCE_MODIFIER_JSON_KEY = "cursed_ar
 static const char* const SOUL_STONE_DROP_CHANCE_JSON_KEY = "soul_stone_drop_chance"; // Controls soul stone drop rate
 static const char* const LIFT_KEY_DROP_CHANCE_JSON_KEY = "lift_key_drop_chance"; // Controls lift key drop rates
 static const char* const ENABLE_BOSS_FIGHT_RESTRICTIONS_JSON_KEY = "enable_boss_fight_restrictions"; // Controls if sigils and spells are restricted during boss fights
+static const char* const CONFUSING_TRAP_DURATION_SECONDS_JSON_KEY = "confusing_trap_duration_seconds"; // Controls the duration in seconds for confusing traps
+static const char* const DISORIENTING_TRAP_DURATION_SECONDS_JSON_KEY = "disorienting_trap_duration_seconds"; // Controls the duration in seconds for disorienting traps
+static const char* const EXPLODING_TRAP_CURRENT_HEALTH_DAMAGE_PERCENT_JSON_KEY = "exploding_trap_current_health_damage_percent"; // Controls the health percentage damage for exploding traps
+static const char* const INHIBITING_TRAP_DURATION_SECONDS_JSON_KEY = "inhibiting_trap_duration_seconds"; // Controls the duration in seconds for inhibiting traps
+static const char* const LURING_TRAP_MONSTER_SPAWN_COUNT_JSON_KEY = "luring_trap_monster_spawn_count"; // Controls the number of monsters spawned for luring traps
+static const char* const GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT_JSON_KEY = "gaze_trap_max_health_damage_percent"; // Controls the number of monsters spawned for luring traps
+static const char* const METEOR_TRAP_SCALING_FACTOR_JSON_KEY = "meteor_trap_scaling_factor"; // Controls the scaling factor of the meteor trap
+static const char* const MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY = "mistpool_equipment_store_price"; // Controls the price of mistpool equipment in stores
+static const char* const SALVES_STORE_PRICE_JSON_KEY = "salves_store_price"; // Controls the price of salves in stores
+
 static const std::string SIGIL_OF_ALTERATION_NAME = "sigil_of_alteration";
 static const std::string SIGIL_OF_CONCEALMENT_NAME = "sigil_of_concealment";
 static const std::string SIGIL_OF_FORTIFICATION_NAME = "sigil_of_fortification";
@@ -169,7 +186,7 @@ static const std::string RUINS_KEY_NAME = "ruins_key";
 static const std::string TIDE_CAVERNS_ORB = "tide_caverns_orb";
 static const std::string DEEP_EARTH_ORB = "deep_earth_orb";
 static const std::string LAVA_CAVES_ORB = "lava_caves_orb";
-// TODO: More orbs
+static const std::string RUINS_ORB = "ruins_orb";
 static const std::string SOUL_STONE_CLERIC = "soul_stone_cleric";
 static const std::string SOUL_STONE_DARK_KNIGHT = "soul_stone_dark_knight";
 static const std::string SOUL_STONE_MAGE = "soul_stone_mage";
@@ -194,6 +211,8 @@ static const std::string DISORIENTING_TRAP_NOTIFICATION_KEY = "Notifications/Mod
 static const std::string EXPLODING_TRAP_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Traps/exploding";
 static const std::string INHIBITING_TRAP_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Traps/inhibiting";
 static const std::string LURING_TRAP_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Traps/luring";
+static const std::string METEOR_TRAP_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Traps/meteor";
+static const std::string GAZE_TRAP_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Traps/gaze";
 static const std::string FLOOR_ENCHANTMENT_CONVERSATION_KEY = "Conversations/Mods/Deep Dungeon/floor_enchantments";
 static const std::string DREAD_BEAST_WARNING_CONVERSATION_KEY = "Conversations/Mods/Deep Dungeon/dread_beast_warning";
 static const std::string FLOOR_TEN_CONVERSATION_KEY = "Conversations/floor_10/mines_floor_ten";
@@ -202,6 +221,7 @@ static const std::string ELEVATOR_LOCKED_CONVERSATION_KEY = "Conversations/Mods/
 static const std::string BOSS_BATTLE_TIDE_CAVERNS_ORB_CONVERSATION_KEY = "Conversations/Mods/Deep Dungeon/Boss Battles/tide_caverns_orb";
 static const std::string BOSS_BATTLE_DEEP_EARTH_ORB_CONVERSATION_KEY = "Conversations/Mods/Deep Dungeon/Boss Battles/deep_earth_orb";
 static const std::string BOSS_BATTLE_LAVA_CAVES_ORB_CONVERSATION_KEY = "Conversations/Mods/Deep Dungeon/Boss Battles/lava_caves_orb";
+static const std::string BOSS_BATTLE_RUINS_ORB_CONVERSATION_KEY = "Conversations/Mods/Deep Dungeon/Boss Battles/ruins_orb";
 static const std::string OFFERINGS_PLACEHOLDER_TEXT_KEY = "Conversations/Mods/Deep Dungeon/placeholders/offerings/result";
 static const std::string FLOOR_ENCHANTMENT_PLACEHOLDER_TEXT_KEY = "Conversations/Mods/Deep Dungeon/placeholders/floor_enchantments/init";
 static const std::string DREAD_BEAST_WARNING_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Special/dread";
@@ -225,6 +245,7 @@ static const std::string RECKONING_OFFERING_LOCALIZED_TEXT_KEY = "Conversations/
 static const std::string TIDE_CAVERNS_ORB_DESCRIPTION_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Orbs/tide_caverns_orb/description";
 static const std::string DEEP_EARTH_ORB_DESCRIPTION_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Orbs/deep_earth_orb/description";
 static const std::string LAVA_CAVES_ORB_DESCRIPTION_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Orbs/lava_caves_orb/description";
+static const std::string RUINS_ORB_DESCRIPTION_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Orbs/ruins_orb/description";
 static const std::string HEALTH_SALVE_DESCRIPTION_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Salves/health_salve/description";
 static const std::string STAMINA_SALVE_DESCRIPTION_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Salves/stamina_salve/description";
 static const std::string MANA_SALVE_DESCRIPTION_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Salves/mana_salve/description";
@@ -273,27 +294,36 @@ static const bool DEFAULT_RESTRICT_ARMOR = true;
 static const bool DEFAULT_RESTRICT_TOOLS = true;
 static const bool DEFAULT_RESTRICT_WEAPONS = true;
 static const bool DEFAULT_LIMIT_SALVES = true;
-static const int DEFAULT_HEALTH_SALVE_POTENCY = 30; // TODO: Allow values 30 to 999.
-static const int DEFAULT_STAMINA_SALVE_POTENCY = 30; // TODO: Allow values 30 to 999.
-static const int DEFAULT_MANA_SALVE_POTENCY = 1; // TODO: Allow values 1 to 999.
-static const double DEFAULT_SUSTAINING_POTION_DURATION_MODIFIER = 0.5; // TODO: Allow values 0.5 to 1.0
+static const int DEFAULT_HEALTH_SALVE_POTENCY = 30;
+static const int DEFAULT_STAMINA_SALVE_POTENCY = 30;
+static const int DEFAULT_MANA_SALVE_POTENCY = 1;
+static const double DEFAULT_SUSTAINING_POTION_DURATION_MODIFIER = 0.5;
 static const bool DEFAULT_RANDOMIZE_DUNGEON_MUSIC = true;
 static const int DEFAULT_RANDOM_DREAD_BEAST_SPAWN_CHANCE = 5; // TODO: Tune this.
 static const int DEFAULT_OFFERING_EVENT_CHANCE = 15;
 static const int DEFAULT_OFFERING_HEALTH_REQUIREMENT = 25; // TODO: Tune this.
 static const int DEFAULT_OFFERING_STAMINA_REQUIREMENT = 20; // TODO: Tune this.
 static const int DEFAULT_OFFERING_MANA_REQUIREMENT = 1;
-static const double DEFAULT_CURSED_ARMOR_DROP_CHANCE_MODIFIER = 1.0; // Allow values 1.0 to 10.0
-static const int DEFAULT_SOUL_STONE_DROP_CHANCE = 35; // Allow values 35 to 100
-static const int DEFAULT_LIFT_KEY_DROP_CHANCE = 2; // Allow values 2 to 100
+static const double DEFAULT_CURSED_ARMOR_DROP_CHANCE_MODIFIER = 1.0;
+static const int DEFAULT_SOUL_STONE_DROP_CHANCE = 35;
+static const int DEFAULT_LIFT_KEY_DROP_CHANCE = 2;
 static const bool DEFAULT_ENABLE_BOSS_FIGHT_RESTRICTIONS = true;
+static const int DEFAULT_CONFUSING_TRAP_DURATION_SECONDS = 1200;
+static const int DEFAULT_DISORIENTING_TRAP_DURATION_SECONDS = 600;
+static const int DEFAULT_EXPLODING_TRAP_CURRENT_HEALTH_DAMAGE_PERCENT = 50;
+static const int DEFAULT_LURING_TRAP_MONSTER_SPAWN_COUNT = 2;
+static const int DEFAULT_INHIBITING_TRAP_DURATION_SECONDS = 900;
+static const int DEFAULT_GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT = 50;
+static const double DEFAULT_METEOR_TRAP_SCALING_FACTOR = 2.5;
+static const int DEFAULT_MISTPOOL_EQUIPMENT_STORE_PRICE = 500;
+static const int DEFAULT_SALVES_STORE_PRICE = 50;
 
 static enum class BossBattle {
 	NONE,
 	TIDE_CAVERNS_ORB,
 	DEEP_EARTH_ORB,
-	LAVA_CAVES_ORB
-	// TODO
+	LAVA_CAVES_ORB,
+	RUINS_ORB
 };
 
 static enum class Classes {
@@ -361,7 +391,7 @@ static enum class FloorEnchantments {
 };
 
 static enum class Offerings {
-	DREAD, // TODO: Effect exists, need to apply it to a monster being spawned.
+	DREAD,
 	INNER_FIRE,
 	LEECH,
 	PERIL,
@@ -388,7 +418,24 @@ static enum class Traps {
 	DISORIENTING,
 	EXPLODING,
 	INHIBITING,
-	LURING
+	LURING,
+	METEOR,
+	GAZE
+};
+
+static enum class CustomAOETypes {
+	METEOR,
+	GAZE
+};
+
+static struct CustomAOE {
+	int x;
+	int y;
+	int spawned_time;
+	int duration;
+	bool is_active;
+	RValue instance;
+	CustomAOETypes type;
 };
 
 static const std::unordered_set<std::string> DUNGEON_TREASURE_CHEST_NAMES = {
@@ -434,7 +481,8 @@ static const std::vector<std::string> ORB_NAMES = {
 	// TODO: Add other orbs
 	TIDE_CAVERNS_ORB,
 	DEEP_EARTH_ORB,
-	LAVA_CAVES_ORB
+	LAVA_CAVES_ORB,
+	RUINS_ORB
 };
 
 static const std::vector<FloorEnchantments> GROUP_ONE_FLOOR_ENCHANTMENTS = {
@@ -1057,6 +1105,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 256 + 8, 192 + 8 },
 		{ 304 + 8, 240 + 8 },
 		{ 384 + 8, 256 + 8 },
+		{ 272 + 8, 368 + 8 },
 	}},
 	{ "rm_mines_lava_generic", {
 		{ 256 + 8, 560 + 8 },
@@ -1065,6 +1114,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 816 + 8, 512 + 8 },
 		{ 448 + 8, 288 + 8 },
 		{ 496 + 8, 208 + 8 },
+		{ 192 + 8, 464 + 8 },
 	}},
 	{ "rm_mines_lava_world", {
 		{ 192 + 8, 160 + 8 },
@@ -1073,6 +1123,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 208 + 8, 448 + 8 },
 		{ 432 + 8, 352 + 8 },
 		{ 496 + 8, 464 + 8 },
+		{ 416 + 8, 256 + 8 }, 
 	}},
 	{ "rm_mines_lava_elements", {
 		{ 352 + 8, 576 + 8 },
@@ -1081,6 +1132,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 368 + 8, 352 + 8 },
 		{ 448 + 8, 368 + 8 },
 		{ 368 + 8, 192 + 8 },
+		{ 368 + 8, 288 + 8 },
 	}},
 	{ "rm_mines_lava_arena", {
 		{ 400 + 8, 384 + 8 },
@@ -1089,6 +1141,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 160 + 8, 576 + 8 },
 		{ 384 + 8, 640 + 8 },
 		{ 544 + 8, 576 + 8 },
+		{ 336 + 8, 320 + 8 },
 	}},
 	{ "rm_mines_lava_61", {
 		{ 144 + 8, 224 + 8 },
@@ -1097,6 +1150,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 304 + 8, 352 + 8 },
 		{ 272 + 8, 432 + 8 },
 		{ 368 + 8, 416 + 8 },
+		{ 464 + 8, 336 + 8 },
 	}},
 	{ "rm_mines_lava_65", {
 		{ 384 + 8, 176 + 8 },
@@ -1105,6 +1159,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 464 + 8, 432 + 8 },
 		{ 528 + 8, 416 + 8 },
 		{ 624 + 8, 288 + 8 },
+		{ 560 + 8, 192 + 8 },
 	}},
 	{ "rm_mines_lava_70", {
 		{ 384 + 8, 208 + 8 },
@@ -1113,6 +1168,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 592 + 8, 288 + 8 },
 		{ 656 + 8, 208 + 8 },
 		{ 576 + 8, 160 + 8 },
+		{ 592 + 8, 384 + 8 },
 	}},
 	{ "rm_mines_lava_75", {
 		{ 544 + 8, 144 + 8 },
@@ -1121,6 +1177,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 448 + 8, 320 + 8 },
 		{ 560 + 8, 352 + 8 },
 		{ 640 + 8, 208 + 8 },
+		{ 480 + 8, 400 + 8 },
 	}},
 	{ "rm_mines_lava_switch1", {
 		{ 352 + 8, 384 + 8 },
@@ -1129,6 +1186,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 768 + 8, 528 + 8 },
 		{ 768 + 8, 368 + 8 },
 		{ 784 + 8, 288 + 8 },
+		{ 528 + 8, 304 + 8 },
 	}},
 	{ "rm_mines_lava_switch2", {
 		{ 256 + 8, 480 + 8 },
@@ -1137,6 +1195,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 544 + 8, 400 + 8 },
 		{ 528 + 8, 336 + 8 },
 		{ 416 + 8, 256 + 8 },
+		{ 656 + 8, 400 + 8 },
 	}},
 	{ "rm_mines_lava_switch3", {
 		{ 272 + 8, 192 + 8 },
@@ -1145,6 +1204,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 544 + 8, 416 + 8 },
 		{ 464 + 8, 496 + 8 },
 		{ 272 + 8, 560 + 8 },
+		{ 256 + 8, 288 + 8 },
 	}},
 	{ "rm_mines_lava_switch4", {
 		{ 464 + 8, 192 + 8 },
@@ -1153,6 +1213,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 448 + 8, 368 + 8 },
 		{ 576 + 8, 432 + 8 },
 		{ 320 + 8, 592 + 8 },
+		{ 368 + 8, 496 + 8 },
 	}},
 	{ "rm_mines_lava_switch5", {
 		{ 512 + 8, 144 + 8 },
@@ -1161,6 +1222,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 720 + 8, 384 + 8 },
 		{ 672 + 8, 544 + 8 },
 		{ 528 + 8, 656 + 8 },
+		{ 496 + 8, 80 + 8 },
 	}},
 	{ "rm_mines_lava_basic1", {
 		{ 768 + 8, 176 + 8 },
@@ -1169,6 +1231,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 720 + 8, 432 + 8 },
 		{ 800 + 8, 480 + 8 },
 		{ 224 + 8, 512 + 8 },
+		{ 624 + 8, 368 + 8 },
 	}},
 	{ "rm_mines_lava_basic2", {
 		{ 336 + 8, 240 + 8 },
@@ -1177,6 +1240,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 432 + 8, 384 + 8 },
 		{ 240 + 8, 656 + 8 },
 		{ 800 + 8, 400 + 8 },
+		{ 336 + 8, 368 + 8 },
 	}},
 	{ "rm_mines_lava_basic3", {
 		{ 320 + 8, 240 + 8 },
@@ -1185,6 +1249,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 352 + 8, 480 + 8 },
 		{ 288 + 8, 656 + 8 },
 		{ 368 + 8, 640 + 8 },
+		{ 224 + 8, 384 + 8 },
 	}},
 	{ "rm_mines_lava_basic4", {
 		{ 432 + 8, 400 + 8 },
@@ -1193,14 +1258,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 784 + 8, 160 + 8 },
 		{ 752 + 8, 400 + 8 },
 		{ 736 + 8, 592 + 8 },
-	}},
-	{ "", {
-		{ 0 + 8, 0 + 8 },
-		{ 0 + 8, 0 + 8 },
-		{ 0 + 8, 0 + 8 },
-		{ 0 + 8, 0 + 8 },
-		{ 0 + 8, 0 + 8 },
-		{ 0 + 8, 0 + 8 },
+		{ 528 + 8, 160 + 8 },
 	}},
 	{ "rm_mines_lava_basic5", {
 		{ 304 + 8, 304 + 8 },
@@ -1209,6 +1267,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 544 + 8, 400 + 8 },
 		{ 544 + 8, 560 + 8 },
 		{ 736 + 8, 288 + 8 },
+		{ 688 + 8, 432 + 8 },
 	}},
 	{ "rm_mines_lava_shrine1", {
 		{ 272 + 8, 416 + 8 },
@@ -1217,6 +1276,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 672 + 8, 368 + 8 },
 		{ 752 + 8, 352 + 8 },
 		{ 848 + 8, 272 + 8 },
+		{ 544 + 8, 416 + 8 },
 	}},
 	{ "rm_mines_lava_shrine2", {
 		{ 288 + 8, 224 + 8 },
@@ -1225,6 +1285,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 608 + 8, 208 + 8 },
 		{ 688 + 8, 208 + 8 },
 		{ 720 + 8, 336 + 8 },
+		{ 752 + 8, 544 + 8 },
 	}},
 	{ "rm_mines_lava_shrine3", {
 		{ 256 + 8, 176 + 8 },
@@ -1233,6 +1294,7 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 176 + 8, 464 + 8 },
 		{ 336 + 8, 512 + 8 },
 		{ 272 + 8, 560 + 8 },
+		{ 352 + 8, 144 + 8 },
 	}},
 	{ "rm_mines_lava_shrine4", {
 		{ 288 + 8, 160 + 8 },
@@ -1241,199 +1303,268 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 		{ 464 + 8, 336 + 8 },
 		{ 640 + 8, 320 + 8 },
 		{ 608 + 8, 608 + 8 },
+		{ 464 + 8, 592 + 8 },
 	}},
-	//{ "", {
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//}},
-	//{ "", {
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//}},
-	//{ "", {
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//}},
-	//{ "", {
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//}},
-	//{ "", {
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//}},
-	//{ "", {
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//}},
-	//{ "", {
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//}},
-	//{ "", {
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//}},
-	//{ "", {
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//}},
-	//{ "", {
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//}},
-	//{ "", {
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//}},
-	//{ "", {
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//}},
-	//{ "", {
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//}},
-	//{ "", {
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//}},
-	//{ "", {
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//}},
-	//{ "", {
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//}},
-	//{ "", {
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//}},
-	//{ "", {
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//}},
-	//{ "", {
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//}},
-	//{ "", {
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//}},
-	//{ "", {
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//}},
-	//{ "", {
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//}},
-	//{ "", {
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//}},
-	//{ "", {
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//	{ 0 + 8, 0 + 8 },
-	//}},
+	{ "rm_mines_ruins_basic1", {
+		{ 432 + 8, 224 + 8 },
+		{ 528 + 8, 208 + 8 },
+		{ 224 + 8, 544 + 8 },
+		{ 400 + 8, 528 + 8 },
+		{ 480 + 8, 384 + 8 },
+		{ 480 + 8, 608 + 8 },
+		{ 592 + 8, 512 + 8 },
+		{ 704 + 8, 528 + 8 },
+	}},
+	{ "rm_mines_ruins_85", {
+		{ 576 + 8, 192 + 8 },
+		{ 320 + 8, 560 + 8 },
+		{ 448 + 8, 528 + 8 },
+		{ 480 + 8, 384 + 8 },
+		{ 592 + 8, 352 + 8 },
+		{ 688 + 8, 384 + 8 },
+		{ 672 + 8, 528 + 8 },
+		{ 848 + 8, 528 + 8 },
+	}},
+	{ "rm_mines_ruins_large_switch", {
+		{ 480 + 8, 176 + 8 },
+		{ 448 + 8, 400 + 8 },
+		{ 496 + 8, 544 + 8 },
+		{ 640 + 8, 544 + 8 },
+		{ 720 + 8, 304 + 8 },
+		{ 784 + 8, 544 + 8 },
+		{ 832 + 8, 256 + 8 },
+		{ 880 + 8, 480 + 8 },
+	}},
+	{ "rm_mines_ruins_81", {
+		{ 176 + 8, 304 + 8 },
+		{ 272 + 8, 352 + 8 },
+		{ 448 + 8, 336 + 8 },
+		{ 544 + 8, 352 + 8 },
+		{ 608 + 8, 400 + 8 },
+		{ 704 + 8, 336 + 8 },
+		{ 880 + 8, 304 + 8 },
+		{ 960 + 8, 352 + 8 },
+	}},
+	{ "rm_mines_ruins_95", {
+		{ 576 + 8, 192 + 8 },
+		{ 304 + 8, 528 + 8 },
+		{ 448 + 8, 544 + 8 },
+		{ 560 + 8, 496 + 8 },
+		{ 608 + 8, 416 + 8 },
+		{ 720 + 8, 544 + 8 },
+		{ 864 + 8, 512 + 8 },
+		{ 576 + 8, 656 + 8 },
+	}},
+	{ "rm_mines_ruins_arena1", {
+		{ 448 + 8, 288 + 8 },
+		{ 560 + 8, 304 + 8 },
+		{ 688 + 8, 272 + 8 },
+		{ 496 + 8, 368 + 8 },
+		{ 656 + 8, 384 + 8 },
+		{ 576 + 8, 448 + 8 },
+		{ 464 + 8, 480 + 8 },
+		{ 704 + 8, 464 + 8 },
+	}},
+	{ "rm_mines_ruins_basic2", {
+		{ 240 + 8, 288 + 8 },
+		{ 256 + 8, 208 + 8 },
+		{ 432 + 8, 208 + 8 },
+		{ 544 + 8, 176 + 8 },
+		{ 624 + 8, 224 + 8 },
+		{ 784 + 8, 208 + 8 },
+		{ 784 + 8, 304 + 8 },
+		{ 528 + 8, 352 + 8 },
+	}},
+	{ "rm_mines_ruins_basic3", {
+		{ 384 + 8, 496 + 8 },
+		{ 416 + 8, 592 + 8 },
+		{ 592 + 8, 464 + 8 },
+		{ 608 + 8, 624 + 8 },
+		{ 752 + 8, 576 + 8 },
+		{ 816 + 8, 480 + 8 },
+		{ 720 + 8, 336 + 8 },
+		{ 672 + 8, 192 + 8 },
+	}},
+	{ "rm_mines_ruins_basic4", {
+		{ 496 + 8, 112 + 8 },
+		{ 672 + 8, 128 + 8 },
+		{ 592 + 8, 176 + 8 },
+		{ 752 + 8, 240 + 8 },
+		{ 448 + 8, 288 + 8 },
+		{ 688 + 8, 304 + 8 },
+		{ 480 + 8, 672 + 8 },
+		{ 624 + 8, 672 + 8 },
+	}},
+	{ "rm_mines_ruins_basic5", {
+		{ 656 + 8, 304 + 8 },
+		{ 464 + 8, 384 + 8 },
+		{ 720 + 8, 384 + 8 },
+		{ 384 + 8, 464 + 8 },
+		{ 288 + 8, 496 + 8 },
+		{ 496 + 8, 496 + 8 },
+		{ 496 + 8, 624 + 8 },
+		{ 576 + 8, 656 + 8 },
+	}},
+	{ "rm_mines_ruins_switch2", {
+		{ 192 + 8, 160 + 8 },
+		{ 528 + 8, 192 + 8 },
+		{ 624 + 8, 144 + 8 },
+		{ 272 + 8, 368 + 8 },
+		{ 672 + 8, 384 + 8 },
+		{ 192 + 8, 512 + 8 },
+		{ 448 + 8, 512 + 8 },
+		{ 608 + 8, 560 + 8 },
+	}},
+	{ "rm_mines_ruins_switch3", {
+		{ 336 + 8, 160 + 8 },
+		{ 320 + 8, 256 + 8 },
+		{ 528 + 8, 272 + 8 },
+		{ 624 + 8, 304 + 8 },
+		{ 304 + 8, 480 + 8 },
+		{ 192 + 8, 528 + 8 },
+		{ 416 + 8, 512 + 8 },
+		{ 320 + 8, 576 + 8 },
+	}},
+	{ "rm_mines_ruins_switch4", {
+		{ 128 + 8, 272 + 8 },
+		{ 592 + 8, 208 + 8 },
+		{ 736 + 8, 224 + 8 },
+		{ 160 + 8, 384 + 8 },
+		{ 720 + 8, 384 + 8 },
+		{ 128 + 8, 512 + 8 },
+		{ 448 + 8, 544 + 8 },
+		{ 736 + 8, 544 + 8 },
+	}},
+	{ "rm_mines_ruins_switch5", {
+		{ 112 + 8, 192 + 8 },
+		{ 272 + 8, 176 + 8 },
+		{ 352 + 8, 240 + 8 },
+		{ 496 + 8, 240 + 8 },
+		{ 672 + 8, 256 + 8 },
+		{ 448 + 8, 384 + 8 },
+		{ 544 + 8, 416 + 8 },
+		{ 624 + 8, 480 + 8 },
+	}},
+	{ "rm_mines_ruins_arena2", {
+		{ 432 + 8, 304 + 8 },
+		{ 592 + 8, 256 + 8 },
+		{ 576 + 8, 336 + 8 },
+		{ 720 + 8, 304 + 8 },
+		{ 448 + 8, 432 + 8 },
+		{ 432 + 8, 496 + 8 },
+		{ 704 + 8, 432 + 8 },
+		{ 736 + 8, 496 + 8 },
+	}},
+	{ "rm_mines_ruins_whirlpool1", {
+		{ 272 + 8, 256 + 8 },
+		{ 496 + 8, 272 + 8 },
+		{ 240 + 8, 448 + 8 },
+		{ 304 + 8, 512 + 8 },
+		{ 480 + 8, 512 + 8 },
+		{ 512 + 8, 448 + 8 },
+		{ 784 + 8, 336 + 8 },
+		{ 784 + 8, 448 + 8 },
+	}},
+	{ "rm_mines_ruins_whirlpool2", {
+		{ 272 + 8, 416 + 8 },
+		{ 464 + 8, 384 + 8 },
+		{ 480 + 8, 464 + 8 },
+		{ 608 + 8, 368 + 8 },
+		{ 608 + 8, 512 + 8 },
+		{ 560 + 8, 592 + 8 },
+		{ 576 + 8, 688 + 8 },
+		{ 688 + 8, 688 + 8 },
+	}},
+	{ "rm_mines_ruins_whirlpool3", {
+		{ 416 + 8, 240 + 8 },
+		{ 352 + 8, 336 + 8 },
+		{ 400 + 8, 416 + 8 },
+		{ 496 + 8, 304 + 8 },
+		{ 592 + 8, 240 + 8 },
+		{ 640 + 8, 336 + 8 },
+		{ 576 + 8, 384 + 8 },
+		{ 608 + 8, 464 + 8 },
+	}},
+	{ "rm_mines_ruins_whirlpool4", {
+		{ 320 + 8, 128 + 8 },
+		{ 512 + 8, 96 + 8 },
+		{ 576 + 8, 224 + 8 },
+		{ 688 + 8, 352 + 8 },
+		{ 752 + 8, 416 + 8 },
+		{ 816 + 8, 224 + 8 },
+		{ 832 + 8, 368 + 8 },
+		{ 848 + 8, 496 + 8 },
+	}},
+	{ "rm_mines_ruins_shrine1", {
+		{ 544 + 8, 224 + 8 },
+		{ 688 + 8, 208 + 8 },
+		{ 832 + 8, 176 + 8 },
+		{ 544 + 8, 352 + 8 },
+		{ 688 + 8, 352 + 8 },
+		{ 832 + 8, 352 + 8 },
+		{ 496 + 8, 512 + 8 },
+		{ 688 + 8, 496 + 8 },
+	}},
+	{ "rm_mines_ruins_whirlpool5", {
+		{ 464 + 8, 192 + 8 },
+		{ 608 + 8, 160 + 8 },
+		{ 736 + 8, 240 + 8 },
+		{ 720 + 8, 336 + 8 },
+		{ 736 + 8, 592 + 8 },
+		{ 672 + 8, 672 + 8 },
+		{ 512 + 8, 688 + 8 },
+		{ 368 + 8, 656 + 8 },
+	} },
+	{ "rm_mines_ruins_shrine2", {
+		{ 448 + 8, 272 + 8 },
+		{ 512 + 8, 288 + 8 },
+		{ 256 + 8, 432 + 8 },
+		{ 240 + 8, 608 + 8 },
+		{ 512 + 8, 480 + 8 },
+		{ 432 + 8, 608 + 8 },
+		{ 608 + 8, 624 + 8 },
+		{ 736 + 8, 608 + 8 },
+	} },
+	{ "rm_mines_ruins_shrine3", {
+		{ 464 + 8, 224 + 8 },
+		{ 432 + 8, 336 + 8 },
+		{ 608 + 8, 256 + 8 },
+		{ 720 + 8, 256 + 8 },
+		{ 400 + 8, 512 + 8 },
+		{ 480 + 8, 464 + 8 },
+		{ 608 + 8, 496 + 8 },
+		{ 720 + 8, 432 + 8 },
+	} },
+	{ "rm_mines_ruins_shrine4", {
+		{ 336 + 8, 80 + 8 },
+		{ 464 + 8, 128 + 8 },
+		{ 640 + 8, 80 + 8 },
+		{ 320 + 8, 288 + 8 },
+		{ 480 + 8, 256 + 8 },
+		{ 624 + 8, 272 + 8 },
+		{ 336 + 8, 416 + 8 },
+		{ 544 + 8, 400 + 8 },
+	} },
+	{ "rm_mines_ruins_shrine5", {
+		{ 496 + 8, 176 + 8 },
+		{ 448 + 8, 288 + 8 },
+		{ 608 + 8, 304 + 8 },
+		{ 672 + 8, 352 + 8 },
+		{ 496 + 8, 432 + 8 },
+		{ 528 + 8, 512 + 8 },
+		{ 624 + 8, 576 + 8 },
+		{ 752 + 8, 480 + 8 },
+	} },
+	{ "rm_mines_ruins_arena3", {
+		{ 496 + 8, 272 + 8 },
+		{ 656 + 8, 272 + 8 },
+		{ 448 + 8, 352 + 8 },
+		{ 528 + 8, 352 + 8 },
+		{ 624 + 8, 336 + 8 },
+		{ 704 + 8, 368 + 8 },
+		{ 624 + 8, 432 + 8 },
+		{ 512 + 8, 496 + 8 },
+	} },
 	//{ "", {
 	//	{ 0 + 8, 0 + 8 },
 	//	{ 0 + 8, 0 + 8 },
@@ -1444,11 +1575,18 @@ static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_
 	//}},
 };
 
-static const std::vector<std::string> MUSIC_INTERNAL_NAMES = {
+// TODO: Add new songs when updated
+static const std::vector<std::string> MUSIC_INTERNAL_NAMES = { // As of 0.15.1
+	"Music/Crystal Tracks/BarleyMoon",
+	"Music/Crystal Tracks/CrystalCaves",
+	"Music/Crystal Tracks/PinkTwintails",
 	"Music/Events/DragonCutscene",
+	"Music/Events/LightAndShadow",
 	"Music/Events/SharedLight",
+	"Music/Events/ShootingStarNight",
 	"Music/Events/TheSeal",
 	"Music/Events/ThemeOfDarkness",
+	"Music/Events/TsukihotaruFinale",
 	"Music/Location Tracks/AnimalFestival",
 	"Music/Location Tracks/Bathhouse",
 	"Music/Location Tracks/Blacksmith",
@@ -1463,27 +1601,35 @@ static const std::vector<std::string> MUSIC_INTERNAL_NAMES = {
 	"Music/Location Tracks/MinesEntry",
 	"Music/Location Tracks/Player Home/Day",
 	"Music/Location Tracks/Player Home/Night",
+	"Music/Location Tracks/SeridiaVoidRoom",
 	"Music/Location Tracks/ShootingStarFestival",
 	"Music/Location Tracks/SpringFestival",
+	"Music/Location Tracks/TheFinalSeal",
+	"Music/Location Tracks/VoidSeal",
+	"Music/Menu Tracks/Tsukihotaru",
 	"Music/Npc Tracks/Adeline",
 	"Music/Npc Tracks/Balor",
-	"Music/Npc Tracks/Caldarus/Caldarus",
-	"Music/Npc Tracks/Celine/Celine",
+	"Music/Npc Tracks/Caldarus",
+	"Music/Npc Tracks/Celine",
 	"Music/Npc Tracks/Eiland",
 	"Music/Npc Tracks/Hayden",
 	"Music/Npc Tracks/Juniper",
 	"Music/Npc Tracks/March",
 	"Music/Npc Tracks/Reina",
 	"Music/Npc Tracks/Ryis",
+	"Music/Npc Tracks/Seridia",
 	"Music/Npc Tracks/Valen",
 	"Music/Playlists/MinesDeepEarth",
 	"Music/Playlists/MinesLavaCaves",
 	"Music/Playlists/MinesTideCaverns",
 	"Music/Playlists/MinesUpper",
+	"Music/Playlists/MinesRuins",
 	"Music/Playlists/Spring",
+	"Music/Playlists/Spring Rain",
 	"Music/Playlists/Summer",
 	"Music/Playlists/Fall",
 	"Music/Playlists/Winter",
+	"Music/Playlists/Winter Snow"
 };
 
 static YYTKInterface* g_ModuleInterface = nullptr;
@@ -1494,6 +1640,7 @@ static bool localize_mod_text = false;
 static bool game_is_active = false;
 static bool unlock_recipes = true;
 static bool crafting_menu_open = false;
+static bool journal_menu_open = false;
 static bool drop_biome_reward = false;
 static bool biome_reward_disabled = false;
 static bool dread_beast_configured = false;
@@ -1510,6 +1657,7 @@ static bool obj_dungeon_elevator_focused = false;
 static bool obj_dungeon_ladder_down_focused = false;
 static double ari_x = -1;
 static double ari_y = -1;
+static double ari_facing_dir = -1;
 static int floor_number = 0;
 static int unmodified_base_health = -1;
 static int floor_start_time = 0;
@@ -1520,8 +1668,9 @@ static int held_item_id = -1;
 static int sigil_of_silence_count = 0;
 static int sigil_of_alteration_count = 0;
 static int dread_beast_monster_id = -1;
+static int dread_beasts_configured = 0;
 static int boss_monsters_configured = 0;
-static BossBattle boss_battle = BossBattle::NONE; // TODO
+static BossBattle boss_battle = BossBattle::NONE;
 static std::string ari_current_location = "";
 static std::string ari_current_gm_room = "";
 static std::unordered_set<int> orb_items = {};
@@ -1546,6 +1695,8 @@ static std::map<std::string, int> item_name_to_id_map = {};
 std::unordered_set<std::pair<int, int>, pair_hash> floor_trap_positions = {};
 static std::unordered_set<int> salves_used = {};
 static std::map<Traps, std::pair<int, int>> active_traps = {}; // Holds the active traps and the position they most recently triggered at.
+static std::vector<CustomAOE> meteor_aoes = {};
+static std::vector<CustomAOE> gaze_aoes = {};
 static std::unordered_set<Sigils> active_sigils = {};
 static std::unordered_set<Offerings> queued_offerings = {};
 static std::unordered_set<Offerings> active_offerings = {};
@@ -1605,6 +1756,15 @@ static struct Configuration {
 	int soul_stone_drop_chance = DEFAULT_SOUL_STONE_DROP_CHANCE;
 	int lift_key_drop_chance = DEFAULT_LIFT_KEY_DROP_CHANCE;
 	bool enable_boss_fight_restrictions = DEFAULT_ENABLE_BOSS_FIGHT_RESTRICTIONS;
+	int confusing_trap_duration_seconds = DEFAULT_CONFUSING_TRAP_DURATION_SECONDS;
+	int disorienting_trap_duration_seconds = DEFAULT_DISORIENTING_TRAP_DURATION_SECONDS;
+	int exploding_trap_current_health_damage_percent = DEFAULT_EXPLODING_TRAP_CURRENT_HEALTH_DAMAGE_PERCENT;
+	int inhibiting_trap_duration_seconds = DEFAULT_INHIBITING_TRAP_DURATION_SECONDS;
+	int luring_trap_monster_spawn_count = DEFAULT_LURING_TRAP_MONSTER_SPAWN_COUNT;
+	int gaze_trap_max_health_damage_percent = DEFAULT_GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT;
+	double meteor_trap_scaling_factor = DEFAULT_METEOR_TRAP_SCALING_FACTOR;
+	int mistpool_equipment_store_price = DEFAULT_MISTPOOL_EQUIPMENT_STORE_PRICE;
+	int salves_store_price = DEFAULT_SALVES_STORE_PRICE;
 };
 static Configuration configuration = Configuration();
 
@@ -1643,7 +1803,16 @@ json CreateConfigJson(bool use_defaults)
 		{ CURSED_ARMOR_DROP_CHANCE_MODIFIER_JSON_KEY, use_defaults ? DEFAULT_CURSED_ARMOR_DROP_CHANCE_MODIFIER : configuration.cursed_armor_drop_chance_modifier },
 		{ SOUL_STONE_DROP_CHANCE_JSON_KEY, use_defaults ? DEFAULT_SOUL_STONE_DROP_CHANCE : configuration.soul_stone_drop_chance },
 		{ LIFT_KEY_DROP_CHANCE_JSON_KEY, use_defaults ? DEFAULT_LIFT_KEY_DROP_CHANCE : configuration.lift_key_drop_chance },
-		{ ENABLE_BOSS_FIGHT_RESTRICTIONS_JSON_KEY, use_defaults ? DEFAULT_ENABLE_BOSS_FIGHT_RESTRICTIONS : configuration.enable_boss_fight_restrictions }
+		{ ENABLE_BOSS_FIGHT_RESTRICTIONS_JSON_KEY, use_defaults ? DEFAULT_ENABLE_BOSS_FIGHT_RESTRICTIONS : configuration.enable_boss_fight_restrictions },
+		{ CONFUSING_TRAP_DURATION_SECONDS_JSON_KEY, use_defaults ? DEFAULT_CONFUSING_TRAP_DURATION_SECONDS : configuration.confusing_trap_duration_seconds },
+		{ DISORIENTING_TRAP_DURATION_SECONDS_JSON_KEY, use_defaults ? DEFAULT_DISORIENTING_TRAP_DURATION_SECONDS : configuration.disorienting_trap_duration_seconds },
+		{ EXPLODING_TRAP_CURRENT_HEALTH_DAMAGE_PERCENT_JSON_KEY, use_defaults ? DEFAULT_EXPLODING_TRAP_CURRENT_HEALTH_DAMAGE_PERCENT : configuration.exploding_trap_current_health_damage_percent },
+		{ INHIBITING_TRAP_DURATION_SECONDS_JSON_KEY, use_defaults ? DEFAULT_INHIBITING_TRAP_DURATION_SECONDS : configuration.inhibiting_trap_duration_seconds },
+		{ LURING_TRAP_MONSTER_SPAWN_COUNT_JSON_KEY, use_defaults ? DEFAULT_LURING_TRAP_MONSTER_SPAWN_COUNT : configuration.luring_trap_monster_spawn_count },
+		{ GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT_JSON_KEY, use_defaults ? DEFAULT_GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT : configuration.gaze_trap_max_health_damage_percent },
+		{ METEOR_TRAP_SCALING_FACTOR_JSON_KEY, use_defaults ? DEFAULT_METEOR_TRAP_SCALING_FACTOR : configuration.meteor_trap_scaling_factor },
+		{ MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY, use_defaults ? DEFAULT_MISTPOOL_EQUIPMENT_STORE_PRICE : configuration.mistpool_equipment_store_price },
+		{ SALVES_STORE_PRICE_JSON_KEY, use_defaults ? DEFAULT_SALVES_STORE_PRICE : configuration.salves_store_price }
 	};
 	return config_json;
 }
@@ -1886,6 +2055,115 @@ void CreateOrLoadConfigFile()
 						configuration.enable_boss_fight_restrictions = json_object[ENABLE_BOSS_FIGHT_RESTRICTIONS_JSON_KEY];
 					else
 						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, ENABLE_BOSS_FIGHT_RESTRICTIONS_JSON_KEY, config_file.c_str());
+
+					// Try loading confusing_trap_duration_seconds
+					if (json_object.contains(CONFUSING_TRAP_DURATION_SECONDS_JSON_KEY) && json_object.at(CONFUSING_TRAP_DURATION_SECONDS_JSON_KEY).is_number_integer())
+					{
+						int confusing_trap_duration_seconds = json_object[CONFUSING_TRAP_DURATION_SECONDS_JSON_KEY];
+						if (confusing_trap_duration_seconds >= 0 && confusing_trap_duration_seconds <= 1200)
+							configuration.confusing_trap_duration_seconds = confusing_trap_duration_seconds;
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, CONFUSING_TRAP_DURATION_SECONDS_JSON_KEY, config_file.c_str());
+					}
+					else
+						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, CONFUSING_TRAP_DURATION_SECONDS_JSON_KEY, config_file.c_str());
+
+					// Try loading disorienting_trap_duration_seconds
+					if (json_object.contains(DISORIENTING_TRAP_DURATION_SECONDS_JSON_KEY) && json_object.at(DISORIENTING_TRAP_DURATION_SECONDS_JSON_KEY).is_number_integer())
+					{
+						int disorienting_trap_duration_seconds = json_object[DISORIENTING_TRAP_DURATION_SECONDS_JSON_KEY];
+						if (disorienting_trap_duration_seconds >= 0 && disorienting_trap_duration_seconds <= 600)
+							configuration.disorienting_trap_duration_seconds = disorienting_trap_duration_seconds;
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, DISORIENTING_TRAP_DURATION_SECONDS_JSON_KEY, config_file.c_str());
+					}
+					else
+						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, DISORIENTING_TRAP_DURATION_SECONDS_JSON_KEY, config_file.c_str());
+
+					// Try loading exploding_trap_current_health_damage_percent
+					if (json_object.contains(EXPLODING_TRAP_CURRENT_HEALTH_DAMAGE_PERCENT_JSON_KEY) && json_object.at(EXPLODING_TRAP_CURRENT_HEALTH_DAMAGE_PERCENT_JSON_KEY).is_number_integer())
+					{
+						int exploding_trap_current_health_damage_percent = json_object[EXPLODING_TRAP_CURRENT_HEALTH_DAMAGE_PERCENT_JSON_KEY];
+						if (exploding_trap_current_health_damage_percent >= 0 && exploding_trap_current_health_damage_percent <= 80)
+							configuration.exploding_trap_current_health_damage_percent = exploding_trap_current_health_damage_percent;
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, EXPLODING_TRAP_CURRENT_HEALTH_DAMAGE_PERCENT_JSON_KEY, config_file.c_str());
+					}
+					else
+						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, EXPLODING_TRAP_CURRENT_HEALTH_DAMAGE_PERCENT_JSON_KEY, config_file.c_str());
+
+					// Try loading luring_trap_monster_spawn_count
+					if (json_object.contains(LURING_TRAP_MONSTER_SPAWN_COUNT_JSON_KEY) && json_object.at(LURING_TRAP_MONSTER_SPAWN_COUNT_JSON_KEY).is_number_integer())
+					{
+						int luring_trap_monster_spawn_count = json_object[LURING_TRAP_MONSTER_SPAWN_COUNT_JSON_KEY];
+						if (luring_trap_monster_spawn_count >= 0 && luring_trap_monster_spawn_count <= 2)
+							configuration.luring_trap_monster_spawn_count = luring_trap_monster_spawn_count;
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, LURING_TRAP_MONSTER_SPAWN_COUNT_JSON_KEY, config_file.c_str());
+					}
+					else
+						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, LURING_TRAP_MONSTER_SPAWN_COUNT_JSON_KEY, config_file.c_str());
+
+					// Try loading inhibiting_trap_duration_seconds
+					if (json_object.contains(INHIBITING_TRAP_DURATION_SECONDS_JSON_KEY) && json_object.at(INHIBITING_TRAP_DURATION_SECONDS_JSON_KEY).is_number_integer())
+					{
+						int inhibiting_trap_duration_seconds = json_object[INHIBITING_TRAP_DURATION_SECONDS_JSON_KEY];
+						if (inhibiting_trap_duration_seconds >= 0 && inhibiting_trap_duration_seconds <= 900)
+							configuration.inhibiting_trap_duration_seconds = inhibiting_trap_duration_seconds;
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, INHIBITING_TRAP_DURATION_SECONDS_JSON_KEY, config_file.c_str());
+					}
+					else
+						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, INHIBITING_TRAP_DURATION_SECONDS_JSON_KEY, config_file.c_str());
+
+					// Try loading gaze_trap_max_health_damage_percent
+					if (json_object.contains(GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT_JSON_KEY) && json_object.at(GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT_JSON_KEY).is_number_integer())
+					{
+						int gaze_trap_max_health_damage_percent = json_object[GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT_JSON_KEY];
+						if (gaze_trap_max_health_damage_percent >= 0 && gaze_trap_max_health_damage_percent <= 99)
+							configuration.gaze_trap_max_health_damage_percent = gaze_trap_max_health_damage_percent;
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT_JSON_KEY, config_file.c_str());
+					}
+					else
+						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT_JSON_KEY, config_file.c_str());
+
+					// Try loading meteor_trap_scaling_factor
+					if (json_object.contains(METEOR_TRAP_SCALING_FACTOR_JSON_KEY) && json_object.at(METEOR_TRAP_SCALING_FACTOR_JSON_KEY).is_number_float())
+					{
+						double meteor_trap_scaling_factor = json_object[METEOR_TRAP_SCALING_FACTOR_JSON_KEY];
+						if (meteor_trap_scaling_factor == 0 || meteor_trap_scaling_factor == 1 || meteor_trap_scaling_factor == 1.5 || meteor_trap_scaling_factor == 2 || meteor_trap_scaling_factor == 2.5 || meteor_trap_scaling_factor == 3)
+							configuration.meteor_trap_scaling_factor = meteor_trap_scaling_factor;
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, METEOR_TRAP_SCALING_FACTOR_JSON_KEY, config_file.c_str());
+					}
+					else
+						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, METEOR_TRAP_SCALING_FACTOR_JSON_KEY, config_file.c_str());
+
+					// Try loading mistpool_equipment_store_price
+					if (json_object.contains(MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY) && json_object.at(MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY).is_number_integer())
+					{
+						int mistpool_equipment_store_price = json_object[MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY];
+						if (mistpool_equipment_store_price >= 1 && mistpool_equipment_store_price <= 500)
+							configuration.mistpool_equipment_store_price = mistpool_equipment_store_price;
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY, config_file.c_str());
+					}
+					else
+						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY, config_file.c_str());
+
+					// Try loading salves_store_price
+					if (json_object.contains(SALVES_STORE_PRICE_JSON_KEY) && json_object.at(SALVES_STORE_PRICE_JSON_KEY).is_number_integer())
+					{
+						int salves_store_price = json_object[SALVES_STORE_PRICE_JSON_KEY];
+						if (salves_store_price >= 1 && salves_store_price <= 50)
+							configuration.salves_store_price = salves_store_price;
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, SALVES_STORE_PRICE_JSON_KEY, config_file.c_str());
+					}
+					else
+						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, SALVES_STORE_PRICE_JSON_KEY, config_file.c_str());
+
 				}
 
 				update_config_file = true;
@@ -2182,11 +2460,53 @@ std::vector<std::vector<double>> generate_inverted_checkerboard()
 	return positions;
 }
 
-double GetDistance(int x1, int y1, int x2, int y2) {
+double GetDistance(int x1, int y1, int x2, int y2)
+{
 	return std::sqrt(std::pow(x2 - x1, 2) + std::pow(y2 - y1, 2));
 }
 
-std::pair<int, int> GetCenterOffset(int screen_center_x, int screen_center_y, int image_width, int image_height) {
+std::pair<int, int> GetVector(int x1, int y1, int x2, int y2)
+{
+	return { x2 - x1, y2 - y1 };
+}
+
+int CalculateMeteorDamage(double distance)
+{
+	const double lethalRadius = 32.0;
+	const double maxDistance = 256.0;
+
+	if (configuration.meteor_trap_scaling_factor == 0)
+		return 0;
+
+	if (distance <= lethalRadius)
+		return 100; 
+
+	if (distance >= maxDistance)
+		return 1;
+
+	double t = (distance - lethalRadius) / (maxDistance - lethalRadius);
+	double damage = 100.0f * std::pow(1.0f - t, configuration.meteor_trap_scaling_factor);
+
+	return max(1, static_cast<int>(damage));
+}
+
+bool FacingTrap(int ariX, int ariY, int trapX, int trapY)
+{
+	static constexpr double PI = 3.14159265358979323846;
+
+	std::pair<int, int> v = GetVector(ariX, ariY, trapX, trapY);
+	double rad = ari_facing_dir * PI / 180.0;
+
+	double forwardX = cos(rad);
+	double forwardY = -sin(rad);
+
+	float dot = forwardX * v.first + forwardY * v.second;
+	bool inFrontHalfPlane = dot >= 0.0f;
+	return inFrontHalfPlane;
+}
+
+std::pair<int, int> GetCenterOffset(int screen_center_x, int screen_center_y, int image_width, int image_height)
+{
 	int offset_x = screen_center_x - image_width / 2;
 	int offset_y = screen_center_y - image_height / 2;
 	return { offset_x, offset_y };
@@ -2347,7 +2667,7 @@ void DrawDashedBorder(
 	}
 }
 
-void PlaySoundEffect(const char* sound_name, int priority)
+void PlaySoundEffect(const char* sound_name, int priority, double gain)
 {
 	const auto sound_index = g_ModuleInterface->CallBuiltin(
 		"asset_get_index",
@@ -2356,7 +2676,7 @@ void PlaySoundEffect(const char* sound_name, int priority)
 
 	g_ModuleInterface->CallBuiltin(
 		"audio_play_sound",
-		{ sound_index, priority, false }
+		{ sound_index, 100, false, gain }
 	);
 }
 
@@ -2752,7 +3072,7 @@ void LoadObjectIds()
 void LoadItems()
 {
 	std::unordered_set<std::string> lift_key_names = { TIDE_CAVERNS_KEY_NAME, DEEP_EARTH_KEY_NAME, LAVA_CAVES_KEY_NAME, RUINS_KEY_NAME };
-	std::unordered_set<std::string> orb_item_names = { TIDE_CAVERNS_ORB, DEEP_EARTH_ORB, LAVA_CAVES_ORB }; // TODO: Add other orbs
+	std::unordered_set<std::string> orb_item_names = { TIDE_CAVERNS_ORB, DEEP_EARTH_ORB, LAVA_CAVES_ORB, RUINS_ORB }; // TODO: Add other orbs
 	std::vector<std::string> custom_potions = { SUSTAINING_POTION_NAME, HEALTH_SALVE_NAME, STAMINA_SALVE_NAME, MANA_SALVE_NAME }; // TODO: Change to unordered_set
 	std::vector<std::string> cursed_armor = { CURSED_HELMET_NAME, CURSED_CHESTPIECE_NAME, CURSED_PANTS_NAME, CURSED_BOOTS_NAME, CURSED_GLOVES_NAME }; // TODO: Change to unordered_set
 
@@ -2895,11 +3215,27 @@ void SetItemManaModifier(int item_id, double mana_modifier)
 	g_ModuleInterface->CallBuiltin("struct_set", { item, "mana_modifier", mana_modifier });
 }
 
+void SetItemShopPrice(int item_id, int store_price)
+{
+	RValue __item_data = *global_instance->GetRefMember("__item_data");
+	RValue item = g_ModuleInterface->CallBuiltin("array_get", { __item_data, item_id });
+
+	RValue value = *item.GetRefMember("value");
+	StructVariableSet(value, "store", store_price);
+}
+
 void ModifyItems()
 {
 	SetItemHealthModifier(item_name_to_id_map[HEALTH_SALVE_NAME], configuration.health_salve_potency);
 	SetItemStaminaModifier(item_name_to_id_map[STAMINA_SALVE_NAME], configuration.stamina_salve_potency);
 	SetItemManaModifier(item_name_to_id_map[MANA_SALVE_NAME], configuration.mana_salve_potency);
+
+	SetItemShopPrice(item_name_to_id_map[MISTPOOL_PICK_AXE_NAME], configuration.mistpool_equipment_store_price);
+	SetItemShopPrice(item_name_to_id_map[MISTPOOL_SWORD_NAME], configuration.mistpool_equipment_store_price);
+	for (std::string armor_name : MISTPOOL_ARMOR_NAMES)
+		SetItemShopPrice(item_name_to_id_map[armor_name], configuration.mistpool_equipment_store_price);
+	for (const auto& pair : salve_name_to_id_map)
+		SetItemShopPrice(pair.second, configuration.salves_store_price);
 }
 
 void MarkDungeonTutorialUnseen()
@@ -3102,7 +3438,7 @@ void ScaleMistpoolWeapon(bool in_dungeon)
 
 	if (in_dungeon)
 	{
-		int damage = (floor_number / 4) + 3; // TODO: Make sure this is scaling correctly with code change
+		int damage = (floor_number / 4) + 3;
 		*sword_scrap_metal->GetRefMember("damage") = damage;
 	}
 	else
@@ -3119,7 +3455,7 @@ void ScaleMistpoolArmor(bool in_dungeon)
 
 		if (in_dungeon)
 		{
-			int defense = floor_number / 20; // TODO: Make sure this is scaling correctly with code change
+			int defense = floor_number / 20;
 			*mistpool_armor_piece->GetRefMember("defense") = defense;
 		}
 		else
@@ -3181,7 +3517,7 @@ void ScaleClassArmor(bool in_dungeon)
 
 		if (in_dungeon)
 		{
-			int defense = floor_number / 20; // TODO: Make sure this is scaling correctly with code change
+			int defense = floor_number / 20;
 			*class_armor_piece->GetRefMember("defense") = defense;
 		}
 		else
@@ -3508,16 +3844,8 @@ void ModifyRockClodAttackPatterns(bool is_boss_battle, RValue monster)
 			Patterns pattern = magic_enum::enum_value<Patterns>(random_pattern_distribution(random_generator));
 			if (is_boss_battle)
 			{
-				if (boss_monsters_configured < 2)
-				{
-					pattern = Patterns::SPIN;
-					boss_monsters_configured++;
-				}
-				else
-				{
-					pattern = Patterns::SPLIT;
-					boss_monsters_configured++;
-				}
+				pattern = Patterns::WALL;
+				boss_monsters_configured++;
 			}
 
 			if (pattern == Patterns::WALL)
@@ -3539,32 +3867,46 @@ void ModifyRockClodAttackPatterns(bool is_boss_battle, RValue monster)
 			else if (pattern == Patterns::SPIN)
 			{
 				// Rotates 18-degrees at a time while shooting 5 pellets in a small cone
+				double attack_sequence = 20;
+				double attack_legion = 3; // 5
+				double attack_sequence_turn = 18;
+				double split_distance = 20; // 5
+				double split_depth = 2;
+				double split_angle = 40;
+
 				StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
 				StructVariableSet(config_clone, "launcher", false);
-				StructVariableSet(config_clone, "attack_sequence", 20.0);
-				StructVariableSet(config_clone, "attack_legion", 5.0);
-				StructVariableSet(config_clone, "attack_sequence_turn", 18.0);
+				StructVariableSet(config_clone, "attack_sequence", attack_sequence);
+				StructVariableSet(config_clone, "attack_legion", attack_legion);
+				StructVariableSet(config_clone, "attack_sequence_turn", attack_sequence_turn);
 				StructVariableSet(config_clone, "attack_sequence_image_speed", 3.0);
 				StructVariableSet(config_clone, "projectile_speed", 3.0);
-				StructVariableSet(config_clone, "split_distance", 5.0);
-				StructVariableSet(config_clone, "split_depth", 2.0);
-				StructVariableSet(config_clone, "split_angle", 40.0);
+				StructVariableSet(config_clone, "split_distance", split_distance);
+				StructVariableSet(config_clone, "split_depth", split_depth);
+				StructVariableSet(config_clone, "split_angle", split_angle);
 				StructVariableSet(monster, "config", config_clone);
 				StructVariableSet(monster, "__deep_dungeon__custom_attack_pattern", 0);
 			}
 			else if (pattern == Patterns::SPLIT)
 			{
 				// Shoots a single pellet that then splits into many that repeatedly split
+				double attack_sequence = 3;
+				double attack_legion = 1;
+				double attack_sequence_turn = -1;
+				double split_distance = 20;
+				double split_depth = 5;
+				double split_angle = 20;
+
 				StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
 				StructVariableSet(config_clone, "launcher", false);
-				StructVariableSet(config_clone, "attack_sequence", 5.0);
-				StructVariableSet(config_clone, "attack_legion", 1.0);
-				StructVariableSet(config_clone, "attack_sequence_turn", -1.0);
+				StructVariableSet(config_clone, "attack_sequence", attack_sequence);
+				StructVariableSet(config_clone, "attack_legion", attack_legion);
+				StructVariableSet(config_clone, "attack_sequence_turn", attack_sequence_turn);
 				StructVariableSet(config_clone, "attack_sequence_image_speed", -1.0);
 				StructVariableSet(config_clone, "projectile_speed", 3.0);
-				StructVariableSet(config_clone, "split_distance", 20.0);
-				StructVariableSet(config_clone, "split_depth", 5.0);
-				StructVariableSet(config_clone, "split_angle", 20.0);
+				StructVariableSet(config_clone, "split_distance", split_distance);
+				StructVariableSet(config_clone, "split_depth", split_depth);
+				StructVariableSet(config_clone, "split_angle", split_angle);
 				StructVariableSet(monster, "config", config_clone);
 				StructVariableSet(monster, "__deep_dungeon__custom_attack_pattern", 0);
 			}
@@ -3599,26 +3941,6 @@ void ModifyStalagmiteAttackPatterns(bool is_boss_battle, RValue monster)
 			Modes mode = Modes::CHECKERBOARD;
 			StructVariableSet(monster, "__deep_dungeon__attack_pattern_mode", magic_enum::enum_name(mode));
 			boss_monsters_configured++;
-
-			// TODO: Use these if a way to spawn multiple stalagmites on a floor is discovered
-			//if (boss_monsters_configured == 0)
-			//{
-			//	Modes mode = Modes::DONUT_PB;
-			//	StructVariableSet(monster, "__deep_dungeon__attack_pattern_mode", magic_enum::enum_name(mode));
-			//	boss_monsters_configured++;
-			//}
-			//else if (boss_monsters_configured == 1)
-			//{
-			//	Modes mode = Modes::CROSS_X;
-			//	StructVariableSet(monster, "__deep_dungeon__attack_pattern_mode", magic_enum::enum_name(mode));
-			//	boss_monsters_configured++;
-			//}
-			//else if (boss_monsters_configured == 2)
-			//{
-			//	Modes mode = Modes::CHECKERBOARD;
-			//	StructVariableSet(monster, "__deep_dungeon__attack_pattern_mode", magic_enum::enum_name(mode));
-			//	boss_monsters_configured++;
-			//}
 		}
 		else
 		{
@@ -3879,7 +4201,7 @@ void ModifyStalagmiteAttackPatterns(bool is_boss_battle, RValue monster)
 	}
 }
 
-void ModifySaplingAttackPatterns(RValue monster, int monster_id)
+void ModifySaplingAttackPatterns(bool is_boss_battle, RValue monster, int monster_id)
 {
 	RValue wait_to_change_attack_pattern_exists = g_ModuleInterface->CallBuiltin("struct_exists", { monster, "__deep_dungeon__wait_to_change_attack_pattern" });
 	if (!wait_to_change_attack_pattern_exists.ToBoolean())
@@ -3893,6 +4215,9 @@ void ModifySaplingAttackPatterns(RValue monster, int monster_id)
 		{
 			RValue config = monster.GetMember("config");
 			RValue config_clone = g_ModuleInterface->CallBuiltin("variable_clone", { config });
+
+			if (is_boss_battle)
+				boss_monsters_configured++;
 
 			StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
 			StructVariableSet(config_clone, "sticky", true);
@@ -3924,13 +4249,18 @@ void ModifySaplingAttackPatterns(RValue monster, int monster_id)
 			g_ModuleInterface->CallBuiltin("array_set", { windup, 1, 1 }); // 55
 			StructVariableSet(config_clone, "windup", windup);
 
+			if (monster_id == monster_name_to_id_map["sapling_pink"])
+			{
+				StructVariableSet(config_clone, "hyper_armor", 3);
+			}
+
 			StructVariableSet(monster, "config", config_clone);
 			StructVariableSet(monster, "__deep_dungeon__custom_attack_pattern", 0);
 		}
 	}
 }
 
-void ModifyShroomAttackPatterns(RValue monster)
+void ModifyShroomAttackPatterns(bool is_boss_battle, RValue monster)
 {
 	RValue wait_to_change_attack_pattern_exists = g_ModuleInterface->CallBuiltin("struct_exists", { monster, "__deep_dungeon__wait_to_change_attack_pattern" });
 	if (!wait_to_change_attack_pattern_exists.ToBoolean())
@@ -3944,6 +4274,9 @@ void ModifyShroomAttackPatterns(RValue monster)
 		{
 			RValue config = monster.GetMember("config");
 			RValue config_clone = g_ModuleInterface->CallBuiltin("variable_clone", { config });
+
+			if (is_boss_battle)
+				boss_monsters_configured++;
 
 			StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
 			StructVariableSet(config_clone, "spew_lava", true);
@@ -3987,7 +4320,7 @@ void ModifyShroomAttackPatterns(RValue monster)
 	}
 }
 
-void ModifyEnchanternAttackPatterns(RValue monster)
+void ModifyEnchanternAttackPatterns(bool is_boss_battle, RValue monster)
 {
 	RValue wait_to_change_attack_pattern_exists = g_ModuleInterface->CallBuiltin("struct_exists", { monster, "__deep_dungeon__wait_to_change_attack_pattern" });
 	if (!wait_to_change_attack_pattern_exists.ToBoolean())
@@ -4001,6 +4334,9 @@ void ModifyEnchanternAttackPatterns(RValue monster)
 		{
 			RValue config = monster.GetMember("config");
 			RValue config_clone = g_ModuleInterface->CallBuiltin("variable_clone", { config });
+
+			if (is_boss_battle)
+				boss_monsters_configured++;
 
 			StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
 			StructVariableSet(config_clone, "charge_speed", 3);
@@ -4029,7 +4365,7 @@ void ModifyEnchanternAttackPatterns(RValue monster)
 	}
 }
 
-void ModifySpiritAttackPatterns(RValue monster)
+void ModifySpiritAttackPatterns(bool is_boss_battle, RValue monster, int monster_id)
 {
 	RValue custom_attack_pattern_exists = g_ModuleInterface->CallBuiltin("struct_exists", { monster, "__deep_dungeon__custom_attack_pattern" });
 	if (!custom_attack_pattern_exists.ToBoolean())
@@ -4039,10 +4375,11 @@ void ModifySpiritAttackPatterns(RValue monster)
 			RValue config = monster.GetMember("config");
 			RValue config_clone = g_ModuleInterface->CallBuiltin("variable_clone", { config });
 
+			if (is_boss_battle)
+				boss_monsters_configured++;
+
 			StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
 			StructVariableSet(config_clone, "projectile_damage", config_clone.GetMember("projectile_damage").ToDouble() * 2);
-			StructVariableSet(config_clone, "projectile_turn_rate", 10);
-			StructVariableSet(config_clone, "projectile_turn_rate", 0.8);
 
 			RValue idle_duration = g_ModuleInterface->CallBuiltin("array_create", { 2 });
 			g_ModuleInterface->CallBuiltin("array_set", { idle_duration, 0, 1 });
@@ -4053,7 +4390,7 @@ void ModifySpiritAttackPatterns(RValue monster)
 			g_ModuleInterface->CallBuiltin("array_set", { tired_duration, 0, 1 });
 			g_ModuleInterface->CallBuiltin("array_set", { tired_duration, 1, 2 });
 			StructVariableSet(config_clone, "tired_duration", tired_duration);
-
+			
 			RValue teleport_duration = g_ModuleInterface->CallBuiltin("array_create", { 2 });
 			g_ModuleInterface->CallBuiltin("array_set", { teleport_duration, 0, 1 });
 			g_ModuleInterface->CallBuiltin("array_set", { teleport_duration, 1, 2 });
@@ -4064,10 +4401,31 @@ void ModifySpiritAttackPatterns(RValue monster)
 			g_ModuleInterface->CallBuiltin("array_set", { teleport_distance_from_player, 1, 30 });
 			StructVariableSet(config_clone, "teleport_distance_from_player", teleport_distance_from_player);
 
-			RValue projectile_life_time = g_ModuleInterface->CallBuiltin("array_create", { 2 });
-			g_ModuleInterface->CallBuiltin("array_set", { projectile_life_time, 0, 240 });
-			g_ModuleInterface->CallBuiltin("array_set", { projectile_life_time, 1, 240 });
-			StructVariableSet(config_clone, "projectile_life_time", projectile_life_time);
+			if (monster_id == monster_name_to_id_map["spirit_purple"])
+			{
+				//StructVariableSet(config_clone, "belt_size", 4);
+				StructVariableSet(config_clone, "projectile_speed", 4.5);
+				StructVariableSet(config_clone, "projectile_turn_rate", 0.4);
+				StructVariableSet(config_clone, "projectile_distance", 24); // Distance they rotate at from the spirit
+				StructVariableSet(config_clone, "rotation_speed", 8);
+				StructVariableSet(config_clone, "shot_rate", 60);
+				StructVariableSet(config_clone, "pre_attack_wait", 60);
+
+				RValue acknowledgment = g_ModuleInterface->CallBuiltin("array_create", { 2 });
+				g_ModuleInterface->CallBuiltin("array_set", { acknowledgment, 0, 10 });
+				g_ModuleInterface->CallBuiltin("array_set", { acknowledgment, 1, 20 });
+				StructVariableSet(config_clone, "acknowledgment", acknowledgment);
+			}
+
+			if (monster_id == monster_name_to_id_map["spirit"])
+			{
+				StructVariableSet(config_clone, "projectile_turn_rate", 0.8);
+
+				RValue projectile_life_time = g_ModuleInterface->CallBuiltin("array_create", { 2 });
+				g_ModuleInterface->CallBuiltin("array_set", { projectile_life_time, 0, 240 });
+				g_ModuleInterface->CallBuiltin("array_set", { projectile_life_time, 1, 240 });
+				StructVariableSet(config_clone, "projectile_life_time", projectile_life_time);
+			}
 
 			StructVariableSet(monster, "config", config_clone);
 			StructVariableSet(monster, "__deep_dungeon__custom_attack_pattern", 0);
@@ -4075,7 +4433,7 @@ void ModifySpiritAttackPatterns(RValue monster)
 	}
 }
 
-void ModifyCatAttackPatterns(RValue monster)
+void ModifyCatAttackPatterns(bool is_boss_battle, RValue monster, int monster_id)
 {
 	RValue custom_attack_pattern_exists = g_ModuleInterface->CallBuiltin("struct_exists", { monster, "__deep_dungeon__custom_attack_pattern" });
 	if (!custom_attack_pattern_exists.ToBoolean())
@@ -4085,11 +4443,12 @@ void ModifyCatAttackPatterns(RValue monster)
 			RValue config = monster.GetMember("config");
 			RValue config_clone = g_ModuleInterface->CallBuiltin("variable_clone", { config });
 
+			if (is_boss_battle)
+				boss_monsters_configured++;
+
 			StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
 			StructVariableSet(config_clone, "charge_range", 192);
 			StructVariableSet(config_clone, "attack_movement_speed", 8);
-			StructVariableSet(config_clone, "petrified_duration", 60);
-			StructVariableSet(config_clone, "petrified_shakes", 10);
 
 			RValue windup_duration = g_ModuleInterface->CallBuiltin("array_create", { 2 });
 			g_ModuleInterface->CallBuiltin("array_set", { windup_duration, 0, 15 });
@@ -4106,13 +4465,24 @@ void ModifyCatAttackPatterns(RValue monster)
 			g_ModuleInterface->CallBuiltin("array_set", { attack_stall_duration, 1, 30 });
 			StructVariableSet(config_clone, "attack_stall_duration", attack_stall_duration);
 
+			if (monster_id == monster_name_to_id_map["cat"])
+			{
+				StructVariableSet(config_clone, "petrified_duration", 60);
+				StructVariableSet(config_clone, "petrified_shakes", 10);
+			}
+
+			if (monster_id == monster_name_to_id_map["cat_void"])
+			{
+				*config_clone.GetRefMember("light_hater")->GetRefMember("light_health") = 99999;
+			}
+
 			StructVariableSet(monster, "config", config_clone);
 			StructVariableSet(monster, "__deep_dungeon__custom_attack_pattern", 0);
 		}
 	}
 }
 
-void ModifyBatAttackPatterns(RValue monster)
+void ModifyBatAttackPatterns(bool is_boss_battle, RValue monster)
 {
 	RValue custom_attack_pattern_exists = g_ModuleInterface->CallBuiltin("struct_exists", { monster, "__deep_dungeon__custom_attack_pattern" });
 	if (!custom_attack_pattern_exists.ToBoolean())
@@ -4121,6 +4491,9 @@ void ModifyBatAttackPatterns(RValue monster)
 		{
 			RValue config = monster.GetMember("config");
 			RValue config_clone = g_ModuleInterface->CallBuiltin("variable_clone", { config });
+
+			if (is_boss_battle)
+				boss_monsters_configured++;
 
 			StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
 			StructVariableSet(config_clone, "speed", 3);
@@ -4154,25 +4527,139 @@ void ModifyBatAttackPatterns(RValue monster)
 	}
 }
 
+void ModifyTomeAttackPatterns(bool is_boss_battle, RValue monster)
+{
+	RValue custom_attack_pattern_exists = g_ModuleInterface->CallBuiltin("struct_exists", { monster, "__deep_dungeon__custom_attack_pattern" });
+	if (!custom_attack_pattern_exists.ToBoolean())
+	{
+		if (StructVariableExists(monster, "config"))
+		{
+			RValue config = monster.GetMember("config");
+			RValue config_clone = g_ModuleInterface->CallBuiltin("variable_clone", { config });
+
+			if (is_boss_battle)
+				boss_monsters_configured++;
+
+			StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+			StructVariableSet(config_clone, "acknowledgment", 15); // 32
+			StructVariableSet(config_clone, "flying_speed", 6); // 2.4
+			StructVariableSet(config_clone, "flying_timeout", 450); // 220
+			StructVariableSet(config_clone, "steering", 0.8); // 0.6
+			StructVariableSet(config_clone, "charge_up_time", 1); // 100
+			StructVariableSet(config_clone, "idle_override_len", 1); // 60
+			StructVariableSet(config_clone, "wind_attack_duration", 60); // 135
+			StructVariableSet(config_clone, "stun_star_duration", 1); // 60
+			StructVariableSet(config_clone, "stun_blink_duration", 1); // 180
+			StructVariableSet(config_clone, "blink_timing", 1); // 60
+			StructVariableSet(config_clone, "blink_timing_decrement", 1); // 10
+			StructVariableSet(monster, "config", config_clone);
+			StructVariableSet(monster, "__deep_dungeon__custom_attack_pattern", 0);
+		}
+	}
+}
+
+void ModifyRockStackAttackPatterns(bool is_boss_battle, RValue monster)
+{
+	RValue custom_attack_pattern_exists = g_ModuleInterface->CallBuiltin("struct_exists", { monster, "__deep_dungeon__custom_attack_pattern" });
+	if (!custom_attack_pattern_exists.ToBoolean())
+	{
+		if (StructVariableExists(monster, "config"))
+		{
+			RValue config = monster.GetMember("config");
+			RValue config_clone = g_ModuleInterface->CallBuiltin("variable_clone", { config });
+
+			if (is_boss_battle)
+				boss_monsters_configured++;
+
+			StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+			StructVariableSet(config_clone, "speed", 10); // 1.5
+			StructVariableSet(config_clone, "aggro_radius", 624); // 256
+			StructVariableSet(config_clone, "air_speed", 10); // 1.25
+			StructVariableSet(config_clone, "air_speed_starting", 10); // 0
+			StructVariableSet(config_clone, "air_speed_max", 10); // 0.02
+			StructVariableSet(config_clone, "rising_duration", 10); // 30
+			StructVariableSet(config_clone, "fall_speed", 15); // 5 // 1
+			StructVariableSet(config_clone, "hop_threshold", 9999); // 48
+
+			RValue fell_stall = g_ModuleInterface->CallBuiltin("array_create", { 2 });
+			g_ModuleInterface->CallBuiltin("array_set", { fell_stall, 0, 1 }); // 30 // 60
+			g_ModuleInterface->CallBuiltin("array_set", { fell_stall, 1, 2 }); // 45 // 75
+			StructVariableSet(config_clone, "fell_stall", fell_stall);
+
+			RValue air_stall = g_ModuleInterface->CallBuiltin("array_create", { 2 });
+			g_ModuleInterface->CallBuiltin("array_set", { air_stall, 0, 75 }); // 150
+			g_ModuleInterface->CallBuiltin("array_set", { air_stall, 1, 150 }); // 250
+			StructVariableSet(config_clone, "air_stall", air_stall);
+
+			RValue air_wait = g_ModuleInterface->CallBuiltin("array_create", { 2 });
+			g_ModuleInterface->CallBuiltin("array_set", { air_wait, 0, 1 }); // 15 // 30
+			g_ModuleInterface->CallBuiltin("array_set", { air_wait, 1, 2 }); // 30 // 60
+			StructVariableSet(config_clone, "air_wait", air_wait);
+
+			StructVariableSet(monster, "config", config_clone);
+			StructVariableSet(monster, "__deep_dungeon__custom_attack_pattern", 0);
+		}
+	}
+}
+
+void ModifyGriffinStatueAttackPatterns(bool is_boss_battle, RValue monster)
+{
+	RValue custom_attack_pattern_exists = g_ModuleInterface->CallBuiltin("struct_exists", { monster, "__deep_dungeon__custom_attack_pattern" });
+	if (!custom_attack_pattern_exists.ToBoolean())
+	{
+		if (StructVariableExists(monster, "config"))
+		{
+			RValue config = monster.GetMember("config");
+			RValue config_clone = g_ModuleInterface->CallBuiltin("variable_clone", { config });
+
+			if (is_boss_battle)
+				boss_monsters_configured++;
+
+			StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+			StructVariableSet(config_clone, "aggro_radius", 624); // 360
+			StructVariableSet(config_clone, "speed", 10); // 0.6
+			StructVariableSet(config_clone, "stomp_frames", 24); // 6
+			StructVariableSet(config_clone, "bonus_damage", 13); // 5
+			StructVariableSet(config_clone, "tumble_hit_reduction", 0.4); // 0.75
+			StructVariableSet(config_clone, "tumble_hit_speed_reduction", 10); // 1
+			StructVariableSet(config_clone, "tumble_hit_speed", 10); // 6
+			StructVariableSet(config_clone, "tumble_spd_reduction", 0.4); // 0.2
+			StructVariableSet(config_clone, "move_speed", is_boss_battle ? 6 : 3);
+			StructVariableSet(config_clone, "chase_rate", 5); // 20
+			StructVariableSet(config_clone, "jump_speed_gain", 1); // 0.25
+			StructVariableSet(config_clone, "gravity_gain", 1); // 0.25
+
+			StructVariableSet(monster, "config", config_clone);
+			StructVariableSet(monster, "__deep_dungeon__custom_attack_pattern", 0);
+		}
+	}
+}
+
 void ModifyDreadBeastAttackPatterns(bool is_boss_battle, RValue monster)
 {
 	int monster_id = monster.GetMember("monster_id").ToInt64();
-	if (monster_id == monster_name_to_id_map["rockclod"] || monster_id == monster_name_to_id_map["rockclod_blue"] || monster_id == monster_name_to_id_map["rockclod_green"] || monster_id == monster_name_to_id_map["rockclod_red"])
+	if (monster_id == monster_name_to_id_map["rockclod"] || monster_id == monster_name_to_id_map["rockclod_blue"] || monster_id == monster_name_to_id_map["rockclod_green"] || monster_id == monster_name_to_id_map["rockclod_red"]) // TODO: "rockclod_purple" if/when implemented
 		ModifyRockClodAttackPatterns(is_boss_battle, monster);
 	if (monster_id == monster_name_to_id_map["stalagmite"] || monster_id == monster_name_to_id_map["stalagmite_green"] || monster_id == monster_name_to_id_map["stalagmite_purple"])
 		ModifyStalagmiteAttackPatterns(is_boss_battle, monster);
-	if (monster_id == monster_name_to_id_map["sapling"] || monster_id == monster_name_to_id_map["sapling_cool"] || monster_id == monster_name_to_id_map["sapling_blue"] || monster_id == monster_name_to_id_map["sapling_purple"] || monster_id == monster_name_to_id_map["sapling_orange"])
-		ModifySaplingAttackPatterns(monster, monster_id);
+	if (monster_id == monster_name_to_id_map["sapling"] || monster_id == monster_name_to_id_map["sapling_cool"] || monster_id == monster_name_to_id_map["sapling_blue"] || monster_id == monster_name_to_id_map["sapling_purple"] || monster_id == monster_name_to_id_map["sapling_orange"] || monster_id == monster_name_to_id_map["sapling_pink"])
+		ModifySaplingAttackPatterns(is_boss_battle, monster, monster_id);
 	if (monster_id == monster_name_to_id_map["mushroom"] || monster_id == monster_name_to_id_map["mushroom_green"] || monster_id == monster_name_to_id_map["mushroom_blue"] || monster_id == monster_name_to_id_map["mushroom_purple"])
-		ModifyShroomAttackPatterns(monster);
+		ModifyShroomAttackPatterns(is_boss_battle, monster);
 	if (monster_id == monster_name_to_id_map["enchantern"] || monster_id == monster_name_to_id_map["enchantern_blue"])
-		ModifyEnchanternAttackPatterns(monster);
-	if (monster_id == monster_name_to_id_map["spirit"])
-		ModifySpiritAttackPatterns(monster);
-	if (monster_id == monster_name_to_id_map["cat"])
-		ModifyCatAttackPatterns(monster);
+		ModifyEnchanternAttackPatterns(is_boss_battle, monster);
+	if (monster_id == monster_name_to_id_map["spirit"] || monster_id == monster_name_to_id_map["spirit_purple"])
+		ModifySpiritAttackPatterns(is_boss_battle, monster, monster_id);
+	if (monster_id == monster_name_to_id_map["cat"] || monster_id == monster_name_to_id_map["cat_void"])
+		ModifyCatAttackPatterns(is_boss_battle, monster, monster_id);
 	if (monster_id == monster_name_to_id_map["bat"] || monster_id == monster_name_to_id_map["bat_blue"])
-		ModifyBatAttackPatterns(monster);
+		ModifyBatAttackPatterns(is_boss_battle, monster);
+	if (monster_id == monster_name_to_id_map["tome"])
+		ModifyTomeAttackPatterns(is_boss_battle, monster);
+	if (monster_id == monster_name_to_id_map["rock_stack"])
+		ModifyRockStackAttackPatterns(is_boss_battle, monster);
+	if (monster_id == monster_name_to_id_map["griffin_statue"])
+		ModifyGriffinStatueAttackPatterns(is_boss_battle, monster);
 }
 
 void UnlockRecipe(int item_id, CInstance* Self, CInstance* Other)
@@ -4482,7 +4969,12 @@ void SetFloorNumber()
 		floor_number = 75;
 	else if (ari_current_gm_room == "rm_ruins_seal" || ari_current_gm_room == "rm_mines_ruins_ritual_chamber")
 		floor_number = 80;
-	// TODO: Add Ruins floors when released.
+	else if (ari_current_gm_room == "rm_mines_ruins_85")
+		floor_number = 85;
+	else if (ari_current_gm_room == "rm_priestess_quarters")
+		floor_number = 90;
+	else if (ari_current_gm_room == "rm_mines_ruins_95")
+		floor_number = 95;
 	else
 		floor_number++;
 }
@@ -4696,6 +5188,20 @@ RValue GetDynamicItemSprite(int item_id)
 
 RValue GetDynamicUiSprite(std::string sprite_name)
 {
+	// OnDungeonRoomStart Conversation Sprite Overrides
+	if (!journal_menu_open) // floor_start_time == current_time_in_seconds
+	{
+		// Priestess Portrait Replacement
+		if (sprite_name.contains("spr_portrait_seridia") && !sprite_name.contains("flashback"))
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_portrait_seridia_flashback_priestess_closed_eyes" });
+		// Heart Insert Icon Conversation Replacement
+		else if (sprite_name == "spr_ui_dialogue_namebar_heartinsert")
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_dialogue_namebar_circleinsert" });
+		// Heart & Circle Icon Conversation Replacement
+		else if (sprite_name.contains("spr_ui_dialogue_heart_") || sprite_name.contains("spr_ui_dialogue_circle_"))
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_dialogue_circle_purple" });
+	}
+
 	// Full Restore (Spell Icon)
 	if (sprite_name == "spr_ui_journal_magic_restore_spell_icon_main")
 	{
@@ -5081,7 +5587,7 @@ void GenerateFloorTraps()
 			return;
 
 		int min_traps = 2;
-		int biome_adjusted_max_traps = min(6, (floor_number / 20) + 2); // Scale the number of traps per floor with progression. Capped at 6.
+		int biome_adjusted_max_traps = (floor_number / 20) + 2;
 
 		std::uniform_int_distribution<size_t> traps_for_room_distribution(min_traps, biome_adjusted_max_traps);
 		int random_trap_count = traps_for_room_distribution(random_generator);
@@ -5090,12 +5596,9 @@ void GenerateFloorTraps()
 		if (CountEquippedClassArmor()[Classes::ROGUE] >= 4)
 			random_trap_count -= 2;
 
+		// Peril
 		if (active_offerings.contains(Offerings::PERIL))
-		{
-			random_trap_count += 2; // PERIL adds two traps
-			if (random_trap_count > 6)
-				random_trap_count = 6; // Capped at 6
-		}
+			random_trap_count += 2;
 
 		int count = 0;
 		for (int i = 0; i < random_trap_count; i++)
@@ -5115,6 +5618,9 @@ std::vector<int> GenerateRandomMonstersIdsForCurrentFloor(int monsters_to_spawn,
 
 	if (monster_id_to_exclude != -1)
 		candidate_monsters.erase(std::remove(candidate_monsters.begin(), candidate_monsters.end(), monster_id_to_exclude), candidate_monsters.end());
+	
+	// Don't spawn griffin statues for luring traps.
+	candidate_monsters.erase(std::remove(candidate_monsters.begin(), candidate_monsters.end(), monster_name_to_id_map["griffin_statue"]), candidate_monsters.end());
 
 	std::vector<int> random_monsters = {};
 	for (int i = 0; i < monsters_to_spawn; i++)
@@ -5151,7 +5657,7 @@ void SpawnDreadBeast(CInstance* Self, CInstance* Other)
 		else if (floor_number < 80)
 			possible_dread_beast_monsters = { "rockclod_red", "sapling_orange", "mushroom_purple", "stalagmite_purple", "spirit", "cat" };
 		else
-			return; // TODO
+			possible_dread_beast_monsters = { "sapling_pink", "spirit_purple", "cat_void", "rock_stack", "tome" }; // TODO: "rockclod_purple" if/when implemented
 
 		std::uniform_int_distribution<size_t> random_dread_beast_distribution(0, possible_dread_beast_monsters.size() - 1);
 		random_index = random_dread_beast_distribution(random_generator);
@@ -5171,10 +5677,10 @@ void SelectDreadBeast(CInstance* Self, CInstance* Other)
 	initial_floor_monsters.erase(std::remove(initial_floor_monsters.begin(), initial_floor_monsters.end(), monster_name_to_id_map["ironclod"]), initial_floor_monsters.end());
 	initial_floor_monsters.erase(std::remove(initial_floor_monsters.begin(), initial_floor_monsters.end(), monster_name_to_id_map["mimic"]), initial_floor_monsters.end());
 	initial_floor_monsters.erase(std::remove(initial_floor_monsters.begin(), initial_floor_monsters.end(), monster_name_to_id_map["mistrilclod"]), initial_floor_monsters.end());
-	initial_floor_monsters.erase(std::remove(initial_floor_monsters.begin(), initial_floor_monsters.end(), monster_name_to_id_map["rock_stack"]), initial_floor_monsters.end());
 	initial_floor_monsters.erase(std::remove(initial_floor_monsters.begin(), initial_floor_monsters.end(), monster_name_to_id_map["rock_stack_lava"]), initial_floor_monsters.end());
 	initial_floor_monsters.erase(std::remove(initial_floor_monsters.begin(), initial_floor_monsters.end(), monster_name_to_id_map["sapling_orange_mini"]), initial_floor_monsters.end());
 	initial_floor_monsters.erase(std::remove(initial_floor_monsters.begin(), initial_floor_monsters.end(), monster_name_to_id_map["silverclod"]), initial_floor_monsters.end());
+	initial_floor_monsters.erase(std::remove(initial_floor_monsters.begin(), initial_floor_monsters.end(), monster_name_to_id_map["rockclod_purple"]), initial_floor_monsters.end()); // TODO: don't remove if/when implemented (MONSTER NOT IMPLEMENTED)
 
 	if (initial_floor_monsters.size() > 0)
 	{
@@ -5551,7 +6057,7 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 			bool malfunction = zero_to_ninety_nine_distribution(random_generator) < 50 ? true : false;
 			if (CountEquippedClassArmor()[Classes::PALADIN] == 5 && malfunction)
 			{
-				PlaySoundEffect("snd_bark_heart603", 100);
+				PlaySoundEffect("snd_bark_heart603", 100, 1);
 				CreateNotification(true, MALFUNCTION_TRAP_NOTIFICATION_KEY, Self, Other);
 			}
 			else
@@ -5561,44 +6067,44 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 
 				if (trap == Traps::CONFUSING)
 				{
-					PlaySoundEffect("snd_bark_o_o", 100);
+					PlaySoundEffect("snd_bark_o_o", 100, 1);
 					CreateNotification(true, CONFUSING_TRAP_NOTIFICATION_KEY, Self, Other);
 
 					if (!active_traps_to_value_map.contains(Traps::CONFUSING))
 					{
-						active_traps_to_value_map[Traps::CONFUSING] = current_time_in_seconds + 1200; // 20m
+						active_traps_to_value_map[Traps::CONFUSING] = current_time_in_seconds + configuration.confusing_trap_duration_seconds;
 						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Confusing Trap effect started at: %d", MOD_NAME, VERSION, current_time_in_seconds);
 					}
 					else
 					{
-						active_traps_to_value_map[Traps::CONFUSING] += 1200;
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Confusing Trap effect extended by: %d", MOD_NAME, VERSION, 1200);
+						active_traps_to_value_map[Traps::CONFUSING] += configuration.confusing_trap_duration_seconds;
+						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Confusing Trap effect extended by: %d", MOD_NAME, VERSION, configuration.confusing_trap_duration_seconds);
 					}
 				}
 				else if (trap == Traps::DISORIENTING)
 				{
-					PlaySoundEffect("snd_interactable_scan", 100);
+					PlaySoundEffect("snd_interactable_scan", 100, 1);
 					CreateNotification(true, DISORIENTING_TRAP_NOTIFICATION_KEY, Self, Other);
 
 					if (!active_traps_to_value_map.contains(Traps::DISORIENTING))
 					{
-						active_traps_to_value_map[Traps::DISORIENTING] = current_time_in_seconds + 600; // 10m
+						active_traps_to_value_map[Traps::DISORIENTING] = current_time_in_seconds + configuration.disorienting_trap_duration_seconds;
 						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Disorienting Trap effect started at: %d", MOD_NAME, VERSION, current_time_in_seconds);
 					}
 					else
 					{
-						active_traps_to_value_map[Traps::DISORIENTING] += 600;
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Disorienting Trap effect extended by: %d", MOD_NAME, VERSION, 600);
+						active_traps_to_value_map[Traps::DISORIENTING] += configuration.disorienting_trap_duration_seconds;
+						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Disorienting Trap effect extended by: %d", MOD_NAME, VERSION, configuration.disorienting_trap_duration_seconds);
 					}
 				}
 				else if (trap == Traps::EXPLODING)
 				{
-					PlaySoundEffect("snd_Explosion_CaveReverb", 100);
+					PlaySoundEffect("snd_Explosion_CaveReverb", 100, 0.30);
 					CreateNotification(true, EXPLODING_TRAP_NOTIFICATION_KEY, Self, Other);
 				}
 				else if (trap == Traps::INHIBITING)
 				{
-					PlaySoundEffect("snd_bark_surprised", 100);
+					PlaySoundEffect("snd_bark_surprised", 100, 1);
 					CreateNotification(true, INHIBITING_TRAP_NOTIFICATION_KEY, Self, Other);
 
 					if (script_name_to_reference_map.contains(GML_SCRIPT_UPDATE_TOOLBAR_MENU))
@@ -5606,37 +6112,71 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 
 					if (!active_traps_to_value_map.contains(Traps::INHIBITING))
 					{
-						active_traps_to_value_map[Traps::INHIBITING] = current_time_in_seconds + 900; // 15m
+						active_traps_to_value_map[Traps::INHIBITING] = current_time_in_seconds + configuration.inhibiting_trap_duration_seconds;
 						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Inhibiting Trap effect started at: %d", MOD_NAME, VERSION, current_time_in_seconds);
 					}
 					else
 					{
-						active_traps_to_value_map[Traps::INHIBITING] += 900;
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Inhibiting Trap effect extended by: %d", MOD_NAME, VERSION, 900);
+						active_traps_to_value_map[Traps::INHIBITING] += configuration.inhibiting_trap_duration_seconds;
+						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Inhibiting Trap effect extended by: %d", MOD_NAME, VERSION, configuration.inhibiting_trap_duration_seconds);
 					}
 				}
 				else if (trap == Traps::LURING)
 				{
 					std::uniform_int_distribution<int> random_position_offset_distribution(-12, 12);
 
-					PlaySoundEffect("snd_ScrollRaise", 100);
+					PlaySoundEffect("snd_ScrollRaise", 100, 1);
 					CreateNotification(true, LURING_TRAP_NOTIFICATION_KEY, Self, Other);
 
-					// TODO: Restrict stalagmite spawns in the ruins if necessary (stalagmite_pink? TBD)
+					// TODO: Restrict monster spawns as necessary (stalagmite_pink? TBD)
 					std::vector<int> random_monsters;
 					if (std::find(initial_floor_monsters.begin(), initial_floor_monsters.end(), monster_name_to_id_map["stalagmite"]) != initial_floor_monsters.end())
-						random_monsters = GenerateRandomMonstersIdsForCurrentFloor(2, monster_name_to_id_map["stalagmite"]);
+						random_monsters = GenerateRandomMonstersIdsForCurrentFloor(configuration.luring_trap_monster_spawn_count, monster_name_to_id_map["stalagmite"]);
 					else if (std::find(initial_floor_monsters.begin(), initial_floor_monsters.end(), monster_name_to_id_map["stalagmite_green"]) != initial_floor_monsters.end())
-						random_monsters = GenerateRandomMonstersIdsForCurrentFloor(2, monster_name_to_id_map["stalagmite_green"]);
+						random_monsters = GenerateRandomMonstersIdsForCurrentFloor(configuration.luring_trap_monster_spawn_count, monster_name_to_id_map["stalagmite_green"]);
 					else if (std::find(initial_floor_monsters.begin(), initial_floor_monsters.end(), monster_name_to_id_map["stalagmite_purple"]) != initial_floor_monsters.end())
-						random_monsters = GenerateRandomMonstersIdsForCurrentFloor(2, monster_name_to_id_map["stalagmite_purple"]);
+						random_monsters = GenerateRandomMonstersIdsForCurrentFloor(configuration.luring_trap_monster_spawn_count, monster_name_to_id_map["stalagmite_purple"]);
 					else
-						random_monsters = GenerateRandomMonstersIdsForCurrentFloor(2);
+						random_monsters = GenerateRandomMonstersIdsForCurrentFloor(configuration.luring_trap_monster_spawn_count);
 
 					for (int i = 0; i < random_monsters.size(); i++)
 						SpawnMonster(Self, Other, floor_trap->first + random_position_offset_distribution(random_generator), floor_trap->second + random_position_offset_distribution(random_generator), random_monsters[i]);
 
 					active_traps.erase(Traps::LURING);
+				}
+				else if (trap == Traps::METEOR)
+				{
+					RValue instance_layer_exists = g_ModuleInterface->CallBuiltin("layer_exists", { "Instances" });
+					if (instance_layer_exists)
+					{
+						PlaySoundEffect("snd_VoidPortalSpawn", 100, 1);
+						CreateNotification(true, METEOR_TRAP_NOTIFICATION_KEY, Self, Other);
+
+						RValue obj_assetobject = g_ModuleInterface->CallBuiltin("asset_get_index", { "obj_assetobject" });
+						RValue instance = g_ModuleInterface->CallBuiltin("instance_create_layer", { floor_trap->first, floor_trap->second, RValue("Instances"), obj_assetobject });
+						
+						CustomAOE meteor = CustomAOE(floor_trap->first, floor_trap->second, current_time_in_seconds, 600, true, instance, CustomAOETypes::METEOR);
+						meteor_aoes.push_back(meteor);
+					}
+
+					active_traps.erase(Traps::METEOR);
+				}
+				else if (trap == Traps::GAZE)
+				{
+					RValue instance_layer_exists = g_ModuleInterface->CallBuiltin("layer_exists", { "Instances" });
+					if (instance_layer_exists)
+					{
+						PlaySoundEffect("snd_VoidMassAppear", 100, 0.7);
+						CreateNotification(true, GAZE_TRAP_NOTIFICATION_KEY, Self, Other);
+
+						RValue obj_assetobject = g_ModuleInterface->CallBuiltin("asset_get_index", { "obj_assetobject" });
+						RValue instance = g_ModuleInterface->CallBuiltin("instance_create_layer", { floor_trap->first, floor_trap->second, RValue("Instances"), obj_assetobject });
+						
+						CustomAOE gaze = CustomAOE(floor_trap->first, floor_trap->second, current_time_in_seconds, 600, true, instance, CustomAOETypes::GAZE);
+						gaze_aoes.push_back(gaze);
+					}
+
+					active_traps.erase(Traps::GAZE);
 				}
 			}
 
@@ -5644,6 +6184,51 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 		}
 		else
 			++floor_trap;
+	}
+}
+
+void ProcessCustomAOEs()
+{
+	for (CustomAOE& meteor : meteor_aoes)
+	{
+		if (meteor.is_active && current_time_in_seconds >= meteor.spawned_time + meteor.duration)
+		{
+			meteor.is_active = false;
+			PlaySoundEffect("snd_EarthquakeImpact", 1, 1);
+			PlaySoundEffect("snd_AriLowHealthWarning", 1, 1);
+
+			double distance = GetDistance(ari_x, ari_y, meteor.x, meteor.y);
+			double modifier = CalculateMeteorDamage(distance) / 100.0;
+
+			double adjusted_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToDouble() * modifier;
+			ModifyHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], -1 * adjusted_health);
+
+			RValue meteor_instance_exists = g_ModuleInterface->CallBuiltin("instance_exists", { meteor.instance });
+			if (meteor_instance_exists.ToBoolean())
+				g_ModuleInterface->CallBuiltin("instance_destroy", { meteor.instance });
+		}
+	}
+
+	for (CustomAOE& gaze : gaze_aoes)
+	{
+		if (gaze.is_active && current_time_in_seconds >= gaze.spawned_time + gaze.duration)
+		{
+			gaze.is_active = false;
+			PlaySoundEffect("snd_CosmicImpact", 1, 0.30);
+
+			bool facing_trap = FacingTrap(ari_x, ari_y, gaze.x, gaze.y);
+			if (facing_trap)
+			{
+				double modifier = configuration.gaze_trap_max_health_damage_percent / 100.0;
+				double adjusted_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToDouble() * modifier;
+				ModifyHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], -1 * adjusted_health);
+				PlaySoundEffect("snd_AriLowHealthWarning", 1, 1);
+			}
+
+			RValue gaze_instance_exists = g_ModuleInterface->CallBuiltin("instance_exists", { gaze.instance });
+			if (gaze_instance_exists.ToBoolean())
+				g_ModuleInterface->CallBuiltin("instance_destroy", { gaze.instance });
+		}
 	}
 }
 
@@ -5753,6 +6338,7 @@ void ResetStaticFields(bool returned_to_title_screen)
 		is_second_wind_tracked_interval = false;
 		ari_x = -1;
 		ari_y = -1;
+		ari_facing_dir = -1;
 		floor_number = 0;
 		floor_start_time = 0;
 		current_time_in_seconds = -1;
@@ -5765,6 +6351,7 @@ void ResetStaticFields(bool returned_to_title_screen)
 	}
 
 	crafting_menu_open = false;
+	journal_menu_open = false;
 	drop_biome_reward = false;
 	biome_reward_disabled = false;
 	dread_beast_configured = false;
@@ -5780,6 +6367,7 @@ void ResetStaticFields(bool returned_to_title_screen)
 	sigil_of_silence_count = 0;
 	sigil_of_alteration_count = 0;
 	dread_beast_monster_id = -1;
+	dread_beasts_configured = 0;
 	boss_monsters_configured = 0;
 	salves_used.clear();
 	active_sigils.clear();
@@ -5849,10 +6437,9 @@ void ObjectCallback(
 				drop_biome_reward = false;
 				DropItem(item_name_to_id_map[CURSED_PANTS_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
 				DropItem(item_name_to_id_map[RUINS_KEY_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
-
 			}
 			// Ruins
-			else if (ari_current_gm_room == "not_yet_implemented") // TODO: Use room name when its implemented
+			else if (ari_current_gm_room == "rm_seridias_chamber")
 			{
 				drop_biome_reward = false;
 				DropItem(item_name_to_id_map[CURSED_BOOTS_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
@@ -5865,7 +6452,7 @@ void ObjectCallback(
 		{
 			// Apply damage to Ari
 			int current_health = GetHealth(global_instance->GetRefMember("__ari")->ToInstance(), self).ToInt64();
-			int penalty = current_health * 4 / 5;
+			int penalty = current_health * configuration.exploding_trap_current_health_damage_percent / 100;
 			SetHealth(global_instance->GetRefMember("__ari")->ToInstance(), self, current_health - penalty);
 
 			// Apply damage to monsters
@@ -5884,7 +6471,7 @@ void ObjectCallback(
 						double hit_points = monster->GetMember("hit_points").ToDouble();
 						if (std::isfinite(hit_points))
 						{
-							int monster_hp_penalty = std::trunc(hit_points * 0.8);
+							int monster_hp_penalty = std::trunc(hit_points * configuration.exploding_trap_current_health_damage_percent / 100);
 							*monster->GetRefMember("hit_points") = max(0, hit_points - monster_hp_penalty);
 
 							if (StructVariableExists(monster, "monster_id"))
@@ -6025,6 +6612,11 @@ void ObjectCallback(
 										boss_battle = BossBattle::LAVA_CAVES_ORB;
 										EnterDungeon(59, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
 									}
+									else if (held_item_id == item_name_to_id_map[RUINS_ORB])
+									{
+										boss_battle = BossBattle::RUINS_ORB;
+										EnterDungeon(79, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+									}
 								}
 							}
 						}
@@ -6045,7 +6637,6 @@ void ObjectCallback(
 		// Drain (Dark Knight Set Bonus)
 		if (class_name_to_set_bonus_effect_value_map[Classes::DARK_KNIGHT][ManagedSetBonuses::DRAIN] > 0)
 		{
-			//int drain_multiplier = class_name_to_set_bonus_effect_value_map[Classes::DARK_KNIGHT][ManagedSetBonuses::DRAIN];
 			int max_health = GetMaxHealth(global_instance->GetRefMember("__ari")->ToInstance(), self).ToInt64(); // TODO: Make this is accounting for HP_PENALTY
 			int recovery = max_health * GetDarkKnightDrainPotency();
 
@@ -6210,6 +6801,20 @@ void ObjectCallback(
 					else if (StructVariableExists(monster, "__deep_dungeon__boss_monster"))
 						ModifyDreadBeastAttackPatterns(true, monster);
 				}
+				else if (boss_battle == BossBattle::RUINS_ORB)
+				{
+					if (!StructVariableExists(monster, "__deep_dungeon__boss_monster") && StructVariableExists(monster, "hit_points"))
+					{
+						double hit_points = monster.GetMember("hit_points").ToDouble();
+						if (std::isfinite(hit_points))
+						{
+							*monster.GetRefMember("hit_points") = hit_points * 3;
+							StructVariableSet(monster, "__deep_dungeon__boss_monster", true);
+						}
+					}
+					else if (StructVariableExists(monster, "__deep_dungeon__boss_monster"))
+						ModifyDreadBeastAttackPatterns(true, monster);
+				}
 
 				// Dread Beasts
 				if (!dread_beast_configured && monster_id.ToInt64() == dread_beast_monster_id && !StructVariableExists(monster, "__deep_dungeon__dread_beast") && StructVariableExists(monster, "hit_points"))
@@ -6218,8 +6823,10 @@ void ObjectCallback(
 					if (std::isfinite(hit_points))
 					{
 						*monster.GetRefMember("hit_points") = hit_points * 3;
-
-						dread_beast_configured = true;
+						dread_beasts_configured++;
+						if (dread_beast_monster_id != monster_name_to_id_map["rock_stack"] || dread_beasts_configured == 2)
+							dread_beast_configured = true;
+						
 						StructVariableSet(monster, "__deep_dungeon__dread_beast", true);
 						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Configured Dread Beast: %s", MOD_NAME, VERSION, monster_id_to_name_map[monster_id.ToInt64()].c_str());
 					}
@@ -6502,7 +7109,7 @@ RValue& GmlScriptRegisterStatusEffectCallback(
 		if (Arguments[0]->ToInt64() == status_effect_name_to_id_map["restorative"])
 		{
 			int finish = Arguments[3]->ToInt64();
-			*Arguments[3] = finish - static_cast<int>(7200 * (1 - configuration.sustaining_potion_duration_modifier)); // Reduce the duration of Restoration
+			*Arguments[3] = finish - static_cast<int>(7200 * (1 - configuration.sustaining_potion_duration_modifier)); // Modify the duration of Restoration
 		}
 	}
 
@@ -6629,7 +7236,10 @@ RValue& GmlScriptSpawnMonsterCallback(
 			int activation_threshold = 100;
 			for (int i = 0; i < sigil_of_silence_count; i++)
 			{
-				activation_threshold /= 3;
+				if(ari_current_gm_room == "rm_mines_ruins_arena3")
+					activation_threshold /= 5;
+				else
+					activation_threshold /= 3;
 			}
 
 			bool activate = false;
@@ -6639,6 +7249,7 @@ RValue& GmlScriptSpawnMonsterCallback(
 				activate = true;
 
 			sigil_of_silence_count++;
+
 			if (activate)
 				return Result;
 		}
@@ -6915,13 +7526,17 @@ RValue& GmlScriptDamageCallback(
 		RValue target = Arguments[0]->GetMember("target");
 		if (target.ToInt64() != 1) // Everything not Ari
 		{
-			std::uniform_int_distribution<size_t> zero_to_two_distribution(0, 2);
-			int random = zero_to_two_distribution(random_generator);
-			if (random == 0) // 33% chance to miss
+			if (!StructVariableExists(*Arguments[0], "__deep_dungeon__distortion_applied"))
 			{
-				*Arguments[0]->GetRefMember("damage") = 0.0;
-				*Arguments[0]->GetRefMember("critical") = false;
-				*Arguments[0]->GetRefMember("knockback") = false;
+				std::uniform_int_distribution<size_t> zero_to_two_distribution(0, 2);
+				int random = zero_to_two_distribution(random_generator);
+				if (random == 0) // 33% chance to miss
+				{
+					*Arguments[0]->GetRefMember("damage") = 0.0;
+					*Arguments[0]->GetRefMember("critical") = false;
+					*Arguments[0]->GetRefMember("knockback") = false;
+				}
+				StructVariableSet(*Arguments[0], "__deep_dungeon__distortion_applied", true);
 			}
 		}
 	}
@@ -7699,6 +8314,7 @@ RValue& GmlScriptGetMinutesCallback(
 		current_time_in_seconds = time.ToInt64();
 
 		ApplyFloorTraps(Self, Other);
+		ProcessCustomAOEs();
 
 		// Restoration
 		if (active_floor_enchantments.contains(FloorEnchantments::RESTORATION))
@@ -7870,9 +8486,15 @@ RValue& GmlScriptGetLocalizerCallback(
 
 	if (game_is_active)
 	{
+		if (AriCurrentGmRoomIsDungeonFloor() && Arguments[0]->ToString() == "npcs/seridia/name")
+		{
+			Result = RValue("Priestess");
+			return Result;
+		}
+
 		// Orbs
 		// TODO: Other orbs when added
-		if (crafting_menu_open && (Arguments[0]->ToString() == TIDE_CAVERNS_ORB_DESCRIPTION_LOCALIZED_TEXT_KEY || Arguments[0]->ToString() == DEEP_EARTH_ORB_DESCRIPTION_LOCALIZED_TEXT_KEY || Arguments[0]->ToString() == LAVA_CAVES_ORB_DESCRIPTION_LOCALIZED_TEXT_KEY))
+		if (crafting_menu_open && (Arguments[0]->ToString() == TIDE_CAVERNS_ORB_DESCRIPTION_LOCALIZED_TEXT_KEY || Arguments[0]->ToString() == DEEP_EARTH_ORB_DESCRIPTION_LOCALIZED_TEXT_KEY || Arguments[0]->ToString() == LAVA_CAVES_ORB_DESCRIPTION_LOCALIZED_TEXT_KEY || Arguments[0]->ToString() == RUINS_ORB_DESCRIPTION_LOCALIZED_TEXT_KEY))
 		{
 			std::string result_str = Result.ToString();
 
@@ -8156,8 +8778,9 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 	// Dread Beast & Boss controls
 	dread_beast_configured = false;
 	dread_beast_monster_id = -1;
+	dread_beasts_configured = 0;
 	boss_monsters_configured = 0;
-	if (active_offerings.empty())
+	if (active_offerings.empty() && ari_current_gm_room != "rm_mines_entry" && ari_current_gm_room != "rm_priestess_quarters" && !ari_current_gm_room.contains("seal") && !ari_current_gm_room.contains("ritual") && !ari_current_gm_room.contains("treasure"))
 	{
 		static thread_local std::mt19937 random_generator(std::random_device{}());
 		std::uniform_int_distribution<size_t> zero_to_ninety_nine_distribution(0, 99);
@@ -8202,7 +8825,7 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 	if (CountEquippedClassArmor()[Classes::ROGUE] > 0)
 		active_sigils.insert(Sigils::CONCEALMENT);
 
-	if (ari_current_gm_room != "rm_mines_entry" && !ari_current_gm_room.contains("seal") && !ari_current_gm_room.contains("ritual") && !ari_current_gm_room.contains("treasure"))
+	if (ari_current_gm_room != "rm_mines_entry" && ari_current_gm_room != "rm_priestess_quarters" && !ari_current_gm_room.contains("seal") && !ari_current_gm_room.contains("ritual") && !ari_current_gm_room.contains("treasure"))
 	{
 		GenerateFloorTraps();
 
@@ -8264,10 +8887,6 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 		}
 		else if (boss_battle == BossBattle::DEEP_EARTH_ORB)
 		{
-			// TODO: Use these if a way to spawn multiple stalagmites on a floor is discovered
-			//SpawnMonster(Self, Other, 96, 240, monster_name_to_id_map["stalagmite"]); // Left
-			//SpawnMonster(Self, Other, 288, 240, monster_name_to_id_map["stalagmite"]); // Right
-
 			SpawnMonster(Self, Other, 144 + 8, 208 + 8, monster_name_to_id_map["enchantern_blue"]); // Left
 			SpawnMonster(Self, Other, 240 + 8, 208 + 8, monster_name_to_id_map["enchantern_blue"]); // Right
 			SpawnMonster(Self, Other, 192 + 8, 240 + 8, monster_name_to_id_map["stalagmite"]); // Middle
@@ -8276,12 +8895,17 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 		else if (boss_battle == BossBattle::LAVA_CAVES_ORB)
 		{
 			SpawnMonster(Self, Other, 128 + 8, 240 + 8, monster_name_to_id_map["bat_blue"]); // West
-			//SpawnMonster(Self, Other, 144 + 8, 192 + 8, monster_name_to_id_map["bat_blue"]); // Northwest
-			//SpawnMonster(Self, Other, 240 + 8, 192 + 8, monster_name_to_id_map["bat_blue"]); // Northeast
 			SpawnMonster(Self, Other, 256 + 8, 240 + 8, monster_name_to_id_map["bat_blue"]); // East
 			SpawnMonster(Self, Other, 192 + 8, 176 + 8, monster_name_to_id_map["bat_blue"]); // North
 			SpawnMonster(Self, Other, 192 + 8, 224 + 8, monster_name_to_id_map["cat"]); // Center
 			PlayConversation(BOSS_BATTLE_LAVA_CAVES_ORB_CONVERSATION_KEY, Self, Other);
+		}
+		else if (boss_battle == BossBattle::RUINS_ORB)
+		{
+			SpawnMonster(Self, Other, 192 + 8, 240 + 8, monster_name_to_id_map["rock_stack"]); // Center
+			SpawnMonster(Self, Other, 112 + 8, 208 + 8, monster_name_to_id_map["griffin_statue"]);
+			SpawnMonster(Self, Other, 272 + 8, 208 + 8, monster_name_to_id_map["griffin_statue"]);
+			PlayConversation(BOSS_BATTLE_RUINS_ORB_CONVERSATION_KEY, Self, Other);
 		}
 	}
 
@@ -8307,6 +8931,8 @@ RValue& GmlScriptGoToRoomCallback(
 )
 {
 	ResetCustomDrawFields();
+	meteor_aoes.clear();
+	gaze_aoes.clear();
 
 	// Teleport Ari to the ritual chamber for boss battles.
 	if (boss_battle == BossBattle::TIDE_CAVERNS_ORB && !ari_current_gm_room.contains("ritual_chamber"))
@@ -8315,6 +8941,8 @@ RValue& GmlScriptGoToRoomCallback(
 		*Arguments[0] = g_ModuleInterface->CallBuiltin("asset_get_index", { "rm_mines_deep_ritual_chamber" });
 	else if (boss_battle == BossBattle::LAVA_CAVES_ORB && !ari_current_gm_room.contains("ritual"))
 		*Arguments[0] = g_ModuleInterface->CallBuiltin("asset_get_index", { "rm_mines_lava_ritual_chamber" });
+	else if (boss_battle == BossBattle::RUINS_ORB && !ari_current_gm_room.contains("ritual"))
+		*Arguments[0] = g_ModuleInterface->CallBuiltin("asset_get_index", { "rm_mines_ruins_ritual_chamber" });
 	// End Boss Battles when leaving the ritual floor.
 	else if (boss_battle != BossBattle::NONE && ari_current_gm_room.contains("ritual"))
 		boss_battle = BossBattle::NONE;
@@ -8332,7 +8960,7 @@ RValue& GmlScriptGoToRoomCallback(
 	RValue room_name = g_ModuleInterface->CallBuiltin("room_get_name", { gm_room });
 	ari_current_gm_room = room_name.ToString();
 
-	if ((ari_current_gm_room.contains("rm_mines") || ari_current_gm_room.contains("seal")) && ari_current_gm_room != "rm_mines_entry")
+	if ((ari_current_gm_room.contains("rm_mines") || ari_current_gm_room.contains("seal") || ari_current_gm_room == "rm_priestess_quarters") && ari_current_gm_room != "rm_mines_entry")
 		SetFloorNumber();
 	else
 		floor_number = 0;
@@ -8405,8 +9033,10 @@ RValue& GmlScriptGoToRoomCallback(
 		sigil_of_silence_count = 0;
 		sigil_of_alteration_count = 0;
 		dread_beast_monster_id = -1;
+		dread_beasts_configured = 0;
 		boss_monsters_configured = 0;
 		class_name_to_set_bonus_effect_value_map.clear();
+		initial_floor_monsters.clear();
 	}
 	else
 		active_offerings.clear();
@@ -8871,6 +9501,48 @@ RValue& GmlScriptCraftingMenuCloseCallback(
 	return Result;
 }
 
+RValue& GmlScriptJournalMenuInitializeCallback(
+	IN CInstance* Self,
+	IN CInstance* Other,
+	OUT RValue& Result,
+	IN int ArgumentCount,
+	IN RValue** Arguments
+)
+{
+	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_JOURNAL_MENU_INITIALIZE));
+	original(
+		Self,
+		Other,
+		Result,
+		ArgumentCount,
+		Arguments
+	);
+
+	journal_menu_open = true;
+	return Result;
+}
+
+RValue& GmlScriptJournalMenuCloseCallback(
+	IN CInstance* Self,
+	IN CInstance* Other,
+	OUT RValue& Result,
+	IN int ArgumentCount,
+	IN RValue** Arguments
+)
+{
+	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_JOURNAL_MENU_CLOSE));
+	original(
+		Self,
+		Other,
+		Result,
+		ArgumentCount,
+		Arguments
+	);
+
+	journal_menu_open = false;
+	return Result;
+}
+
 RValue& GmlScriptVertigoDrawWithColorCallback(
 	IN CInstance* Self,
 	IN CInstance* Other,
@@ -8916,7 +9588,7 @@ RValue& GmlScriptSceneAudioPlayerPlayCallback(
 	if (!script_name_to_reference_map.contains(GML_SCRIPT_SCENE_AUDIO_PLAYER_PLAY))
 		script_name_to_reference_map[GML_SCRIPT_SCENE_AUDIO_PLAYER_PLAY] = { Self, Other };
 
-	if (game_is_active && configuration.randomize_dungeon_music && AriCurrentGmRoomIsDungeonFloor())
+	if (game_is_active && configuration.randomize_dungeon_music && AriCurrentGmRoomIsDungeonFloor() && floor_number != 91)
 	{
 		static thread_local std::mt19937 random_generator(std::random_device{}());
 		std::uniform_int_distribution<size_t> game_music_distribution(0, MUSIC_INTERNAL_NAMES.size() - 1);
@@ -8932,6 +9604,33 @@ RValue& GmlScriptSceneAudioPlayerPlayCallback(
 		Arguments
 	);
 
+	return Result;
+}
+
+RValue& GmlScriptFindNpcBlipNoiseCallback(
+	IN CInstance* Self,
+	IN CInstance* Other,
+	OUT RValue& Result,
+	IN int ArgumentCount,
+	IN RValue** Arguments
+)
+{
+	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_FIND_NPC_BLIP_NOISE));
+	original(
+		Self,
+		Other,
+		Result,
+		ArgumentCount,
+		Arguments
+	);
+
+	if (AriCurrentGmRoomIsDungeonFloor())
+	{
+		std::string audio_asset_name = Result.ToString();
+		if (audio_asset_name == "SoundEffects/NPCs/Vocal/TextBlipSeridiaHuman" || audio_asset_name == "SoundEffects/NPCs/Vocal/TextBlipPriestess")
+			Result = "SoundEffects/NPCs/Vocal/TextBlipHeadPriestess";
+	}
+	
 	return Result;
 }
 
@@ -8957,6 +9656,102 @@ RValue& GmlScriptSaveGameCallback(
 		ArgumentCount,
 		Arguments
 	);
+
+	return Result;
+}
+
+RValue& GmlScriptAriFaceDirCallback(
+	IN CInstance* Self,
+	IN CInstance* Other,
+	OUT RValue& Result,
+	IN int ArgumentCount,
+	IN RValue** Arguments
+)
+{
+	ari_facing_dir = Arguments[0]->ToDouble();
+
+	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_ARI_FACE_DIR));
+	original(
+		Self,
+		Other,
+		Result,
+		ArgumentCount,
+		Arguments
+	);
+
+	return Result;
+}
+
+RValue& GmlScriptOnBeginStepCallback(
+	IN CInstance* Self,
+	IN CInstance* Other,
+	OUT RValue& Result,
+	IN int ArgumentCount,
+	IN RValue** Arguments
+)
+{
+	// Meteor Sprites
+	for (int i = 0; i < meteor_aoes.size(); i++)
+	{
+		if (meteor_aoes[i].is_active)
+		{
+			RValue spr_trap_meteor = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_trap_meteor" });
+			g_ModuleInterface->CallBuiltin("variable_instance_set", { meteor_aoes[i].instance, "sprite_index", spr_trap_meteor });
+			g_ModuleInterface->CallBuiltin("variable_instance_set", { meteor_aoes[i].instance, "image_speed", 0.6 });
+		}
+	}
+
+	// Gaze Traps
+	for (int i = 0; i < gaze_aoes.size(); i++)
+	{
+		if (gaze_aoes[i].is_active)
+		{
+			RValue spr_trap_gaze = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_trap_gaze" });
+			g_ModuleInterface->CallBuiltin("variable_instance_set", { gaze_aoes[i].instance, "sprite_index", spr_trap_gaze });
+			g_ModuleInterface->CallBuiltin("variable_instance_set", { gaze_aoes[i].instance, "image_speed", 0.6 });
+		}
+	}
+
+	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_ON_BEGIN_STEP));
+	original(
+		Self,
+		Other,
+		Result,
+		ArgumentCount,
+		Arguments
+	);
+
+	return Result;
+}
+
+RValue& GmlScriptRecipeGenerateInfusionsCallback(
+	IN CInstance* Self,
+	IN CInstance* Other,
+	OUT RValue& Result,
+	IN int ArgumentCount,
+	IN RValue** Arguments
+)
+{
+	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_RECIPE_GENERATE_INFUSIONS));
+	original(
+		Self,
+		Other,
+		Result,
+		ArgumentCount,
+		Arguments
+	);
+
+	if (StructVariableExists(Self, "item_id"))
+	{
+		int item_id = Self->GetMember("item_id").ToInt64();
+		if (item_id_to_sigil_map.contains(item_id))
+		{
+			RValue empty_array = g_ModuleInterface->CallBuiltin("array_create", { 0 });
+			*Result.GetRefMember("__count") = 0;
+			*Result.GetRefMember("__internal_size") = 0;
+			*Result.GetRefMember("__buffer") = empty_array;
+		}
+	}
 
 	return Result;
 }
@@ -9715,7 +10510,7 @@ void CreateHookGmlScriptGetEquipmentBonusFrom(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_EQUIPMENT_BONUS_FROM);
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_EQUIPMENT_BONUS_FROM);
 	}
 
 	status = MmCreateHook(
@@ -9728,7 +10523,7 @@ void CreateHookGmlScriptGetEquipmentBonusFrom(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_EQUIPMENT_BONUS_FROM);
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_EQUIPMENT_BONUS_FROM);
 	}
 }
 
@@ -9742,7 +10537,7 @@ void CreateHookGmlScriptHudShouldShow(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_HUD_SHOULD_SHOW);
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_HUD_SHOULD_SHOW);
 	}
 
 	status = MmCreateHook(
@@ -9755,7 +10550,7 @@ void CreateHookGmlScriptHudShouldShow(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_HUD_SHOULD_SHOW);
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_HUD_SHOULD_SHOW);
 	}
 }
 
@@ -9769,7 +10564,7 @@ void CreateHookGmlScriptOnDrawGui(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ON_DRAW_GUI);
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ON_DRAW_GUI);
 	}
 
 	status = MmCreateHook(
@@ -9782,7 +10577,7 @@ void CreateHookGmlScriptOnDrawGui(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ON_DRAW_GUI);
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ON_DRAW_GUI);
 	}
 }
 
@@ -9796,7 +10591,7 @@ void CreateHookGmlScriptDisplayResize(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_DISPLAY_RESIZE);
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_DISPLAY_RESIZE);
 	}
 
 	status = MmCreateHook(
@@ -9809,7 +10604,7 @@ void CreateHookGmlScriptDisplayResize(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_DISPLAY_RESIZE);
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_DISPLAY_RESIZE);
 	}
 }
 
@@ -9823,7 +10618,7 @@ void CreateHookGmlScriptGetUiIcon(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_ITEM_UI_ICON);
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_ITEM_UI_ICON);
 	}
 
 	status = MmCreateHook(
@@ -9836,7 +10631,7 @@ void CreateHookGmlScriptGetUiIcon(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_ITEM_UI_ICON);
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_ITEM_UI_ICON);
 	}
 }
 
@@ -9850,7 +10645,7 @@ void CreateHookGmlScriptUpdateToolbarMenu(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_UPDATE_TOOLBAR_MENU);
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_UPDATE_TOOLBAR_MENU);
 	}
 
 	status = MmCreateHook(
@@ -9863,7 +10658,7 @@ void CreateHookGmlScriptUpdateToolbarMenu(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_UPDATE_TOOLBAR_MENU);
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_UPDATE_TOOLBAR_MENU);
 	}
 }
 
@@ -10056,6 +10851,60 @@ void CreateHookGmlScriptCraftingMenuClose(AurieStatus& status)
 	}
 }
 
+void CreateHookGmlScriptJournalMenuInitialize(AurieStatus& status)
+{
+	CScript* gml_script_journal_menu_initialize = nullptr;
+	status = g_ModuleInterface->GetNamedRoutinePointer(
+		GML_SCRIPT_JOURNAL_MENU_INITIALIZE,
+		(PVOID*)&gml_script_journal_menu_initialize
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_JOURNAL_MENU_INITIALIZE);
+	}
+
+	status = MmCreateHook(
+		g_ArSelfModule,
+		GML_SCRIPT_JOURNAL_MENU_INITIALIZE,
+		gml_script_journal_menu_initialize->m_Functions->m_ScriptFunction,
+		GmlScriptJournalMenuInitializeCallback,
+		nullptr
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_JOURNAL_MENU_INITIALIZE);
+	}
+}
+
+void CreateHookGmlScriptJournalMenuClose(AurieStatus& status)
+{
+	CScript* gml_script_journal_menu_close = nullptr;
+	status = g_ModuleInterface->GetNamedRoutinePointer(
+		GML_SCRIPT_JOURNAL_MENU_CLOSE,
+		(PVOID*)&gml_script_journal_menu_close
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_JOURNAL_MENU_CLOSE);
+	}
+
+	status = MmCreateHook(
+		g_ArSelfModule,
+		GML_SCRIPT_JOURNAL_MENU_CLOSE,
+		gml_script_journal_menu_close->m_Functions->m_ScriptFunction,
+		GmlScriptJournalMenuCloseCallback,
+		nullptr
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_JOURNAL_MENU_CLOSE);
+	}
+}
+
 void CreateHookGmlScriptVertigoDrawWithColor(AurieStatus& status)
 {
 	CScript* gml_script_vertigo_draw_with_color = nullptr;
@@ -10110,6 +10959,33 @@ void CreateHookGmlScriptSceneAudioPlayerPlay(AurieStatus& status)
 	}
 }
 
+void CreateHookGmlScriptFindNpcBlipNoise(AurieStatus& status)
+{
+	CScript* gml_script_find_npc_blip_noise = nullptr;
+	status = g_ModuleInterface->GetNamedRoutinePointer(
+		GML_SCRIPT_FIND_NPC_BLIP_NOISE,
+		(PVOID*)&gml_script_find_npc_blip_noise
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_FIND_NPC_BLIP_NOISE);
+	}
+
+	status = MmCreateHook(
+		g_ArSelfModule,
+		GML_SCRIPT_FIND_NPC_BLIP_NOISE,
+		gml_script_find_npc_blip_noise->m_Functions->m_ScriptFunction,
+		GmlScriptFindNpcBlipNoiseCallback,
+		nullptr
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_FIND_NPC_BLIP_NOISE);
+	}
+}
+
 void CreateHookGmlScriptSaveGame(AurieStatus& status)
 {
 	CScript* gml_script_save_game = nullptr;
@@ -10120,7 +10996,7 @@ void CreateHookGmlScriptSaveGame(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SAVE_GAME);
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SAVE_GAME);
 	}
 
 	status = MmCreateHook(
@@ -10133,7 +11009,88 @@ void CreateHookGmlScriptSaveGame(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SAVE_GAME);
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SAVE_GAME);
+	}
+}
+
+void CreateHookGmlScriptAriFaceDir(AurieStatus& status)
+{
+	CScript* gml_script_ari_face_dir = nullptr;
+	status = g_ModuleInterface->GetNamedRoutinePointer(
+		GML_SCRIPT_ARI_FACE_DIR,
+		(PVOID*)&gml_script_ari_face_dir
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ARI_FACE_DIR);
+	}
+
+	status = MmCreateHook(
+		g_ArSelfModule,
+		GML_SCRIPT_ARI_FACE_DIR,
+		gml_script_ari_face_dir->m_Functions->m_ScriptFunction,
+		GmlScriptAriFaceDirCallback,
+		nullptr
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ARI_FACE_DIR);
+	}
+}
+
+void CreateHookGmlScriptOnBeginStep(AurieStatus& status)
+{
+	CScript* gml_script_on_begin_step = nullptr;
+	status = g_ModuleInterface->GetNamedRoutinePointer(
+		GML_SCRIPT_ON_BEGIN_STEP,
+		(PVOID*)&gml_script_on_begin_step
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ON_BEGIN_STEP);
+	}
+
+	status = MmCreateHook(
+		g_ArSelfModule,
+		GML_SCRIPT_ON_BEGIN_STEP,
+		gml_script_on_begin_step->m_Functions->m_ScriptFunction,
+		GmlScriptOnBeginStepCallback,
+		nullptr
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ON_BEGIN_STEP);
+	}
+}
+
+void CreateHookGmlScriptRecipeGenerateInfusions(AurieStatus& status)
+{
+	CScript* gml_script_recipe_generate_infusions = nullptr;
+	status = g_ModuleInterface->GetNamedRoutinePointer(
+		GML_SCRIPT_RECIPE_GENERATE_INFUSIONS,
+		(PVOID*)&gml_script_recipe_generate_infusions
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_RECIPE_GENERATE_INFUSIONS);
+	}
+
+	status = MmCreateHook(
+		g_ArSelfModule,
+		GML_SCRIPT_RECIPE_GENERATE_INFUSIONS,
+		gml_script_recipe_generate_infusions->m_Functions->m_ScriptFunction,
+		GmlScriptRecipeGenerateInfusionsCallback,
+		nullptr
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_RECIPE_GENERATE_INFUSIONS);
 	}
 }
 
@@ -10147,7 +11104,7 @@ void CreateHookGmlScriptGetUnifiedTime(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_UNIFIED_TIME);
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_UNIFIED_TIME);
 	}
 
 	status = MmCreateHook(
@@ -10160,7 +11117,7 @@ void CreateHookGmlScriptGetUnifiedTime(AurieStatus& status)
 
 	if (!AurieSuccess(status))
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_UNIFIED_TIME);
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_UNIFIED_TIME);
 	}
 }
 
@@ -10172,8 +11129,6 @@ EXPORTED AurieStatus ModuleInitialize(
 	UNREFERENCED_PARAMETER(ModulePath);
 
 	AurieStatus status = AURIE_SUCCESS;
-
-	Sigils x = Sigils::RAGE;
 
 	status = ObGetInterface(
 		"YYTK_Main",
@@ -10465,6 +11420,20 @@ EXPORTED AurieStatus ModuleInitialize(
 		return status;
 	}
 
+	CreateHookGmlScriptJournalMenuInitialize(status);
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return status;
+	}
+
+	CreateHookGmlScriptJournalMenuClose(status);
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return status;
+	}
+
 	CreateHookGmlScriptVertigoDrawWithColor(status);
 	if (!AurieSuccess(status))
 	{
@@ -10479,7 +11448,35 @@ EXPORTED AurieStatus ModuleInitialize(
 		return status;
 	}
 
+	CreateHookGmlScriptFindNpcBlipNoise(status);
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return status;
+	}
+
 	CreateHookGmlScriptSaveGame(status);
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return status;
+	}
+
+	CreateHookGmlScriptAriFaceDir(status);
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return status;
+	}
+
+	CreateHookGmlScriptOnBeginStep(status);
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return status;
+	}
+
+	CreateHookGmlScriptRecipeGenerateInfusions(status);
 	if (!AurieSuccess(status))
 	{
 		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
