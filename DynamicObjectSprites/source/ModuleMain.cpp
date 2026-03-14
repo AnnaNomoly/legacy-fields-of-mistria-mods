@@ -8,7 +8,7 @@ using namespace YYTK;
 using json = nlohmann::json;
 
 static const char* const MOD_NAME = "DynamicObjectSprites";
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";
 static const char* const GML_SCRIPT_GET_MINUTES = "gml_Script_get_minutes";
 static const char* const GML_SCRIPT_CALENDAR_DAY = "gml_Script_day@Calendar@Calendar";
 static const char* const GML_SCRIPT_CALENDAR_SEASON = "gml_Script_season@Calendar@Calendar";
@@ -22,6 +22,7 @@ static const std::string DYNAMIC_OBJECT_SPRITES_KEY = "dynamic_object_sprites";
 static const std::string CONDITIONS_KEY = "conditions";
 static const std::string ORIGINAL_SPRITE_NAME_KEY = "original_sprite_name";
 static const std::string REPLACEMENT_SPRITE_NAME_KEY = "replacement_sprite_name";
+static const std::string BASE_SPRITE_NAME_KEY = "base_sprite_name";
 static const std::string TIME_OF_DAY_KEY = "time_of_day"; // DAY or NIGHT
 static const std::string DAY_OF_WEEK_KEY = "day_of_week";
 static const std::string DAY_OF_MONTH_KEY = "day_of_month"; // 1 - 28
@@ -38,8 +39,10 @@ static struct DynamicObjectSprite {
 	int weather = -1;
 	std::string original_sprite_name;
 	std::string replacement_sprite_name;
+	std::string base_sprite;
 	std::string_view mod_name;
 
+	bool IsFloorSprite() { return !base_sprite.empty(); }
 	bool HasTimeOfDayCondition() { return time_of_day != -1; }
 	bool HasWeekDayCondition() { return week_day != -1; }
 	bool HasMonthDayCondition() { return month_day != -1; }
@@ -326,6 +329,14 @@ void LoadConfigFiles()
 											if (json_dynamic_object_sprite_replacement_sprite_name.empty() || json_dynamic_object_sprite_replacement_sprite_name.size() == 0)
 												continue;
 
+											bool is_base_sprite = json_dynamic_object_sprite.contains(BASE_SPRITE_NAME_KEY) && json_dynamic_object_sprite.at(BASE_SPRITE_NAME_KEY).is_string();
+											if (is_base_sprite)
+											{
+												std::string json_dynamic_object_sprite_base_sprite_name = json_dynamic_object_sprite[BASE_SPRITE_NAME_KEY];
+												if (json_dynamic_object_sprite_base_sprite_name.empty() || json_dynamic_object_sprite_base_sprite_name.size() == 0)
+													continue;
+											}
+
 											// Test the original_sprite_name exists.
 											RValue original_sprite = g_ModuleInterface->CallBuiltin("asset_get_index", { json_dynamic_object_sprite_original_sprite_name.c_str() });
 											if (original_sprite.m_Kind != VALUE_REF)
@@ -342,10 +353,23 @@ void LoadConfigFiles()
 												continue;
 											}
 
+											// Test the base_sprite exists if applicable.
+											if (is_base_sprite)
+											{
+												std::string json_dynamic_object_sprite_base_sprite_name = json_dynamic_object_sprite[BASE_SPRITE_NAME_KEY];
+												RValue replacement_sprite = g_ModuleInterface->CallBuiltin("asset_get_index", { json_dynamic_object_sprite_base_sprite_name.c_str() });
+												if (replacement_sprite.m_Kind != VALUE_REF)
+												{
+													g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - The provided base sprite doesn't exist: %s", MOD_NAME, VERSION, json_dynamic_object_sprite_base_sprite_name.c_str());
+													continue;
+												}
+											}
+
 											DynamicObjectSprite dynamic_object_sprite = DynamicObjectSprite();
 											dynamic_object_sprite.mod_name = mod_name_view;
 											dynamic_object_sprite.original_sprite_name = json_dynamic_object_sprite_original_sprite_name;
 											dynamic_object_sprite.replacement_sprite_name = json_dynamic_object_sprite_replacement_sprite_name;
+											if (is_base_sprite) dynamic_object_sprite.base_sprite = json_dynamic_object_sprite[BASE_SPRITE_NAME_KEY];
 
 											// time_of_day condition.
 											if (json_dynamic_object_sprite_conditions.contains(TIME_OF_DAY_KEY) && json_dynamic_object_sprite_conditions.at(TIME_OF_DAY_KEY).is_string())
@@ -457,7 +481,10 @@ RValue GetDynamicObjectSprite(std::string sprite_name)
 {
 	for (DynamicObjectSprite dynamic_object_sprite : dynamic_object_sprites)
 	{
-		if (sprite_name != dynamic_object_sprite.original_sprite_name)
+		if (!dynamic_object_sprite.IsFloorSprite() && sprite_name != dynamic_object_sprite.original_sprite_name)
+			continue;
+
+		if (dynamic_object_sprite.IsFloorSprite() && sprite_name != dynamic_object_sprite.base_sprite)
 			continue;
 
 		if (dynamic_object_sprite.HasTimeOfDayCondition())
@@ -483,9 +510,20 @@ RValue GetDynamicObjectSprite(std::string sprite_name)
 		if (dynamic_object_sprite.HasWeatherCondition() && current_weather != dynamic_object_sprite.weather)
 			continue;
 
-		RValue replacement_sprite = g_ModuleInterface->CallBuiltin("asset_get_index", { dynamic_object_sprite.replacement_sprite_name.c_str() });
-		if (replacement_sprite.m_Kind == VALUE_REF)
-			return replacement_sprite;
+		if (!dynamic_object_sprite.IsFloorSprite())
+		{
+			RValue replacement_sprite = g_ModuleInterface->CallBuiltin("asset_get_index", { RValue(dynamic_object_sprite.replacement_sprite_name) });
+			if (replacement_sprite.m_Kind == VALUE_REF)
+				return replacement_sprite;
+		}
+		else
+		{
+			RValue original = g_ModuleInterface->CallBuiltin("asset_get_index", { RValue(dynamic_object_sprite.original_sprite_name) });
+			RValue replacement = g_ModuleInterface->CallBuiltin("asset_get_index", { RValue(dynamic_object_sprite.replacement_sprite_name) });
+			
+			g_ModuleInterface->CallBuiltin("sprite_assign", { original, replacement });
+			return RValue();
+		}
 	}
 
 	return RValue();
