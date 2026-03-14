@@ -284,6 +284,7 @@ static const std::string ROGUE_SET_BONUS_TREASURE_HUNTER_LOCALIZED_TEXT_KEY = "I
 
 static const int TWO_MINUTES_IN_SECONDS = 120;
 static const int THREE_MINUTES_IN_SECONDS = 180;
+static const int ONE_HOUR_IN_SECONDS = 3600;
 static const int TRAP_ACTIVATION_DISTANCE = 16;
 
 // Configuration defaults
@@ -388,6 +389,15 @@ static enum class FloorEnchantments {
 	SECOND_WIND, // Group 1
 	HASTE, // Group 1
 	FEY, // Group 3
+
+	// Predict Exclusive Effects
+	FUMIGATE, // Group 1
+	FRAILTY, // Group 2
+	GRUDGE, // Group 2
+	DEEP_WOUNDS, // Group 1
+	BLINK, // Group 1
+	STONESKIN, // Group 1
+	PHALANX // Group 1
 };
 
 static enum class Offerings {
@@ -396,6 +406,12 @@ static enum class Offerings {
 	LEECH,
 	PERIL,
 	RECKONING,
+
+	// Condemn Exclusive Offerings
+	OUTBREAK,
+	SPIRIT_LINK,
+	SPIKES,
+	REFLECT
 };
 
 static enum class Sigils {
@@ -1650,8 +1666,11 @@ static bool orb_item_used = false;
 static bool inner_fire_cast = false;
 static bool reckoning_applied = false;
 static bool fairy_buff_applied = false;
+static bool stoneskin_applied = false;
 static bool is_restoration_tracked_interval = false;
 static bool is_second_wind_tracked_interval = false;
+static bool is_fumigate_tracked_interval = false;
+static bool is_deep_wounds_tracked_interval = false;
 static bool offering_chance_occurred = false;
 static bool obj_dungeon_elevator_focused = false;
 static bool obj_dungeon_ladder_down_focused = false;
@@ -1664,7 +1683,15 @@ static int floor_start_time = 0;
 static int current_time_in_seconds = -1;
 static int time_of_last_restoration_tick = -1;
 static int time_of_last_second_wind_tick = -1;
+static int time_of_last_fumigate_tick = -1;
+static int time_of_last_deep_wounds_tick = -1;
+static int time_of_last_outbreak_tick = -1;
 static int held_item_id = -1;
+static int frailty_hit_counter = 0;
+static int grudge_counter = 0;
+static int deep_wounds_damage_pool = 0;
+static int stoneskin_shield_amount = 0;
+static int spirit_link_combined_health_pool = 0;
 static int sigil_of_silence_count = 0;
 static int sigil_of_alteration_count = 0;
 static int dread_beast_monster_id = -1;
@@ -3822,7 +3849,7 @@ void SpawnMonster(CInstance* Self, CInstance* Other, int room_x, int room_y, int
 	);
 }
 
-void ModifyRockClodAttackPatterns(bool is_boss_battle, RValue monster)
+void ModifyRockClodAttackPatterns(bool is_boss_battle, bool is_outbreak, RValue monster)
 {
 	const enum class Patterns {
 		WALL, // Shoots a wall of 10 pellets repeatedly 5 times
@@ -3851,7 +3878,9 @@ void ModifyRockClodAttackPatterns(bool is_boss_battle, RValue monster)
 			if (pattern == Patterns::WALL)
 			{
 				// Shoots a wall of 10 pellets repeatedly 5 times
-				StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+				if(!is_outbreak)
+					StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+
 				StructVariableSet(config_clone, "launcher", false);
 				StructVariableSet(config_clone, "attack_sequence", 5.0);
 				StructVariableSet(config_clone, "attack_legion", 10.0);
@@ -3874,7 +3903,9 @@ void ModifyRockClodAttackPatterns(bool is_boss_battle, RValue monster)
 				double split_depth = 2;
 				double split_angle = 40;
 
-				StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+				if (!is_outbreak)
+					StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+
 				StructVariableSet(config_clone, "launcher", false);
 				StructVariableSet(config_clone, "attack_sequence", attack_sequence);
 				StructVariableSet(config_clone, "attack_legion", attack_legion);
@@ -3897,7 +3928,9 @@ void ModifyRockClodAttackPatterns(bool is_boss_battle, RValue monster)
 				double split_depth = 5;
 				double split_angle = 20;
 
-				StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+				if (!is_outbreak)
+					StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+
 				StructVariableSet(config_clone, "launcher", false);
 				StructVariableSet(config_clone, "attack_sequence", attack_sequence);
 				StructVariableSet(config_clone, "attack_legion", attack_legion);
@@ -3914,7 +3947,7 @@ void ModifyRockClodAttackPatterns(bool is_boss_battle, RValue monster)
 	}
 }
 
-void ModifyStalagmiteAttackPatterns(bool is_boss_battle, RValue monster)
+void ModifyStalagmiteAttackPatterns(bool is_boss_battle, bool is_outbreak, RValue monster)
 {
 	const enum class Modes {
 		DONUT_PB,
@@ -3975,7 +4008,9 @@ void ModifyStalagmiteAttackPatterns(bool is_boss_battle, RValue monster)
 						g_ModuleInterface->CallBuiltin("array_set", { secondary_spikes, i, pair });
 					}
 
-					StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+					if (!is_outbreak)
+						StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+
 					StructVariableSet(config_clone, "secondary_spikes", secondary_spikes);
 					StructVariableSet(monster, "config", config_clone);
 					StructVariableSet(monster, "__deep_dungeon__custom_attack_pattern", starting_pattern);
@@ -3991,7 +4026,9 @@ void ModifyStalagmiteAttackPatterns(bool is_boss_battle, RValue monster)
 						g_ModuleInterface->CallBuiltin("array_set", { secondary_spikes, i, pair });
 					}
 
-					StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+					if (!is_outbreak)
+						StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+
 					StructVariableSet(config_clone, "secondary_spikes", secondary_spikes);
 					StructVariableSet(monster, "config", config_clone);
 					StructVariableSet(monster, "__deep_dungeon__custom_attack_pattern", starting_pattern);
@@ -4010,7 +4047,9 @@ void ModifyStalagmiteAttackPatterns(bool is_boss_battle, RValue monster)
 						g_ModuleInterface->CallBuiltin("array_set", { secondary_spikes, i, pair });
 					}
 
-					StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+					if (!is_outbreak)
+						StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+
 					StructVariableSet(config_clone, "secondary_spikes", secondary_spikes);
 					StructVariableSet(monster, "config", config_clone);
 					StructVariableSet(monster, "__deep_dungeon__custom_attack_pattern", starting_pattern);
@@ -4026,7 +4065,9 @@ void ModifyStalagmiteAttackPatterns(bool is_boss_battle, RValue monster)
 						g_ModuleInterface->CallBuiltin("array_set", { secondary_spikes, i, pair });
 					}
 
-					StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+					if (!is_outbreak)
+						StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+
 					StructVariableSet(config_clone, "secondary_spikes", secondary_spikes);
 					StructVariableSet(monster, "config", config_clone);
 					StructVariableSet(monster, "__deep_dungeon__custom_attack_pattern", starting_pattern);
@@ -4045,7 +4086,9 @@ void ModifyStalagmiteAttackPatterns(bool is_boss_battle, RValue monster)
 						g_ModuleInterface->CallBuiltin("array_set", { secondary_spikes, i, pair });
 					}
 
-					StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+					if (!is_outbreak)
+						StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+
 					StructVariableSet(config_clone, "secondary_spikes", secondary_spikes);
 					StructVariableSet(monster, "config", config_clone);
 					StructVariableSet(monster, "__deep_dungeon__custom_attack_pattern", starting_pattern);
@@ -4061,7 +4104,9 @@ void ModifyStalagmiteAttackPatterns(bool is_boss_battle, RValue monster)
 						g_ModuleInterface->CallBuiltin("array_set", { secondary_spikes, i, pair });
 					}
 
-					StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+					if (!is_outbreak)
+						StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+
 					StructVariableSet(config_clone, "secondary_spikes", secondary_spikes);
 					StructVariableSet(monster, "config", config_clone);
 					StructVariableSet(monster, "__deep_dungeon__custom_attack_pattern", starting_pattern);
@@ -4201,7 +4246,7 @@ void ModifyStalagmiteAttackPatterns(bool is_boss_battle, RValue monster)
 	}
 }
 
-void ModifySaplingAttackPatterns(bool is_boss_battle, RValue monster, int monster_id)
+void ModifySaplingAttackPatterns(bool is_boss_battle, RValue is_outbreak, RValue monster, int monster_id)
 {
 	RValue wait_to_change_attack_pattern_exists = g_ModuleInterface->CallBuiltin("struct_exists", { monster, "__deep_dungeon__wait_to_change_attack_pattern" });
 	if (!wait_to_change_attack_pattern_exists.ToBoolean())
@@ -4219,7 +4264,9 @@ void ModifySaplingAttackPatterns(bool is_boss_battle, RValue monster, int monste
 			if (is_boss_battle)
 				boss_monsters_configured++;
 
-			StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+			if (!is_outbreak)
+				StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+
 			StructVariableSet(config_clone, "sticky", true);
 			StructVariableSet(config_clone, "free_fly", true);
 			StructVariableSet(config_clone, "air_speed_modifier", 0.6);
@@ -4260,7 +4307,7 @@ void ModifySaplingAttackPatterns(bool is_boss_battle, RValue monster, int monste
 	}
 }
 
-void ModifyShroomAttackPatterns(bool is_boss_battle, RValue monster)
+void ModifyShroomAttackPatterns(bool is_boss_battle, RValue is_outbreak, RValue monster)
 {
 	RValue wait_to_change_attack_pattern_exists = g_ModuleInterface->CallBuiltin("struct_exists", { monster, "__deep_dungeon__wait_to_change_attack_pattern" });
 	if (!wait_to_change_attack_pattern_exists.ToBoolean())
@@ -4278,7 +4325,9 @@ void ModifyShroomAttackPatterns(bool is_boss_battle, RValue monster)
 			if (is_boss_battle)
 				boss_monsters_configured++;
 
-			StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+			if (!is_outbreak)
+				StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+
 			StructVariableSet(config_clone, "spew_lava", true);
 			StructVariableSet(config_clone, "lava_damage", 1);
 			StructVariableSet(config_clone, "lava_angle", 90);
@@ -4320,7 +4369,7 @@ void ModifyShroomAttackPatterns(bool is_boss_battle, RValue monster)
 	}
 }
 
-void ModifyEnchanternAttackPatterns(bool is_boss_battle, RValue monster)
+void ModifyEnchanternAttackPatterns(bool is_boss_battle, RValue is_outbreak, RValue monster)
 {
 	RValue wait_to_change_attack_pattern_exists = g_ModuleInterface->CallBuiltin("struct_exists", { monster, "__deep_dungeon__wait_to_change_attack_pattern" });
 	if (!wait_to_change_attack_pattern_exists.ToBoolean())
@@ -4338,7 +4387,9 @@ void ModifyEnchanternAttackPatterns(bool is_boss_battle, RValue monster)
 			if (is_boss_battle)
 				boss_monsters_configured++;
 
-			StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+			if (!is_outbreak)
+				StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+
 			StructVariableSet(config_clone, "charge_speed", 3);
 			StructVariableSet(config_clone, "flee_speed", 2);
 			StructVariableSet(config_clone, "attack_radius", 384);
@@ -4365,7 +4416,7 @@ void ModifyEnchanternAttackPatterns(bool is_boss_battle, RValue monster)
 	}
 }
 
-void ModifySpiritAttackPatterns(bool is_boss_battle, RValue monster, int monster_id)
+void ModifySpiritAttackPatterns(bool is_boss_battle, RValue is_outbreak, RValue monster, int monster_id)
 {
 	RValue custom_attack_pattern_exists = g_ModuleInterface->CallBuiltin("struct_exists", { monster, "__deep_dungeon__custom_attack_pattern" });
 	if (!custom_attack_pattern_exists.ToBoolean())
@@ -4378,8 +4429,11 @@ void ModifySpiritAttackPatterns(bool is_boss_battle, RValue monster, int monster
 			if (is_boss_battle)
 				boss_monsters_configured++;
 
-			StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
-			StructVariableSet(config_clone, "projectile_damage", config_clone.GetMember("projectile_damage").ToDouble() * 2);
+			if (!is_outbreak)
+				StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+
+			if (!is_outbreak)
+				StructVariableSet(config_clone, "projectile_damage", config_clone.GetMember("projectile_damage").ToDouble() * 2);
 
 			RValue idle_duration = g_ModuleInterface->CallBuiltin("array_create", { 2 });
 			g_ModuleInterface->CallBuiltin("array_set", { idle_duration, 0, 1 });
@@ -4433,7 +4487,7 @@ void ModifySpiritAttackPatterns(bool is_boss_battle, RValue monster, int monster
 	}
 }
 
-void ModifyCatAttackPatterns(bool is_boss_battle, RValue monster, int monster_id)
+void ModifyCatAttackPatterns(bool is_boss_battle, RValue is_outbreak, RValue monster, int monster_id)
 {
 	RValue custom_attack_pattern_exists = g_ModuleInterface->CallBuiltin("struct_exists", { monster, "__deep_dungeon__custom_attack_pattern" });
 	if (!custom_attack_pattern_exists.ToBoolean())
@@ -4446,7 +4500,9 @@ void ModifyCatAttackPatterns(bool is_boss_battle, RValue monster, int monster_id
 			if (is_boss_battle)
 				boss_monsters_configured++;
 
-			StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+			if (!is_outbreak)
+				StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+
 			StructVariableSet(config_clone, "charge_range", 192);
 			StructVariableSet(config_clone, "attack_movement_speed", 8);
 
@@ -4482,7 +4538,7 @@ void ModifyCatAttackPatterns(bool is_boss_battle, RValue monster, int monster_id
 	}
 }
 
-void ModifyBatAttackPatterns(bool is_boss_battle, RValue monster)
+void ModifyBatAttackPatterns(bool is_boss_battle, RValue is_outbreak, RValue monster)
 {
 	RValue custom_attack_pattern_exists = g_ModuleInterface->CallBuiltin("struct_exists", { monster, "__deep_dungeon__custom_attack_pattern" });
 	if (!custom_attack_pattern_exists.ToBoolean())
@@ -4495,7 +4551,9 @@ void ModifyBatAttackPatterns(bool is_boss_battle, RValue monster)
 			if (is_boss_battle)
 				boss_monsters_configured++;
 
-			StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+			if (!is_outbreak)
+				StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+
 			StructVariableSet(config_clone, "speed", 3);
 			StructVariableSet(config_clone, "flee_speed", 3); // -1
 			StructVariableSet(config_clone, "attack_radius", 144);
@@ -4527,7 +4585,7 @@ void ModifyBatAttackPatterns(bool is_boss_battle, RValue monster)
 	}
 }
 
-void ModifyTomeAttackPatterns(bool is_boss_battle, RValue monster)
+void ModifyTomeAttackPatterns(bool is_boss_battle, RValue is_outbreak, RValue monster)
 {
 	RValue custom_attack_pattern_exists = g_ModuleInterface->CallBuiltin("struct_exists", { monster, "__deep_dungeon__custom_attack_pattern" });
 	if (!custom_attack_pattern_exists.ToBoolean())
@@ -4540,7 +4598,9 @@ void ModifyTomeAttackPatterns(bool is_boss_battle, RValue monster)
 			if (is_boss_battle)
 				boss_monsters_configured++;
 
-			StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+			if (!is_outbreak)
+				StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+
 			StructVariableSet(config_clone, "acknowledgment", 15); // 32
 			StructVariableSet(config_clone, "flying_speed", 6); // 2.4
 			StructVariableSet(config_clone, "flying_timeout", 450); // 220
@@ -4558,7 +4618,7 @@ void ModifyTomeAttackPatterns(bool is_boss_battle, RValue monster)
 	}
 }
 
-void ModifyRockStackAttackPatterns(bool is_boss_battle, RValue monster)
+void ModifyRockStackAttackPatterns(bool is_boss_battle, RValue is_outbreak, RValue monster)
 {
 	RValue custom_attack_pattern_exists = g_ModuleInterface->CallBuiltin("struct_exists", { monster, "__deep_dungeon__custom_attack_pattern" });
 	if (!custom_attack_pattern_exists.ToBoolean())
@@ -4571,7 +4631,9 @@ void ModifyRockStackAttackPatterns(bool is_boss_battle, RValue monster)
 			if (is_boss_battle)
 				boss_monsters_configured++;
 
-			StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+			if (!is_outbreak)
+				StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+
 			StructVariableSet(config_clone, "speed", 10); // 1.5
 			StructVariableSet(config_clone, "aggro_radius", 624); // 256
 			StructVariableSet(config_clone, "air_speed", 10); // 1.25
@@ -4602,7 +4664,7 @@ void ModifyRockStackAttackPatterns(bool is_boss_battle, RValue monster)
 	}
 }
 
-void ModifyGriffinStatueAttackPatterns(bool is_boss_battle, RValue monster)
+void ModifyGriffinStatueAttackPatterns(bool is_boss_battle, RValue is_outbreak, RValue monster)
 {
 	RValue custom_attack_pattern_exists = g_ModuleInterface->CallBuiltin("struct_exists", { monster, "__deep_dungeon__custom_attack_pattern" });
 	if (!custom_attack_pattern_exists.ToBoolean())
@@ -4615,7 +4677,9 @@ void ModifyGriffinStatueAttackPatterns(bool is_boss_battle, RValue monster)
 			if (is_boss_battle)
 				boss_monsters_configured++;
 
-			StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+			if (!is_outbreak)
+				StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+
 			StructVariableSet(config_clone, "aggro_radius", 624); // 360
 			StructVariableSet(config_clone, "speed", 10); // 0.6
 			StructVariableSet(config_clone, "stomp_frames", 24); // 6
@@ -4635,31 +4699,31 @@ void ModifyGriffinStatueAttackPatterns(bool is_boss_battle, RValue monster)
 	}
 }
 
-void ModifyDreadBeastAttackPatterns(bool is_boss_battle, RValue monster)
+void ModifyDreadBeastAttackPatterns(bool is_boss_battle, bool is_outbreak, RValue monster)
 {
 	int monster_id = monster.GetMember("monster_id").ToInt64();
 	if (monster_id == monster_name_to_id_map["rockclod"] || monster_id == monster_name_to_id_map["rockclod_blue"] || monster_id == monster_name_to_id_map["rockclod_green"] || monster_id == monster_name_to_id_map["rockclod_red"]) // TODO: "rockclod_purple" if/when implemented
-		ModifyRockClodAttackPatterns(is_boss_battle, monster);
+		ModifyRockClodAttackPatterns(is_boss_battle, is_outbreak, monster);
 	if (monster_id == monster_name_to_id_map["stalagmite"] || monster_id == monster_name_to_id_map["stalagmite_green"] || monster_id == monster_name_to_id_map["stalagmite_purple"])
-		ModifyStalagmiteAttackPatterns(is_boss_battle, monster);
+		ModifyStalagmiteAttackPatterns(is_boss_battle, is_outbreak, monster);
 	if (monster_id == monster_name_to_id_map["sapling"] || monster_id == monster_name_to_id_map["sapling_cool"] || monster_id == monster_name_to_id_map["sapling_blue"] || monster_id == monster_name_to_id_map["sapling_purple"] || monster_id == monster_name_to_id_map["sapling_orange"] || monster_id == monster_name_to_id_map["sapling_pink"])
-		ModifySaplingAttackPatterns(is_boss_battle, monster, monster_id);
+		ModifySaplingAttackPatterns(is_boss_battle, is_outbreak, monster, monster_id);
 	if (monster_id == monster_name_to_id_map["mushroom"] || monster_id == monster_name_to_id_map["mushroom_green"] || monster_id == monster_name_to_id_map["mushroom_blue"] || monster_id == monster_name_to_id_map["mushroom_purple"])
-		ModifyShroomAttackPatterns(is_boss_battle, monster);
+		ModifyShroomAttackPatterns(is_boss_battle, is_outbreak, monster);
 	if (monster_id == monster_name_to_id_map["enchantern"] || monster_id == monster_name_to_id_map["enchantern_blue"])
-		ModifyEnchanternAttackPatterns(is_boss_battle, monster);
+		ModifyEnchanternAttackPatterns(is_boss_battle, is_outbreak, monster);
 	if (monster_id == monster_name_to_id_map["spirit"] || monster_id == monster_name_to_id_map["spirit_purple"])
-		ModifySpiritAttackPatterns(is_boss_battle, monster, monster_id);
+		ModifySpiritAttackPatterns(is_boss_battle, is_outbreak, monster, monster_id);
 	if (monster_id == monster_name_to_id_map["cat"] || monster_id == monster_name_to_id_map["cat_void"])
-		ModifyCatAttackPatterns(is_boss_battle, monster, monster_id);
+		ModifyCatAttackPatterns(is_boss_battle, is_outbreak, monster, monster_id);
 	if (monster_id == monster_name_to_id_map["bat"] || monster_id == monster_name_to_id_map["bat_blue"])
-		ModifyBatAttackPatterns(is_boss_battle, monster);
+		ModifyBatAttackPatterns(is_boss_battle, is_outbreak, monster);
 	if (monster_id == monster_name_to_id_map["tome"])
-		ModifyTomeAttackPatterns(is_boss_battle, monster);
+		ModifyTomeAttackPatterns(is_boss_battle, is_outbreak, monster);
 	if (monster_id == monster_name_to_id_map["rock_stack"])
-		ModifyRockStackAttackPatterns(is_boss_battle, monster);
+		ModifyRockStackAttackPatterns(is_boss_battle, is_outbreak, monster);
 	if (monster_id == monster_name_to_id_map["griffin_statue"])
-		ModifyGriffinStatueAttackPatterns(is_boss_battle, monster);
+		ModifyGriffinStatueAttackPatterns(is_boss_battle, is_outbreak, monster);
 }
 
 void UnlockRecipe(int item_id, CInstance* Self, CInstance* Other)
@@ -6336,6 +6400,8 @@ void ResetStaticFields(bool returned_to_title_screen)
 		unlock_recipes = true;
 		is_restoration_tracked_interval = false;
 		is_second_wind_tracked_interval = false;
+		is_fumigate_tracked_interval = false;
+		is_deep_wounds_tracked_interval = false;
 		ari_x = -1;
 		ari_y = -1;
 		ari_facing_dir = -1;
@@ -6344,6 +6410,9 @@ void ResetStaticFields(bool returned_to_title_screen)
 		current_time_in_seconds = -1;
 		time_of_last_restoration_tick = -1;
 		time_of_last_second_wind_tick = -1;
+		time_of_last_fumigate_tick = -1;
+		time_of_last_deep_wounds_tick = -1;
+		time_of_last_outbreak_tick = -1;
 		held_item_id = -1;
 		ari_current_location = "";
 		ari_current_gm_room = "";
@@ -6361,9 +6430,14 @@ void ResetStaticFields(bool returned_to_title_screen)
 	inner_fire_cast = false;
 	reckoning_applied = false;
 	fairy_buff_applied = false;
+	stoneskin_applied = false;
 	offering_chance_occurred = false;
 	obj_dungeon_elevator_focused = false;
 	obj_dungeon_ladder_down_focused = false;
+	frailty_hit_counter = 0;
+	grudge_counter = 0;
+	deep_wounds_damage_pool = 0;
+	stoneskin_shield_amount = 0;
 	sigil_of_silence_count = 0;
 	sigil_of_alteration_count = 0;
 	dread_beast_monster_id = -1;
@@ -6634,6 +6708,43 @@ void ObjectCallback(
 			is_restoration_tracked_interval = false;
 		}
 
+		// Fumigate
+		if (is_fumigate_tracked_interval)
+		{
+			int current_health = GetHealth(global_instance->GetRefMember("__ari")->ToInstance(), self).ToInt64();
+			if (current_health > 0)
+				ModifyHealth(global_instance->GetRefMember("__ari")->ToInstance(), self, -1);
+
+			for (CInstance* monster : current_floor_monsters)
+			{
+				if (StructVariableExists(monster, "monster_id") && StructVariableExists(monster, "hit_points") && StructVariableExists(monster, "__deep_dungeon__default_hit_points"))
+				{
+					RValue monster_id = monster->GetMember("monster_id");
+					double hit_points = monster->GetMember("hit_points").ToDouble();
+					if (IsNumeric(monster_id) && std::isfinite(hit_points) && hit_points > 0)
+						*monster->GetRefMember("hit_points") = hit_points - 1;
+				}
+			}
+
+			is_fumigate_tracked_interval = false;
+		}
+
+		// Deep Wounds
+		if (is_deep_wounds_tracked_interval)
+		{
+			int current_health = GetHealth(global_instance->GetRefMember("__ari")->ToInstance(), self).ToInt64();
+			if (current_health > 0 && deep_wounds_damage_pool > 0)
+			{
+				int damage = std::clamp(deep_wounds_damage_pool * 10 / 100, 1, 10);
+				damage = min(damage, deep_wounds_damage_pool);
+
+				deep_wounds_damage_pool -= damage;
+				ModifyHealth(global_instance->GetRefMember("__ari")->ToInstance(), self, -1 * damage);
+			}
+
+			is_deep_wounds_tracked_interval = false;
+		}
+
 		// Drain (Dark Knight Set Bonus)
 		if (class_name_to_set_bonus_effect_value_map[Classes::DARK_KNIGHT][ManagedSetBonuses::DRAIN] > 0)
 		{
@@ -6715,6 +6826,24 @@ void ObjectCallback(
 			SetHealth(global_instance->GetRefMember("__ari")->ToInstance(), self, 1);
 		}
 
+		// Stoneskin
+		if (active_floor_enchantments.contains(FloorEnchantments::STONESKIN) && !stoneskin_applied)
+		{
+			stoneskin_applied = true;
+			
+			// TODO: Tune this
+			if (floor_number < 20)
+				stoneskin_shield_amount = 20;
+			else if (floor_number < 40)
+				stoneskin_shield_amount = 40;
+			else if (floor_number < 60)
+				stoneskin_shield_amount = 60;
+			else if (floor_number < 60)
+				stoneskin_shield_amount = 80;
+			else
+				stoneskin_shield_amount = 100;
+		}
+
 		TrackAriResources(global_instance->GetRefMember("__ari")->ToInstance(), self);
 	}
 
@@ -6771,7 +6900,7 @@ void ObjectCallback(
 						}
 					}
 					else if (StructVariableExists(monster, "__deep_dungeon__boss_monster"))
-						ModifyDreadBeastAttackPatterns(true, monster);
+						ModifyDreadBeastAttackPatterns(true, false, monster);
 				}
 				else if (boss_battle == BossBattle::DEEP_EARTH_ORB)
 				{
@@ -6785,7 +6914,7 @@ void ObjectCallback(
 						}
 					}
 					else if (StructVariableExists(monster, "__deep_dungeon__boss_monster"))
-						ModifyDreadBeastAttackPatterns(true, monster);
+						ModifyDreadBeastAttackPatterns(true, false, monster);
 				}
 				else if (boss_battle == BossBattle::LAVA_CAVES_ORB)
 				{
@@ -6799,7 +6928,7 @@ void ObjectCallback(
 						}
 					}
 					else if (StructVariableExists(monster, "__deep_dungeon__boss_monster"))
-						ModifyDreadBeastAttackPatterns(true, monster);
+						ModifyDreadBeastAttackPatterns(true, false, monster);
 				}
 				else if (boss_battle == BossBattle::RUINS_ORB)
 				{
@@ -6813,7 +6942,7 @@ void ObjectCallback(
 						}
 					}
 					else if (StructVariableExists(monster, "__deep_dungeon__boss_monster"))
-						ModifyDreadBeastAttackPatterns(true, monster);
+						ModifyDreadBeastAttackPatterns(true, false, monster);
 				}
 
 				// Dread Beasts
@@ -6832,7 +6961,7 @@ void ObjectCallback(
 					}
 				}
 				else if (StructVariableExists(monster, "__deep_dungeon__dread_beast"))
-					ModifyDreadBeastAttackPatterns(false, monster);
+					ModifyDreadBeastAttackPatterns(false, false, monster);
 
 				// Track the monster
 				if (!StructVariableExists(monster, "__deep_dungeon__current_floor_monsters") && StructVariableExists(monster, "hit_points"))
@@ -6840,6 +6969,17 @@ void ObjectCallback(
 					current_floor_monsters.push_back(self);
 					StructVariableSet(monster, "__deep_dungeon__current_floor_monsters", true);
 					StructVariableSet(monster, "__deep_dungeon__default_hit_points", monster.GetMember("hit_points").ToDouble());
+				}
+
+				// Grudge
+				if (active_floor_enchantments.contains(FloorEnchantments::GRUDGE) && !StructVariableExists(monster, "__deep_dungeon__grudge_tracked") && StructVariableExists(monster, "hit_points"))
+				{
+					double hit_points = monster.GetMember("hit_points").ToDouble();
+					if (std::isfinite(hit_points) && hit_points <= 0)
+					{
+						grudge_counter += 1;
+						StructVariableSet(monster, "__deep_dungeon__grudge_tracked", true);
+					}
 				}
 
 				// Regular loot drops
@@ -6855,7 +6995,7 @@ void ObjectCallback(
 						if (floor_number < 20) // Upper Mines
 						{
 							DropItem(item_name_to_id_map["beast_coin_tiny"], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
-							if (StructVariableExists(monster, "__deep_dungeon__dread_beast"))
+							if (StructVariableExists(monster, "__deep_dungeon__dread_beast") && !StructVariableExists(monster, "__deep_dungeon__outbreak"))
 							{
 								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < configuration.soul_stone_drop_chance ? true : false;
 								if (drop_soul_stone)
@@ -6867,7 +7007,7 @@ void ObjectCallback(
 							DropItem(item_name_to_id_map["beast_coin_small"], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
 							if (configuration.disable_dungeon_lift && drop_lift_key)
 								DropItem(item_name_to_id_map[TIDE_CAVERNS_KEY_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
-							if (StructVariableExists(monster, "__deep_dungeon__dread_beast"))
+							if (StructVariableExists(monster, "__deep_dungeon__dread_beast") && !StructVariableExists(monster, "__deep_dungeon__outbreak"))
 							{
 								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < configuration.soul_stone_drop_chance ? true : false;
 								if (drop_soul_stone)
@@ -6879,7 +7019,7 @@ void ObjectCallback(
 							DropItem(item_name_to_id_map["beast_coin_medium"], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
 							if (configuration.disable_dungeon_lift && drop_lift_key)
 								DropItem(item_name_to_id_map[DEEP_EARTH_KEY_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
-							if (StructVariableExists(monster, "__deep_dungeon__dread_beast"))
+							if (StructVariableExists(monster, "__deep_dungeon__dread_beast") && !StructVariableExists(monster, "__deep_dungeon__outbreak"))
 							{
 								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < configuration.soul_stone_drop_chance ? true : false;
 								if (drop_soul_stone)
@@ -6891,7 +7031,7 @@ void ObjectCallback(
 							DropItem(item_name_to_id_map["beast_coin_large"], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
 							if (configuration.disable_dungeon_lift && drop_lift_key)
 								DropItem(item_name_to_id_map[LAVA_CAVES_KEY_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
-							if (StructVariableExists(monster, "__deep_dungeon__dread_beast"))
+							if (StructVariableExists(monster, "__deep_dungeon__dread_beast") && !StructVariableExists(monster, "__deep_dungeon__outbreak"))
 							{
 								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < configuration.soul_stone_drop_chance ? true : false;
 								if (drop_soul_stone)
@@ -6903,7 +7043,7 @@ void ObjectCallback(
 							DropItem(item_name_to_id_map["beast_coin_giant"], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
 							if (configuration.disable_dungeon_lift && drop_lift_key)
 								DropItem(item_name_to_id_map[RUINS_KEY_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
-							if (StructVariableExists(monster, "__deep_dungeon__dread_beast"))
+							if (StructVariableExists(monster, "__deep_dungeon__dread_beast") && !StructVariableExists(monster, "__deep_dungeon__outbreak"))
 							{
 								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < configuration.soul_stone_drop_chance ? true : false;
 								if (drop_soul_stone)
@@ -7007,6 +7147,89 @@ void ObjectCallback(
 						}
 					}
 				}
+
+				// Spirit Link
+				if (active_offerings.contains(Offerings::SPIRIT_LINK) && monster_id.ToInt64() != monster_name_to_id_map["mimic"])
+				{
+					if (StructVariableExists(monster, "hit_points"))
+					{
+						double hit_points = monster.GetMember("hit_points").ToDouble();
+						if (std::isfinite(hit_points))
+						{
+							if (StructVariableExists(monster, "__deep_dungeon__spirit_link_applied") && spirit_link_combined_health_pool <= 0)
+								StructVariableSet(monster, "hit_points", 0);
+							else if (!StructVariableExists(monster, "__deep_dungeon__spirit_link_applied"))
+							{
+								spirit_link_combined_health_pool += hit_points;
+								StructVariableSet(monster, "__deep_dungeon__spirit_link_applied", true);
+								StructVariableSet(monster, "__deep_dungeon__spirit_link_damage", 0);
+								
+							}
+							else if (StructVariableExists(monster, "__deep_dungeon__default_hit_points"))
+							{
+								int default_hit_points = monster.GetMember("__deep_dungeon__default_hit_points").ToInt64();
+								int spirit_link_damage = monster.GetMember("__deep_dungeon__spirit_link_damage").ToInt64();
+								if (hit_points < default_hit_points)
+								{
+									spirit_link_damage += (default_hit_points - hit_points);
+									spirit_link_combined_health_pool -= (default_hit_points - hit_points);
+
+									StructVariableSet(monster, "__deep_dungeon__spirit_link_damage", spirit_link_damage);
+									StructVariableSet(monster, "hit_points", default_hit_points);
+								}
+							}
+						}
+					}
+				}
+				else if (StructVariableExists(monster, "__deep_dungeon__spirit_link_applied"))
+				{
+					if (StructVariableExists(monster, "hit_points"))
+					{
+						double hit_points = monster.GetMember("hit_points").ToDouble();
+						if (std::isfinite(hit_points))
+						{
+							int default_hit_points = monster.GetMember("__deep_dungeon__default_hit_points").ToInt64();
+							int spirit_link_damage = monster.GetMember("__deep_dungeon__spirit_link_damage").ToInt64();
+							
+							if(default_hit_points - spirit_link_damage > 0)
+								StructVariableSet(monster, "hit_points", default_hit_points - spirit_link_damage);
+							else
+								StructVariableSet(monster, "hit_points", 0);
+						}
+
+						StructVariableRemove(monster, "__deep_dungeon__spirit_link_applied");
+					}
+				}
+
+				// Spikes
+				//if (active_offerings.contains(Offerings::SPIKES))
+				//{
+				//	if (StructVariableExists(monster, "hit_points"))
+				//	{
+				//		double hit_points = monster.GetMember("hit_points").ToDouble();
+				//		if (std::isfinite(hit_points))
+				//		{
+				//			if (!StructVariableExists(monster, "__deep_dungeon__spikes_applied"))
+				//			{
+				//				StructVariableSet(monster, "__deep_dungeon__spikes_applied", true);
+				//				StructVariableSet(monster, "__deep_dungeon__spikes_damage", 0);
+				//			}
+				//			else if (StructVariableExists(monster, "__deep_dungeon__default_hit_points"))
+				//			{
+				//				int default_hit_points = monster.GetMember("__deep_dungeon__default_hit_points").ToInt64();
+				//				int spikes_damage = monster.GetMember("__deep_dungeon__spikes_damage").ToInt64();
+				//				if (hit_points < default_hit_points)
+				//				{
+				//					spikes_damage += (default_hit_points - hit_points - spikes_damage);
+				//					StructVariableSet(monster, "__deep_dungeon__spikes_damage", spikes_damage);
+
+				//					int reflected_amount = max(1, spikes_damage * 20 / 100);
+				//					ModifyHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], -1 * reflected_amount);
+				//				}
+				//			}
+				//		}
+				//	}
+				//}
 
 				// Sigil of Concealment
 				if (active_sigils.contains(Sigils::CONCEALMENT))
@@ -7159,6 +7382,40 @@ RValue& GmlScriptModifyHealthCallback(
 	// Afflatus Misery (Cleric Set Bonus)
 	if (Arguments[0]->ToInt64() < 0 && CountEquippedClassArmor()[Classes::CLERIC] == 5 && AriCurrentGmRoomIsDungeonFloor())
 		class_name_to_set_bonus_effect_value_map[Classes::CLERIC][ManagedSetBonuses::AFFLATUS_MISERY] += abs(Arguments[0]->ToInt64());
+
+	// Frailty
+	if (Arguments[0]->ToInt64() < 0 && active_floor_enchantments.contains(FloorEnchantments::FRAILTY) && !is_fumigate_tracked_interval && !is_deep_wounds_tracked_interval) // Need to check for Fumigate and Deep Wounds since Frailty is a Group 2 enchant
+		frailty_hit_counter += 1;
+
+	// Deep Wounds
+	if (Arguments[0]->ToInt64() < 0 && active_floor_enchantments.contains(FloorEnchantments::DEEP_WOUNDS) && !is_deep_wounds_tracked_interval)
+		deep_wounds_damage_pool += abs(Arguments[0]->ToInt64());
+
+	// Stoneskin
+	if (Arguments[0]->ToInt64() < 0 && active_floor_enchantments.contains(FloorEnchantments::STONESKIN) && stoneskin_shield_amount > 0)
+	{
+		int damage = abs(Arguments[0]->ToInt64());
+		if (stoneskin_shield_amount >= damage)
+		{
+			stoneskin_shield_amount -= damage;
+			damage = 0;
+			
+		}
+		else
+		{
+			damage -= stoneskin_shield_amount;
+			stoneskin_shield_amount = 0;
+		}
+		*Arguments[0] = -1 * damage;
+	}
+
+	// Phalanx
+	if (Arguments[0]->ToInt64() < 0 && active_floor_enchantments.contains(FloorEnchantments::PHALANX))
+	{
+		int damage = abs(Arguments[0]->ToInt64());
+		int modifier = damage * 20 / 100;
+		*Arguments[0] = -1 * (damage - modifier);
+	}
 
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_MODIFY_HEALTH));
 	original(
@@ -7520,6 +7777,46 @@ RValue& GmlScriptDamageCallback(
 {
 	static thread_local std::mt19937 random_generator(std::random_device{}());
 
+	// Frailty
+	if (active_floor_enchantments.contains(FloorEnchantments::FRAILTY))
+	{
+		if (!StructVariableExists(*Arguments[0], "__deep_dungeon__frailty_applied")) // Prevents attacks that "persist" from repeatedly getting Frailty applied
+		{
+			RValue target = Arguments[0]->GetMember("target");
+			if (target.ToInt64() == 1) // Ari
+			{
+				int modifier = frailty_hit_counter * 5;
+				double additional_damage = std::trunc(Arguments[0]->GetMember("damage").ToDouble() * modifier / 100);
+				*Arguments[0]->GetRefMember("damage") = Arguments[0]->GetMember("damage").ToDouble() + additional_damage;
+			}
+
+			StructVariableSet(*Arguments[0], "__deep_dungeon__frailty_applied", true);
+		}
+	}
+
+	// Grudge
+	if (active_floor_enchantments.contains(FloorEnchantments::GRUDGE))
+	{
+		if (!StructVariableExists(*Arguments[0], "__deep_dungeon__grudge_applied")) // Prevents attacks that "persist" from repeatedly getting Grudge applied
+		{
+			RValue target = Arguments[0]->GetMember("target");
+			if (target.ToInt64() == 1) // Ari
+			{
+				int modifier = grudge_counter * 10; // Ari takes 10% more damage per grudge stack
+				double additional_damage = std::trunc(Arguments[0]->GetMember("damage").ToDouble() * modifier / 100);
+				*Arguments[0]->GetRefMember("damage") = Arguments[0]->GetMember("damage").ToDouble() + additional_damage;
+			}
+			else
+			{
+				int modifier = grudge_counter * 5; // Ari deals 5% less damage per grudge stack
+				double penalty = std::trunc(Arguments[0]->GetMember("damage").ToDouble() * modifier / 100);
+				*Arguments[0]->GetRefMember("damage") = Arguments[0]->GetMember("damage").ToDouble() - penalty;
+			}
+
+			StructVariableSet(*Arguments[0], "__deep_dungeon__grudge_applied", true);
+		}
+	}
+
 	// Distortion
 	if (active_floor_enchantments.contains(FloorEnchantments::DISTORTION))
 	{
@@ -7537,6 +7834,24 @@ RValue& GmlScriptDamageCallback(
 					*Arguments[0]->GetRefMember("knockback") = false;
 				}
 				StructVariableSet(*Arguments[0], "__deep_dungeon__distortion_applied", true);
+			}
+		}
+	}
+
+	// Blink
+	if (active_floor_enchantments.contains(FloorEnchantments::BLINK))
+	{
+		RValue target = Arguments[0]->GetMember("target");
+		if (target.ToInt64() == 1) // Ari
+		{
+			if (!StructVariableExists(*Arguments[0], "__deep_dungeon__blink_applied"))
+			{
+				std::uniform_int_distribution<size_t> zero_to_four_distribution(0, 4);
+				int random = zero_to_four_distribution(random_generator);
+				if (random == 0) // 20% chance to miss
+					*Arguments[0]->GetRefMember("damage") = 0.0;
+
+				StructVariableSet(*Arguments[0], "__deep_dungeon__blink_applied", true);
 			}
 		}
 	}
@@ -7560,7 +7875,7 @@ RValue& GmlScriptDamageCallback(
 	// Gloom
 	if (active_floor_enchantments.contains(FloorEnchantments::GLOOM))
 	{
-		if (!StructVariableExists(*Arguments[0], "__deep_dungeon__gloom_applied")) // Prevents monster attacks that "persist" from repeatedly getting Gloom applied
+		if (!StructVariableExists(*Arguments[0], "__deep_dungeon__gloom_applied")) // Prevents attacks that "persist" from repeatedly getting Gloom applied
 		{
 			RValue target = Arguments[0]->GetMember("target");
 			if (target.ToInt64() == 1) // Ari
@@ -7729,6 +8044,56 @@ RValue& GmlScriptDamageCallback(
 		ArgumentCount,
 		Arguments
 	);
+
+	// Spikes
+	if (active_offerings.contains(Offerings::SPIKES) && Result.ToBoolean())
+	{
+		RValue target = Arguments[0]->GetMember("target");
+		if (target.ToInt64() != 1) // Everything not Ari
+		{
+			int damage = Arguments[0]->GetMember("damage").ToInt64();
+			int penalty = max(1, damage * 20 / 100);
+			ModifyHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], -1 * penalty);
+		}
+	}
+
+	// Reflect
+	if (active_offerings.contains(Offerings::REFLECT) && Result.ToBoolean())
+	{
+		RValue target = Arguments[0]->GetMember("target");
+		if (target.ToInt64() == 1) // Ari
+		{			
+			std::map<int, CInstance*> distance_to_monster_map = {};
+			for (CInstance* monster : current_floor_monsters)
+			{
+				if (StructVariableExists(monster, "hit_points"))
+				{
+					double hit_points = monster->GetMember("hit_points").ToDouble();
+					if (std::isfinite(hit_points) && hit_points > 0)
+					{
+						RValue monster_x;
+						RValue monster_y;
+						g_ModuleInterface->GetBuiltin("x", monster, NULL_INDEX, monster_x);
+						g_ModuleInterface->GetBuiltin("y", monster, NULL_INDEX, monster_y);
+
+						double distance = GetDistance(ari_x, ari_y, monster_x.ToInt64(), monster_y.ToInt64());
+						if (!distance_to_monster_map.contains(distance))
+							distance_to_monster_map[distance] = monster;
+					}
+				}
+			}
+
+			if (!distance_to_monster_map.empty())
+			{
+				int damage = Arguments[0]->GetMember("damage").ToInt64();
+				int penalty = max(1, damage * 20 / 100);
+
+				CInstance* closest_monster = distance_to_monster_map.begin()->second;
+				int hit_points = closest_monster->GetMember("hit_points").ToInt64();
+				*closest_monster->GetRefMember("hit_points") = max(0, hit_points - penalty);
+			}
+		}
+	}
 
 	if (afflatus_misery_proc && Result.ToBoolean())
 		class_name_to_set_bonus_effect_value_map[Classes::CLERIC][ManagedSetBonuses::AFFLATUS_MISERY] = 0;
@@ -7939,9 +8304,18 @@ RValue& GmlScriptPlayTextCallback(
 
 			if (is_offering)
 			{
+				// TODO: Implement logic to check for Condemn
+				const std::vector<Offerings> possible_offerings = {
+					Offerings::DREAD,
+					Offerings::INNER_FIRE,
+					Offerings::LEECH,
+					Offerings::PERIL,
+					Offerings::RECKONING
+				};
+				
 				// Pick a random offering effect
 				static thread_local std::mt19937 random_generator(std::random_device{}());
-				std::uniform_int_distribution<size_t> random_offering_distribution(0, magic_enum::enum_count<Offerings>() - 1);
+				std::uniform_int_distribution<size_t> random_offering_distribution(0, possible_offerings.size() - 1);
 				Offerings offering = magic_enum::enum_value<Offerings>(random_offering_distribution(random_generator));
 				queued_offerings.insert(offering);
 			}
@@ -8315,7 +8689,7 @@ RValue& GmlScriptGetMinutesCallback(
 
 		ApplyFloorTraps(Self, Other);
 		ProcessCustomAOEs();
-
+		
 		// Restoration
 		if (active_floor_enchantments.contains(FloorEnchantments::RESTORATION))
 		{
@@ -8333,6 +8707,67 @@ RValue& GmlScriptGetMinutesCallback(
 			{
 				is_second_wind_tracked_interval = true;
 				time_of_last_second_wind_tick = current_time_in_seconds;
+			}
+		}
+
+		// Fumigate
+		if (active_floor_enchantments.contains(FloorEnchantments::FUMIGATE))
+		{
+			if (!is_fumigate_tracked_interval && (current_time_in_seconds - time_of_last_fumigate_tick) >= TWO_MINUTES_IN_SECONDS)
+			{
+				is_fumigate_tracked_interval = true;
+				time_of_last_fumigate_tick = current_time_in_seconds;
+			}
+		}
+
+		// Deep Wounds
+		if (active_floor_enchantments.contains(FloorEnchantments::DEEP_WOUNDS))
+		{
+			if (!is_deep_wounds_tracked_interval && (current_time_in_seconds - time_of_last_deep_wounds_tick) >= TWO_MINUTES_IN_SECONDS)
+			{
+				is_deep_wounds_tracked_interval = true;
+				time_of_last_deep_wounds_tick = current_time_in_seconds;
+			}
+		}
+
+		// Outbreak
+		if (active_offerings.contains(Offerings::OUTBREAK))
+		{
+			if ((current_time_in_seconds - time_of_last_outbreak_tick) >= ONE_HOUR_IN_SECONDS)
+			{
+				const std::unordered_set<int> restricted_monsters = { // TODO: Update as needed with new monsters
+					monster_name_to_id_map["barrel"],
+					monster_name_to_id_map["copperclod"],
+					monster_name_to_id_map["goldclod"],
+					monster_name_to_id_map["ironclod"],
+					monster_name_to_id_map["mimic"],
+					monster_name_to_id_map["mistrilclod"],
+					monster_name_to_id_map["rock_stack_lava"],
+					monster_name_to_id_map["sapling_orange_mini"],
+					monster_name_to_id_map["silverclod"],
+					monster_name_to_id_map["rockclod_purple"]
+				};
+
+				for (CInstance* monster : current_floor_monsters)
+				{
+					if (StructVariableExists(monster, "monster_id") && StructVariableExists(monster, "hit_points") && !StructVariableExists(monster, "__deep_dungeon__dread_beast") && !StructVariableExists(monster, "__deep_dungeon__outbreak"))
+					{
+						int monster_id = monster->GetMember("monster_id").ToInt64();
+						double hit_points = monster->GetMember("hit_points").ToDouble();
+
+						if (!restricted_monsters.contains(monster_id) && std::isfinite(hit_points) && hit_points > 0)
+						{
+							ModifyDreadBeastAttackPatterns(false, true, monster);
+							StructVariableSet(monster, "__deep_dungeon__dread_beast", true);
+							StructVariableSet(monster, "__deep_dungeon__outbreak", true);
+							g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Configured Outbreak: %s", MOD_NAME, VERSION, monster_id_to_name_map[monster_id].c_str());
+
+							break;
+						}
+					}						
+				}
+
+				time_of_last_outbreak_tick = current_time_in_seconds;
 			}
 		}
 
@@ -8809,7 +9244,12 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 	inner_fire_cast = false;
 	reckoning_applied = false;
 	fairy_buff_applied = false;
+	stoneskin_applied = false;
 	offering_chance_occurred = false;
+	frailty_hit_counter = 0;
+	grudge_counter = 0;
+	deep_wounds_damage_pool = 0;
+	stoneskin_shield_amount = 0;
 	sigil_of_silence_count = 0;
 	sigil_of_alteration_count = 0;
 
@@ -8853,6 +9293,12 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 			time_of_last_restoration_tick = current_time_in_seconds;
 		if (active_floor_enchantments.contains(FloorEnchantments::SECOND_WIND))
 			time_of_last_second_wind_tick = current_time_in_seconds;
+		if (active_floor_enchantments.contains(FloorEnchantments::FUMIGATE))
+			time_of_last_fumigate_tick = current_time_in_seconds;
+		if (active_floor_enchantments.contains(FloorEnchantments::DEEP_WOUNDS))
+			time_of_last_deep_wounds_tick = current_time_in_seconds;
+		if (active_offerings.contains(Offerings::OUTBREAK))
+			time_of_last_outbreak_tick = current_time_in_seconds;
 		if (CountEquippedClassArmor()[Classes::CLERIC] > 0)
 			class_name_to_set_bonus_effect_value_map[Classes::CLERIC][ManagedSetBonuses::AUTO_REGEN] = current_time_in_seconds;
 
@@ -9028,8 +9474,13 @@ RValue& GmlScriptGoToRoomCallback(
 		inner_fire_cast = false;
 		reckoning_applied = false;
 		fairy_buff_applied = false;
+		stoneskin_applied = false;
 		offering_chance_occurred = false;
 		floor_start_time = 0;
+		frailty_hit_counter = 0;
+		grudge_counter = 0;
+		deep_wounds_damage_pool = 0;
+		stoneskin_shield_amount = 0;
 		sigil_of_silence_count = 0;
 		sigil_of_alteration_count = 0;
 		dread_beast_monster_id = -1;
