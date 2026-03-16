@@ -8,7 +8,7 @@ using namespace YYTK;
 using json = nlohmann::json;
 
 static const char* const MOD_NAME = "SecretSanta";
-static const char* const VERSION = "1.2.0";
+static const char* const VERSION = "1.2.1";
 static const char* const GML_SCRIPT_DAY = "gml_Script_day@Calendar@Calendar";
 static const char* const GML_SCRIPT_SEASON = "gml_Script_season@Calendar@Calendar";
 static const char* const GML_SCRIPT_YEAR = "gml_Script_year@Calendar@Calendar";
@@ -984,87 +984,90 @@ RValue& GmlScriptShowRoomTitleCallback(
 			if (!MailExists("secret_santa_first_year"))
 				SendMail("secret_santa_first_year");
 
-			if (day >= 20 && !json_object.contains(current_year_object_key))
+			if (day >= 20)
 			{
-				// Randomly determine the secret santa sender and recipient.
-				std::random_device rd;
-				std::mt19937 gen(rd());
-
-				const std::vector<std::string> unlocked_npcs = GetUnlockedNpcs(script_name_to_reference_map[GML_SCRIPT_T2_READ][0], script_name_to_reference_map[GML_SCRIPT_T2_READ][1]);
-				std::uniform_int_distribution<> distr(0, static_cast<int>(unlocked_npcs.size() - 1));
-
-				int random_sender = distr(gen);
-				int random_recipient = distr(gen);
-
-				// Create the current year object.
-				json current_year_object = json::object();
-				current_year_object[SENDER_KEY] = unlocked_npcs[random_sender];
-				current_year_object[RECIPIENT_KEY] = unlocked_npcs[random_recipient];
-
-				// Create the date objects.
-				json current_year_winter_20_object = json::object();
-				current_year_winter_20_object[MAIL_SENT_KEY] = false;
-
-				json current_year_winter_26_object = json::object();
-				current_year_winter_26_object[MAIL_SENT_KEY] = false;
-
-				json current_year_winter_27_object = json::object();
-				current_year_winter_27_object[MAIL_SENT_KEY] = false;
-
-				// Add the date objects to the current year object.
-				current_year_object[current_year_winter_20_date_string] = current_year_winter_20_object;
-				current_year_object[current_year_winter_26_date_string] = current_year_winter_26_object;
-				current_year_object[current_year_winter_27_date_string] = current_year_winter_27_object;
-
-				// Update the JSON object.
-				json_object[current_year_object_key] = current_year_object;
-			}
-
-			// Set the static sender and recipient fields using the JSON data.
-			secret_santa_sender = json_object[current_year_object_key][SENDER_KEY];
-			secret_santa_recipient = json_object[current_year_object_key][RECIPIENT_KEY];
-
-			if (day == 20)
-			{
-				bool mail_sent = json_object[current_year_object_key][current_year_winter_20_date_string][MAIL_SENT_KEY];
-				if (!mail_sent)
+				if (!json_object.contains(current_year_object_key))
 				{
-					std::string mail_name_str = "secret_santa_notice_" + secret_santa_recipient;
-					SendMail(mail_name_str);
-
-					json_object[current_year_object_key][current_year_winter_20_date_string][MAIL_SENT_KEY] = true;
-				}
-			}
-
-			if (day == 26)
-			{
-				bool mail_sent = json_object[current_year_object_key][current_year_winter_26_date_string][MAIL_SENT_KEY];
-				if (!mail_sent)
-				{
-					std::string mail_name_str = "secret_santa_reminder_" + secret_santa_recipient;
-					SendMail(mail_name_str);
-
-					json_object[current_year_object_key][current_year_winter_26_date_string][MAIL_SENT_KEY] = true;
-				}
-			}
-
-			if (day == 27)
-			{
-				bool mail_sent = json_object[current_year_object_key][current_year_winter_27_date_string][MAIL_SENT_KEY];
-				if (!mail_sent)
-				{
-					// Randomly select a gift.
+					// Randomly determine the secret santa sender and recipient.
 					std::random_device rd;
 					std::mt19937 gen(rd());
-					std::uniform_int_distribution<> distr(0, static_cast<int>(GIFTS->size() - 1));
-					int random_gift = distr(gen);
 
-					auto random_gift_str = GIFTS[random_gift];
+					const std::vector<std::string> unlocked_npcs = GetUnlockedNpcs(script_name_to_reference_map[GML_SCRIPT_T2_READ][0], script_name_to_reference_map[GML_SCRIPT_T2_READ][1]);
+					std::uniform_int_distribution<> distr(0, static_cast<int>(unlocked_npcs.size() - 1));
 
-					std::string mail_name_str = "secret_santa_" + secret_santa_sender + "_" + random_gift_str;
-					SendMail(mail_name_str);
+					int random_sender = distr(gen);
+					int random_recipient = distr(gen);
 
-					json_object[current_year_object_key][current_year_winter_27_date_string][MAIL_SENT_KEY] = true;
+					// Create the current year object.
+					json current_year_object = json::object();
+					current_year_object[SENDER_KEY] = unlocked_npcs[random_sender];
+					current_year_object[RECIPIENT_KEY] = unlocked_npcs[random_recipient];
+
+					// Create the date objects.
+					json current_year_winter_20_object = json::object();
+					current_year_winter_20_object[MAIL_SENT_KEY] = false;
+
+					json current_year_winter_26_object = json::object();
+					current_year_winter_26_object[MAIL_SENT_KEY] = false;
+
+					json current_year_winter_27_object = json::object();
+					current_year_winter_27_object[MAIL_SENT_KEY] = false;
+
+					// Add the date objects to the current year object.
+					current_year_object[current_year_winter_20_date_string] = current_year_winter_20_object;
+					current_year_object[current_year_winter_26_date_string] = current_year_winter_26_object;
+					current_year_object[current_year_winter_27_date_string] = current_year_winter_27_object;
+
+					// Update the JSON object.
+					json_object[current_year_object_key] = current_year_object;
+				}
+
+				// Set the static sender and recipient fields using the JSON data.
+				secret_santa_sender = json_object[current_year_object_key][SENDER_KEY];
+				secret_santa_recipient = json_object[current_year_object_key][RECIPIENT_KEY];
+
+				if (day == 20)
+				{
+					bool mail_sent = json_object[current_year_object_key][current_year_winter_20_date_string][MAIL_SENT_KEY];
+					if (!mail_sent)
+					{
+						std::string mail_name_str = "secret_santa_notice_" + secret_santa_recipient;
+						SendMail(mail_name_str);
+
+						json_object[current_year_object_key][current_year_winter_20_date_string][MAIL_SENT_KEY] = true;
+					}
+				}
+
+				if (day == 26)
+				{
+					bool mail_sent = json_object[current_year_object_key][current_year_winter_26_date_string][MAIL_SENT_KEY];
+					if (!mail_sent)
+					{
+						std::string mail_name_str = "secret_santa_reminder_" + secret_santa_recipient;
+						SendMail(mail_name_str);
+
+						json_object[current_year_object_key][current_year_winter_26_date_string][MAIL_SENT_KEY] = true;
+					}
+				}
+
+				if (day == 27)
+				{
+					bool mail_sent = json_object[current_year_object_key][current_year_winter_27_date_string][MAIL_SENT_KEY];
+					if (!mail_sent)
+					{
+						// Randomly select a gift.
+						std::random_device rd;
+						std::mt19937 gen(rd());
+						std::uniform_int_distribution<> distr(0, static_cast<int>(GIFTS->size() - 1));
+						int random_gift = distr(gen);
+
+						auto random_gift_str = GIFTS[random_gift];
+
+						std::string mail_name_str = "secret_santa_" + secret_santa_sender + "_" + random_gift_str;
+						SendMail(mail_name_str);
+
+						json_object[current_year_object_key][current_year_winter_27_date_string][MAIL_SENT_KEY] = true;
+					}
 				}
 			}
 		}
