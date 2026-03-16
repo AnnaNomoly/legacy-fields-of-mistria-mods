@@ -28,7 +28,7 @@ struct pair_hash {
 };
 
 static const char* const MOD_NAME = "DeepDungeon";
-static const char* const VERSION = "0.9.0";
+static const char* const VERSION = "1.0.0";
 static const char* const GML_SCRIPT_GET_LOCALIZER = "gml_Script_get@Localizer@Localizer";
 static const char* const GML_SCRIPT_SPAWN_LADDER = "gml_Script_spawn_ladder@DungeonRunner@DungeonRunner";
 static const char* const GML_SCRIPT_CREATE_NOTIFICATION = "gml_Script_create_notification";
@@ -175,6 +175,11 @@ static const std::string ROGUE_CHESTPIECE_NAME = "rogue_chestpiece";
 static const std::string ROGUE_GLOVES_NAME = "rogue_gloves";
 static const std::string ROGUE_PANTS_NAME = "rogue_pants";
 static const std::string ROGUE_BOOTS_NAME = "rogue_boots";
+static const std::string ORACLE_HELMET_NAME = "oracle_helmet";
+static const std::string ORACLE_CHESTPIECE_NAME = "oracle_chestpiece";
+static const std::string ORACLE_GLOVES_NAME = "oracle_gloves";
+static const std::string ORACLE_PANTS_NAME = "oracle_pants";
+static const std::string ORACLE_BOOTS_NAME = "oracle_boots";
 static const std::string TREASURE_CHEST_WOOD_NAME = "treasure_chest_wood";
 static const std::string TREASURE_CHEST_COPPER_NAME = "treasure_chest_copper";
 static const std::string TREASURE_CHEST_SILVER_NAME = "treasure_chest_silver";
@@ -192,6 +197,7 @@ static const std::string SOUL_STONE_DARK_KNIGHT = "soul_stone_dark_knight";
 static const std::string SOUL_STONE_MAGE = "soul_stone_mage";
 static const std::string SOUL_STONE_PALADIN = "soul_stone_paladin";
 static const std::string SOUL_STONE_ROGUE = "soul_stone_rogue";
+static const std::string SOUL_STONE_ORACLE = "soul_stone_oracle";
 static const std::string SAVING_DISABLED_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/saving_disabled";
 static const std::string LIFT_KEY_RESTRICTED_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/lift_key_restricted";
 static const std::string ORB_RESTRICTED_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/orb_restricted";
@@ -213,6 +219,12 @@ static const std::string INHIBITING_TRAP_NOTIFICATION_KEY = "Notifications/Mods/
 static const std::string LURING_TRAP_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Traps/luring";
 static const std::string METEOR_TRAP_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Traps/meteor";
 static const std::string GAZE_TRAP_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Traps/gaze";
+static const std::string PREDICT_SPELL_CAST_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/predict";
+static const std::string PROPHECY_FORTIFICATION_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Prophecy/fortification";
+static const std::string PROPHECY_STRENGTH_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Prophecy/strength";
+static const std::string PROPHECY_PROTECTION_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Prophecy/protection";
+static const std::string PROPHECY_CONCEALMENT_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Prophecy/concealment";
+static const std::string PROPHECY_SAFETY_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Prophecy/safety";
 static const std::string FLOOR_ENCHANTMENT_CONVERSATION_KEY = "Conversations/Mods/Deep Dungeon/floor_enchantments";
 static const std::string DREAD_BEAST_WARNING_CONVERSATION_KEY = "Conversations/Mods/Deep Dungeon/dread_beast_warning";
 static const std::string FLOOR_TEN_CONVERSATION_KEY = "Conversations/floor_10/mines_floor_ten";
@@ -222,6 +234,7 @@ static const std::string BOSS_BATTLE_TIDE_CAVERNS_ORB_CONVERSATION_KEY = "Conver
 static const std::string BOSS_BATTLE_DEEP_EARTH_ORB_CONVERSATION_KEY = "Conversations/Mods/Deep Dungeon/Boss Battles/deep_earth_orb";
 static const std::string BOSS_BATTLE_LAVA_CAVES_ORB_CONVERSATION_KEY = "Conversations/Mods/Deep Dungeon/Boss Battles/lava_caves_orb";
 static const std::string BOSS_BATTLE_RUINS_ORB_CONVERSATION_KEY = "Conversations/Mods/Deep Dungeon/Boss Battles/ruins_orb";
+static const std::string CONDEMN_PLACEHOLDER_TEXT_KEY = "Conversations/Mods/Deep Dungeon/placeholders/condemn/result";
 static const std::string OFFERINGS_PLACEHOLDER_TEXT_KEY = "Conversations/Mods/Deep Dungeon/placeholders/offerings/result";
 static const std::string FLOOR_ENCHANTMENT_PLACEHOLDER_TEXT_KEY = "Conversations/Mods/Deep Dungeon/placeholders/floor_enchantments/init";
 static const std::string DREAD_BEAST_WARNING_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Special/dread";
@@ -237,11 +250,22 @@ static const std::string FEY_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY = "Conversatio
 static const std::string RESTORATION_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Floor Enchantments/Positive/restoration";
 static const std::string SECOND_WIND_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Floor Enchantments/Positive/second_wind";
 static const std::string HASTE_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Floor Enchantments/Positive/haste";
+static const std::string FUMIGATE_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Floor Enchantments/Predict/fumigate";
+static const std::string FRAILTY_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Floor Enchantments/Predict/frailty";
+static const std::string GRUDGE_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Floor Enchantments/Predict/grudge";
+static const std::string DEEP_WOUNDS_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Floor Enchantments/Predict/deep_wounds";
+static const std::string BLINK_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Floor Enchantments/Predict/blink";
+static const std::string STONESKIN_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Floor Enchantments/Predict/stoneskin";
+static const std::string PHALANX_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Floor Enchantments/Predict/phalanx";
 static const std::string DREAD_OFFERING_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Offerings/Negative/dread";
 static const std::string INNER_FIRE_OFFERING_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Offerings/Positive/inner_fire";
 static const std::string LEECH_OFFERING_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Offerings/Positive/leech";
 static const std::string PERIL_OFFERING_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Offerings/Negative/peril";
 static const std::string RECKONING_OFFERING_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Offerings/Negative/reckoning";
+static const std::string OUTBREAK_OFFERING_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Offerings/Condemn/outbreak";
+static const std::string SPIRIT_LINK_OFFERING_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Offerings/Condemn/spirit_link";
+static const std::string SPIKES_OFFERING_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Offerings/Condemn/spikes";
+static const std::string REFLECT_OFFERING_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Offerings/Condemn/reflect";
 static const std::string TIDE_CAVERNS_ORB_DESCRIPTION_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Orbs/tide_caverns_orb/description";
 static const std::string DEEP_EARTH_ORB_DESCRIPTION_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Orbs/deep_earth_orb/description";
 static const std::string LAVA_CAVES_ORB_DESCRIPTION_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Orbs/lava_caves_orb/description";
@@ -255,6 +279,7 @@ static const std::string DARK_KNIGHT_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY = "Ite
 static const std::string MAGE_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Armor/mage/description";
 static const std::string PALADIN_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Armor/paladin/description";
 static const std::string ROGUE_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Armor/rogue/description";
+static const std::string ORACLE_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Armor/oracle/description";
 static const std::string SET_PIECES_EQUIPPED_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/set_bonuses/equipped";
 static const std::string CLERIC_SET_BONUS_AUTO_REGEN_ONE_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Classes/Cleric/set_bonuses/auto_regen/1";
 static const std::string CLERIC_SET_BONUS_AUTO_REGEN_TWO_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Classes/Cleric/set_bonuses/auto_regen/2";
@@ -281,6 +306,11 @@ static const std::string ROGUE_SET_BONUS_HIDE_LOCALIZED_TEXT_KEY = "Items/Mods/D
 static const std::string ROGUE_SET_BONUS_SNEAK_ATTACK_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Classes/Rogue/set_bonuses/sneak_attack";
 static const std::string ROGUE_SET_BONUS_DISARM_TRAP_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Classes/Rogue/set_bonuses/disarm_trap";
 static const std::string ROGUE_SET_BONUS_TREASURE_HUNTER_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Classes/Rogue/set_bonuses/treasure_hunter";
+static const std::string ORACLE_SET_BONUS_PREDICT_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Classes/Oracle/set_bonuses/predict";
+static const std::string ORACLE_SET_BONUS_CONDEMN_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Classes/Oracle/set_bonuses/condemn";
+static const std::string ORACLE_SET_BONUS_DIVINATION_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Classes/Oracle/set_bonuses/divination";
+static const std::string ORACLE_SET_BONUS_BLESSED_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Classes/Oracle/set_bonuses/blessed";
+static const std::string ORACLE_SET_BONUS_PROPHECY_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Classes/Oracle/set_bonuses/prophecy";
 
 static const int TWO_MINUTES_IN_SECONDS = 120;
 static const int THREE_MINUTES_IN_SECONDS = 180;
@@ -332,7 +362,8 @@ static enum class Classes {
 	MAGE,
 	PALADIN,
 	DARK_KNIGHT,
-	ROGUE
+	ROGUE,
+	ORACLE
 };
 
 static enum class ManagedSetBonuses { // Set bonuses that have actively managed values.
@@ -349,7 +380,10 @@ static enum class ManagedSetBonuses { // Set bonuses that have actively managed 
 	ENPOISON, // Mage
 	QUAKE, // Mage
 	MANA_FONT, // Mage
-	FLEE // Rogue
+	FLEE, // Rogue
+	PREDICT, // Oracle
+	CONDEMN, // Oracle
+	BLESSED // Oracle
 };
 
 static enum class ElementalSealEffects {
@@ -474,7 +508,8 @@ static const std::unordered_set<std::string> CLASS_ARMOR_NAMES = {
 	DARK_KNIGHT_HELMET_NAME, DARK_KNIGHT_CHESTPIECE_NAME, DARK_KNIGHT_GLOVES_NAME, DARK_KNIGHT_PANTS_NAME, DARK_KNIGHT_BOOTS_NAME,
 	MAGE_HELMET_NAME, MAGE_CHESTPIECE_NAME, MAGE_GLOVES_NAME, MAGE_PANTS_NAME, MAGE_BOOTS_NAME,
 	PALADIN_HELMET_NAME, PALADIN_CHESTPIECE_NAME, PALADIN_GLOVES_NAME, PALADIN_PANTS_NAME, PALADIN_BOOTS_NAME,
-	ROGUE_HELMET_NAME, ROGUE_CHESTPIECE_NAME, ROGUE_GLOVES_NAME, ROGUE_PANTS_NAME, ROGUE_BOOTS_NAME
+	ROGUE_HELMET_NAME, ROGUE_CHESTPIECE_NAME, ROGUE_GLOVES_NAME, ROGUE_PANTS_NAME, ROGUE_BOOTS_NAME,
+	ORACLE_HELMET_NAME, ORACLE_CHESTPIECE_NAME, ORACLE_GLOVES_NAME, ORACLE_PANTS_NAME, ORACLE_BOOTS_NAME
 };
 
 static const std::map<Classes, std::unordered_set<std::string>> CLASS_NAME_TO_ARMOR_NAMES_MAP = {
@@ -482,7 +517,8 @@ static const std::map<Classes, std::unordered_set<std::string>> CLASS_NAME_TO_AR
 	{ Classes::DARK_KNIGHT, { DARK_KNIGHT_HELMET_NAME, DARK_KNIGHT_CHESTPIECE_NAME, DARK_KNIGHT_GLOVES_NAME, DARK_KNIGHT_PANTS_NAME, DARK_KNIGHT_BOOTS_NAME } },
 	{ Classes::MAGE, { MAGE_HELMET_NAME, MAGE_CHESTPIECE_NAME, MAGE_GLOVES_NAME, MAGE_PANTS_NAME, MAGE_BOOTS_NAME } },
 	{ Classes::PALADIN, { PALADIN_HELMET_NAME, PALADIN_CHESTPIECE_NAME, PALADIN_GLOVES_NAME, PALADIN_PANTS_NAME, PALADIN_BOOTS_NAME } },
-	{ Classes::ROGUE, { ROGUE_HELMET_NAME, ROGUE_CHESTPIECE_NAME, ROGUE_GLOVES_NAME, ROGUE_PANTS_NAME, ROGUE_BOOTS_NAME } }
+	{ Classes::ROGUE, { ROGUE_HELMET_NAME, ROGUE_CHESTPIECE_NAME, ROGUE_GLOVES_NAME, ROGUE_PANTS_NAME, ROGUE_BOOTS_NAME } },
+	{ Classes::ORACLE, { ORACLE_HELMET_NAME, ORACLE_CHESTPIECE_NAME, ORACLE_GLOVES_NAME, ORACLE_PANTS_NAME, ORACLE_BOOTS_NAME } }
 };
 
 static const std::vector<std::string> SOUL_STONE_NAMES = {
@@ -490,7 +526,8 @@ static const std::vector<std::string> SOUL_STONE_NAMES = {
 	SOUL_STONE_DARK_KNIGHT,
 	SOUL_STONE_MAGE,
 	SOUL_STONE_PALADIN,
-	SOUL_STONE_ROGUE
+	SOUL_STONE_ROGUE,
+	SOUL_STONE_ORACLE
 };
 
 static const std::vector<std::string> ORB_NAMES = {
@@ -510,11 +547,34 @@ static const std::vector<FloorEnchantments> GROUP_ONE_FLOOR_ENCHANTMENTS = {
 	FloorEnchantments::HASTE,
 };
 
+static const std::vector<FloorEnchantments> GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS = {
+	FloorEnchantments::HP_PENALTY,
+	FloorEnchantments::EXHAUSTION,
+	FloorEnchantments::GRAVITY,
+	FloorEnchantments::RESTORATION,
+	FloorEnchantments::SECOND_WIND,
+	FloorEnchantments::HASTE,
+	FloorEnchantments::FUMIGATE,
+	FloorEnchantments::DEEP_WOUNDS,
+	FloorEnchantments::BLINK,
+	FloorEnchantments::STONESKIN,
+	FloorEnchantments::PHALANX
+};
+
 static const std::vector<FloorEnchantments> GROUP_TWO_FLOOR_ENCHANTMENTS = {
 	FloorEnchantments::AMNESIA,
 	FloorEnchantments::ITEM_PENALTY,
 	FloorEnchantments::DISTORTION,
 	FloorEnchantments::DAMAGE_DOWN,
+};
+
+static const std::vector<FloorEnchantments> GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS = {
+	FloorEnchantments::AMNESIA,
+	FloorEnchantments::ITEM_PENALTY,
+	FloorEnchantments::DISTORTION,
+	FloorEnchantments::DAMAGE_DOWN,
+	FloorEnchantments::FRAILTY,
+	FloorEnchantments::GRUDGE
 };
 
 static const std::vector<FloorEnchantments> GROUP_THREE_FLOOR_ENCHANTMENTS = {
@@ -5215,7 +5275,7 @@ RValue GetDynamicItemSprite(int item_id)
 	}
 	if (item_id == sigil_to_item_id_map[Sigils::TEMPTATION])
 	{
-		if (active_sigils.contains(Sigils::TEMPTATION) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
+		if (active_sigils.contains(Sigils::TEMPTATION) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::CONDEMN] > 0 || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_temptation_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_temptation" });
@@ -5303,6 +5363,14 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 					return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_enpoison_spell_icon_main" });
 			}
 		}
+		// Predict (Oracle Set Bonus)
+		else if (CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+		{
+			if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] > 0 || (configuration.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
+				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_predict_spell_icon_disabled" });
+			else
+				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_predict_spell_icon_main" });
+		}
 		// Full Restore Disabled
 		else if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || (configuration.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_restore_spell_icon_disabled" });
@@ -5333,6 +5401,14 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 			else
 				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_quake_spell_icon_main" });
 		}
+		// Condemn (Oracle Set Bonus)
+		else if (CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+		{
+			if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::CONDEMN] > 0 || (configuration.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
+				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_condemn_spell_icon_disabled" });
+			else
+				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_condemn_spell_icon_main" });
+		}
 		// Growth Disabled
 		else if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || (configuration.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_growth_spell_icon_disabled" });
@@ -5358,12 +5434,12 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 
 			for (FloorEnchantments floor_enchantment : active_floor_enchantments)
 			{
-				auto group_one_enchantment = std::find(GROUP_ONE_FLOOR_ENCHANTMENTS.begin(), GROUP_ONE_FLOOR_ENCHANTMENTS.end(), floor_enchantment);
-				if (group_one_enchantment != GROUP_ONE_FLOOR_ENCHANTMENTS.end())
+				auto group_one_enchantment = std::find(GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS.begin(), GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS.end(), floor_enchantment);
+				if (group_one_enchantment != GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS.end())
 					group_one_enchantment_str += magic_enum::enum_name(floor_enchantment);
 
-				auto group_two_enchantment = std::find(GROUP_TWO_FLOOR_ENCHANTMENTS.begin(), GROUP_TWO_FLOOR_ENCHANTMENTS.end(), floor_enchantment);
-				if (group_two_enchantment != GROUP_TWO_FLOOR_ENCHANTMENTS.end())
+				auto group_two_enchantment = std::find(GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS.begin(), GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS.end(), floor_enchantment);
+				if (group_two_enchantment != GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS.end())
 					group_two_enchantment_str += magic_enum::enum_name(floor_enchantment);
 
 				auto group_three_enchantment = std::find(GROUP_THREE_FLOOR_ENCHANTMENTS.begin(), GROUP_THREE_FLOOR_ENCHANTMENTS.end(), floor_enchantment);
@@ -5407,6 +5483,9 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 			else if (elemental_seal_effect == ElementalSealEffects::VENOM)
 				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_enpoison_card_icon" });
 		}
+		// Predict (Oracle Set Bonus)
+		else if (CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_predict_card_icon" });
 	}
 	// Summon Rain (Card Icon)
 	else if (sprite_name == "spr_ui_journal_magic_rain_card_icon")
@@ -5421,6 +5500,9 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 		// Quake (Mage Set Bonus)
 		if (CountEquippedClassArmor()[Classes::MAGE] >= 4)
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_quake_card_icon" });
+		// Condemn (Oracle Set Bonus)
+		else if (CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_condemn_card_icon" });
 	}
 	// Full Restore (Card Ribbon)
 	else if (sprite_name == "spr_ui_journal_magic_card_ribbon_restore")
@@ -5439,6 +5521,9 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 			else if (elemental_seal_effect == ElementalSealEffects::VENOM)
 				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_card_ribbon_enpoison" });
 		}
+		// Predict (Oracle Set Bonus)
+		else if (CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_card_ribbon_predict" });
 	}
 	// Summon Rain (Card Ribbon)
 	else if (sprite_name == "spr_ui_journal_magic_card_ribbon_rain")
@@ -5453,6 +5538,9 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 		// Quake (Mage Set Bonus)
 		if (CountEquippedClassArmor()[Classes::MAGE] >= 4)
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_card_ribbon_quake" });
+		// Condemn (Oracle Set Bonus)
+		else if (CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_card_ribbon_condemn" });
 	}
 	// Spell Card Backplate
 	else if (sprite_name == "spr_ui_journal_magic_card_backplate")
@@ -5500,140 +5588,310 @@ std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floo
 
 	if (dungeon_biome == DungeonBiomes::UPPER)
 	{
-		// 50% chance for Group 1
-		int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
-		if (group_one_chance < 50)
+		// Predict (Oracle Set Bonus)
+		if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] == 1 && CountEquippedClassArmor()[Classes::ORACLE] >= 5)
 		{
-			std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
-			random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
-		}
+			// 70% chance for Group 1
+			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_one_chance < 70)
+			{
+				std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+				random_floor_enchantments.insert(GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+			}
 
-		// 25% chance for Group 2
-		int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
-		if (group_two_chance < 25)
+			// 45% chance for Group 2
+			int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_two_chance < 45)
+			{
+				std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+				random_floor_enchantments.insert(GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+			}
+
+			// 20% chance for Group 3
+			int group_three_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_three_chance < 20)
+			{
+				int gloom_chance = zero_to_ninety_nine_distribution(random_generator);
+				if (gloom_chance < 50) // 50% chance for Gloom
+					random_floor_enchantments.insert(FloorEnchantments::GLOOM);
+				else // 50% chance for Fey
+					random_floor_enchantments.insert(FloorEnchantments::FEY);
+			}
+		}
+		// Default
+		else
 		{
-			std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
-			random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+			// 50% chance for Group 1
+			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_one_chance < 50)
+			{
+				std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
+				random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+			}
+
+			// 25% chance for Group 2
+			int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_two_chance < 25)
+			{
+				std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
+				random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+			}
 		}
 	}
 
 	if (dungeon_biome == DungeonBiomes::TIDE_CAVERNS)
 	{
-		// 65% chance for Group 1
-		int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
-		if (group_one_chance < 65)
+		// Predict (Oracle Set Bonus)
+		if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] == 1 && CountEquippedClassArmor()[Classes::ORACLE] >= 5)
 		{
-			std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
-			random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
-		}
+			// 85% chance for Group 1
+			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_one_chance < 85)
+			{
+				std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+				random_floor_enchantments.insert(GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+			}
 
-		// 40% chance for Group 2
-		int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
-		if (group_two_chance < 40)
-		{
-			std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
-			random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
-		}
+			// 60% chance for Group 2
+			int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_two_chance < 60)
+			{
+				std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+				random_floor_enchantments.insert(GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+			}
 
-		// 25% chance for Group 3
-		int group_three_chance = zero_to_ninety_nine_distribution(random_generator);
-		if (group_three_chance < 25)
+			// 45% chance for Group 3
+			int group_three_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_three_chance < 45)
+			{
+				int gloom_chance = zero_to_ninety_nine_distribution(random_generator);
+				if (gloom_chance < 60) // 60% chance for Gloom
+					random_floor_enchantments.insert(FloorEnchantments::GLOOM);
+				else // 40% chance for Fey
+					random_floor_enchantments.insert(FloorEnchantments::FEY);
+			}
+		}
+		// Default
+		else
 		{
-			int gloom_chance = zero_to_ninety_nine_distribution(random_generator);
-			if (gloom_chance < 60) // 60% chance for Gloom
-				random_floor_enchantments.insert(FloorEnchantments::GLOOM);
-			else // 40% chance for Fey
-				random_floor_enchantments.insert(FloorEnchantments::FEY);
+			// 65% chance for Group 1
+			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_one_chance < 65)
+			{
+				std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
+				random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+			}
+
+			// 40% chance for Group 2
+			int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_two_chance < 40)
+			{
+				std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
+				random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+			}
+
+			// 25% chance for Group 3
+			int group_three_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_three_chance < 25)
+			{
+				int gloom_chance = zero_to_ninety_nine_distribution(random_generator);
+				if (gloom_chance < 60) // 60% chance for Gloom
+					random_floor_enchantments.insert(FloorEnchantments::GLOOM);
+				else // 40% chance for Fey
+					random_floor_enchantments.insert(FloorEnchantments::FEY);
+			}
 		}
 	}
 
 	if (dungeon_biome == DungeonBiomes::DEEP_EARTH)
 	{
-		// 45% chance for Group 1
-		int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
-		if (group_one_chance < 45)
+		// Predict (Oracle Set Bonus)
+		if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] == 1 && CountEquippedClassArmor()[Classes::ORACLE] >= 5)
 		{
-			std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
-			random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
-		}
+			// 65% chance for Group 1
+			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_one_chance < 65)
+			{
+				std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+				random_floor_enchantments.insert(GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+			}
 
-		// 65% chance for Group 2
-		int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
-		if (group_two_chance < 65)
-		{
-			std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
-			random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
-		}
+			// 85% chance for Group 2
+			int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_two_chance < 85)
+			{
+				std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+				random_floor_enchantments.insert(GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+			}
 
-		// 30% chance for Group 3
-		int group_three_chance = zero_to_ninety_nine_distribution(random_generator);
-		if (group_three_chance < 30)
+			// 50% chance for Group 3
+			int group_three_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_three_chance < 50)
+			{
+				int gloom_chance = zero_to_ninety_nine_distribution(random_generator);
+				if (gloom_chance < 70) // 70% chance for Gloom
+					random_floor_enchantments.insert(FloorEnchantments::GLOOM);
+				else // 30% chance for Fey
+					random_floor_enchantments.insert(FloorEnchantments::FEY);
+			}
+		}
+		// Default
+		else
 		{
-			int gloom_chance = zero_to_ninety_nine_distribution(random_generator);
-			if (gloom_chance < 70) // 70% chance for Gloom
-				random_floor_enchantments.insert(FloorEnchantments::GLOOM);
-			else // 30% chance for Fey
-				random_floor_enchantments.insert(FloorEnchantments::FEY);
+			// 45% chance for Group 1
+			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_one_chance < 45)
+			{
+				std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
+				random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+			}
+
+			// 65% chance for Group 2
+			int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_two_chance < 65)
+			{
+				std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
+				random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+			}
+
+			// 30% chance for Group 3
+			int group_three_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_three_chance < 30)
+			{
+				int gloom_chance = zero_to_ninety_nine_distribution(random_generator);
+				if (gloom_chance < 70) // 70% chance for Gloom
+					random_floor_enchantments.insert(FloorEnchantments::GLOOM);
+				else // 30% chance for Fey
+					random_floor_enchantments.insert(FloorEnchantments::FEY);
+			}
 		}
 	}
 
 	if (dungeon_biome == DungeonBiomes::LAVA_CAVES)
 	{
-		// 60% chance for Group 1
-		int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
-		if (group_one_chance < 60)
+		// Predict (Oracle Set Bonus)
+		if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] == 1 && CountEquippedClassArmor()[Classes::ORACLE] >= 5)
 		{
-			std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
-			random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
-		}
+			// 80% chance for Group 1
+			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_one_chance < 80)
+			{
+				std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+				random_floor_enchantments.insert(GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+			}
 
-		// 75% chance for Group 2
-		int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
-		if (group_two_chance < 75)
-		{
-			std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
-			random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
-		}
+			// 95% chance for Group 2
+			int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_two_chance < 95)
+			{
+				std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+				random_floor_enchantments.insert(GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+			}
 
-		// 35% chance for Group 3
-		int group_three_chance = zero_to_ninety_nine_distribution(random_generator);
-		if (group_three_chance < 35)
+			// 55% chance for Group 3
+			int group_three_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_three_chance < 55)
+			{
+				int gloom_chance = zero_to_ninety_nine_distribution(random_generator);
+				if (gloom_chance < 80) // 80% chance for Gloom
+					random_floor_enchantments.insert(FloorEnchantments::GLOOM);
+				else // 20% chance for Fey
+					random_floor_enchantments.insert(FloorEnchantments::FEY);
+			}
+		}
+		// Default
+		else
 		{
-			int gloom_chance = zero_to_ninety_nine_distribution(random_generator);
-			if (gloom_chance < 80) // 80% chance for Gloom
-				random_floor_enchantments.insert(FloorEnchantments::GLOOM);
-			else // 20% chance for Fey
-				random_floor_enchantments.insert(FloorEnchantments::FEY);
+			// 60% chance for Group 1
+			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_one_chance < 60)
+			{
+				std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
+				random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+			}
+
+			// 75% chance for Group 2
+			int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_two_chance < 75)
+			{
+				std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
+				random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+			}
+
+			// 35% chance for Group 3
+			int group_three_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_three_chance < 35)
+			{
+				int gloom_chance = zero_to_ninety_nine_distribution(random_generator);
+				if (gloom_chance < 80) // 80% chance for Gloom
+					random_floor_enchantments.insert(FloorEnchantments::GLOOM);
+				else // 20% chance for Fey
+					random_floor_enchantments.insert(FloorEnchantments::FEY);
+			}
 		}
 	}
 
 	if (dungeon_biome == DungeonBiomes::RUINS)
 	{
-		// 65% chance for Group 1
-		int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
-		if (group_one_chance < 65)
+		// Predict (Oracle Set Bonus)
+		if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] == 1 && CountEquippedClassArmor()[Classes::ORACLE] >= 5)
 		{
-			std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
-			random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
-		}
+			// 85% chance for Group 1
+			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_one_chance < 85)
+			{
+				std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+				random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+			}
 
-		// 75% chance for Group 2
-		int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
-		if (group_two_chance < 75)
-		{
-			std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
-			random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
-		}
+			// 95% chance for Group 2
+			int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_two_chance < 95)
+			{
+				std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+				random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+			}
 
-		// 40% chance for Group 3
-		int group_three_chance = zero_to_ninety_nine_distribution(random_generator);
-		if (group_three_chance < 40)
+			// 60% chance for Group 3
+			int group_three_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_three_chance < 60)
+			{
+				int gloom_chance = zero_to_ninety_nine_distribution(random_generator);
+				if (gloom_chance < 90) // 90% chance for Gloom
+					random_floor_enchantments.insert(FloorEnchantments::GLOOM);
+				else // 10% chance for Fey
+					random_floor_enchantments.insert(FloorEnchantments::FEY);
+			}
+		}
+		// Default
+		else
 		{
-			int gloom_chance = zero_to_ninety_nine_distribution(random_generator);
-			if (gloom_chance < 90) // 90% chance for Gloom
-				random_floor_enchantments.insert(FloorEnchantments::GLOOM);
-			else // 10% chance for Fey
-				random_floor_enchantments.insert(FloorEnchantments::FEY);
+			// 65% chance for Group 1
+			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_one_chance < 65)
+			{
+				std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
+				random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+			}
+
+			// 75% chance for Group 2
+			int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_two_chance < 75)
+			{
+				std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
+				random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+			}
+
+			// 40% chance for Group 3
+			int group_three_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_three_chance < 40)
+			{
+				int gloom_chance = zero_to_ninety_nine_distribution(random_generator);
+				if (gloom_chance < 90) // 90% chance for Gloom
+					random_floor_enchantments.insert(FloorEnchantments::GLOOM);
+				else // 10% chance for Fey
+					random_floor_enchantments.insert(FloorEnchantments::FEY);
+			}
 		}
 	}
 
@@ -6631,6 +6889,21 @@ void ObjectCallback(
 											CancelStatusEffect(refs[0], refs[1], status_effect_name_to_id_map["fairy"]);
 										}
 
+										// Blessed (Oracle Set Bonus)
+										if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED] > 0)
+										{
+											int max_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+											int adjusted_max_health = max_health - class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED];
+
+											SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], adjusted_max_health);
+											int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+
+											VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], adjusted_max_health);
+											VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, adjusted_max_health);
+
+											class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED] = 0;
+										}
+
 										active_floor_enchantments.clear();
 										active_sigils.insert(Sigils::SERENITY);
 									}
@@ -7619,6 +7892,22 @@ RValue& GmlScriptCanCastSpellCallback(
 		else
 			Result = 1;
 	}
+	// Predict (Oracle Set Bonus)
+	else if (Arguments[0]->ToInt64() == spell_name_to_id_map["full_restore"] && CountEquippedClassArmor()[Classes::ORACLE] >= 5 && AriCurrentGmRoomIsDungeonFloor())
+	{
+		if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] > 0)
+			Result = 0;
+		else
+			Result = 1;
+	}
+	// Condemn (Oracle Set Bonus)
+	else if (Arguments[0]->ToInt64() == spell_name_to_id_map["growth"] && CountEquippedClassArmor()[Classes::ORACLE] >= 5 && AriCurrentGmRoomIsDungeonFloor())
+	{
+		if (offering_chance_occurred || class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::CONDEMN] > 0)
+			Result = 0;
+		else
+			Result = 1;
+	}
 
 	return Result;
 }
@@ -7711,6 +8000,30 @@ RValue& GmlScriptCastSpellCallback(
 		}
 
 		class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::QUAKE] = 1;
+		return Result;
+	}
+
+	// Predict (Oracle Set Bonus)
+	if (Arguments[0]->ToInt64() == spell_name_to_id_map["full_restore"] && CountEquippedClassArmor()[Classes::ORACLE] >= 5 && AriCurrentGmRoomIsDungeonFloor())
+	{
+		CreateNotification(false, PREDICT_SPELL_CAST_NOTIFICATION_KEY, Self, Other);
+		class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] = 1;
+		return Result;
+	}
+
+	// Condemn (Oracle Set Bonus)
+	if (Arguments[0]->ToInt64() == spell_name_to_id_map["growth"] && CountEquippedClassArmor()[Classes::ORACLE] >= 5 && AriCurrentGmRoomIsDungeonFloor())
+	{
+		static thread_local std::mt19937 random_generator(std::random_device{}());
+		std::uniform_int_distribution<size_t> random_offering_distribution(0, magic_enum::enum_count<Offerings>() - 1);
+
+		Offerings offering = magic_enum::enum_value<Offerings>(random_offering_distribution(random_generator));
+		queued_offerings.insert(offering);
+		offering_chance_occurred = true;
+
+		class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::CONDEMN] = 1;
+		PlayConversation("Conversations/Mods/Deep Dungeon/condemn", Self, Other);
+
 		return Result;
 	}
 
@@ -8304,7 +8617,6 @@ RValue& GmlScriptPlayTextCallback(
 
 			if (is_offering)
 			{
-				// TODO: Implement logic to check for Condemn
 				const std::vector<Offerings> possible_offerings = {
 					Offerings::DREAD,
 					Offerings::INNER_FIRE,
@@ -8312,7 +8624,7 @@ RValue& GmlScriptPlayTextCallback(
 					Offerings::PERIL,
 					Offerings::RECKONING
 				};
-				
+
 				// Pick a random offering effect
 				static thread_local std::mt19937 random_generator(std::random_device{}());
 				std::uniform_int_distribution<size_t> random_offering_distribution(0, possible_offerings.size() - 1);
@@ -8509,6 +8821,14 @@ RValue& GmlScriptUseItemCallback(
 
 				// Redemption Already Active
 				if (held_item_id == sigil_to_item_id_map[Sigils::REDEMPTION] && FairyBuffIsActive())
+				{
+					g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - That sigil is already active!", MOD_NAME, VERSION);
+					CreateNotification(false, SIGIL_LIMIT_NOTIFICATION_KEY, Self, Other);
+					return Result;
+				}
+
+				// Condemn (Oracle Set Bonus)
+				if (held_item_id == sigil_to_item_id_map[Sigils::TEMPTATION] && class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::CONDEMN] > 0)
 				{
 					g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - That sigil is already active!", MOD_NAME, VERSION);
 					CreateNotification(false, SIGIL_LIMIT_NOTIFICATION_KEY, Self, Other);
@@ -8816,18 +9136,30 @@ RValue& GmlScriptGetLocalizerCallback(
 		floor_enchantments_to_localized_string_map[FloorEnchantments::RESTORATION] = LocalizeString(Self, Other, RESTORATION_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY).ToString();
 		floor_enchantments_to_localized_string_map[FloorEnchantments::SECOND_WIND] = LocalizeString(Self, Other, SECOND_WIND_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY).ToString();
 		floor_enchantments_to_localized_string_map[FloorEnchantments::HASTE] = LocalizeString(Self, Other, HASTE_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY).ToString();
+		floor_enchantments_to_localized_string_map[FloorEnchantments::FUMIGATE] = LocalizeString(Self, Other, FUMIGATE_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY).ToString();
+		floor_enchantments_to_localized_string_map[FloorEnchantments::FRAILTY] = LocalizeString(Self, Other, FRAILTY_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY).ToString();
+		floor_enchantments_to_localized_string_map[FloorEnchantments::GRUDGE] = LocalizeString(Self, Other, GRUDGE_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY).ToString();
+		floor_enchantments_to_localized_string_map[FloorEnchantments::DEEP_WOUNDS] = LocalizeString(Self, Other, DEEP_WOUNDS_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY).ToString();
+		floor_enchantments_to_localized_string_map[FloorEnchantments::BLINK] = LocalizeString(Self, Other, BLINK_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY).ToString();
+		floor_enchantments_to_localized_string_map[FloorEnchantments::STONESKIN] = LocalizeString(Self, Other, STONESKIN_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY).ToString();
+		floor_enchantments_to_localized_string_map[FloorEnchantments::PHALANX] = LocalizeString(Self, Other, PHALANX_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY).ToString();
 
 		offerings_to_localized_string_map[Offerings::DREAD] = LocalizeString(Self, Other, DREAD_OFFERING_LOCALIZED_TEXT_KEY).ToString();
 		offerings_to_localized_string_map[Offerings::INNER_FIRE] = LocalizeString(Self, Other, INNER_FIRE_OFFERING_LOCALIZED_TEXT_KEY).ToString();
 		offerings_to_localized_string_map[Offerings::LEECH] = LocalizeString(Self, Other, LEECH_OFFERING_LOCALIZED_TEXT_KEY).ToString();
 		offerings_to_localized_string_map[Offerings::PERIL] = LocalizeString(Self, Other, PERIL_OFFERING_LOCALIZED_TEXT_KEY).ToString();
 		offerings_to_localized_string_map[Offerings::RECKONING] = LocalizeString(Self, Other, RECKONING_OFFERING_LOCALIZED_TEXT_KEY).ToString();
+		offerings_to_localized_string_map[Offerings::OUTBREAK] = LocalizeString(Self, Other, OUTBREAK_OFFERING_LOCALIZED_TEXT_KEY).ToString();
+		offerings_to_localized_string_map[Offerings::SPIRIT_LINK] = LocalizeString(Self, Other, SPIRIT_LINK_OFFERING_LOCALIZED_TEXT_KEY).ToString();
+		offerings_to_localized_string_map[Offerings::SPIKES] = LocalizeString(Self, Other, SPIKES_OFFERING_LOCALIZED_TEXT_KEY).ToString();
+		offerings_to_localized_string_map[Offerings::REFLECT] = LocalizeString(Self, Other, REFLECT_OFFERING_LOCALIZED_TEXT_KEY).ToString();
 
 		classes_to_localized_armor_description_string_map[Classes::CLERIC] = LocalizeString(Self, Other, CLERIC_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY).ToString();
 		classes_to_localized_armor_description_string_map[Classes::DARK_KNIGHT] = LocalizeString(Self, Other, DARK_KNIGHT_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY).ToString();
 		classes_to_localized_armor_description_string_map[Classes::MAGE] = LocalizeString(Self, Other, MAGE_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY).ToString();
 		classes_to_localized_armor_description_string_map[Classes::PALADIN] = LocalizeString(Self, Other, PALADIN_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY).ToString();
 		classes_to_localized_armor_description_string_map[Classes::ROGUE] = LocalizeString(Self, Other, ROGUE_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY).ToString();
+		classes_to_localized_armor_description_string_map[Classes::ORACLE] = LocalizeString(Self, Other, ORACLE_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY).ToString();
 	}
 	else if (game_is_active && AriCurrentGmRoomIsDungeonFloor())
 	{
@@ -8879,6 +9211,16 @@ RValue& GmlScriptGetLocalizerCallback(
 						*Arguments[0] = RValue("Spells/Mods/Deep Dungeon/Enpoison/type");
 				}
 			}
+			// Predict (Oracle Set Bonus)
+			else if (CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+			{
+				if (localization_key == "spells/full_restore/name")
+					*Arguments[0] = RValue("Spells/Mods/Deep Dungeon/Predict/name");
+				else if (localization_key == "spells/full_restore/description")
+					*Arguments[0] = RValue("Spells/Mods/Deep Dungeon/Predict/description");
+				else if (localization_key == "spells/full_restore/type")
+					*Arguments[0] = RValue("Spells/Mods/Deep Dungeon/Predict/type");
+			}
 		}
 		// Summon Rain
 		else if (localization_key.contains("spells/summon_rain"))
@@ -8906,6 +9248,16 @@ RValue& GmlScriptGetLocalizerCallback(
 					*Arguments[0] = RValue("Spells/Mods/Deep Dungeon/Quake/description");
 				else if (localization_key == "spells/growth/type")
 					*Arguments[0] = RValue("Spells/Mods/Deep Dungeon/Quake/type");
+			}
+			// Condemn (Oracle Set Bonus)
+			else if (CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+			{
+				if (localization_key == "spells/growth/name")
+					*Arguments[0] = RValue("Spells/Mods/Deep Dungeon/Condemn/name");
+				else if (localization_key == "spells/growth/description")
+					*Arguments[0] = RValue("Spells/Mods/Deep Dungeon/Condemn/description");
+				else if (localization_key == "spells/growth/type")
+					*Arguments[0] = RValue("Spells/Mods/Deep Dungeon/Condemn/type");
 			}
 		}
 	}
@@ -8992,8 +9344,8 @@ RValue& GmlScriptGetLocalizerCallback(
 			Result = RValue(custom_text);
 			return Result;
 		}
-		// Offerings
-		else if (Arguments[0]->ToString() == OFFERINGS_PLACEHOLDER_TEXT_KEY)
+		// Offerings & Condemn (Oracle Set Bonus)
+		else if (Arguments[0]->ToString() == OFFERINGS_PLACEHOLDER_TEXT_KEY || Arguments[0]->ToString() == CONDEMN_PLACEHOLDER_TEXT_KEY)
 		{
 			std::string custom_text = "";
 			for (auto it = queued_offerings.begin(); it != queued_offerings.end();)
@@ -9117,6 +9469,23 @@ RValue& GmlScriptGetLocalizerCallback(
 				custom_text += "\n- " + LocalizeString(Self, Other, ROGUE_SET_BONUS_DISARM_TRAP_LOCALIZED_TEXT_KEY).ToString();
 			if (rogue_armor_pieces_equipped == 5)
 				custom_text += "\n- " + LocalizeString(Self, Other, ROGUE_SET_BONUS_TREASURE_HUNTER_LOCALIZED_TEXT_KEY).ToString();
+
+			Result = RValue(custom_text);
+			return Result;
+		}
+		else if (Arguments[0]->ToString() == ORACLE_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY && !crafting_menu_open)
+		{
+			int oracle_armor_pieces_equipped = CountEquippedClassArmor()[Classes::ORACLE];
+			std::string custom_text = classes_to_localized_armor_description_string_map[Classes::ORACLE];
+			custom_text += "\n\n" + LocalizeString(Self, Other, SET_PIECES_EQUIPPED_LOCALIZED_TEXT_KEY).ToString() + " [" + std::to_string(oracle_armor_pieces_equipped) + "/5]";
+			if (oracle_armor_pieces_equipped == 5)
+			{
+				custom_text += "\n- " + LocalizeString(Self, Other, ORACLE_SET_BONUS_PREDICT_LOCALIZED_TEXT_KEY).ToString();
+				custom_text += "\n- " + LocalizeString(Self, Other, ORACLE_SET_BONUS_CONDEMN_LOCALIZED_TEXT_KEY).ToString();
+				custom_text += "\n- " + LocalizeString(Self, Other, ORACLE_SET_BONUS_DIVINATION_LOCALIZED_TEXT_KEY).ToString();
+				custom_text += "\n- " + LocalizeString(Self, Other, ORACLE_SET_BONUS_BLESSED_LOCALIZED_TEXT_KEY).ToString();
+				custom_text += "\n- " + LocalizeString(Self, Other, ORACLE_SET_BONUS_PROPHECY_LOCALIZED_TEXT_KEY).ToString();
+			}
 
 			Result = RValue(custom_text);
 			return Result;
@@ -9265,6 +9634,40 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 	if (CountEquippedClassArmor()[Classes::ROGUE] > 0)
 		active_sigils.insert(Sigils::CONCEALMENT);
 
+	// Prophecy (Oracle Set Bonus)
+	if (CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+	{
+		static thread_local std::mt19937 random_generator(std::random_device{}());
+		std::uniform_int_distribution<size_t> zero_to_ninety_nine_distribution(0, 99);
+
+		int random = zero_to_ninety_nine_distribution(random_generator);
+		if (random < 30)
+		{
+			active_sigils.insert(Sigils::FORTIFICATION);
+			CreateNotification(false, PROPHECY_FORTIFICATION_NOTIFICATION_KEY, Self, Other);
+		}
+		else if (random < 60)
+		{
+			active_sigils.insert(Sigils::STRENGTH);
+			CreateNotification(false, PROPHECY_STRENGTH_NOTIFICATION_KEY, Self, Other);
+		}
+		else if (random < 75)
+		{
+			active_sigils.insert(Sigils::PROTECTION);
+			CreateNotification(false, PROPHECY_PROTECTION_NOTIFICATION_KEY, Self, Other);
+		}
+		else if (random < 90)
+		{
+			active_sigils.insert(Sigils::CONCEALMENT);
+			CreateNotification(false, PROPHECY_CONCEALMENT_NOTIFICATION_KEY, Self, Other);
+		}
+		else
+		{
+			active_sigils.insert(Sigils::SAFETY);
+			CreateNotification(false, PROPHECY_SAFETY_NOTIFICATION_KEY, Self, Other);
+		}
+	}
+
 	if (ari_current_gm_room != "rm_mines_entry" && ari_current_gm_room != "rm_priestess_quarters" && !ari_current_gm_room.contains("seal") && !ari_current_gm_room.contains("ritual") && !ari_current_gm_room.contains("treasure"))
 	{
 		GenerateFloorTraps();
@@ -9304,6 +9707,32 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 
 		if (script_name_to_reference_map.contains(GML_SCRIPT_UPDATE_TOOLBAR_MENU))
 			UpdateToolbarMenu(script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][0], script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][1]);
+
+		// Blessed (Oracle Set Bonus)
+		if (CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+		{
+			int bonus = 0;
+			if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] == 1)
+				bonus += 10 * active_floor_enchantments.size();
+			if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::CONDEMN] == 1)
+				bonus += 10 * active_offerings.size();
+
+			if (bonus > 0)
+			{
+				int max_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+				int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+				int adjusted_max_health = max_health + bonus;
+				int adjusted_current_health = current_health + bonus;
+
+				SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], adjusted_max_health);
+				SetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], adjusted_current_health);
+				
+				VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], adjusted_max_health);
+				VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, adjusted_max_health);
+
+				class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED] = bonus;
+			}
+		}
 
 		// HP Penalty
 		if (active_floor_enchantments.contains(FloorEnchantments::HP_PENALTY))
@@ -9354,6 +9783,9 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 			PlayConversation(BOSS_BATTLE_RUINS_ORB_CONVERSATION_KEY, Self, Other);
 		}
 	}
+
+	class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] = 0;
+	class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::CONDEMN] = 0;
 
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_ON_DUNGEON_ROOM_START));
 	original(
@@ -9434,6 +9866,7 @@ RValue& GmlScriptGoToRoomCallback(
 	class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::ENPOISON] = 0;
 	class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::QUAKE] = 0;
 	class_name_to_set_bonus_effect_value_map[Classes::ROGUE][ManagedSetBonuses::FLEE] = 0;
+	class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED] = 0;
 
 	// Reset Max HP Adjustments
 	if (unmodified_base_health != -1)
@@ -9488,6 +9921,11 @@ RValue& GmlScriptGoToRoomCallback(
 		boss_monsters_configured = 0;
 		class_name_to_set_bonus_effect_value_map.clear();
 		initial_floor_monsters.clear();
+
+		// Reset Oracle set bonus effects.
+		class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] = 0;
+		class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::CONDEMN] = 0;
+
 	}
 	else
 		active_offerings.clear();
