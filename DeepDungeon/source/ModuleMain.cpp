@@ -134,6 +134,8 @@ static const std::string SIGIL_OF_SERENITY_NAME = "sigil_of_serenity";
 static const std::string SIGIL_OF_SILENCE_NAME = "sigil_of_silence";
 static const std::string SIGIL_OF_STRENGTH_NAME = "sigil_of_strength";
 static const std::string SIGIL_OF_TEMPTATION_NAME = "sigil_of_temptation";
+static const std::string SIGIL_OF_SIGHT_NAME = "sigil_of_sight";
+static const std::string SIGIL_OF_INTUITION_NAME = "sigil_of_intuition";
 static const std::string SUSTAINING_POTION_NAME = "sustaining_potion";
 static const std::string HEALTH_SALVE_NAME = "health_salve";
 static const std::string STAMINA_SALVE_NAME = "stamina_salve";
@@ -219,6 +221,7 @@ static const std::string INHIBITING_TRAP_NOTIFICATION_KEY = "Notifications/Mods/
 static const std::string LURING_TRAP_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Traps/luring";
 static const std::string METEOR_TRAP_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Traps/meteor";
 static const std::string GAZE_TRAP_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Traps/gaze";
+static const std::string VOID_TRAP_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Traps/void";
 static const std::string PREDICT_SPELL_CAST_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/predict";
 static const std::string PROPHECY_FORTIFICATION_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Prophecy/fortification";
 static const std::string PROPHECY_STRENGTH_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Prophecy/strength";
@@ -460,7 +463,9 @@ static enum class Sigils {
 	REDEMPTION,
 	ALTERATION,
 	CONCEALMENT,
-	TEMPTATION
+	TEMPTATION,
+	SIGHT,
+	INTUITION
 };
 
 static enum class Traps {
@@ -470,12 +475,14 @@ static enum class Traps {
 	INHIBITING,
 	LURING,
 	METEOR,
-	GAZE
+	GAZE,
+	_VOID
 };
 
 static enum class CustomAOETypes {
 	METEOR,
-	GAZE
+	GAZE,
+	_VOID
 };
 
 static struct CustomAOE {
@@ -483,9 +490,19 @@ static struct CustomAOE {
 	int y;
 	int spawned_time;
 	int duration;
+	int last_application;
 	bool is_active;
 	RValue instance;
 	CustomAOETypes type;
+};
+
+static struct RevealedFloorTrap {
+	int x;
+	int y;
+	bool is_active;
+	RValue instance;
+
+	bool Equals(std::pair<int, int> p) { return p.first == x && p.second == y; }
 };
 
 static const std::unordered_set<std::string> DUNGEON_TREASURE_CHEST_NAMES = {
@@ -594,7 +611,9 @@ static const std::map<std::string, Sigils> item_name_to_sigil_map = {
 	{ SIGIL_OF_SERENITY_NAME, Sigils::SERENITY },
 	{ SIGIL_OF_SILENCE_NAME, Sigils::SILENCE },
 	{ SIGIL_OF_STRENGTH_NAME, Sigils::STRENGTH },
-	{ SIGIL_OF_TEMPTATION_NAME, Sigils::TEMPTATION }
+	{ SIGIL_OF_TEMPTATION_NAME, Sigils::TEMPTATION },
+	{ SIGIL_OF_SIGHT_NAME, Sigils::SIGHT },
+	{ SIGIL_OF_INTUITION_NAME, Sigils::INTUITION }
 };
 
 static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_POINTS = {
@@ -1784,6 +1803,8 @@ static std::unordered_set<int> salves_used = {};
 static std::map<Traps, std::pair<int, int>> active_traps = {}; // Holds the active traps and the position they most recently triggered at.
 static std::vector<CustomAOE> meteor_aoes = {};
 static std::vector<CustomAOE> gaze_aoes = {};
+static std::vector<CustomAOE> void_aoes = {};
+static std::vector<RevealedFloorTrap> revealed_floor_traps = {}; // TODO
 static std::unordered_set<Sigils> active_sigils = {};
 static std::unordered_set<Offerings> queued_offerings = {};
 static std::unordered_set<Offerings> active_offerings = {};
@@ -6339,6 +6360,36 @@ void CastSpell(CInstance* Self, CInstance* Other, int spell_id)
 	);
 }
 
+void RevealFloorTraps()
+{
+	if (active_sigils.contains(Sigils::SIGHT) && revealed_floor_traps.empty()) // TODO: Update when Sigil of Sight is implemented
+	{
+		for (auto floor_trap = floor_trap_positions.begin(); floor_trap != floor_trap_positions.end(); floor_trap++) {
+			RValue instance_layer_exists = g_ModuleInterface->CallBuiltin("layer_exists", { "Instances" });
+			if (instance_layer_exists)
+			{
+				RValue obj_assetobject = g_ModuleInterface->CallBuiltin("asset_get_index", { "obj_assetobject" });
+				RValue instance = g_ModuleInterface->CallBuiltin("instance_create_layer", { floor_trap->first, floor_trap->second, RValue("Instances"), obj_assetobject });
+
+				RevealedFloorTrap revealed_floor_trap = RevealedFloorTrap(floor_trap->first, floor_trap->second, true, instance);
+				revealed_floor_traps.push_back(revealed_floor_trap);
+			}
+		}
+	}
+
+	for (RevealedFloorTrap revealed_floor_trap : revealed_floor_traps)
+	{
+		if (revealed_floor_trap.is_active && !floor_trap_positions.contains({ revealed_floor_trap.x, revealed_floor_trap.y }))
+		{
+			revealed_floor_trap.is_active = false;
+
+			RValue revealed_floor_trap_instance_exists = g_ModuleInterface->CallBuiltin("instance_exists", { revealed_floor_trap.instance });
+			if (revealed_floor_trap_instance_exists.ToBoolean())
+				g_ModuleInterface->CallBuiltin("instance_destroy", { revealed_floor_trap.instance });
+		}
+	}
+}
+
 void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 {
 	// Prune traps that have fully applied.
@@ -6477,7 +6528,7 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 						RValue obj_assetobject = g_ModuleInterface->CallBuiltin("asset_get_index", { "obj_assetobject" });
 						RValue instance = g_ModuleInterface->CallBuiltin("instance_create_layer", { floor_trap->first, floor_trap->second, RValue("Instances"), obj_assetobject });
 						
-						CustomAOE meteor = CustomAOE(floor_trap->first, floor_trap->second, current_time_in_seconds, 600, true, instance, CustomAOETypes::METEOR);
+						CustomAOE meteor = CustomAOE(floor_trap->first, floor_trap->second, current_time_in_seconds, 600, current_time_in_seconds, true, instance, CustomAOETypes::METEOR);
 						meteor_aoes.push_back(meteor);
 					}
 
@@ -6494,11 +6545,28 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 						RValue obj_assetobject = g_ModuleInterface->CallBuiltin("asset_get_index", { "obj_assetobject" });
 						RValue instance = g_ModuleInterface->CallBuiltin("instance_create_layer", { floor_trap->first, floor_trap->second, RValue("Instances"), obj_assetobject });
 						
-						CustomAOE gaze = CustomAOE(floor_trap->first, floor_trap->second, current_time_in_seconds, 600, true, instance, CustomAOETypes::GAZE);
+						CustomAOE gaze = CustomAOE(floor_trap->first, floor_trap->second, current_time_in_seconds, 600, current_time_in_seconds, true, instance, CustomAOETypes::GAZE);
 						gaze_aoes.push_back(gaze);
 					}
 
 					active_traps.erase(Traps::GAZE);
+				}
+				else if (trap == Traps::_VOID)
+				{
+					RValue instance_layer_exists = g_ModuleInterface->CallBuiltin("layer_exists", { "Instances" });
+					if (instance_layer_exists)
+					{
+						PlaySoundEffect("snd_MagicVoidLightSpell", 100, 0.3);
+						CreateNotification(true, VOID_TRAP_NOTIFICATION_KEY, Self, Other);
+
+						RValue obj_assetobject = g_ModuleInterface->CallBuiltin("asset_get_index", { "obj_assetobject" });
+						RValue instance = g_ModuleInterface->CallBuiltin("instance_create_layer", { floor_trap->first, floor_trap->second, RValue("Instances"), obj_assetobject });
+
+						CustomAOE void_aoe = CustomAOE(floor_trap->first, floor_trap->second, current_time_in_seconds, 1800, current_time_in_seconds, true, instance, CustomAOETypes::_VOID); // TODO: Make duration configurable
+						void_aoes.push_back(void_aoe);
+					}
+
+					active_traps.erase(Traps::_VOID);
 				}
 			}
 
@@ -6550,6 +6618,27 @@ void ProcessCustomAOEs()
 			RValue gaze_instance_exists = g_ModuleInterface->CallBuiltin("instance_exists", { gaze.instance });
 			if (gaze_instance_exists.ToBoolean())
 				g_ModuleInterface->CallBuiltin("instance_destroy", { gaze.instance });
+		}
+	}
+
+	for (CustomAOE& void_aoe : void_aoes)
+	{
+		if (void_aoe.is_active && current_time_in_seconds >= void_aoe.last_application + 15) // TODO: Make tick rate configurable
+		{
+			void_aoe.last_application = current_time_in_seconds;
+
+			double distance = GetDistance(ari_x, ari_y, void_aoe.x, void_aoe.y);
+			if (distance > 96 && distance <= 298)
+				ModifyHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], -1);
+		}
+
+		if (void_aoe.is_active && current_time_in_seconds >= void_aoe.spawned_time + void_aoe.duration)
+		{
+			void_aoe.is_active = false;
+
+			RValue void_trap_instance_exists = g_ModuleInterface->CallBuiltin("instance_exists", { void_aoe.instance });
+			if (void_trap_instance_exists.ToBoolean())
+				g_ModuleInterface->CallBuiltin("instance_destroy", { void_aoe.instance });
 		}
 	}
 }
@@ -6913,6 +7002,16 @@ void ObjectCallback(
 										active_sigils.insert(Sigils::STRENGTH);
 									if (held_item_id == sigil_to_item_id_map[Sigils::TEMPTATION])
 										active_sigils.insert(Sigils::TEMPTATION);
+									if (held_item_id == sigil_to_item_id_map[Sigils::SIGHT])
+									{
+										// TODO: Register Status Effect: 16, 0, 13175132, 13193132 (start + 18000)
+										int unified_time = GetUnifiedTime(script_name_to_reference_map[GML_SCRIPT_GET_UNIFIED_TIME][0], script_name_to_reference_map[GML_SCRIPT_GET_UNIFIED_TIME][1]).ToInt64();
+										RegisterStatusEffect(script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1], status_effect_name_to_id_map["sacred_light"], 0, unified_time, unified_time + 18000); // TODO: Confirm this is the right end time modifier
+
+										active_sigils.insert(Sigils::SIGHT);
+									}
+									if (held_item_id == sigil_to_item_id_map[Sigils::INTUITION]) // TODO: Implement the logic
+										active_sigils.insert(Sigils::INTUITION);
 
 									if (script_name_to_reference_map.contains(GML_SCRIPT_UPDATE_TOOLBAR_MENU))
 										UpdateToolbarMenu(script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][0], script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][1]);
@@ -9007,6 +9106,7 @@ RValue& GmlScriptGetMinutesCallback(
 		RValue time = global_instance->GetMember("__clock").GetMember("time");
 		current_time_in_seconds = time.ToInt64();
 
+		RevealFloorTraps();
 		ApplyFloorTraps(Self, Other);
 		ProcessCustomAOEs();
 		
@@ -9626,7 +9726,7 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 	unmodified_base_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
 
 	// Toggle reward on seal rooms when dungeon lift is disabled
-	if (configuration.disable_dungeon_lift && ari_current_gm_room.contains("seal") && !biome_reward_disabled)
+	if (configuration.disable_dungeon_lift && ari_current_gm_room.contains("seal") && ari_current_gm_room != "rm_void_seal" && !biome_reward_disabled)
 		drop_biome_reward = true;
 	biome_reward_disabled = false;
 
@@ -9655,6 +9755,9 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 		{
 			active_sigils.insert(Sigils::PROTECTION);
 			CreateNotification(false, PROPHECY_PROTECTION_NOTIFICATION_KEY, Self, Other);
+
+			RegisterStatusEffect(script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1], status_effect_name_to_id_map["guardians_shield"], RValue(), 1, 2147483647.0);
+			SetInvulnerabilityHits(2);
 		}
 		else if (random < 90)
 		{
@@ -9670,7 +9773,8 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 
 	if (ari_current_gm_room != "rm_mines_entry" && ari_current_gm_room != "rm_priestess_quarters" && !ari_current_gm_room.contains("seal") && !ari_current_gm_room.contains("ritual") && !ari_current_gm_room.contains("treasure"))
 	{
-		GenerateFloorTraps();
+		if (!active_sigils.contains(Sigils::SAFETY)) // This should only happen after Prophecy (Oracle Set Bonus)
+			GenerateFloorTraps();
 
 		if (ari_current_gm_room == "rm_mines_upper_floor1")
 			active_floor_enchantments = RandomFloorEnchantments(true, DungeonBiomes::UPPER);
@@ -9809,8 +9913,10 @@ RValue& GmlScriptGoToRoomCallback(
 )
 {
 	ResetCustomDrawFields();
+	revealed_floor_traps.clear();
 	meteor_aoes.clear();
 	gaze_aoes.clear();
+	void_aoes.clear();
 
 	// Teleport Ari to the ritual chamber for boss battles.
 	if (boss_battle == BossBattle::TIDE_CAVERNS_ORB && !ari_current_gm_room.contains("ritual_chamber"))
@@ -9824,6 +9930,10 @@ RValue& GmlScriptGoToRoomCallback(
 	// End Boss Battles when leaving the ritual floor.
 	else if (boss_battle != BossBattle::NONE && ari_current_gm_room.contains("ritual"))
 		boss_battle = BossBattle::NONE;
+
+	// If leaving the void seal, prohibit the key from spawning in progression mode.
+	if (configuration.disable_dungeon_lift && ari_current_gm_room == "rm_void_seal")
+		biome_reward_disabled = true;
 
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_GO_TO_ROOM));
 	original(
@@ -10579,6 +10689,17 @@ RValue& GmlScriptOnBeginStepCallback(
 	IN RValue** Arguments
 )
 {
+	// Revealed Traps
+	for (int i = 0; i < revealed_floor_traps.size(); i++)
+	{
+		if (revealed_floor_traps[i].is_active)
+		{
+			RValue spr_revealed_floor_trap = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_revealed_floor_trap" });
+			g_ModuleInterface->CallBuiltin("variable_instance_set", { revealed_floor_traps[i].instance, "sprite_index", spr_revealed_floor_trap });
+			g_ModuleInterface->CallBuiltin("variable_instance_set", { revealed_floor_traps[i].instance, "depth", 350 });
+		}
+	}
+
 	// Meteor Sprites
 	for (int i = 0; i < meteor_aoes.size(); i++)
 	{
@@ -10598,6 +10719,18 @@ RValue& GmlScriptOnBeginStepCallback(
 			RValue spr_trap_gaze = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_trap_gaze" });
 			g_ModuleInterface->CallBuiltin("variable_instance_set", { gaze_aoes[i].instance, "sprite_index", spr_trap_gaze });
 			g_ModuleInterface->CallBuiltin("variable_instance_set", { gaze_aoes[i].instance, "image_speed", 0.6 });
+		}
+	}
+
+	// Void Traps
+	for (int i = 0; i < void_aoes.size(); i++)
+	{
+		if (void_aoes[i].is_active)
+		{
+			RValue spr_trap_void = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_trap_void" });
+			g_ModuleInterface->CallBuiltin("variable_instance_set", { void_aoes[i].instance, "sprite_index", spr_trap_void });
+			g_ModuleInterface->CallBuiltin("variable_instance_set", { void_aoes[i].instance, "image_speed", 0.25 }); // 0.1
+			g_ModuleInterface->CallBuiltin("variable_instance_set", { void_aoes[i].instance, "depth", -1000 });
 		}
 	}
 
