@@ -136,6 +136,11 @@ static const std::string SIGIL_OF_STRENGTH_NAME = "sigil_of_strength";
 static const std::string SIGIL_OF_TEMPTATION_NAME = "sigil_of_temptation";
 static const std::string SIGIL_OF_SIGHT_NAME = "sigil_of_sight";
 static const std::string SIGIL_OF_INTUITION_NAME = "sigil_of_intuition";
+static const std::string GREATER_SIGIL_OF_BENEDICTION_NAME = "greater_sigil_of_benediction";
+static const std::string GREATER_SIGIL_OF_ASTRAL_FLOW_NAME = "greater_sigil_of_astral_flow";
+static const std::string GREATER_SIGIL_OF_CHAIN_SPELL_NAME = "greater_sigil_of_chain_spell";
+static const std::string GREATER_SIGIL_OF_SPIRIT_SURGE_NAME = "greater_sigil_of_spirit_surge";
+static const std::string GREATER_SIGIL_OF_MEIKYO_SHISUI_NAME = "greater_sigil_of_meikyo_shisui";
 static const std::string SUSTAINING_POTION_NAME = "sustaining_potion";
 static const std::string HEALTH_SALVE_NAME = "health_salve";
 static const std::string STAMINA_SALVE_NAME = "stamina_salve";
@@ -204,7 +209,9 @@ static const std::string SAVING_DISABLED_NOTIFICATION_KEY = "Notifications/Mods/
 static const std::string LIFT_KEY_RESTRICTED_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/lift_key_restricted";
 static const std::string ORB_RESTRICTED_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/orb_restricted";
 static const std::string SIGIL_RESTRICTED_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/sigil_restricted";
+static const std::string GREATER_SIGIL_RESTRICTED_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/greater_sigil_restricted";
 static const std::string SIGIL_LIMIT_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/sigil_limit";
+static const std::string GREATER_SIGIL_LIMIT_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/greater_sigil_limit";
 static const std::string SALVE_LIMIT_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/salve_limit";
 static const std::string ITEM_PENALTY_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/item_penalty";
 static const std::string ITEM_PROHIBITED_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/item_prohibited";
@@ -228,6 +235,9 @@ static const std::string PROPHECY_STRENGTH_NOTIFICATION_KEY = "Notifications/Mod
 static const std::string PROPHECY_PROTECTION_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Prophecy/protection";
 static const std::string PROPHECY_CONCEALMENT_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Prophecy/concealment";
 static const std::string PROPHECY_SAFETY_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Prophecy/safety";
+static const std::string TREASURE_SPOT_NOT_PRESENT_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Treasure Spot/not_present";
+static const std::string TREASURE_SPOT_SPAWNED_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Treasure Spot/spawned";
+static const std::string TREASURE_SPOT_FOUND_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Treasure Spot/found";
 static const std::string FLOOR_ENCHANTMENT_CONVERSATION_KEY = "Conversations/Mods/Deep Dungeon/floor_enchantments";
 static const std::string DREAD_BEAST_WARNING_CONVERSATION_KEY = "Conversations/Mods/Deep Dungeon/dread_beast_warning";
 static const std::string FLOOR_TEN_CONVERSATION_KEY = "Conversations/floor_10/mines_floor_ten";
@@ -468,6 +478,14 @@ static enum class Sigils {
 	INTUITION
 };
 
+static enum class GreaterSigils {
+	BENEDICTION,
+	ASTRAL_FLOW,
+	CHAIN_SPELL,
+	SPIRIT_SURGE,
+	MEIKYO_SHISUI
+};
+
 static enum class Traps {
 	CONFUSING,
 	DISORIENTING,
@@ -501,8 +519,17 @@ static struct RevealedFloorTrap {
 	int y;
 	bool is_active;
 	RValue instance;
+};
 
-	bool Equals(std::pair<int, int> p) { return p.first == x && p.second == y; }
+static struct TreasureSpot {
+	enum TreasureSpotState { INACTIVE, WAITING_TO_SPAWN, SPAWNED, FOUND };
+
+	int x;
+	int y;
+	int floors_to_descend;
+	bool is_active;
+	RValue instance;
+	TreasureSpotState state = INACTIVE;
 };
 
 static const std::unordered_set<std::string> DUNGEON_TREASURE_CHEST_NAMES = {
@@ -614,6 +641,14 @@ static const std::map<std::string, Sigils> item_name_to_sigil_map = {
 	{ SIGIL_OF_TEMPTATION_NAME, Sigils::TEMPTATION },
 	{ SIGIL_OF_SIGHT_NAME, Sigils::SIGHT },
 	{ SIGIL_OF_INTUITION_NAME, Sigils::INTUITION }
+};
+
+static const std::map<std::string, GreaterSigils> item_name_to_greater_sigil_map = {
+	{ GREATER_SIGIL_OF_BENEDICTION_NAME, GreaterSigils::BENEDICTION },
+	{ GREATER_SIGIL_OF_ASTRAL_FLOW_NAME, GreaterSigils::ASTRAL_FLOW },
+	{ GREATER_SIGIL_OF_CHAIN_SPELL_NAME, GreaterSigils::CHAIN_SPELL },
+	{ GREATER_SIGIL_OF_SPIRIT_SURGE_NAME, GreaterSigils::SPIRIT_SURGE },
+	{ GREATER_SIGIL_OF_MEIKYO_SHISUI_NAME, GreaterSigils::MEIKYO_SHISUI }
 };
 
 static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_POINTS = {
@@ -1740,6 +1775,7 @@ static bool drop_biome_reward = false;
 static bool biome_reward_disabled = false;
 static bool dread_beast_configured = false;
 static bool sigil_item_used = false;
+static bool greater_sigil_item_used = false;
 static bool lift_key_used = false;
 static bool orb_item_used = false;
 static bool inner_fire_cast = false;
@@ -1758,6 +1794,7 @@ static double ari_y = -1;
 static double ari_facing_dir = -1;
 static int floor_number = 0;
 static int unmodified_base_health = -1;
+static int hp_penalty_amount = -1;
 static int floor_start_time = 0;
 static int current_time_in_seconds = -1;
 static int time_of_last_restoration_tick = -1;
@@ -1777,6 +1814,7 @@ static int dread_beast_monster_id = -1;
 static int dread_beasts_configured = 0;
 static int boss_monsters_configured = 0;
 static BossBattle boss_battle = BossBattle::NONE;
+static TreasureSpot treasure_spot = TreasureSpot();
 static std::string ari_current_location = "";
 static std::string ari_current_gm_room = "";
 static std::unordered_set<int> orb_items = {};
@@ -1785,6 +1823,8 @@ static std::unordered_set<int> restricted_items = {};
 static std::unordered_set<int> deep_dungeon_items = {};
 static std::map<Sigils, int> sigil_to_item_id_map = {};
 static std::map<int, Sigils> item_id_to_sigil_map = {};
+static std::map<GreaterSigils, int> greater_sigil_to_item_id_map = {};
+static std::map<int, GreaterSigils> item_id_to_greater_sigil_map = {};
 static std::map<std::string, int> perk_name_to_id_map = {};
 static std::map<std::string, int> spell_name_to_id_map = {};
 static std::map<int, int> spell_id_to_default_cost_map = {};
@@ -1804,8 +1844,9 @@ static std::map<Traps, std::pair<int, int>> active_traps = {}; // Holds the acti
 static std::vector<CustomAOE> meteor_aoes = {};
 static std::vector<CustomAOE> gaze_aoes = {};
 static std::vector<CustomAOE> void_aoes = {};
-static std::vector<RevealedFloorTrap> revealed_floor_traps = {}; // TODO
+static std::vector<RevealedFloorTrap> revealed_floor_traps = {};
 static std::unordered_set<Sigils> active_sigils = {};
+static std::unordered_set<GreaterSigils> active_greater_sigils = {};
 static std::unordered_set<Offerings> queued_offerings = {};
 static std::unordered_set<Offerings> active_offerings = {};
 static std::unordered_set<FloorEnchantments> active_floor_enchantments = {};
@@ -3200,12 +3241,22 @@ void LoadItems()
 			std::string item_name = item->GetMember("recipe_key").ToString(); // The internal item name
 			item_name_to_id_map[item_name] = item_id;
 
-			// Sigil items
+			// Sigils
 			if (item_name_to_sigil_map.contains(item_name))
 			{
 				deep_dungeon_items.insert(item_id);
 				sigil_to_item_id_map[item_name_to_sigil_map.at(item_name)] = item_id;
 				item_id_to_sigil_map[item_id] = item_name_to_sigil_map.at(item_name);
+
+				*item->GetRefMember("health_modifier") = 0;
+			}
+
+			// Greater Sigils
+			if (item_name_to_greater_sigil_map.contains(item_name))
+			{
+				deep_dungeon_items.insert(item_id);
+				greater_sigil_to_item_id_map[item_name_to_greater_sigil_map.at(item_name)] = item_id;
+				item_id_to_greater_sigil_map[item_id] = item_name_to_greater_sigil_map.at(item_name);
 
 				*item->GetRefMember("health_modifier") = 0;
 			}
@@ -3546,7 +3597,8 @@ void ScaleMistpoolWeapon(bool in_dungeon)
 
 	if (in_dungeon)
 	{
-		int damage = (floor_number / 4) + 3;
+		int modified_floor_number = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? floor_number + 40 : floor_number;
+		int damage = (modified_floor_number / 4) + 3;
 		*sword_scrap_metal->GetRefMember("damage") = damage;
 	}
 	else
@@ -3563,7 +3615,8 @@ void ScaleMistpoolArmor(bool in_dungeon)
 
 		if (in_dungeon)
 		{
-			int defense = floor_number / 20;
+			int modified_floor_number = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? floor_number + 20 : floor_number;
+			int defense = modified_floor_number / 20;
 			*mistpool_armor_piece->GetRefMember("defense") = defense;
 		}
 		else
@@ -3582,30 +3635,30 @@ void ScaleMistpoolPickaxe(bool in_dungeon)
 	{
 		if (floor_number < 20)
 		{
-			*pick_axe_worn->GetRefMember("damage") = 1;
-			*pick_axe_worn->GetRefMember("quality") = 0;
+			*pick_axe_worn->GetRefMember("damage") = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? 2 : 1;
+			*pick_axe_worn->GetRefMember("quality") = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? 1 : 0;
 		}
 		else if (floor_number < 40)
 		{
-			*pick_axe_worn->GetRefMember("damage") = 2;
-			*pick_axe_worn->GetRefMember("quality") = 1;
+			*pick_axe_worn->GetRefMember("damage") = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? 3 : 2;
+			*pick_axe_worn->GetRefMember("quality") = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? 2 : 1;
 		}
 		else if (floor_number < 60)
 		{
-			*pick_axe_worn->GetRefMember("damage") = 3;
-			*pick_axe_worn->GetRefMember("quality") = 2;
+			*pick_axe_worn->GetRefMember("damage") = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? 4 : 3;
+			*pick_axe_worn->GetRefMember("quality") = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? 3 : 2;
 		}
 
 		else if (floor_number < 80)
 		{
-			*pick_axe_worn->GetRefMember("damage") = 4;
-			*pick_axe_worn->GetRefMember("quality") = 3;
+			*pick_axe_worn->GetRefMember("damage") = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? 5 : 4;
+			*pick_axe_worn->GetRefMember("quality") = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? 4 : 3;
 		}
 
 		else if (floor_number < 100)
 		{
-			*pick_axe_worn->GetRefMember("damage") = 5;
-			*pick_axe_worn->GetRefMember("quality") = 4;
+			*pick_axe_worn->GetRefMember("damage") = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? 6 : 5;
+			*pick_axe_worn->GetRefMember("quality") = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? 5 : 4;
 		}
 	}
 	else
@@ -3625,7 +3678,8 @@ void ScaleClassArmor(bool in_dungeon)
 
 		if (in_dungeon)
 		{
-			int defense = floor_number / 20;
+			int modified_floor_number = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? floor_number + 20 : floor_number;
+			int defense = modified_floor_number / 20;
 			*class_armor_piece->GetRefMember("defense") = defense;
 		}
 		else
@@ -3853,6 +3907,12 @@ void ModifySpellCosts(bool reset_cost, bool in_dungeon) {
 		int cost = reset_cost ? spell_id_to_default_cost_map[i] : spell_id_to_default_cost_map[i] / 2;
 		if (in_dungeon && i == spell_name_to_id_map["growth"])
 			cost = reset_cost ? spell_id_to_default_cost_map[i] / 2 : spell_id_to_default_cost_map[i] / 4;
+		if (active_greater_sigils.contains(GreaterSigils::CHAIN_SPELL))
+			cost = 0;
+		if (i == spell_name_to_id_map["full_restore"] && CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+			cost = 0;
+		if (i == spell_name_to_id_map["growth"] && CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+			cost = 0;
 
 		*array_element->GetRefMember("cost") = cost;
 	}
@@ -5151,7 +5211,7 @@ RValue GetDynamicItemSprite(int item_id)
 				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_tool_mistpool_t3_sword" });
 		}
 	}
-	if (item_id == item_name_to_id_map[MISTPOOL_PICK_AXE_NAME])
+	else if (item_id == item_name_to_id_map[MISTPOOL_PICK_AXE_NAME])
 	{
 		if (floor_number < 20)
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_tool_mistpool_t0_pickaxe" });
@@ -5162,7 +5222,7 @@ RValue GetDynamicItemSprite(int item_id)
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_tool_mistpool_t3_pickaxe" });
 	}
-	if (item_id == item_name_to_id_map[MISTPOOL_HELMET_NAME])
+	else if (item_id == item_name_to_id_map[MISTPOOL_HELMET_NAME])
 	{
 		if (floor_number < 20)
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_equipment_mistpool_helmet_tier_1" });
@@ -5173,7 +5233,7 @@ RValue GetDynamicItemSprite(int item_id)
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_equipment_mistpool_helmet_tier_4" });
 	}
-	if (item_id == item_name_to_id_map[MISTPOOL_CHESTPIECE_NAME])
+	else if (item_id == item_name_to_id_map[MISTPOOL_CHESTPIECE_NAME])
 	{
 		if (floor_number < 20)
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_equipment_mistpool_chestpiece_tier_1" });
@@ -5184,7 +5244,7 @@ RValue GetDynamicItemSprite(int item_id)
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_equipment_mistpool_chestpiece_tier_4" });
 	}
-	if (item_id == item_name_to_id_map[MISTPOOL_GLOVES_NAME])
+	else if (item_id == item_name_to_id_map[MISTPOOL_GLOVES_NAME])
 	{
 		if (floor_number < 20)
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_equipment_mistpool_gloves_tier_1" });
@@ -5195,7 +5255,7 @@ RValue GetDynamicItemSprite(int item_id)
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_equipment_mistpool_gloves_tier_4" });
 	}
-	if (item_id == item_name_to_id_map[MISTPOOL_PANTS_NAME])
+	else if (item_id == item_name_to_id_map[MISTPOOL_PANTS_NAME])
 	{
 		if (floor_number < 20)
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_equipment_mistpool_pants_tier_1" });
@@ -5206,7 +5266,7 @@ RValue GetDynamicItemSprite(int item_id)
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_equipment_mistpool_pants_tier_4" });
 	}
-	if (item_id == item_name_to_id_map[MISTPOOL_BOOTS_NAME])
+	else if (item_id == item_name_to_id_map[MISTPOOL_BOOTS_NAME])
 	{
 		if (floor_number < 20)
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_equipment_mistpool_boots_tier_1" });
@@ -5217,112 +5277,161 @@ RValue GetDynamicItemSprite(int item_id)
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_equipment_mistpool_boots_tier_4" });
 	}
-	if (item_id == sigil_to_item_id_map[Sigils::ALTERATION])
+	else if (item_id == sigil_to_item_id_map[Sigils::ALTERATION])
 	{
 		if (active_sigils.contains(Sigils::ALTERATION) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_alteration_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_alteration" });
 	}
-	if (item_id == sigil_to_item_id_map[Sigils::CONCEALMENT])
+	else if (item_id == sigil_to_item_id_map[Sigils::CONCEALMENT])
 	{
 		if (active_sigils.contains(Sigils::CONCEALMENT) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_concealment_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_concealment" });
 	}
-	if (item_id == sigil_to_item_id_map[Sigils::FORTIFICATION])
+	else if (item_id == sigil_to_item_id_map[Sigils::FORTIFICATION])
 	{
 		if (active_sigils.contains(Sigils::FORTIFICATION) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_fortification_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_fortification" });
 	}
-	if (item_id == sigil_to_item_id_map[Sigils::FORTUNE])
+	else if (item_id == sigil_to_item_id_map[Sigils::FORTUNE])
 	{
 		if (active_sigils.contains(Sigils::FORTUNE) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_fortune_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_fortune" });
 	}
-	if (item_id == sigil_to_item_id_map[Sigils::PROTECTION])
+	else if (item_id == sigil_to_item_id_map[Sigils::PROTECTION])
 	{
 		if (active_sigils.contains(Sigils::PROTECTION) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || GetInvulnerabilityHits() > 0 || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_protection_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_protection" });
 	}
-	if (item_id == sigil_to_item_id_map[Sigils::RAGE])
+	else if (item_id == sigil_to_item_id_map[Sigils::RAGE])
 	{
 		if (active_sigils.contains(Sigils::RAGE) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_rage_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_rage" });
 	}
-	if (item_id == sigil_to_item_id_map[Sigils::REDEMPTION])
+	else if (item_id == sigil_to_item_id_map[Sigils::REDEMPTION])
 	{
 		if (active_sigils.contains(Sigils::REDEMPTION) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || FairyBuffIsActive() || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_redemption_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_redemption" });
 	}
-	if (item_id == sigil_to_item_id_map[Sigils::SAFETY])
+	else if (item_id == sigil_to_item_id_map[Sigils::SAFETY])
 	{
 		if (active_sigils.contains(Sigils::SAFETY) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_safety_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_safety" });
 	}
-	if (item_id == sigil_to_item_id_map[Sigils::SERENITY])
+	else if (item_id == sigil_to_item_id_map[Sigils::SERENITY])
 	{
 		if (active_sigils.contains(Sigils::SERENITY) || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_serenity_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_serenity" });
 	}
-	if (item_id == sigil_to_item_id_map[Sigils::SILENCE])
+	else if (item_id == sigil_to_item_id_map[Sigils::SILENCE])
 	{
 		if (active_sigils.contains(Sigils::SILENCE) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_silence_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_silence" });
 	}
-	if (item_id == sigil_to_item_id_map[Sigils::STRENGTH])
+	else if (item_id == sigil_to_item_id_map[Sigils::STRENGTH])
 	{
 		if (active_sigils.contains(Sigils::STRENGTH) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_strength_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_strength" });
 	}
-	if (item_id == sigil_to_item_id_map[Sigils::TEMPTATION])
+	else if (item_id == sigil_to_item_id_map[Sigils::TEMPTATION])
 	{
 		if (active_sigils.contains(Sigils::TEMPTATION) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::CONDEMN] > 0 || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_temptation_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_temptation" });
 	}
-	if (item_id == salve_name_to_id_map[SUSTAINING_POTION_NAME])
+	else if (item_id == sigil_to_item_id_map[Sigils::SIGHT])
+	{
+		if (active_sigils.contains(Sigils::SIGHT) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_sight_disabled" });
+		else
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_sight" });
+	}
+	else if (item_id == sigil_to_item_id_map[Sigils::INTUITION])
+	{
+		if (active_sigils.contains(Sigils::INTUITION) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_intuition_disabled" });
+		else
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_intuition" });
+	}
+	else if (item_id == greater_sigil_to_item_id_map[GreaterSigils::BENEDICTION])
+	{
+		if (!active_greater_sigils.empty() || !AriCurrentGmRoomIsDungeonFloor())
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_greater_sigil_of_benediction_disabled" });
+		else
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_greater_sigil_of_benediction" });
+	}
+	else if (item_id == greater_sigil_to_item_id_map[GreaterSigils::ASTRAL_FLOW])
+	{
+		if (!active_greater_sigils.empty() || !AriCurrentGmRoomIsDungeonFloor())
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_greater_sigil_of_astral_flow_disabled" });
+		else
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_greater_sigil_of_astral_flow" });
+	}
+	else if (item_id == greater_sigil_to_item_id_map[GreaterSigils::CHAIN_SPELL])
+	{
+		if (!active_greater_sigils.empty() || !AriCurrentGmRoomIsDungeonFloor())
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_greater_sigil_of_chain_spell_disabled" });
+		else
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_greater_sigil_of_chain_spell" });
+	}
+	else if (item_id == greater_sigil_to_item_id_map[GreaterSigils::SPIRIT_SURGE])
+	{
+		if (!active_greater_sigils.empty() || !AriCurrentGmRoomIsDungeonFloor())
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_greater_sigil_of_spirit_surge_disabled" });
+		else
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_greater_sigil_of_spirit_surge" });
+	}
+	else if (item_id == greater_sigil_to_item_id_map[GreaterSigils::MEIKYO_SHISUI])
+	{
+		if (!active_greater_sigils.empty() || !AriCurrentGmRoomIsDungeonFloor())
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_greater_sigil_of_meikyo_shisui_disabled" });
+		else
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_greater_sigil_of_meikyo_shisui" });
+	}
+	else if (item_id == salve_name_to_id_map[SUSTAINING_POTION_NAME])
 	{
 		if (active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_potion_sustain_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_potion_sustain" });
 	}
-	if (item_id == salve_name_to_id_map[HEALTH_SALVE_NAME])
+	else if (item_id == salve_name_to_id_map[HEALTH_SALVE_NAME])
 	{
 		if ((configuration.limit_salves && salves_used.contains(item_id)) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_salve_health_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_salve_health" });
 	}
-	if (item_id == salve_name_to_id_map[STAMINA_SALVE_NAME])
+	else if (item_id == salve_name_to_id_map[STAMINA_SALVE_NAME])
 	{
 		if ((configuration.limit_salves && salves_used.contains(item_id)) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_salve_stamina_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_salve_stamina" });
 	}
-	if (item_id == salve_name_to_id_map[MANA_SALVE_NAME])
+	else if (item_id == salve_name_to_id_map[MANA_SALVE_NAME])
 	{
 		if ((configuration.limit_salves && salves_used.contains(item_id)) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_salve_mana_disabled" });
@@ -5954,6 +6063,24 @@ void GenerateFloorTraps()
 	}
 }
 
+void GenerateTreasureSpot(CInstance* Self, CInstance* Other)
+{
+	static thread_local std::mt19937 random_generator(std::random_device{}());
+	std::uniform_int_distribution<size_t> zero_to_seven_distribution(0, 7);
+
+	int biome_adjusted_max_traps_with_peril = (floor_number / 20) + 4;
+	int floors_to_descend = zero_to_seven_distribution(random_generator);
+
+	if (floor_trap_positions.size() == biome_adjusted_max_traps_with_peril)
+		floors_to_descend++;
+
+	treasure_spot.floors_to_descend = floors_to_descend;
+	treasure_spot.state = TreasureSpot::WAITING_TO_SPAWN;
+
+	if (treasure_spot.floors_to_descend > 0)
+		CreateNotification(true, TREASURE_SPOT_NOT_PRESENT_NOTIFICATION_KEY, Self, Other);
+}
+
 std::vector<int> GenerateRandomMonstersIdsForCurrentFloor(int monsters_to_spawn, const int monster_id_to_exclude = -1)
 {
 	static thread_local std::mt19937 random_generator(std::random_device{}());
@@ -6362,7 +6489,7 @@ void CastSpell(CInstance* Self, CInstance* Other, int spell_id)
 
 void RevealFloorTraps()
 {
-	if (active_sigils.contains(Sigils::SIGHT) && revealed_floor_traps.empty()) // TODO: Update when Sigil of Sight is implemented
+	if (active_sigils.contains(Sigils::SIGHT) && revealed_floor_traps.empty())
 	{
 		for (auto floor_trap = floor_trap_positions.begin(); floor_trap != floor_trap_positions.end(); floor_trap++) {
 			RValue instance_layer_exists = g_ModuleInterface->CallBuiltin("layer_exists", { "Instances" });
@@ -6643,6 +6770,93 @@ void ProcessCustomAOEs()
 	}
 }
 
+void ProcessTreasureSpot(CInstance* Self, CInstance* Other)
+{
+	if (treasure_spot.state == TreasureSpot::WAITING_TO_SPAWN && treasure_spot.floors_to_descend == 0)
+	{
+		int biome_adjusted_max_traps_with_peril = (floor_number / 20) + 4;
+		if (floor_trap_positions.size() < biome_adjusted_max_traps_with_peril)
+		{
+			// Find a position for the treasure spot on the current floor.
+			std::vector<std::pair<int, int>> spawn_points = TRAP_SPAWN_POINTS.at(ari_current_gm_room);
+
+			std::pair<int, int> treasure_spot_coordinates;
+			for (std::pair<int, int> spawn_point : spawn_points)
+			{
+				if (floor_trap_positions.contains(spawn_point))
+					continue;
+
+				treasure_spot_coordinates = spawn_point;
+				break;
+			}
+
+			RValue instance_layer_exists = g_ModuleInterface->CallBuiltin("layer_exists", { "Instances" });
+			if (instance_layer_exists)
+			{
+				PlaySoundEffect("snd_TreasureChestSpawn", 100, 0.7);
+				CreateNotification(true, TREASURE_SPOT_SPAWNED_NOTIFICATION_KEY, Self, Other);
+
+				RValue obj_assetobject = g_ModuleInterface->CallBuiltin("asset_get_index", { "obj_assetobject" });
+				RValue instance = g_ModuleInterface->CallBuiltin("instance_create_layer", { treasure_spot_coordinates.first, treasure_spot_coordinates.second, RValue("Instances"), obj_assetobject });
+
+				treasure_spot.x = treasure_spot_coordinates.first;
+				treasure_spot.y = treasure_spot_coordinates.second;
+				treasure_spot.is_active = true;
+				treasure_spot.instance = instance;
+				treasure_spot.state = TreasureSpot::SPAWNED;
+			}
+			else
+			{
+				treasure_spot.floors_to_descend++;
+				CreateNotification(true, TREASURE_SPOT_NOT_PRESENT_NOTIFICATION_KEY, Self, Other);
+			}
+		}
+		else
+		{
+			treasure_spot.floors_to_descend++;
+			CreateNotification(true, TREASURE_SPOT_NOT_PRESENT_NOTIFICATION_KEY, Self, Other);
+		}
+		
+	}
+
+	if (treasure_spot.state == TreasureSpot::SPAWNED)
+	{
+		static thread_local std::mt19937 random_generator(std::random_device{}());
+		std::uniform_int_distribution<size_t> random_greater_sigil_distribution(0, magic_enum::enum_count<GreaterSigils>() - 1);
+
+		double distance = GetDistance(ari_x, ari_y, treasure_spot.x, treasure_spot.y);
+		if (distance <= 8)
+		{
+			treasure_spot.state = TreasureSpot::FOUND;
+			CreateNotification(true, TREASURE_SPOT_FOUND_NOTIFICATION_KEY, Self, Other);
+
+			//GreaterSigils random_greater_sigil = magic_enum::enum_value<GreaterSigils>(random_greater_sigil_distribution(random_generator));
+			//DropItem(greater_sigil_to_item_id_map[random_greater_sigil], ari_x, ari_y, Self, Other);
+			
+			if (floor_number < 20)
+				DropItem(greater_sigil_to_item_id_map[GreaterSigils::SPIRIT_SURGE], ari_x, ari_y, Self, Other);
+			else if (floor_number < 40)
+				DropItem(greater_sigil_to_item_id_map[GreaterSigils::MEIKYO_SHISUI], ari_x, ari_y, Self, Other);
+			else if (floor_number < 60)
+				DropItem(greater_sigil_to_item_id_map[GreaterSigils::BENEDICTION], ari_x, ari_y, Self, Other);
+			else if (floor_number < 80)
+				DropItem(greater_sigil_to_item_id_map[GreaterSigils::CHAIN_SPELL], ari_x, ari_y, Self, Other);
+			else if (floor_number < 100)
+				DropItem(greater_sigil_to_item_id_map[GreaterSigils::ASTRAL_FLOW], ari_x, ari_y, Self, Other);
+			
+			if (treasure_spot.is_active)
+			{
+				treasure_spot.is_active = false;
+
+				RValue treasure_spot_instance_exists = g_ModuleInterface->CallBuiltin("instance_exists", { treasure_spot.instance });
+				if (treasure_spot_instance_exists.ToBoolean())
+					g_ModuleInterface->CallBuiltin("instance_destroy", { treasure_spot.instance });
+			}
+		}
+	}
+
+}
+
 void ApplyOfferingPenalties(CInstance* Self, CInstance* Other)
 {
 	if (ari_resource_to_penalty_map[AriResources::HEALTH])
@@ -6772,6 +6986,7 @@ void ResetStaticFields(bool returned_to_title_screen)
 	biome_reward_disabled = false;
 	dread_beast_configured = false;
 	sigil_item_used = false;
+	greater_sigil_item_used = false;
 	lift_key_used = false;
 	orb_item_used = false;
 	inner_fire_cast = false;
@@ -6785,6 +7000,7 @@ void ResetStaticFields(bool returned_to_title_screen)
 	grudge_counter = 0;
 	deep_wounds_damage_pool = 0;
 	stoneskin_shield_amount = 0;
+	spirit_link_combined_health_pool = 0;
 	sigil_of_silence_count = 0;
 	sigil_of_alteration_count = 0;
 	dread_beast_monster_id = -1;
@@ -6792,6 +7008,7 @@ void ResetStaticFields(bool returned_to_title_screen)
 	boss_monsters_configured = 0;
 	salves_used.clear();
 	active_sigils.clear();
+	active_greater_sigils.clear();
 	queued_offerings.clear();
 	active_offerings.clear();
 	active_floor_enchantments.clear();
@@ -6969,7 +7186,7 @@ void ObjectCallback(
 									}
 									if (held_item_id == sigil_to_item_id_map[Sigils::SERENITY])
 									{
-										// TODO: Check for other Floor Enchantments and Offering effects to cancel as implemented
+										// Undo Fey
 										if (active_floor_enchantments.contains(FloorEnchantments::FEY))
 										{
 											std::vector<CInstance*> refs = script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE];
@@ -6978,7 +7195,7 @@ void ObjectCallback(
 											CancelStatusEffect(refs[0], refs[1], status_effect_name_to_id_map["fairy"]);
 										}
 
-										// Blessed (Oracle Set Bonus)
+										// Undo Blessed (Oracle Set Bonus)
 										if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED] > 0)
 										{
 											int max_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
@@ -6993,6 +7210,20 @@ void ObjectCallback(
 											class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED] = 0;
 										}
 
+										// Undo HP Penalty
+										if (hp_penalty_amount > -1)
+										{
+											int max_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+											int adjusted_max_health = max_health + hp_penalty_amount;
+											hp_penalty_amount = -1;
+
+											SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], adjusted_max_health);
+											int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+
+											VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], adjusted_max_health);
+											VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, adjusted_max_health);
+										}
+
 										active_floor_enchantments.clear();
 										active_sigils.insert(Sigils::SERENITY);
 									}
@@ -7004,14 +7235,98 @@ void ObjectCallback(
 										active_sigils.insert(Sigils::TEMPTATION);
 									if (held_item_id == sigil_to_item_id_map[Sigils::SIGHT])
 									{
-										// TODO: Register Status Effect: 16, 0, 13175132, 13193132 (start + 18000)
 										int unified_time = GetUnifiedTime(script_name_to_reference_map[GML_SCRIPT_GET_UNIFIED_TIME][0], script_name_to_reference_map[GML_SCRIPT_GET_UNIFIED_TIME][1]).ToInt64();
-										RegisterStatusEffect(script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1], status_effect_name_to_id_map["sacred_light"], 0, unified_time, unified_time + 18000); // TODO: Confirm this is the right end time modifier
-
+										RegisterStatusEffect(script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1], status_effect_name_to_id_map["sacred_light"], 0, unified_time, unified_time + 18000);
 										active_sigils.insert(Sigils::SIGHT);
 									}
-									if (held_item_id == sigil_to_item_id_map[Sigils::INTUITION]) // TODO: Implement the logic
+									if (held_item_id == sigil_to_item_id_map[Sigils::INTUITION])
+									{
+										GenerateTreasureSpot(global_instance->GetRefMember("__ari")->ToInstance(), self);
 										active_sigils.insert(Sigils::INTUITION);
+									}
+										
+									if (script_name_to_reference_map.contains(GML_SCRIPT_UPDATE_TOOLBAR_MENU))
+										UpdateToolbarMenu(script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][0], script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][1]);
+								}
+								else if (greater_sigil_item_used)
+								{
+									greater_sigil_item_used = false;
+
+									if (held_item_id == greater_sigil_to_item_id_map[GreaterSigils::BENEDICTION])
+									{
+										// Undo Fey
+										if (active_floor_enchantments.contains(FloorEnchantments::FEY))
+										{
+											std::vector<CInstance*> refs = script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE];
+
+											ModifySpellCosts(true, true);
+											CancelStatusEffect(refs[0], refs[1], status_effect_name_to_id_map["fairy"]);
+										}
+
+										// Undo Blessed (Oracle Set Bonus)
+										if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED] > 0)
+										{
+											int max_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+											int adjusted_max_health = max_health - class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED];
+
+											SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], adjusted_max_health);
+											int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+
+											VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], adjusted_max_health);
+											VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, adjusted_max_health);
+
+											class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED] = 0;
+										}
+
+										// Undo HP Penalty
+										if (hp_penalty_amount > -1)
+										{
+											int max_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+											int adjusted_max_health = max_health + hp_penalty_amount;
+											hp_penalty_amount = -1;
+
+											SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], adjusted_max_health);
+											int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+
+											VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], adjusted_max_health);
+											VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, adjusted_max_health);
+										}
+
+										active_floor_enchantments.clear();
+										active_sigils.insert(Sigils::SERENITY);
+										active_greater_sigils.insert(GreaterSigils::BENEDICTION);
+										ModifyHealth(global_instance->GetRefMember("__ari")->ToInstance(), self, 999);
+									}
+									else if (held_item_id == greater_sigil_to_item_id_map[GreaterSigils::ASTRAL_FLOW])
+									{
+										for (CInstance* monster : current_floor_monsters)
+										{
+											if (StructVariableExists(monster, "monster_id") && StructVariableExists(monster, "hit_points"))
+											{
+												RValue monster_id = monster->GetMember("monster_id");
+												double hit_points = monster->GetMember("hit_points").ToDouble();
+												if (IsNumeric(monster_id) && std::isfinite(hit_points) && hit_points > 0)
+													*monster->GetRefMember("hit_points") = 0;
+											}
+										}
+
+										active_greater_sigils.insert(GreaterSigils::ASTRAL_FLOW);
+									}
+									else if (held_item_id == greater_sigil_to_item_id_map[GreaterSigils::CHAIN_SPELL])
+										active_greater_sigils.insert(GreaterSigils::CHAIN_SPELL);
+									else if (held_item_id == greater_sigil_to_item_id_map[GreaterSigils::SPIRIT_SURGE])
+									{
+										active_greater_sigils.insert(GreaterSigils::SPIRIT_SURGE);
+										ModifyStamina(global_instance->GetRefMember("__ari")->ToInstance(), self, 999);
+									}
+									else if (held_item_id == greater_sigil_to_item_id_map[GreaterSigils::MEIKYO_SHISUI])
+									{
+										active_greater_sigils.insert(GreaterSigils::MEIKYO_SHISUI);
+										ScaleMistpoolArmor(true);
+										ScaleMistpoolWeapon(true);
+										ScaleMistpoolPickaxe(true);
+										ScaleClassArmor(true);
+									}
 
 									if (script_name_to_reference_map.contains(GML_SCRIPT_UPDATE_TOOLBAR_MENU))
 										UpdateToolbarMenu(script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][0], script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][1]);
@@ -7120,7 +7435,7 @@ void ObjectCallback(
 		// Drain (Dark Knight Set Bonus)
 		if (class_name_to_set_bonus_effect_value_map[Classes::DARK_KNIGHT][ManagedSetBonuses::DRAIN] > 0)
 		{
-			int max_health = GetMaxHealth(global_instance->GetRefMember("__ari")->ToInstance(), self).ToInt64(); // TODO: Make this is accounting for HP_PENALTY
+			int max_health = GetMaxHealth(global_instance->GetRefMember("__ari")->ToInstance(), self).ToInt64();
 			int recovery = max_health * GetDarkKnightDrainPotency();
 
 			ModifyHealth(global_instance->GetRefMember("__ari")->ToInstance(), self, recovery);
@@ -7215,6 +7530,10 @@ void ObjectCallback(
 			else
 				stoneskin_shield_amount = 100;
 		}
+
+		// Chain Spell
+		if (active_greater_sigils.contains(GreaterSigils::CHAIN_SPELL))
+			ModifySpellCosts(false, true);
 
 		TrackAriResources(global_instance->GetRefMember("__ari")->ToInstance(), self);
 	}
@@ -7832,6 +8151,10 @@ RValue& GmlScriptModifyStaminaCallback(
 			*Arguments[0] = modified_stamina_cost;
 		}
 	}
+	
+	// Spirit Surge
+	if (active_greater_sigils.contains(GreaterSigils::SPIRIT_SURGE) && Arguments[0]->ToDouble() < 0)
+		*Arguments[0] = 0;
 
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_MODIFY_STAMINA));
 	original(
@@ -8138,10 +8461,47 @@ RValue& GmlScriptCastSpellCallback(
 	// Divine Seal (Cleric Set Bonus)
 	if (Arguments[0]->ToInt64() == spell_name_to_id_map["full_restore"] && CountEquippedClassArmor()[Classes::CLERIC] >= 3 && AriCurrentGmRoomIsDungeonFloor())
 	{
-		RegisterStatusEffect(script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1], status_effect_name_to_id_map["fairy"], RValue(), 1, 2147483647.0);
+		// Undo Fey
+		if (active_floor_enchantments.contains(FloorEnchantments::FEY))
+		{
+			std::vector<CInstance*> refs = script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE];
+
+			ModifySpellCosts(true, true);
+			CancelStatusEffect(refs[0], refs[1], status_effect_name_to_id_map["fairy"]);
+		}
 
 		active_floor_enchantments.clear();
 		active_sigils.insert(Sigils::SERENITY); // Prevent Serenity on the floor so it isn't wasted.
+		RegisterStatusEffect(script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1], status_effect_name_to_id_map["fairy"], RValue(), 1, 2147483647.0);
+
+		// Undo Blessed (Oracle Set Bonus)
+		if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED] > 0)
+		{
+			int max_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+			int adjusted_max_health = max_health - class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED];
+
+			SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], adjusted_max_health);
+			int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+
+			VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], adjusted_max_health);
+			VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, adjusted_max_health);
+
+			class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED] = 0;
+		}
+
+		// Undo HP Penalty
+		if (hp_penalty_amount > -1)
+		{
+			int max_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+			int adjusted_max_health = max_health + hp_penalty_amount;
+			hp_penalty_amount = -1;
+
+			SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], adjusted_max_health);
+			int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+
+			VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], adjusted_max_health);
+			VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, adjusted_max_health);
+		}
 	}
 
 	// Flood (Mage Set Bonus)
@@ -8170,11 +8530,15 @@ RValue& GmlScriptGetMoveSpeedCallback(
 
 	// Gravity
 	if (active_floor_enchantments.contains(FloorEnchantments::GRAVITY))
-		Result = 1.25; // TODO: Trying 1.25 instead of 1.0 for balancing
+		Result = 1.25;
 
 	// Haste
 	if (active_floor_enchantments.contains(FloorEnchantments::HASTE))
 		Result = 3.0;
+
+	// Spirit Surge
+	if (active_greater_sigils.contains(GreaterSigils::SPIRIT_SURGE))
+		Result = 4.0;
 
 	return Result; // 2.0 is default run speed
 }
@@ -8877,9 +9241,9 @@ RValue& GmlScriptUseItemCallback(
 	{
 		if (Self->m_Object == NULL && strstr(Other->m_Object->m_Name, "obj_ari"))
 		{
-			if (deep_dungeon_items.contains(held_item_id) && held_item_id != sigil_to_item_id_map[Sigils::SERENITY] && held_item_id != item_name_to_id_map[MISTPOOL_SWORD_NAME])
+			if (deep_dungeon_items.contains(held_item_id) && held_item_id != sigil_to_item_id_map[Sigils::SERENITY] && held_item_id != item_name_to_id_map[MISTPOOL_SWORD_NAME] && !item_id_to_greater_sigil_map.contains(held_item_id))
 			{
-				g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - You are unable to use that item due to the Item Penalty floor enchantment!!", MOD_NAME, VERSION);
+				g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - You are unable to use that item due to the Item Penalty floor enchantment!", MOD_NAME, VERSION);
 				CreateNotification(false, ITEM_PENALTY_NOTIFICATION_KEY, Self, Other);
 				return Result;
 			}
@@ -8899,6 +9263,14 @@ RValue& GmlScriptUseItemCallback(
 					CreateNotification(false, SIGIL_RESTRICTED_NOTIFICATION_KEY, Self, Other);
 					return Result;
 				}
+
+				// Great Sigils Restricted
+				if (item_id_to_greater_sigil_map.contains(held_item_id))
+				{
+					g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - You are unable to use greater sigils during boss battles!", MOD_NAME, VERSION);
+					CreateNotification(false, GREATER_SIGIL_RESTRICTED_NOTIFICATION_KEY, Self, Other);
+					return Result;
+				}
 			}
 			else
 			{
@@ -8907,6 +9279,14 @@ RValue& GmlScriptUseItemCallback(
 				{
 					g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - That sigil is already active!", MOD_NAME, VERSION);
 					CreateNotification(false, SIGIL_LIMIT_NOTIFICATION_KEY, Self, Other);
+					return Result;
+				}
+
+				// Greater Sigil Already Used
+				if (item_id_to_greater_sigil_map.contains(held_item_id) && !active_greater_sigils.empty())
+				{
+					g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - A greater sigil has already been used!", MOD_NAME, VERSION);
+					CreateNotification(false, GREATER_SIGIL_LIMIT_NOTIFICATION_KEY, Self, Other);
 					return Result;
 				}
 
@@ -8970,6 +9350,11 @@ RValue& GmlScriptUseItemCallback(
 	sigil_item_used = false;
 	if (item_id_to_sigil_map.contains(held_item_id))
 		sigil_item_used = true;
+
+	// Greater Sigil Item
+	greater_sigil_item_used = false;
+	if (item_id_to_greater_sigil_map.contains(held_item_id))
+		greater_sigil_item_used = true;
 
 	// Lift Key Item
 	lift_key_used = false;
@@ -9109,6 +9494,7 @@ RValue& GmlScriptGetMinutesCallback(
 		RevealFloorTraps();
 		ApplyFloorTraps(Self, Other);
 		ProcessCustomAOEs();
+		ProcessTreasureSpot(Self, Other);
 		
 		// Restoration
 		if (active_floor_enchantments.contains(FloorEnchantments::RESTORATION))
@@ -9664,12 +10050,12 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 	IN RValue** Arguments
 )
 {
-	// TODO: Run logic to actually undo all active floor enchantments.
-	// TODO: Remove all buffs.
 	ResetCustomDrawFields();
 	salves_used.clear();
 	active_sigils.clear();
+	active_greater_sigils.clear();
 	active_floor_enchantments.clear();
+	spirit_link_combined_health_pool = 0;
 	active_offerings = queued_offerings;
 	queued_offerings.clear();
 	current_floor_monsters.clear();
@@ -9678,6 +10064,7 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 	active_traps.clear();
 	active_traps_to_value_map.clear();
 	floor_trap_positions.clear();
+	revealed_floor_traps.clear();
 
 	// Dread Beast & Boss controls
 	dread_beast_configured = false;
@@ -9776,6 +10163,15 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 		if (!active_sigils.contains(Sigils::SAFETY)) // This should only happen after Prophecy (Oracle Set Bonus)
 			GenerateFloorTraps();
 
+		if (treasure_spot.state == TreasureSpot::WAITING_TO_SPAWN)
+		{
+			active_sigils.insert(Sigils::INTUITION);
+			treasure_spot.floors_to_descend--;
+
+			if(treasure_spot.floors_to_descend > 0)
+				CreateNotification(true, TREASURE_SPOT_NOT_PRESENT_NOTIFICATION_KEY, Self, Other);
+		}
+
 		if (ari_current_gm_room == "rm_mines_upper_floor1")
 			active_floor_enchantments = RandomFloorEnchantments(true, DungeonBiomes::UPPER);
 		else if (ari_current_gm_room.find("rm_mines_upper") != std::string::npos)
@@ -9844,6 +10240,7 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 			int max_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
 			int penalty = max_health / 4;
 			int adjusted_max_health = max_health - penalty;
+			hp_penalty_amount = penalty;
 
 			SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], adjusted_max_health);
 			int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
@@ -9979,6 +10376,7 @@ RValue& GmlScriptGoToRoomCallback(
 	class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED] = 0;
 
 	// Reset Max HP Adjustments
+	hp_penalty_amount = -1;
 	if (unmodified_base_health != -1)
 	{
 		SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], unmodified_base_health);
@@ -9989,6 +10387,9 @@ RValue& GmlScriptGoToRoomCallback(
 		unmodified_base_health = -1;
 	}
 
+	if (floor_number != 0 && (treasure_spot.state == TreasureSpot::SPAWNED || treasure_spot.state == TreasureSpot::FOUND))
+		treasure_spot = TreasureSpot();
+
 	if (ari_current_location == "dungeon" && (!ari_current_gm_room.contains("rm_mines") || ari_current_gm_room == "rm_mines_entry")) // TODO: Don't use ari_current_location
 	{
 		// TODO: Run logic to actually undo all active floor enchantments.
@@ -9996,6 +10397,7 @@ RValue& GmlScriptGoToRoomCallback(
 		ResetCustomDrawFields();
 		salves_used.clear();
 		active_sigils.clear();
+		active_greater_sigils.clear();
 		active_floor_enchantments.clear();
 		active_offerings.clear(); // Different than OnDungeonRoomStart
 		queued_offerings.clear();
@@ -10024,6 +10426,7 @@ RValue& GmlScriptGoToRoomCallback(
 		grudge_counter = 0;
 		deep_wounds_damage_pool = 0;
 		stoneskin_shield_amount = 0;
+		spirit_link_combined_health_pool = 0;
 		sigil_of_silence_count = 0;
 		sigil_of_alteration_count = 0;
 		dread_beast_monster_id = -1;
@@ -10031,6 +10434,7 @@ RValue& GmlScriptGoToRoomCallback(
 		boss_monsters_configured = 0;
 		class_name_to_set_bonus_effect_value_map.clear();
 		initial_floor_monsters.clear();
+		treasure_spot = TreasureSpot();
 
 		// Reset Oracle set bonus effects.
 		class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] = 0;
@@ -10699,6 +11103,15 @@ RValue& GmlScriptOnBeginStepCallback(
 			g_ModuleInterface->CallBuiltin("variable_instance_set", { revealed_floor_traps[i].instance, "depth", 350 });
 		}
 	}
+
+	// Treasure Spot
+	if (treasure_spot.is_active)
+	{
+		RValue spr_treasure_spot = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_treasure_spot" });
+		g_ModuleInterface->CallBuiltin("variable_instance_set", { treasure_spot.instance, "sprite_index", spr_treasure_spot });
+		g_ModuleInterface->CallBuiltin("variable_instance_set", { treasure_spot.instance, "depth", 350 });
+	}
+	
 
 	// Meteor Sprites
 	for (int i = 0; i < meteor_aoes.size(); i++)
