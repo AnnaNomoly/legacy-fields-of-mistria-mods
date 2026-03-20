@@ -8,7 +8,8 @@ using namespace YYTK;
 using json = nlohmann::json;
 
 static const char* const MOD_NAME = "DynamicNpcPortraits";
-static const char* const VERSION = "1.0.1";
+static const char* const VERSION = "1.1.0";
+static const char* const GML_SCRIPT_T2_READ = "gml_Script_read@T2r@T2r";
 static const char* const GML_SCRIPT_IS_DUNGEON_ROOM = "gml_Script_is_dungeon_room";
 static const char* const GML_SCRIPT_GO_TO_ROOM = "gml_Script_goto_gm_room";
 static const char* const GML_SCRIPT_TRY_LOCATION_ID_TO_STRING = "gml_Script_try_location_id_to_string";
@@ -35,6 +36,55 @@ static const std::string YEAR_KEY = "year";
 static const std::string WEATHER_KEY = "weather";
 static const std::string LOCATION_KEY = "location"; // INDOORS, OUTDOORS, <LOCATION_NAME>
 static const std::string NPC_KEY = "npc";
+static const std::string HEART_LEVEL_KEY = "heart_level"; // 1 - 10, convert 
+static const std::string RELATIONSHIP_STATUS_KEY = "relationship_status";
+static const std::string SHOOTING_STAR_FESTIVAL_STATUS_KEY = "shooting_star_festival_status";
+static const std::string SPRING_FESTIVAL_NOT_FIRST_PLACE_KEY = "spring_festival_not_first_place";
+static const std::string CUSTOM_CONDITION_KEY = "custom_condition";
+static const std::string CUSTOM_CONDITION_T2_NAME_KEY = "t2_name";
+static const std::string CUSTOM_CONDITION_TYPE_KEY = "t2_type";
+static const std::string CUSTOM_CONDITION_OPERATOR_KEY = "comparison_operator";
+static const std::string CUSTOM_CONDITION_T2_VALUE_KEY = "t2_value";
+
+static enum class RelationshipStatus {
+	UNDEFINED,
+	BEST_FRIEND,
+	ROMANTIC
+};
+
+static enum class ShootingStartFestivalStatus {
+	UNDEFINED,
+	INVITED,
+	WENT
+};
+
+static struct CustomCondition {
+	enum T2Type {
+		BOOLEAN,
+		NUMERIC,
+		STRING
+	};
+
+	enum Operator {
+		EQUALS,
+		NOT_EQUALS,
+		GREATER_THAN,
+		LESS_THAN,
+		GREATER_THAN_OR_EQUALS,
+		LESS_THAN_OR_EQUALS
+	};
+
+	struct T2Value {
+		bool bool_value;
+		int int_value;
+		std::string string_value;
+	};
+
+	std::string t2_name;
+	T2Type t2_type;
+	Operator comparison_operator;
+	T2Value t2_value;
+};
 
 static struct DynamicPortrait {
 	int time_of_day = -1;
@@ -45,6 +95,11 @@ static struct DynamicPortrait {
 	int weather = -1;
 	int location = -1;
 	int npc = -1;
+	int heart_level = -1;
+	RelationshipStatus relationship_status = RelationshipStatus::UNDEFINED;
+	ShootingStartFestivalStatus shooting_star_festival_status = ShootingStartFestivalStatus::UNDEFINED;
+	bool sprint_festival_not_first_place = false;
+	std::optional<CustomCondition> custom_condition;
 	std::string sprite_name;
 	std::string_view mod_name;
 
@@ -56,6 +111,11 @@ static struct DynamicPortrait {
 	bool HasWeatherCondition() { return weather != -1; }
 	bool HasLocationCondition() { return location != -1; }
 	bool HasNpcCondition() { return npc != -1; }
+	bool HasHeartLevelCondition() { return heart_level != -1; }
+	bool HasRelationshipStatusCondition() { return relationship_status != RelationshipStatus::UNDEFINED; }
+	bool HasShootingStarDateCondition() { return shooting_star_festival_status != ShootingStartFestivalStatus::UNDEFINED; }
+	bool HasSpringFestivalCondition() { return sprint_festival_not_first_place; }
+	bool HasCustomCondition() { return custom_condition.has_value(); }
 };
 
 static YYTKInterface* g_ModuleInterface = nullptr;
@@ -86,6 +146,7 @@ static std::map<std::string, int> location_name_to_id_map = {}; // __location_id
 static std::map<int, std::string> location_id_to_name_map = {}; // __location_id__
 static std::map<std::string, int> npc_name_to_id_map = {}; // __npc_id__
 static std::map<int, std::string> npc_id_to_name_map = {}; // __npc_id__
+static std::map<std::string, std::vector<CInstance*>> script_name_to_reference_map = {}; // Vector<CInstance*> holds references to Self and Other for each script.
 
 void ResetStaticFields(bool title_screen)
 {
@@ -93,6 +154,7 @@ void ResetStaticFields(bool title_screen)
 	{
 		game_is_active = false;
 		ari_current_gm_room = "";
+		script_name_to_reference_map = {};
 	}
 	
 	ari_is_in_dungeon = false;
@@ -270,6 +332,69 @@ void LoadNpcs()
 	}
 }
 
+RValue GetNpcFromDatabase(int npc_id)
+{
+	RValue __npc_database = global_instance->GetMember("__npc_database");
+	return g_ModuleInterface->CallBuiltin("array_get", { __npc_database, npc_id });
+}
+
+int GetNpcHeartPoints(RValue npc)
+{
+	return npc.GetMember("heart_points").ToInt64();
+}
+
+int HeartPointsToLevel(int heart_points)
+{
+	if (heart_points >= 1755)
+		return 10;
+	if (heart_points >= 1400)
+		return 9;
+	if (heart_points >= 1125)
+		return 8;
+	if (heart_points >= 900)
+		return 7;
+	if (heart_points >= 705)
+		return 6;
+	if (heart_points >= 530)
+		return 5;
+	if (heart_points >= 390)
+		return 4;
+	if (heart_points >= 280)
+		return 3;
+	if (heart_points >= 180)
+		return 2;
+	if (heart_points >= 80)
+		return 1;
+	return 0;
+}
+
+bool GetNpcGiftFlag(RValue npc)
+{
+	return npc.GetMember("gift_flag").ToBoolean();
+}
+
+RValue T2Read(std::string key, CInstance* Self, CInstance* Other)
+{
+	CScript* gml_script_get_localizer = nullptr;
+	g_ModuleInterface->GetNamedRoutinePointer(
+		GML_SCRIPT_T2_READ,
+		(PVOID*)&gml_script_get_localizer
+	);
+
+	RValue result;
+	RValue input = RValue(key);
+	RValue* input_ptr = &input;
+	gml_script_get_localizer->m_Functions->m_ScriptFunction(
+		Self,
+		Other,
+		result,
+		1,
+		{ &input_ptr }
+	);
+
+	return result;
+}
+
 bool AriIsIndoors()
 {
 	if (!game_is_active || current_location == -1)
@@ -341,6 +466,175 @@ bool IsValidNpc(const std::string& s)
 
 	std::string s_lower = to_lower(s);
 	return npc_name_to_id_map.contains(s_lower);
+}
+
+bool IsValidRelationshipStatus(const std::string& s)
+{
+	if (s.empty() || s.size() == 0)
+		return false;
+	if (s == "best_friend" || s == "romantic")
+		return true;
+
+	return false;
+}
+
+RelationshipStatus ParseRelationshipStatus(const std::string& s)
+{
+	if (s == "best_friend")
+		return RelationshipStatus::BEST_FRIEND;
+	if (s == "romantic")
+		return RelationshipStatus::ROMANTIC;
+	return RelationshipStatus::UNDEFINED;
+}
+
+bool IsValidShootingStarFestivalStatus(const std::string& s)
+{
+	if (s.empty() || s.size() == 0)
+		return false;
+	if (s.contains("invited") || s.contains("went"))
+		return true;
+
+	return false;
+}
+
+ShootingStartFestivalStatus ParseShootingStarFestivalStatus(const std::string& s)
+{
+	if (s.contains("invited"))
+		return ShootingStartFestivalStatus::INVITED;
+	if (s.contains("went"))
+		return ShootingStartFestivalStatus::WENT;
+	return ShootingStartFestivalStatus::UNDEFINED;
+}
+
+CustomCondition::T2Type ParseCustomConditionType(const std::string& s)
+{
+	if (s == "BOOLEAN")
+		return CustomCondition::T2Type::BOOLEAN;
+	if (s == "NUMERIC")
+		return CustomCondition::T2Type::NUMERIC;
+	if (s == "STRING")
+		return CustomCondition::T2Type::STRING;
+}
+
+CustomCondition::Operator ParseCustomConditionOperator(const std::string& s)
+{
+	if (s == "EQUALS")
+		return CustomCondition::Operator::EQUALS;
+	if (s == "NOT_EQUALS")
+		return CustomCondition::Operator::NOT_EQUALS;
+	if (s == "GREATER_THAN")
+		return CustomCondition::Operator::GREATER_THAN;
+	if (s == "LESS_THAN")
+		return CustomCondition::Operator::LESS_THAN;
+	if (s == "GREATER_THAN_OR_EQUALS")
+		return CustomCondition::Operator::GREATER_THAN_OR_EQUALS;
+	if (s == "LESS_THAN_OR_EQUALS")
+		return CustomCondition::Operator::LESS_THAN_OR_EQUALS;
+}
+
+CustomCondition::T2Value ParseCustomConditionValue(CustomCondition::T2Type t2_type, const std::string& s)
+{
+	CustomCondition::T2Value t2_value = CustomCondition::T2Value();
+
+	if (t2_type == CustomCondition::T2Type::NUMERIC)
+	{
+		double d = std::stod(s);
+		t2_value.int_value = static_cast<int>(d);
+	}
+	if (t2_type == CustomCondition::T2Type::BOOLEAN)
+	{
+		if (s == "true")
+			t2_value.bool_value = true;
+		if (s == "false")
+			t2_value.bool_value = false;
+	}
+	if (t2_type == CustomCondition::T2Type::STRING)
+		t2_value.string_value = s;
+
+	return t2_value;
+}
+
+bool IsValidCustomCondition(const json& json)
+{
+	if (!json.contains(CUSTOM_CONDITION_T2_NAME_KEY) || !json.at(CUSTOM_CONDITION_T2_NAME_KEY).is_string())
+		return false;
+	if (!json.contains(CUSTOM_CONDITION_TYPE_KEY) || !json.at(CUSTOM_CONDITION_TYPE_KEY).is_string())
+		return false;
+	if (!json.contains(CUSTOM_CONDITION_OPERATOR_KEY) || !json.at(CUSTOM_CONDITION_OPERATOR_KEY).is_string())
+		return false;
+	if (!json.contains(CUSTOM_CONDITION_T2_VALUE_KEY) || !json.at(CUSTOM_CONDITION_T2_VALUE_KEY).is_string())
+		return false;
+
+	std::string t2_name = json[CUSTOM_CONDITION_T2_NAME_KEY];
+	if (t2_name.empty() || t2_name.size() == 0)
+		return false;
+
+	std::string t2_type_str = json[CUSTOM_CONDITION_TYPE_KEY];
+	if (t2_type_str.empty() || t2_type_str.size() == 0)
+		return false;
+	if (t2_type_str != "BOOLEAN" && t2_type_str != "NUMERIC" && t2_type_str != "STRING")
+		return false;
+
+	std::string t2_operator_str = json[CUSTOM_CONDITION_OPERATOR_KEY];
+	if (t2_operator_str.empty() || t2_operator_str.size() == 0)
+		return false;
+	if (t2_operator_str != "EQUALS" && t2_operator_str != "NOT_EQUALS" && t2_operator_str != "GREATER_THAN" && t2_operator_str != "LESS_THAN" && t2_operator_str != "GREATER_THAN_OR_EQUALS" && t2_operator_str != "LESS_THAN_OR_EQUALS")
+		return false;
+
+	std::string t2_value_str = json[CUSTOM_CONDITION_T2_VALUE_KEY];
+	if (t2_value_str.empty() || t2_value_str.size() == 0)
+		return false;
+
+	CustomCondition::T2Type t2_type = ParseCustomConditionType(t2_type_str);
+	CustomCondition::Operator t2_operator = ParseCustomConditionOperator(t2_operator_str);
+
+	if (t2_type == CustomCondition::T2Type::BOOLEAN || t2_type == CustomCondition::T2Type::STRING)
+	{
+		if (t2_operator != CustomCondition::Operator::EQUALS && CustomCondition::Operator::NOT_EQUALS)
+			return false;
+	}
+
+	if (t2_type == CustomCondition::T2Type::NUMERIC)
+	{
+		try {
+			size_t pos;
+			double d = std::stod(t2_value_str, &pos);
+
+			if (pos != t2_value_str.size()) {
+				return false; // not fully numeric
+			}
+
+			int x = static_cast<int>(d);  // truncates toward 0
+		}
+		catch (const std::invalid_argument&) { return false; }
+		catch (const std::out_of_range&) { return false; }
+	}
+	if (t2_type == CustomCondition::T2Type::BOOLEAN)
+	{
+		if (t2_value_str != "true" && t2_value_str != "false")
+			return false;
+	}
+	if (t2_type == CustomCondition::T2Type::STRING)
+	{
+		if (t2_value_str.empty() || t2_value_str.size() == 0)
+			return false;
+	}
+
+	return true;
+}
+
+CustomCondition ParseCustomCondition(const json& json)
+{
+	std::string t2_name = json[CUSTOM_CONDITION_T2_NAME_KEY];
+	std::string t2_type_str = json[CUSTOM_CONDITION_TYPE_KEY];
+	std::string t2_operator_str = json[CUSTOM_CONDITION_OPERATOR_KEY];
+	std::string t2_value_str = json[CUSTOM_CONDITION_T2_VALUE_KEY];
+
+	CustomCondition::T2Type t2_type = ParseCustomConditionType(t2_type_str);
+	CustomCondition::Operator t2_operator = ParseCustomConditionOperator(t2_operator_str);
+	CustomCondition::T2Value t2_value = ParseCustomConditionValue(t2_type, t2_value_str);
+
+	return CustomCondition(t2_name, t2_type, t2_operator, t2_value);
 }
 
 void PrintError(std::exception_ptr eptr)
@@ -508,11 +802,50 @@ void CreateOrLoadConfigFile()
 												std::string location_str = json_dynamic_portrait_conditions[LOCATION_KEY];
 												if (IsValidLocation(location_str))
 													dynamic_portrait.location = location_name_to_id_map[location_str];
-													
+											}
+
+											// heart_level condition
+											if (json_dynamic_portrait_conditions.contains(HEART_LEVEL_KEY) && json_dynamic_portrait_conditions.at(HEART_LEVEL_KEY).is_number_integer())
+											{
+												int heart_level = json_dynamic_portrait_conditions[HEART_LEVEL_KEY];
+												if (heart_level > 0 && heart_level <= 10)
+													dynamic_portrait.heart_level = heart_level;
+											}
+
+											// relationship_status condition
+											if (json_dynamic_portrait_conditions.contains(RELATIONSHIP_STATUS_KEY) && json_dynamic_portrait_conditions.at(RELATIONSHIP_STATUS_KEY).is_string())
+											{
+												std::string relationship_str = json_dynamic_portrait_conditions[RELATIONSHIP_STATUS_KEY];
+												if (IsValidRelationshipStatus(relationship_str))
+													dynamic_portrait.relationship_status = ParseRelationshipStatus(relationship_str);
+											}
+
+											// shooting_star_festival_status
+											if (json_dynamic_portrait_conditions.contains(SHOOTING_STAR_FESTIVAL_STATUS_KEY) && json_dynamic_portrait_conditions.at(SHOOTING_STAR_FESTIVAL_STATUS_KEY).is_string())
+											{
+												std::string shooting_star_festival_status_str = json_dynamic_portrait_conditions[SHOOTING_STAR_FESTIVAL_STATUS_KEY];
+												if (IsValidShootingStarFestivalStatus(shooting_star_festival_status_str))
+													dynamic_portrait.shooting_star_festival_status = ParseShootingStarFestivalStatus(shooting_star_festival_status_str);
+											}
+
+											// spring_festival condition
+											if (json_dynamic_portrait_conditions.contains(SPRING_FESTIVAL_NOT_FIRST_PLACE_KEY) && json_dynamic_portrait_conditions.at(SPRING_FESTIVAL_NOT_FIRST_PLACE_KEY).is_boolean())
+											{
+												bool spring_festival_not_first_place = json_dynamic_portrait_conditions[SPRING_FESTIVAL_NOT_FIRST_PLACE_KEY];
+												if (spring_festival_not_first_place)
+													dynamic_portrait.sprint_festival_not_first_place = true;
+											}
+
+											// custom_condition
+											if (json_dynamic_portrait_conditions.contains(CUSTOM_CONDITION_KEY) && json_dynamic_portrait_conditions.at(CUSTOM_CONDITION_KEY).is_object())
+											{
+												json custom_condition_json = json_dynamic_portrait_conditions[CUSTOM_CONDITION_KEY];
+												if (IsValidCustomCondition(custom_condition_json))
+													dynamic_portrait.custom_condition = ParseCustomCondition(custom_condition_json);
 											}
 
 											// Final validation. Confirm the reminder has at least one valid condition.
-											if (dynamic_portrait.HasTimeOfDayCondition() || dynamic_portrait.HasWeekDayCondition() || dynamic_portrait.HasMonthDayCondition() || dynamic_portrait.HasSeasonCondition() || dynamic_portrait.HasYearCondition() || dynamic_portrait.HasWeatherCondition() || dynamic_portrait.HasLocationCondition())
+											if (dynamic_portrait.HasTimeOfDayCondition() || dynamic_portrait.HasWeekDayCondition() || dynamic_portrait.HasMonthDayCondition() || dynamic_portrait.HasSeasonCondition() || dynamic_portrait.HasYearCondition() || dynamic_portrait.HasWeatherCondition() || dynamic_portrait.HasLocationCondition() || dynamic_portrait.HasHeartLevelCondition() || dynamic_portrait.HasRelationshipStatusCondition() || dynamic_portrait.HasShootingStarDateCondition() || dynamic_portrait.HasSpringFestivalCondition() || dynamic_portrait.HasCustomCondition())
 											{
 												dynamic_portraits.push_back(dynamic_portrait);
 												g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Dynamic Portrait config loaded for sprite: %s", MOD_NAME, VERSION, json_dynamic_portrait_sprite_name.c_str());
@@ -575,6 +908,14 @@ RValue GetDynamicNpcPortrait(std::string sprite_name)
 	std::vector<std::string> sprite_name_parts = split(sprite_name, '_');
 	std::string npc_name = sprite_name_parts[2];
 
+	//------------------------------------
+	RValue test = T2Read("Mods/Debug/test", script_name_to_reference_map[GML_SCRIPT_T2_READ][0], script_name_to_reference_map[GML_SCRIPT_T2_READ][1]);
+	RValue shooting_star_date_partner = T2Read("shooting_star_date_partner", script_name_to_reference_map[GML_SCRIPT_T2_READ][0], script_name_to_reference_map[GML_SCRIPT_T2_READ][1]);
+	RValue shooting_star_date_status = T2Read("shooting_star_date_status", script_name_to_reference_map[GML_SCRIPT_T2_READ][0], script_name_to_reference_map[GML_SCRIPT_T2_READ][1]);
+	int temp = 5;
+
+	//------------------------------------
+
 	std::string expression = "";
 	for (int i = 4; i < sprite_name_parts.size(); i++)
 	{
@@ -624,12 +965,104 @@ RValue GetDynamicNpcPortrait(std::string sprite_name)
 				continue;
 		}
 
+		if (dynamic_portrait.HasHeartLevelCondition())
+		{
+			RValue npc = GetNpcFromDatabase(dynamic_portrait.npc);
+			int heart_points = GetNpcHeartPoints(npc);
+			int heart_level = HeartPointsToLevel(heart_points);
+
+			if (heart_level < dynamic_portrait.heart_level)
+				continue;
+		}
+
+		if (dynamic_portrait.HasRelationshipStatusCondition())
+		{
+			std::string npc_name = npc_id_to_name_map[dynamic_portrait.npc];
+			RValue relationship_status = T2Read(npc_name + "_status", script_name_to_reference_map[GML_SCRIPT_T2_READ][0], script_name_to_reference_map[GML_SCRIPT_T2_READ][1]);
+
+			if (relationship_status.m_Kind != VALUE_STRING)
+				continue;
+			if (!IsValidRelationshipStatus(relationship_status.ToString()))
+				continue;
+			if (dynamic_portrait.relationship_status != ParseRelationshipStatus(relationship_status.ToString()))
+				continue;
+		}
+
+		if (dynamic_portrait.HasShootingStarDateCondition())
+		{
+			std::string npc_name = npc_id_to_name_map[dynamic_portrait.npc];
+			RValue shooting_star_date_status = T2Read("shooting_star_date_status", script_name_to_reference_map[GML_SCRIPT_T2_READ][0], script_name_to_reference_map[GML_SCRIPT_T2_READ][1]);
+
+			if (shooting_star_date_status.m_Kind != VALUE_STRING)
+				continue;
+			if (!IsValidShootingStarFestivalStatus(shooting_star_date_status.ToString()))
+				continue;
+			if (!shooting_star_date_status.ToString().contains(npc_id_to_name_map[dynamic_portrait.npc]))
+				continue;
+			if (dynamic_portrait.shooting_star_festival_status != ParseShootingStarFestivalStatus(shooting_star_date_status.ToString()))
+				continue;
+		}
+
+		if (dynamic_portrait.HasSpringFestivalCondition())
+		{
+			RValue sf_first_place = T2Read("sf_first_place", script_name_to_reference_map[GML_SCRIPT_T2_READ][0], script_name_to_reference_map[GML_SCRIPT_T2_READ][1]);
+			RValue sf_first_place_plus = T2Read("sf_first_place_plus", script_name_to_reference_map[GML_SCRIPT_T2_READ][0], script_name_to_reference_map[GML_SCRIPT_T2_READ][1]);
+
+			if (sf_first_place.m_Kind != VALUE_BOOL || sf_first_place_plus.m_Kind != VALUE_BOOL)
+				continue;
+			if (sf_first_place.ToBoolean() || sf_first_place_plus.ToBoolean())
+				continue;
+		}
+
+		if (dynamic_portrait.HasCustomCondition())
+		{
+			RValue t2_value = T2Read(dynamic_portrait.custom_condition.value().t2_name, script_name_to_reference_map[GML_SCRIPT_T2_READ][0], script_name_to_reference_map[GML_SCRIPT_T2_READ][1]);
+
+			if (dynamic_portrait.custom_condition.value().t2_type == CustomCondition::T2Type::BOOLEAN && t2_value.m_Kind != VALUE_BOOL)
+				continue;
+			if (dynamic_portrait.custom_condition.value().t2_type == CustomCondition::T2Type::NUMERIC && !IsNumeric(t2_value))
+				continue;
+			if (dynamic_portrait.custom_condition.value().t2_type == CustomCondition::T2Type::STRING && t2_value.m_Kind != VALUE_STRING)
+				continue;
+
+			if (t2_value.m_Kind == VALUE_BOOL && dynamic_portrait.custom_condition.value().t2_value.bool_value != t2_value.ToBoolean())
+				continue;
+			if (IsNumeric(t2_value) && dynamic_portrait.custom_condition.value().t2_value.int_value != t2_value.ToInt64())
+				continue;
+			if (t2_value.m_Kind == VALUE_STRING && dynamic_portrait.custom_condition.value().t2_value.string_value != t2_value.ToString())
+				continue;
+		}
+
 		std::string sprite_name = dynamic_portrait.sprite_name + "_" + expression;
 		RValue sprite = g_ModuleInterface->CallBuiltin("asset_get_index", { sprite_name.c_str() });
 		if (sprite.m_Kind == VALUE_REF)
 			return sprite;
 	}
 }
+
+RValue& GmlScriptT2ReadCallback(
+	IN CInstance* Self,
+	IN CInstance* Other,
+	OUT RValue& Result,
+	IN int ArgumentCount,
+	IN RValue** Arguments
+)
+{
+	if (!script_name_to_reference_map.contains(GML_SCRIPT_T2_READ))
+		script_name_to_reference_map[GML_SCRIPT_T2_READ] = { Self, Other };
+
+	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_T2_READ));
+	original(
+		Self,
+		Other,
+		Result,
+		ArgumentCount,
+		Arguments
+	);
+	
+	return Result;
+}
+
 
 RValue& GmlScriptIsDungeonRoomCallback(
 	IN CInstance* Self,
@@ -914,6 +1347,33 @@ RValue& GmlScriptSetupMainScreenCallback(
 	);
 
 	return Result;
+}
+
+void CreateHookGmlScriptT2Read(AurieStatus& status)
+{
+	CScript* gml_script_t2_read = nullptr;
+	status = g_ModuleInterface->GetNamedRoutinePointer(
+		GML_SCRIPT_T2_READ,
+		(PVOID*)&gml_script_t2_read
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_T2_READ);
+	}
+
+	status = MmCreateHook(
+		g_ArSelfModule,
+		GML_SCRIPT_T2_READ,
+		gml_script_t2_read->m_Functions->m_ScriptFunction,
+		GmlScriptT2ReadCallback,
+		nullptr
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_T2_READ);
+	}
 }
 
 void CreateHookGmlScriptIsDungeonRoom(AurieStatus& status)
@@ -1230,6 +1690,13 @@ EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path&
 		return AURIE_MODULE_DEPENDENCY_NOT_RESOLVED;
 
 	g_ModuleInterface->Print(CM_LIGHTAQUA, "[%s %s] - Plugin starting...", MOD_NAME, VERSION);
+
+	CreateHookGmlScriptT2Read(status);
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return status;
+	}
 
 	CreateHookGmlScriptIsDungeonRoom(status);
 	if (!AurieSuccess(status))
