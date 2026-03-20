@@ -5971,7 +5971,7 @@ std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floo
 			if (group_one_chance < 85)
 			{
 				std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
-				random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+				random_floor_enchantments.insert(GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
 			}
 
 			// 95% chance for Group 2
@@ -5979,7 +5979,7 @@ std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floo
 			if (group_two_chance < 95)
 			{
 				std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
-				random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+				random_floor_enchantments.insert(GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
 			}
 
 			// 60% chance for Group 3
