@@ -21,7 +21,12 @@ static const char* const GML_SCRIPT_GET_WEATHER = "gml_Script_get_weather@Weathe
 static const char* const GML_SCRIPT_CUTSCENE_IS_RUNNING = "gml_Script_is_running@Mist@Mist";
 static const char* const GML_SCRIPT_VERTIGO_DRAW_WITH_COLOR = "gml_Script_vertigo_draw_with_color";
 static const char* const GML_SCRIPT_SETUP_MAIN_SCREEN = "gml_Script_setup_main_screen@TitleMenu@TitleMenu";
-static const int EIGHT_PM_IN_SECONDS = 72000;
+static const int SIX_AM_IN_SECONDS = 60 * 60 * 6;
+static const int EIGHT_AM_IN_SECONDS = 60 * 60 * 8;
+static const int TWELVE_PM_IN_SECONDS = 60 * 60 * 12;
+static const int FIVE_PM_IN_SECONDS = 60 * 60 * 17;
+static const int NINE_PM_IN_SECONDS = 60 * 60 * 21;
+static const int TWELVE_AM_IN_SECONDS = 60 * 60 * 24;
 static const std::string INDOORS = "indoors";
 static const std::string OUTDOORS = "outdoors";
 static const std::string MOD_NAME_KEY = "mod_name";
@@ -45,6 +50,7 @@ static const std::string CUSTOM_CONDITION_T2_NAME_KEY = "t2_name";
 static const std::string CUSTOM_CONDITION_TYPE_KEY = "t2_type";
 static const std::string CUSTOM_CONDITION_OPERATOR_KEY = "comparison_operator";
 static const std::string CUSTOM_CONDITION_T2_VALUE_KEY = "t2_value";
+static const std::vector<std::string> TIME_OF_DAY_CONSTANTS = { "day", "night", "dawn", "morning ", "afternoon", "evening", "twilight" };
 
 static enum class RelationshipStatus {
 	UNDEFINED,
@@ -134,14 +140,10 @@ static std::string ari_current_gm_room = "";
 static std::unordered_set<std::string> mod_names = {};
 static std::vector<DynamicPortrait> dynamic_portraits = {};
 static std::map<int, bool> location_id_to_outdoor_map = {};
-static std::map<std::string, int> daytime_to_id_map = {}; // __daytime__
-static std::map<int, std::string> id_to_daytime_map = {}; // __daytime__
+static std::map<std::string, int> time_of_day_to_id_map = {};
 static std::map<std::string, int> day_name_to_id_map = {}; // __day__
-static std::map<int, std::string> day_id_to_name_map = {}; // __day__
 static std::map<std::string, int> season_name_to_id_map = {}; // __season__
-static std::map<int, std::string> season_id_to_name_map = {}; // __season__
 static std::map<std::string, int> weather_name_to_id_map = {}; // __weather__
-static std::map<int, std::string> weather_id_to_name_map = {}; // __weather__
 static std::map<std::string, int> location_name_to_id_map = {}; // __location_id__
 static std::map<int, std::string> location_id_to_name_map = {}; // __location_id__
 static std::map<std::string, int> npc_name_to_id_map = {}; // __npc_id__
@@ -234,15 +236,9 @@ std::string to_lower(std::string s)
 
 void LoadDaytime()
 {
-	size_t array_length = 0;
-	RValue daytime = global_instance->GetMember("__daytime__");
-	g_ModuleInterface->GetArraySize(daytime, array_length);
-	for (size_t i = 0; i < array_length; i++)
+	for (int i = 0; i < TIME_OF_DAY_CONSTANTS.size(); i++)
 	{
-		RValue* array_element;
-		g_ModuleInterface->GetArrayEntry(daytime, i, array_element);
-		daytime_to_id_map[array_element->ToString()] = i;
-		id_to_daytime_map[i] = array_element->ToString();
+		time_of_day_to_id_map[TIME_OF_DAY_CONSTANTS[i]] = i;
 	}
 }
 
@@ -256,7 +252,6 @@ void LoadDays()
 		RValue* array_element;
 		g_ModuleInterface->GetArrayEntry(days, i, array_element);
 		day_name_to_id_map[array_element->ToString()] = i;
-		day_id_to_name_map[i] = array_element->ToString();
 	}
 }
 
@@ -270,7 +265,6 @@ void LoadSeasons()
 		RValue* array_element;
 		g_ModuleInterface->GetArrayEntry(seasons, i, array_element);
 		season_name_to_id_map[array_element->ToString()] = i;
-		season_id_to_name_map[i] = array_element->ToString();
 	}
 }
 
@@ -284,7 +278,6 @@ void LoadWeather()
 		RValue* array_element;
 		g_ModuleInterface->GetArrayEntry(weather, i, array_element);
 		weather_name_to_id_map[array_element->ToString()] = i;
-		weather_id_to_name_map[i] = array_element->ToString();
 	}
 }
 
@@ -409,9 +402,39 @@ bool AriIsIndoors()
 	return true;
 }
 
-bool IsNight()
+bool IsDay() // 6AM to 9PM
 {
-	return current_time_in_seconds >= EIGHT_PM_IN_SECONDS;
+	return current_time_in_seconds < NINE_PM_IN_SECONDS;
+}
+
+bool IsNight() // 9PM to 2AM
+{
+	return current_time_in_seconds >= NINE_PM_IN_SECONDS;
+}
+
+bool IsDawn() // 6AM to 8AM
+{
+	return current_time_in_seconds < EIGHT_AM_IN_SECONDS;
+}
+
+bool IsMorning() // 6AM to 12PM
+{
+	return current_time_in_seconds < TWELVE_PM_IN_SECONDS;
+}
+
+bool IsAfternoon() // 12PM to 5PM
+{
+	return current_time_in_seconds >= TWELVE_PM_IN_SECONDS && current_time_in_seconds < FIVE_PM_IN_SECONDS;
+}
+
+bool IsEvening() // 5PM to 9PM
+{
+	return current_time_in_seconds >= FIVE_PM_IN_SECONDS && current_time_in_seconds < NINE_PM_IN_SECONDS;
+}
+
+bool IsTwilight() // 12AM to 2AM
+{
+	return current_time_in_seconds >= TWELVE_AM_IN_SECONDS;
 }
 
 bool IsValidTimeOfDay(const std::string& s)
@@ -420,7 +443,7 @@ bool IsValidTimeOfDay(const std::string& s)
 		return false;
 
 	std::string s_lower = to_lower(s);
-	return daytime_to_id_map.contains(s_lower);
+	return time_of_day_to_id_map.contains(s_lower);
 }
 
 bool IsValidDayOfWeek(const std::string& s)
@@ -753,7 +776,7 @@ void CreateOrLoadConfigFile()
 											{
 												std::string time_of_day_str = json_dynamic_portrait_conditions[TIME_OF_DAY_KEY];
 												if (IsValidTimeOfDay(time_of_day_str))
-													dynamic_portrait.time_of_day = daytime_to_id_map[time_of_day_str];
+													dynamic_portrait.time_of_day = time_of_day_to_id_map[time_of_day_str];
 											}
 
 											// day_of_week condition.
@@ -931,9 +954,19 @@ RValue GetDynamicNpcPortrait(std::string sprite_name)
 
 		if (dynamic_portrait.HasTimeOfDayCondition())
 		{
-			if (dynamic_portrait.time_of_day == daytime_to_id_map["day"] && IsNight())
+			if (dynamic_portrait.time_of_day == time_of_day_to_id_map["day"] && !IsDay())
 				continue;
-			if (dynamic_portrait.time_of_day == daytime_to_id_map["night"] && !IsNight())
+			if (dynamic_portrait.time_of_day == time_of_day_to_id_map["night"] && !IsNight())
+				continue;
+			if (dynamic_portrait.time_of_day == time_of_day_to_id_map["dawn"] && !IsDawn())
+				continue;
+			if (dynamic_portrait.time_of_day == time_of_day_to_id_map["morning"] && !IsMorning())
+				continue;
+			if (dynamic_portrait.time_of_day == time_of_day_to_id_map["afternoon"] && !IsAfternoon())
+				continue;
+			if (dynamic_portrait.time_of_day == time_of_day_to_id_map["evening"] && !IsEvening())
+				continue;
+			if (dynamic_portrait.time_of_day == time_of_day_to_id_map["twilight"] && !IsTwilight())
 				continue;
 		}
 
