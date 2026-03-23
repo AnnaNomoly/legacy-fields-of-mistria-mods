@@ -7,7 +7,7 @@ using namespace YYTK;
 using json = nlohmann::json;
 
 static const char* const MOD_NAME = "ThePerfectGift";
-static const char* const VERSION = "1.2.0";
+static const char* const VERSION = "1.2.1";
 static const char* const UNLOCK_ALL_GIFT_PREFERENCES_KEY = "unlock_all_gift_preferences";
 static const char* const SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS_KEY = "show_gift_preferences_on_item_tooltips";
 static const char* const GML_SCRIPT_TRY_ITEM_ID_TO_STRING = "gml_Script_try_item_id_to_string";
@@ -65,7 +65,7 @@ static const std::vector<std::string> ACTIVE_NPC_LIST = { // As of 0.15.1
 	HAYDEN, HEMLOCK, HENRIETTA, HOLT, JOSEPHINE, JUNIPER, LANDEN, LOUIS, LUC, MAPLE,
 	MARCH, MERRI, NORA, OLRIC, REINA, RYIS, SERIDIA, TALIFERRO, TERITHIA, VALEN, VERA, WHEEDLE
 };
-static const std::multimap<std::string, std::vector<std::string>> GIFT_DIALOG_MAP = { // As of 0.15.1
+static const std::multimap<std::string, std::vector<std::string>> GIFT_DIALOG_MAP = { // As of 0.15.3
 	// Adeline
 	{ "Cutscenes/Heart Events/Adeline/adeline_eight_hearts/adeline_eight_hearts/3", { ADELINE, "lemon_pie" }},
 	{ "Conversations/Bank/Adeline/Relationship Lines/Relationship/post_8h_lines_romantic/adeline_post_8h_romantic_7/init", { ADELINE, "middlemist" }},
@@ -85,6 +85,7 @@ static const std::multimap<std::string, std::vector<std::string>> GIFT_DIALOG_MA
 	{ "Cutscenes/Story Events/adeline_quest_board/adeline_quest_board/17", { ADELINE, "tulip" }},
 	{ "Conversations/Bank/Josephine/Banked Lines/week_one_pt_2/week_two/4", { ADELINE, "coffee" }},
 	{ "Conversations/Group Conversations/Adeline_Balor/market/market/2", { ADELINE, "coffee" }},
+	{ "Conversations/Bank/Adeline/Banked Lines/office_work/office_work_5/init", { ADELINE, "coffee" }},
 	// Balor
 	{ "Conversations/Bank/Balor/Relationship Lines/Relationship/post_8h_lines_romantic/balor_post_8h_romantic_3/init", { BALOR, "ore_diamond", "ore_ruby"}},
 	{ "Conversations/Bank/Balor/Banked Lines/bath_smelled_nice/bath_smelled_nice/1", { BALOR, "jasmine" }},
@@ -202,6 +203,8 @@ static const std::multimap<std::string, std::vector<std::string>> GIFT_DIALOG_MA
 	{ "Conversations/Tutorial Dialogue/misc_quest_lines/gossip_for_elsie_balor/4", { JUNIPER, "newt" }},
 	{ "Conversations/Tutorial Dialogue/misc_quest_lines/gossip_for_elsie_turn_in/7", { JUNIPER, "newt" }},
 	{ "Conversations/General Dialogue/ari_birthday/ari_birthday_juniper_low_hearts/2", { JUNIPER, "newt" }},
+	{ "Conversations/Friday Night at the Inn/Post_FNATI/post_fnati/juniper_post_fnati_2/init", { JUNIPER, "red_wine" }},
+	{ "Conversations/Bank/Juniper/Banked Lines/shopping/shopping_8/1", { JUNIPER, "monster_powder" }},
 	// Landen
 	{ "Conversations/Bank/Landen/Banked Lines/inn_special/inn_special/init", { LANDEN, "vegetable_pot_pie" }},
 	{ "Cutscenes/Heart Events/Ryis/ryis_six_hearts/ryis_six_hearts/17", { LANDEN, "coconut_cream_pie" }},
@@ -232,6 +235,7 @@ static const std::multimap<std::string, std::vector<std::string>> GIFT_DIALOG_MA
 	{ "Conversations/Bank/Maple/Museum Lines/stone_shell/stone_shell/init", { MAPLE, "stone_shell" }},
 	{ "Conversations/Bank/Reina/Banked Lines/luc_and_maple_cheese/luc_and_maple_cheese/init", { MAPLE, "cheese" }},
 	{ "Conversations/General Dialogue/birthday_anticipation/maple_self_birthday_anticipation/init", { MAPLE, "lost_crown_of_aldaria" }},
+	{ "Conversations/Friday Night at the Inn/Post_FNATI/post_fnati/maple_post_fnati_1/2", { MAPLE, "hot_cocoa" }},
 	// March
 	{ "Conversations/Bank/March/Banked Lines/beer/beer/init", { MARCH, "beer" }},
 	{ "Conversations/Bank/March/Banked Lines/chocolate/chocolate/init", { MARCH, "chocolate" }},
