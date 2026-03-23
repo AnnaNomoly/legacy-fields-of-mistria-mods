@@ -91,6 +91,8 @@ static const char* const GML_SCRIPT_SAVE_GAME = "gml_Script_save_game";
 static const char* const GML_SCRIPT_ARI_FACE_DIR = "gml_Script_face_dir@gml_Object_obj_ari_Create_0";
 static const char* const GML_SCRIPT_ON_BEGIN_STEP = "gml_Script_on_begin_step@Anchor@Anchor";
 static const char* const GML_SCRIPT_RECIPE_GENERATE_INFUSIONS = "gml_Script_generate_infusions@Recipe@Recipe";
+static const char* const GML_SCRIPT_BARK_EMITTER = "gml_Script_BarkEmitter";
+static const char* const GML_SCRIPT_BARK_EMITTER_EMIT = "gml_Script_emit@BarkEmitter@BarkEmitter";
 static const char* const DISABLE_DUNGEON_LIFT_JSON_KEY = "disable_dungeon_lift"; // Controls the dungeon lift
 static const char* const RESTRICT_PERKS_JSON_KEY = "restrict_perks"; // Determines if perks are restricted in the dungeon
 static const char* const RESTRICT_ITEMS_JSON_KEY = "restrict_items"; // Determines if items are restricted in the dungeon
@@ -1854,6 +1856,7 @@ static std::map<std::string, int> tutorial_name_to_id_map = {};
 static std::map<std::string, int> infusion_name_to_id_map = {};
 static std::map<std::string, int> status_effect_name_to_id_map = {};
 static std::map<std::string, int> item_name_to_id_map = {};
+static std::map<std::string, int> bark_name_to_id_map = {};
 std::unordered_set<std::pair<int, int>, pair_hash> floor_trap_positions = {};
 static std::unordered_set<int> salves_used = {};
 static std::map<Traps, std::pair<int, int>> active_traps = {}; // Holds the active traps and the position they most recently triggered at.
@@ -3121,6 +3124,21 @@ void LoadMonsterStates()
 	}
 
 	// TODO: New monsters as added.
+}
+
+void LoadBarkData()
+{
+	size_t array_length;
+	RValue bark_data = global_instance->GetMember("__bark_id__");
+	g_ModuleInterface->GetArraySize(bark_data, array_length);
+
+	for (size_t i = 0; i < array_length; i++)
+	{
+		RValue* bark_name;
+		g_ModuleInterface->GetArrayEntry(bark_data, i, bark_name);
+
+		bark_name_to_id_map[bark_name->ToString()] = i;
+	}
 }
 
 void LoadStatusEffects()
@@ -4999,6 +5017,28 @@ void PlayConversation(std::string conversation_localization_str, CInstance* Self
 	);
 }
 
+void EmitBark(CInstance* Self, CInstance* Other, RValue bark_id, RValue bark_type)
+{
+	CScript* gml_script_register_status_effect = nullptr;
+	g_ModuleInterface->GetNamedRoutinePointer(
+		GML_SCRIPT_BARK_EMITTER_EMIT,
+		(PVOID*)&gml_script_register_status_effect
+	);
+
+	RValue result;
+	RValue* bark_id_ptr = &bark_id;
+	RValue* bark_type_ptr = &bark_type;
+	RValue* argument_array[2] = { bark_id_ptr, bark_type_ptr };
+
+	gml_script_register_status_effect->m_Functions->m_ScriptFunction(
+		Self,
+		Other,
+		result,
+		2,
+		argument_array
+	);
+}
+
 void SceneAudioPlayerStop(CInstance* Self, CInstance* Other)
 {
 	CScript* gml_script_create_notification = nullptr;
@@ -6663,6 +6703,7 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 			std::uniform_int_distribution<size_t> zero_to_ninety_nine_distribution(0, 99);
 
 			Traps trap = magic_enum::enum_value<Traps>(random_trap_distribution(random_generator));
+			trap = Traps::_VOID;
 
 			// Hallowed Ground (Paladin Set Bonus)
 			bool malfunction = zero_to_ninety_nine_distribution(random_generator) < 50 ? true : false;
@@ -6680,6 +6721,7 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 				{
 					PlaySoundEffect("snd_bark_o_o", 100, 1);
 					CreateNotification(true, CONFUSING_TRAP_NOTIFICATION_KEY, Self, Other);
+					EmitBark(script_name_to_reference_map[GML_SCRIPT_BARK_EMITTER][0], script_name_to_reference_map["obj_ari"][1], bark_name_to_id_map["annoyed"], 0);
 
 					if (!active_traps_to_value_map.contains(Traps::CONFUSING))
 					{
@@ -6696,6 +6738,7 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 				{
 					PlaySoundEffect("snd_interactable_scan", 100, 1);
 					CreateNotification(true, DISORIENTING_TRAP_NOTIFICATION_KEY, Self, Other);
+					EmitBark(script_name_to_reference_map[GML_SCRIPT_BARK_EMITTER][0], script_name_to_reference_map["obj_ari"][1], bark_name_to_id_map["annoyed"], 0);
 
 					if (!active_traps_to_value_map.contains(Traps::DISORIENTING))
 					{
@@ -6712,11 +6755,13 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 				{
 					PlaySoundEffect("snd_Explosion_CaveReverb", 100, 0.30);
 					CreateNotification(true, EXPLODING_TRAP_NOTIFICATION_KEY, Self, Other);
+					EmitBark(script_name_to_reference_map[GML_SCRIPT_BARK_EMITTER][0], script_name_to_reference_map["obj_ari"][1], bark_name_to_id_map["angry"], 0);
 				}
 				else if (trap == Traps::INHIBITING)
 				{
 					PlaySoundEffect("snd_bark_surprised", 100, 1);
 					CreateNotification(true, INHIBITING_TRAP_NOTIFICATION_KEY, Self, Other);
+					EmitBark(script_name_to_reference_map[GML_SCRIPT_BARK_EMITTER][0], script_name_to_reference_map["obj_ari"][1], bark_name_to_id_map["no_coin"], 0);
 
 					if (script_name_to_reference_map.contains(GML_SCRIPT_UPDATE_TOOLBAR_MENU))
 						UpdateToolbarMenu(script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][0], script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][1]);
@@ -6738,6 +6783,7 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 
 					PlaySoundEffect("snd_ScrollRaise", 100, 1);
 					CreateNotification(true, LURING_TRAP_NOTIFICATION_KEY, Self, Other);
+					EmitBark(script_name_to_reference_map[GML_SCRIPT_BARK_EMITTER][0], script_name_to_reference_map["obj_ari"][1], bark_name_to_id_map["exclamation_mark"], 0);
 
 					// TODO: Restrict monster spawns as necessary (stalagmite_pink? TBD)
 					std::vector<int> random_monsters;
@@ -6762,6 +6808,7 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 					{
 						PlaySoundEffect("snd_VoidPortalSpawn", 100, 1);
 						CreateNotification(true, METEOR_TRAP_NOTIFICATION_KEY, Self, Other);
+						EmitBark(script_name_to_reference_map[GML_SCRIPT_BARK_EMITTER][0], script_name_to_reference_map["obj_ari"][1], bark_name_to_id_map["exclamation_mark"], 0);
 
 						RValue obj_assetobject = g_ModuleInterface->CallBuiltin("asset_get_index", { "obj_assetobject" });
 						RValue instance = g_ModuleInterface->CallBuiltin("instance_create_layer", { floor_trap->first, floor_trap->second, RValue("Instances"), obj_assetobject });
@@ -6779,6 +6826,7 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 					{
 						PlaySoundEffect("snd_VoidMassAppear", 100, 0.7);
 						CreateNotification(true, GAZE_TRAP_NOTIFICATION_KEY, Self, Other);
+						EmitBark(script_name_to_reference_map[GML_SCRIPT_BARK_EMITTER][0], script_name_to_reference_map["obj_ari"][1], bark_name_to_id_map["exclamation_mark"], 0);
 
 						RValue obj_assetobject = g_ModuleInterface->CallBuiltin("asset_get_index", { "obj_assetobject" });
 						RValue instance = g_ModuleInterface->CallBuiltin("instance_create_layer", { floor_trap->first, floor_trap->second, RValue("Instances"), obj_assetobject });
@@ -6796,6 +6844,7 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 					{
 						PlaySoundEffect("snd_MagicVoidLightSpell", 100, 0.3);
 						CreateNotification(true, VOID_TRAP_NOTIFICATION_KEY, Self, Other);
+						EmitBark(script_name_to_reference_map[GML_SCRIPT_BARK_EMITTER][0], script_name_to_reference_map["obj_ari"][1], bark_name_to_id_map["exclamation_mark"], 0);
 
 						RValue obj_assetobject = g_ModuleInterface->CallBuiltin("asset_get_index", { "obj_assetobject" });
 						RValue instance = g_ModuleInterface->CallBuiltin("instance_create_layer", { floor_trap->first, floor_trap->second, RValue("Instances"), obj_assetobject });
@@ -10269,7 +10318,7 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 		active_sigils.insert(Sigils::CONCEALMENT);
 
 	// Prophecy (Oracle Set Bonus)
-	if (CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+	if (CountEquippedClassArmor()[Classes::ORACLE] >= 5 && class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] == 1 && class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::CONDEMN] == 1)
 	{
 		static thread_local std::mt19937 random_generator(std::random_device{}());
 		std::uniform_int_distribution<size_t> zero_to_ninety_nine_distribution(0, 99);
@@ -10625,6 +10674,7 @@ RValue& GmlScriptSetupMainScreenCallback(
 		LoadDungeonBiomeCandidateMonsters();
 		LoadPlayerStates();
 		LoadMonsterStates();
+		LoadBarkData();
 		LoadTutorials();
 		LoadStalagmiteAttackData();
 		ModifyItems();
@@ -11334,6 +11384,30 @@ RValue& GmlScriptRecipeGenerateInfusionsCallback(
 			*Result.GetRefMember("__buffer") = empty_array;
 		}
 	}
+
+	return Result;
+}
+
+
+RValue& GmlScriptBarkEmitterCallback(
+	IN CInstance* Self,
+	IN CInstance* Other,
+	OUT RValue& Result,
+	IN int ArgumentCount,
+	IN RValue** Arguments
+)
+{
+	if (/*!custom_bark_playing && */(StructVariableExists(Other, "god_mode") || StructVariableExists(Other, "wimp_mode")))
+		script_name_to_reference_map[GML_SCRIPT_BARK_EMITTER] = { Self, Other };
+
+	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_BARK_EMITTER));
+	original(
+		Self,
+		Other,
+		Result,
+		ArgumentCount,
+		Arguments
+	);
 
 	return Result;
 }
@@ -12676,6 +12750,33 @@ void CreateHookGmlScriptRecipeGenerateInfusions(AurieStatus& status)
 	}
 }
 
+void CreateHookGmlScriptBarkEmitter(AurieStatus& status)
+{
+	CScript* gml_script_bark_emitter = nullptr;
+	status = g_ModuleInterface->GetNamedRoutinePointer(
+		GML_SCRIPT_BARK_EMITTER,
+		(PVOID*)&gml_script_bark_emitter
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_BARK_EMITTER);
+	}
+
+	status = MmCreateHook(
+		g_ArSelfModule,
+		GML_SCRIPT_BARK_EMITTER,
+		gml_script_bark_emitter->m_Functions->m_ScriptFunction,
+		GmlScriptBarkEmitterCallback,
+		nullptr
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_BARK_EMITTER);
+	}
+}
+
 void CreateHookGmlScriptGetUnifiedTime(AurieStatus& status)
 {
 	CScript* gml_script_get_unified_time = nullptr;
@@ -13059,6 +13160,13 @@ EXPORTED AurieStatus ModuleInitialize(
 	}
 
 	CreateHookGmlScriptRecipeGenerateInfusions(status);
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return status;
+	}
+
+	CreateHookGmlScriptBarkEmitter(status);
 	if (!AurieSuccess(status))
 	{
 		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
