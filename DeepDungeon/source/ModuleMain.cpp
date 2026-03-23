@@ -121,6 +121,7 @@ static const char* const INHIBITING_TRAP_DURATION_SECONDS_JSON_KEY = "inhibiting
 static const char* const LURING_TRAP_MONSTER_SPAWN_COUNT_JSON_KEY = "luring_trap_monster_spawn_count"; // Controls the number of monsters spawned for luring traps
 static const char* const GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT_JSON_KEY = "gaze_trap_max_health_damage_percent"; // Controls the number of monsters spawned for luring traps
 static const char* const METEOR_TRAP_SCALING_FACTOR_JSON_KEY = "meteor_trap_scaling_factor"; // Controls the scaling factor of the meteor trap
+static const char* const VOID_TRAP_DURATION_SECONDS_JSON_KEY = "void_trap_duration_seconds"; // Controls the duration in seconds for void traps
 static const char* const MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY = "mistpool_equipment_store_price"; // Controls the price of mistpool equipment in stores
 static const char* const SALVES_STORE_PRICE_JSON_KEY = "salves_store_price"; // Controls the price of salves in stores
 
@@ -377,6 +378,7 @@ static const int DEFAULT_LURING_TRAP_MONSTER_SPAWN_COUNT = 2;
 static const int DEFAULT_INHIBITING_TRAP_DURATION_SECONDS = 900;
 static const int DEFAULT_GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT = 50;
 static const double DEFAULT_METEOR_TRAP_SCALING_FACTOR = 2.5;
+static const int DEFAULT_VOID_TRAP_DURATION_SECONDS = 1500;
 static const int DEFAULT_MISTPOOL_EQUIPMENT_STORE_PRICE = 500;
 static const int DEFAULT_SALVES_STORE_PRICE = 50;
 
@@ -1931,6 +1933,7 @@ static struct Configuration {
 	int luring_trap_monster_spawn_count = DEFAULT_LURING_TRAP_MONSTER_SPAWN_COUNT;
 	int gaze_trap_max_health_damage_percent = DEFAULT_GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT;
 	double meteor_trap_scaling_factor = DEFAULT_METEOR_TRAP_SCALING_FACTOR;
+	int void_trap_duration_seconds = DEFAULT_VOID_TRAP_DURATION_SECONDS;
 	int mistpool_equipment_store_price = DEFAULT_MISTPOOL_EQUIPMENT_STORE_PRICE;
 	int salves_store_price = DEFAULT_SALVES_STORE_PRICE;
 };
@@ -1979,6 +1982,7 @@ json CreateConfigJson(bool use_defaults)
 		{ LURING_TRAP_MONSTER_SPAWN_COUNT_JSON_KEY, use_defaults ? DEFAULT_LURING_TRAP_MONSTER_SPAWN_COUNT : configuration.luring_trap_monster_spawn_count },
 		{ GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT_JSON_KEY, use_defaults ? DEFAULT_GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT : configuration.gaze_trap_max_health_damage_percent },
 		{ METEOR_TRAP_SCALING_FACTOR_JSON_KEY, use_defaults ? DEFAULT_METEOR_TRAP_SCALING_FACTOR : configuration.meteor_trap_scaling_factor },
+		{ VOID_TRAP_DURATION_SECONDS_JSON_KEY, use_defaults ? DEFAULT_VOID_TRAP_DURATION_SECONDS : configuration.void_trap_duration_seconds },
 		{ MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY, use_defaults ? DEFAULT_MISTPOOL_EQUIPMENT_STORE_PRICE : configuration.mistpool_equipment_store_price },
 		{ SALVES_STORE_PRICE_JSON_KEY, use_defaults ? DEFAULT_SALVES_STORE_PRICE : configuration.salves_store_price }
 	};
@@ -2307,6 +2311,18 @@ void CreateOrLoadConfigFile()
 					}
 					else
 						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, METEOR_TRAP_SCALING_FACTOR_JSON_KEY, config_file.c_str());
+
+					// Try loading void_trap_duration_seconds
+					if (json_object.contains(VOID_TRAP_DURATION_SECONDS_JSON_KEY) && json_object.at(VOID_TRAP_DURATION_SECONDS_JSON_KEY).is_number_integer())
+					{
+						int void_trap_duration_seconds = json_object[VOID_TRAP_DURATION_SECONDS_JSON_KEY];
+						if (void_trap_duration_seconds >= 0 && void_trap_duration_seconds <= 1800)
+							configuration.void_trap_duration_seconds = void_trap_duration_seconds;
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, VOID_TRAP_DURATION_SECONDS_JSON_KEY, config_file.c_str());
+					}
+					else
+						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, VOID_TRAP_DURATION_SECONDS_JSON_KEY, config_file.c_str());
 
 					// Try loading mistpool_equipment_store_price
 					if (json_object.contains(MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY) && json_object.at(MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY).is_number_integer())
@@ -6703,7 +6719,6 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 			std::uniform_int_distribution<size_t> zero_to_ninety_nine_distribution(0, 99);
 
 			Traps trap = magic_enum::enum_value<Traps>(random_trap_distribution(random_generator));
-			trap = Traps::_VOID;
 
 			// Hallowed Ground (Paladin Set Bonus)
 			bool malfunction = zero_to_ninety_nine_distribution(random_generator) < 50 ? true : false;
@@ -6849,7 +6864,7 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 						RValue obj_assetobject = g_ModuleInterface->CallBuiltin("asset_get_index", { "obj_assetobject" });
 						RValue instance = g_ModuleInterface->CallBuiltin("instance_create_layer", { floor_trap->first, floor_trap->second, RValue("Instances"), obj_assetobject });
 
-						CustomAOE void_aoe = CustomAOE(floor_trap->first, floor_trap->second, current_time_in_seconds, 1800, current_time_in_seconds, true, instance, CustomAOETypes::_VOID); // TODO: Make duration configurable
+						CustomAOE void_aoe = CustomAOE(floor_trap->first, floor_trap->second, current_time_in_seconds, configuration.void_trap_duration_seconds, current_time_in_seconds, true, instance, CustomAOETypes::_VOID);
 						void_aoes.push_back(void_aoe);
 					}
 
