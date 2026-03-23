@@ -191,10 +191,26 @@ static const std::string TREASURE_CHEST_WOOD_NAME = "treasure_chest_wood";
 static const std::string TREASURE_CHEST_COPPER_NAME = "treasure_chest_copper";
 static const std::string TREASURE_CHEST_SILVER_NAME = "treasure_chest_silver";
 static const std::string TREASURE_CHEST_GOLD_NAME = "treasure_chest_gold";
-static const std::string TIDE_CAVERNS_KEY_NAME = "tide_caverns_key";
-static const std::string DEEP_EARTH_KEY_NAME = "deep_earth_key";
-static const std::string LAVA_CAVES_KEY_NAME = "lava_caves_key";
-static const std::string RUINS_KEY_NAME = "ruins_key";
+static const std::string UPPER_MINES_KEY_F5_NAME = "upper_mines_key_f5";
+static const std::string UPPER_MINES_KEY_F10_NAME = "upper_mines_key_f10";
+static const std::string UPPER_MINES_KEY_F15_NAME = "upper_mines_key_f15";
+static const std::string TIDE_CAVERNS_KEY_F20_NAME = "tide_caverns_key_f20";
+static const std::string TIDE_CAVERNS_KEY_F25_NAME = "tide_caverns_key_f25";
+static const std::string TIDE_CAVERNS_KEY_F30_NAME = "tide_caverns_key_f30";
+static const std::string TIDE_CAVERNS_KEY_F35_NAME = "tide_caverns_key_f35";
+static const std::string DEEP_EARTH_KEY_F40_NAME = "deep_earth_key_f40";
+static const std::string DEEP_EARTH_KEY_F45_NAME = "deep_earth_key_f45";
+static const std::string DEEP_EARTH_KEY_F50_NAME = "deep_earth_key_f50";
+static const std::string DEEP_EARTH_KEY_F55_NAME = "deep_earth_key_f55";
+static const std::string LAVA_CAVES_KEY_F60_NAME = "lava_caves_key_f60";
+static const std::string LAVA_CAVES_KEY_F65_NAME = "lava_caves_key_f65";
+static const std::string LAVA_CAVES_KEY_F70_NAME = "lava_caves_key_f70";
+static const std::string LAVA_CAVES_KEY_F75_NAME = "lava_caves_key_f75";
+static const std::string RUINS_KEY_F80_NAME = "ruins_key_f80";
+static const std::string RUINS_KEY_F85_NAME = "ruins_key_f85";
+static const std::string RUINS_KEY_F90_NAME = "ruins_key_f90";
+static const std::string RUINS_KEY_F95_NAME = "ruins_key_f95";
+static const std::string RUINS_KEY_F100_NAME = "ruins_key_f100";
 static const std::string TIDE_CAVERNS_ORB = "tide_caverns_orb";
 static const std::string DEEP_EARTH_ORB = "deep_earth_orb";
 static const std::string LAVA_CAVES_ORB = "lava_caves_orb";
@@ -3220,7 +3236,13 @@ void LoadObjectIds()
 
 void LoadItems()
 {
-	std::unordered_set<std::string> lift_key_names = { TIDE_CAVERNS_KEY_NAME, DEEP_EARTH_KEY_NAME, LAVA_CAVES_KEY_NAME, RUINS_KEY_NAME };
+	std::unordered_set<std::string> lift_key_names = { 
+		UPPER_MINES_KEY_F5_NAME, UPPER_MINES_KEY_F10_NAME, UPPER_MINES_KEY_F15_NAME,
+		TIDE_CAVERNS_KEY_F20_NAME, TIDE_CAVERNS_KEY_F25_NAME, TIDE_CAVERNS_KEY_F30_NAME,TIDE_CAVERNS_KEY_F35_NAME,
+		DEEP_EARTH_KEY_F40_NAME, DEEP_EARTH_KEY_F45_NAME, DEEP_EARTH_KEY_F50_NAME, DEEP_EARTH_KEY_F55_NAME,
+		LAVA_CAVES_KEY_F60_NAME, LAVA_CAVES_KEY_F65_NAME, LAVA_CAVES_KEY_F70_NAME, LAVA_CAVES_KEY_F75_NAME,
+		RUINS_KEY_F80_NAME, RUINS_KEY_F85_NAME, RUINS_KEY_F90_NAME, RUINS_KEY_F95_NAME, RUINS_KEY_F100_NAME
+	};
 	std::unordered_set<std::string> orb_item_names = { TIDE_CAVERNS_ORB, DEEP_EARTH_ORB, LAVA_CAVES_ORB, RUINS_ORB }; // TODO: Add other orbs
 	std::vector<std::string> custom_potions = { SUSTAINING_POTION_NAME, HEALTH_SALVE_NAME, STAMINA_SALVE_NAME, MANA_SALVE_NAME }; // TODO: Change to unordered_set
 	std::vector<std::string> cursed_armor = { CURSED_HELMET_NAME, CURSED_CHESTPIECE_NAME, CURSED_PANTS_NAME, CURSED_BOOTS_NAME, CURSED_GLOVES_NAME }; // TODO: Change to unordered_set
@@ -4876,6 +4898,53 @@ void UnlockRecipe(int item_id, CInstance* Self, CInstance* Other)
 		recipe_unlocks[item_id] = 1.0; // This value is ultimately what unlocks the recipe.
 }
 
+void UnlockLiftKeyRecipe(CInstance* Self, CInstance* Other)
+{
+	if (!configuration.disable_dungeon_lift)
+		return;
+
+	if (floor_number == 5)
+		UnlockRecipe(item_name_to_id_map[UPPER_MINES_KEY_F5_NAME], Self, Other);
+	else if (floor_number == 10)
+		UnlockRecipe(item_name_to_id_map[UPPER_MINES_KEY_F10_NAME], Self, Other);
+	else if (floor_number == 15)
+		UnlockRecipe(item_name_to_id_map[UPPER_MINES_KEY_F15_NAME], Self, Other);
+	else if (floor_number == 20)
+		UnlockRecipe(item_name_to_id_map[TIDE_CAVERNS_KEY_F20_NAME], Self, Other);
+	else if (floor_number == 25)
+		UnlockRecipe(item_name_to_id_map[TIDE_CAVERNS_KEY_F25_NAME], Self, Other);
+	else if (floor_number == 30)
+		UnlockRecipe(item_name_to_id_map[TIDE_CAVERNS_KEY_F30_NAME], Self, Other);
+	else if (floor_number == 35)
+		UnlockRecipe(item_name_to_id_map[TIDE_CAVERNS_KEY_F35_NAME], Self, Other);
+	else if (floor_number == 40)
+		UnlockRecipe(item_name_to_id_map[DEEP_EARTH_KEY_F40_NAME], Self, Other);
+	else if (floor_number == 45)
+		UnlockRecipe(item_name_to_id_map[DEEP_EARTH_KEY_F45_NAME], Self, Other);
+	else if (floor_number == 50)
+		UnlockRecipe(item_name_to_id_map[DEEP_EARTH_KEY_F50_NAME], Self, Other);
+	else if (floor_number == 55)
+		UnlockRecipe(item_name_to_id_map[DEEP_EARTH_KEY_F55_NAME], Self, Other);
+	else if (floor_number == 60)
+		UnlockRecipe(item_name_to_id_map[LAVA_CAVES_KEY_F60_NAME], Self, Other);
+	else if (floor_number == 65)
+		UnlockRecipe(item_name_to_id_map[LAVA_CAVES_KEY_F65_NAME], Self, Other);
+	else if (floor_number == 70)
+		UnlockRecipe(item_name_to_id_map[LAVA_CAVES_KEY_F70_NAME], Self, Other);
+	else if (floor_number == 75)
+		UnlockRecipe(item_name_to_id_map[LAVA_CAVES_KEY_F75_NAME], Self, Other);
+	else if (floor_number == 80)
+		UnlockRecipe(item_name_to_id_map[RUINS_KEY_F80_NAME], Self, Other);
+	else if (floor_number == 85)
+		UnlockRecipe(item_name_to_id_map[RUINS_KEY_F85_NAME], Self, Other);
+	else if (floor_number == 90)
+		UnlockRecipe(item_name_to_id_map[RUINS_KEY_F90_NAME], Self, Other);
+	else if (floor_number == 95)
+		UnlockRecipe(item_name_to_id_map[RUINS_KEY_F95_NAME], Self, Other);
+	else if (floor_number == 100)
+		UnlockRecipe(item_name_to_id_map[RUINS_KEY_F100_NAME], Self, Other);
+}
+
 void CreateNotification(bool ignore_cooldown, std::string notification_localization_str, CInstance* Self, CInstance* Other)
 {
 	uint64_t current_system_time = GetCurrentSystemTime();
@@ -5051,6 +5120,48 @@ void DropItem(int item_id, double x_coord, double y_coord, CInstance* Self, CIns
 		4,
 		arguments
 	);
+}
+
+void DropLiftKey()
+{
+	if(floor_number >= 95)
+		DropItem(item_name_to_id_map[RUINS_KEY_F95_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 90)
+		DropItem(item_name_to_id_map[RUINS_KEY_F90_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 85)
+		DropItem(item_name_to_id_map[RUINS_KEY_F85_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 80)
+		DropItem(item_name_to_id_map[RUINS_KEY_F80_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 75)
+		DropItem(item_name_to_id_map[LAVA_CAVES_KEY_F75_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 70)
+		DropItem(item_name_to_id_map[LAVA_CAVES_KEY_F70_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 65)
+		DropItem(item_name_to_id_map[LAVA_CAVES_KEY_F65_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 60)
+		DropItem(item_name_to_id_map[LAVA_CAVES_KEY_F60_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 55)
+		DropItem(item_name_to_id_map[DEEP_EARTH_KEY_F55_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 50)
+		DropItem(item_name_to_id_map[DEEP_EARTH_KEY_F50_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 45)
+		DropItem(item_name_to_id_map[DEEP_EARTH_KEY_F45_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 40)
+		DropItem(item_name_to_id_map[DEEP_EARTH_KEY_F40_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 35)
+		DropItem(item_name_to_id_map[TIDE_CAVERNS_KEY_F35_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 30)
+		DropItem(item_name_to_id_map[TIDE_CAVERNS_KEY_F30_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 25)
+		DropItem(item_name_to_id_map[TIDE_CAVERNS_KEY_F25_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 20)
+		DropItem(item_name_to_id_map[TIDE_CAVERNS_KEY_F20_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 15)
+		DropItem(item_name_to_id_map[UPPER_MINES_KEY_F15_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 10)
+		DropItem(item_name_to_id_map[UPPER_MINES_KEY_F10_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 5)
+		DropItem(item_name_to_id_map[UPPER_MINES_KEY_F5_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
 }
 
 void EnterDungeon(double dungeon_level, CInstance* Self, CInstance* Other)
@@ -7053,35 +7164,35 @@ void ObjectCallback(
 			{
 				drop_biome_reward = false;
 				DropItem(item_name_to_id_map[CURSED_CHESTPIECE_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
-				DropItem(item_name_to_id_map[TIDE_CAVERNS_KEY_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+				DropItem(item_name_to_id_map[TIDE_CAVERNS_KEY_F20_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
 			}
 			// Tide Caverns
 			else if (ari_current_gm_room == "rm_earth_seal")
 			{
 				drop_biome_reward = false;
 				DropItem(item_name_to_id_map[CURSED_HELMET_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
-				DropItem(item_name_to_id_map[DEEP_EARTH_KEY_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+				DropItem(item_name_to_id_map[DEEP_EARTH_KEY_F40_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
 			}
 			// Deep Earth
 			else if (ari_current_gm_room == "rm_fire_seal")
 			{
 				drop_biome_reward = false;
 				DropItem(item_name_to_id_map[CURSED_GLOVES_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
-				DropItem(item_name_to_id_map[LAVA_CAVES_KEY_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+				DropItem(item_name_to_id_map[LAVA_CAVES_KEY_F60_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
 			}
 			// Lava Caves
 			else if (ari_current_gm_room == "rm_ruins_seal")
 			{
 				drop_biome_reward = false;
 				DropItem(item_name_to_id_map[CURSED_PANTS_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
-				DropItem(item_name_to_id_map[RUINS_KEY_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+				DropItem(item_name_to_id_map[RUINS_KEY_F80_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
 			}
 			// Ruins
 			else if (ari_current_gm_room == "rm_seridias_chamber")
 			{
 				drop_biome_reward = false;
 				DropItem(item_name_to_id_map[CURSED_BOOTS_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
-				// TODO: Drop some special kind of key?
+				DropItem(item_name_to_id_map[RUINS_KEY_F100_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
 			}
 		}
 
@@ -7343,14 +7454,46 @@ void ObjectCallback(
 									lift_key_used = false;
 									biome_reward_disabled = true;
 
-									if (held_item_id == item_name_to_id_map[TIDE_CAVERNS_KEY_NAME])
+									if (held_item_id == item_name_to_id_map[UPPER_MINES_KEY_F5_NAME])
+										EnterDungeon(4, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+									else if (held_item_id == item_name_to_id_map[UPPER_MINES_KEY_F10_NAME])
+										EnterDungeon(9, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+									else if (held_item_id == item_name_to_id_map[UPPER_MINES_KEY_F15_NAME])
+										EnterDungeon(14, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+									else if (held_item_id == item_name_to_id_map[TIDE_CAVERNS_KEY_F20_NAME])
 										EnterDungeon(19, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
-									else if (held_item_id == item_name_to_id_map[DEEP_EARTH_KEY_NAME])
+									else if (held_item_id == item_name_to_id_map[TIDE_CAVERNS_KEY_F25_NAME])
+										EnterDungeon(24, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+									else if (held_item_id == item_name_to_id_map[TIDE_CAVERNS_KEY_F30_NAME])
+										EnterDungeon(29, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+									else if (held_item_id == item_name_to_id_map[TIDE_CAVERNS_KEY_F35_NAME])
+										EnterDungeon(34, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+									else if (held_item_id == item_name_to_id_map[DEEP_EARTH_KEY_F40_NAME])
 										EnterDungeon(39, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
-									else if (held_item_id == item_name_to_id_map[LAVA_CAVES_KEY_NAME])
+									else if (held_item_id == item_name_to_id_map[DEEP_EARTH_KEY_F45_NAME])
+										EnterDungeon(44, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+									else if (held_item_id == item_name_to_id_map[DEEP_EARTH_KEY_F50_NAME])
+										EnterDungeon(49, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+									else if (held_item_id == item_name_to_id_map[DEEP_EARTH_KEY_F55_NAME])
+										EnterDungeon(54, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+									else if (held_item_id == item_name_to_id_map[LAVA_CAVES_KEY_F60_NAME])
 										EnterDungeon(59, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
-									else if (held_item_id == item_name_to_id_map[RUINS_KEY_NAME])
+									else if (held_item_id == item_name_to_id_map[LAVA_CAVES_KEY_F65_NAME])
+										EnterDungeon(64, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+									else if (held_item_id == item_name_to_id_map[LAVA_CAVES_KEY_F70_NAME])
+										EnterDungeon(69, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+									else if (held_item_id == item_name_to_id_map[LAVA_CAVES_KEY_F75_NAME])
+										EnterDungeon(74, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+									else if (held_item_id == item_name_to_id_map[RUINS_KEY_F80_NAME])
 										EnterDungeon(79, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+									else if (held_item_id == item_name_to_id_map[RUINS_KEY_F85_NAME])
+										EnterDungeon(84, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+									else if (held_item_id == item_name_to_id_map[RUINS_KEY_F90_NAME])
+										EnterDungeon(89, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+									else if (held_item_id == item_name_to_id_map[RUINS_KEY_F95_NAME])
+										EnterDungeon(94, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+									else if (held_item_id == item_name_to_id_map[RUINS_KEY_F100_NAME])
+										EnterDungeon(99, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
 								}
 								else if (orb_item_used)
 								{
@@ -7686,6 +7829,8 @@ void ObjectCallback(
 						if (floor_number < 20) // Upper Mines
 						{
 							DropItem(item_name_to_id_map["beast_coin_tiny"], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+							if (configuration.disable_dungeon_lift && drop_lift_key)
+								DropLiftKey();
 							if (StructVariableExists(monster, "__deep_dungeon__dread_beast") && !StructVariableExists(monster, "__deep_dungeon__outbreak"))
 							{
 								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < configuration.soul_stone_drop_chance ? true : false;
@@ -7697,7 +7842,7 @@ void ObjectCallback(
 						{
 							DropItem(item_name_to_id_map["beast_coin_small"], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
 							if (configuration.disable_dungeon_lift && drop_lift_key)
-								DropItem(item_name_to_id_map[TIDE_CAVERNS_KEY_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+								DropLiftKey();
 							if (StructVariableExists(monster, "__deep_dungeon__dread_beast") && !StructVariableExists(monster, "__deep_dungeon__outbreak"))
 							{
 								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < configuration.soul_stone_drop_chance ? true : false;
@@ -7709,7 +7854,7 @@ void ObjectCallback(
 						{
 							DropItem(item_name_to_id_map["beast_coin_medium"], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
 							if (configuration.disable_dungeon_lift && drop_lift_key)
-								DropItem(item_name_to_id_map[DEEP_EARTH_KEY_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+								DropLiftKey();
 							if (StructVariableExists(monster, "__deep_dungeon__dread_beast") && !StructVariableExists(monster, "__deep_dungeon__outbreak"))
 							{
 								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < configuration.soul_stone_drop_chance ? true : false;
@@ -7721,7 +7866,7 @@ void ObjectCallback(
 						{
 							DropItem(item_name_to_id_map["beast_coin_large"], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
 							if (configuration.disable_dungeon_lift && drop_lift_key)
-								DropItem(item_name_to_id_map[LAVA_CAVES_KEY_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+								DropLiftKey();
 							if (StructVariableExists(monster, "__deep_dungeon__dread_beast") && !StructVariableExists(monster, "__deep_dungeon__outbreak"))
 							{
 								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < configuration.soul_stone_drop_chance ? true : false;
@@ -7733,7 +7878,7 @@ void ObjectCallback(
 						{
 							DropItem(item_name_to_id_map["beast_coin_giant"], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
 							if (configuration.disable_dungeon_lift && drop_lift_key)
-								DropItem(item_name_to_id_map[RUINS_KEY_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+								DropLiftKey();
 							if (StructVariableExists(monster, "__deep_dungeon__dread_beast") && !StructVariableExists(monster, "__deep_dungeon__outbreak"))
 							{
 								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < configuration.soul_stone_drop_chance ? true : false;
@@ -10050,7 +10195,9 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 	IN RValue** Arguments
 )
 {
+	UnlockLiftKeyRecipe(Self, Other);
 	ResetCustomDrawFields();
+
 	salves_used.clear();
 	active_sigils.clear();
 	active_greater_sigils.clear();
