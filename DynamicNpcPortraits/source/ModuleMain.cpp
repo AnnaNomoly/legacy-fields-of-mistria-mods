@@ -50,6 +50,7 @@ static const std::string CUSTOM_CONDITION_T2_NAME_KEY = "t2_name";
 static const std::string CUSTOM_CONDITION_TYPE_KEY = "t2_type";
 static const std::string CUSTOM_CONDITION_OPERATOR_KEY = "comparison_operator";
 static const std::string CUSTOM_CONDITION_T2_VALUE_KEY = "t2_value";
+static const std::string ROUTINE_KEY = "routine";
 static const std::vector<std::string> TIME_OF_DAY_CONSTANTS = { "day", "night", "dawn", "morning ", "afternoon", "evening", "twilight" };
 
 static enum class RelationshipStatus {
@@ -92,6 +93,11 @@ static struct CustomCondition {
 	T2Value t2_value;
 };
 
+static struct CurrentNpcRoutine {
+	int time_last_updated = -1;
+	int current_routine = -1;
+};
+
 static struct DynamicPortrait {
 	int time_of_day = -1;
 	int week_day = -1;
@@ -102,6 +108,7 @@ static struct DynamicPortrait {
 	int location = -1;
 	int npc = -1;
 	int heart_level = -1;
+	int current_routine = -1;
 	RelationshipStatus relationship_status = RelationshipStatus::UNDEFINED;
 	ShootingStartFestivalStatus shooting_star_festival_status = ShootingStartFestivalStatus::UNDEFINED;
 	bool sprint_festival_not_first_place = false;
@@ -118,6 +125,7 @@ static struct DynamicPortrait {
 	bool HasLocationCondition() { return location != -1; }
 	bool HasNpcCondition() { return npc != -1; }
 	bool HasHeartLevelCondition() { return heart_level != -1; }
+	bool HasCurrentRoutineCondition() { return current_routine != -1; }
 	bool HasRelationshipStatusCondition() { return relationship_status != RelationshipStatus::UNDEFINED; }
 	bool HasShootingStarDateCondition() { return shooting_star_festival_status != ShootingStartFestivalStatus::UNDEFINED; }
 	bool HasSpringFestivalCondition() { return sprint_festival_not_first_place; }
@@ -148,7 +156,9 @@ static std::map<std::string, int> location_name_to_id_map = {}; // __location_id
 static std::map<int, std::string> location_id_to_name_map = {}; // __location_id__
 static std::map<std::string, int> npc_name_to_id_map = {}; // __npc_id__
 static std::map<int, std::string> npc_id_to_name_map = {}; // __npc_id__
+static std::map<std::string, int> routine_name_to_id_map = {}; // __routine__
 static std::map<std::string, std::vector<CInstance*>> script_name_to_reference_map = {}; // Vector<CInstance*> holds references to Self and Other for each script.
+static std::map<std::string, CurrentNpcRoutine> npc_name_to_current_routine_map = {};
 
 void ResetStaticFields(bool title_screen)
 {
@@ -325,6 +335,19 @@ void LoadNpcs()
 	}
 }
 
+void LoadRoutines()
+{
+	size_t array_length = 0;
+	RValue routines = global_instance->GetMember("__routine__");
+	g_ModuleInterface->GetArraySize(routines, array_length);
+	for (size_t i = 0; i < array_length; i++)
+	{
+		RValue* array_element;
+		g_ModuleInterface->GetArrayEntry(routines, i, array_element);
+		routine_name_to_id_map[array_element->ToString()] = i;
+	}
+}
+
 RValue GetNpcFromDatabase(int npc_id)
 {
 	RValue __npc_database = global_instance->GetMember("__npc_database");
@@ -480,6 +503,15 @@ bool IsValidLocation(const std::string& s)
 
 	std::string s_lower = to_lower(s);
 	return location_name_to_id_map.contains(s_lower);
+}
+
+bool IsValidRoutine(const std::string& s)
+{
+	if (s.empty() || s.size() == 0)
+		return false;
+
+	std::string s_lower = to_lower(s);
+	return routine_name_to_id_map.contains(s_lower);
 }
 
 bool IsValidNpc(const std::string& s)
@@ -660,6 +692,35 @@ CustomCondition ParseCustomCondition(const json& json)
 	return CustomCondition(t2_name, t2_type, t2_operator, t2_value);
 }
 
+void GetCurrentRoutine(CInstance* npc, std::string npc_name)
+{
+	if (StructVariableExists(npc, "me"))
+	{
+		RValue me = npc->GetMember("me");
+		if (IsObject(me) && StructVariableExists(me, "activity_handler"))
+		{
+			RValue activity_handler = me.GetMember("activity_handler");
+			if (IsObject(activity_handler) && StructVariableExists(activity_handler, "routine"))
+			{
+				RValue routine = activity_handler.GetMember("routine");
+				if (IsObject(routine) && StructVariableExists(routine, "id"))
+				{
+					RValue id = routine.GetMember("id");
+					if (IsNumeric(id))
+						npc_name_to_current_routine_map[npc_name] = CurrentNpcRoutine(current_time_in_seconds, id.ToInt64());
+				}
+			}
+		}
+	}		
+}
+
+void PruneOutdatedNpcRoutines()
+{
+	for (auto& entry : npc_name_to_current_routine_map)
+		if (current_time_in_seconds > entry.second.time_last_updated + 300) // 5m
+			entry.second.current_routine = -1;
+}
+
 void PrintError(std::exception_ptr eptr)
 {
 	try {
@@ -835,6 +896,14 @@ void CreateOrLoadConfigFile()
 													dynamic_portrait.heart_level = heart_level;
 											}
 
+											// routine condition
+											if (json_dynamic_portrait_conditions.contains(ROUTINE_KEY) && json_dynamic_portrait_conditions.at(ROUTINE_KEY).is_string())
+											{
+												std::string routine_str = json_dynamic_portrait_conditions[ROUTINE_KEY];
+												if (IsValidRoutine(routine_str))
+													dynamic_portrait.current_routine = routine_name_to_id_map[routine_str];
+											}
+
 											// relationship_status condition
 											if (json_dynamic_portrait_conditions.contains(RELATIONSHIP_STATUS_KEY) && json_dynamic_portrait_conditions.at(RELATIONSHIP_STATUS_KEY).is_string())
 											{
@@ -886,7 +955,6 @@ void CreateOrLoadConfigFile()
 									g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s", MOD_NAME, VERSION, DYNAMIC_PORTRAITS_KEY.c_str(), filename.c_str());
 									g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Ignoring the file.", MOD_NAME, VERSION);
 								}
-
 							}
 						}
 						catch (...)
@@ -930,14 +998,6 @@ RValue GetDynamicNpcPortrait(std::string sprite_name)
 	// Example: spr_portrait_balor_spring_sincere_special
 	std::vector<std::string> sprite_name_parts = split(sprite_name, '_');
 	std::string npc_name = sprite_name_parts[2];
-
-	//------------------------------------
-	RValue test = T2Read("Mods/Debug/test", script_name_to_reference_map[GML_SCRIPT_T2_READ][0], script_name_to_reference_map[GML_SCRIPT_T2_READ][1]);
-	RValue shooting_star_date_partner = T2Read("shooting_star_date_partner", script_name_to_reference_map[GML_SCRIPT_T2_READ][0], script_name_to_reference_map[GML_SCRIPT_T2_READ][1]);
-	RValue shooting_star_date_status = T2Read("shooting_star_date_status", script_name_to_reference_map[GML_SCRIPT_T2_READ][0], script_name_to_reference_map[GML_SCRIPT_T2_READ][1]);
-	int temp = 5;
-
-	//------------------------------------
 
 	std::string expression = "";
 	for (int i = 4; i < sprite_name_parts.size(); i++)
@@ -1066,10 +1126,103 @@ RValue GetDynamicNpcPortrait(std::string sprite_name)
 				continue;
 		}
 
+		if (dynamic_portrait.HasCurrentRoutineCondition())
+		{
+			if (dynamic_portrait.current_routine != npc_name_to_current_routine_map[npc_id_to_name_map[dynamic_portrait.npc]].current_routine)
+				continue;
+		}
+
 		std::string sprite_name = dynamic_portrait.sprite_name + "_" + expression;
 		RValue sprite = g_ModuleInterface->CallBuiltin("asset_get_index", { sprite_name.c_str() });
 		if (sprite.m_Kind == VALUE_REF)
 			return sprite;
+	}
+}
+
+void ObjectCallback(
+	IN FWCodeEvent& CodeEvent
+)
+{
+	auto& [self, other, code, argc, argv] = CodeEvent.Arguments();
+
+	if (!self)
+		return;
+
+	if (!self->m_Object)
+		return;
+
+	if (game_is_active && !GameIsPaused() && !cutscene_is_running)
+	{
+		PruneOutdatedNpcRoutines();
+
+		if (strstr(self->m_Object->m_Name, "obj_adeline"))
+			GetCurrentRoutine(self, "adeline");
+		else if (strstr(self->m_Object->m_Name, "obj_balor"))
+			GetCurrentRoutine(self, "balor");
+		else if (strstr(self->m_Object->m_Name, "obj_caldarus"))
+			GetCurrentRoutine(self, "caldarus");
+		else if (strstr(self->m_Object->m_Name, "obj_celine"))
+			GetCurrentRoutine(self, "celine");
+		else if (strstr(self->m_Object->m_Name, "obj_darcy"))
+			GetCurrentRoutine(self, "darcy");
+		else if (strstr(self->m_Object->m_Name, "obj_dell"))
+			GetCurrentRoutine(self, "dell");
+		else if (strstr(self->m_Object->m_Name, "obj_dozy"))
+			GetCurrentRoutine(self, "dozy");
+		else if (strstr(self->m_Object->m_Name, "obj_eiland"))
+			GetCurrentRoutine(self, "eiland");
+		else if (strstr(self->m_Object->m_Name, "obj_elsie"))
+			GetCurrentRoutine(self, "elsie");
+		else if (strstr(self->m_Object->m_Name, "obj_errol"))
+			GetCurrentRoutine(self, "errol");
+		else if (strstr(self->m_Object->m_Name, "obj_hayden"))
+			GetCurrentRoutine(self, "hayden");
+		else if (strstr(self->m_Object->m_Name, "obj_hemlock"))
+			GetCurrentRoutine(self, "hemlock");
+		else if (strstr(self->m_Object->m_Name, "obj_henrietta"))
+			GetCurrentRoutine(self, "henrietta");
+		else if (strstr(self->m_Object->m_Name, "obj_holt"))
+			GetCurrentRoutine(self, "holt");
+		else if (strstr(self->m_Object->m_Name, "obj_josephine"))
+			GetCurrentRoutine(self, "josephine");
+		else if (strstr(self->m_Object->m_Name, "obj_juniper"))
+			GetCurrentRoutine(self, "juniper");
+		else if (strstr(self->m_Object->m_Name, "obj_landen"))
+			GetCurrentRoutine(self, "landen");
+		else if (strstr(self->m_Object->m_Name, "obj_louis"))
+			GetCurrentRoutine(self, "louis");
+		else if (strstr(self->m_Object->m_Name, "obj_luc"))
+			GetCurrentRoutine(self, "luc");
+		else if (strstr(self->m_Object->m_Name, "obj_maple"))
+			GetCurrentRoutine(self, "maple");
+		else if (strstr(self->m_Object->m_Name, "obj_march"))
+			GetCurrentRoutine(self, "march");
+		else if (strstr(self->m_Object->m_Name, "obj_merri"))
+			GetCurrentRoutine(self, "merri");
+		else if (strstr(self->m_Object->m_Name, "obj_nora"))
+			GetCurrentRoutine(self, "nora");
+		else if (strstr(self->m_Object->m_Name, "obj_olric"))
+			GetCurrentRoutine(self, "olric");
+		else if (strstr(self->m_Object->m_Name, "obj_reina"))
+			GetCurrentRoutine(self, "reina");
+		else if (strstr(self->m_Object->m_Name, "obj_ryis"))
+			GetCurrentRoutine(self, "ryis");
+		else if (strstr(self->m_Object->m_Name, "obj_seridia"))
+			GetCurrentRoutine(self, "seridia");
+		//else if (strstr(self->m_Object->m_Name, "obj_stillwell"))
+		//	GetCurrentRoutine(self, "stillwell");
+		else if (strstr(self->m_Object->m_Name, "obj_taliferro"))
+			GetCurrentRoutine(self, "taliferro");
+		else if (strstr(self->m_Object->m_Name, "obj_terithia"))
+			GetCurrentRoutine(self, "terithia");
+		else if (strstr(self->m_Object->m_Name, "obj_valen"))
+			GetCurrentRoutine(self, "valen");
+		else if (strstr(self->m_Object->m_Name, "obj_vera"))
+			GetCurrentRoutine(self, "vera");
+		else if (strstr(self->m_Object->m_Name, "obj_wheedle"))
+			GetCurrentRoutine(self, "wheedle");
+		//else if (strstr(self->m_Object->m_Name, "obj_zorel"))
+		//	GetCurrentRoutine(self, "zorel");
 	}
 }
 
@@ -1095,7 +1248,6 @@ RValue& GmlScriptT2ReadCallback(
 	
 	return Result;
 }
-
 
 RValue& GmlScriptIsDungeonRoomCallback(
 	IN CInstance* Self,
@@ -1365,6 +1517,7 @@ RValue& GmlScriptSetupMainScreenCallback(
 		LoadWeather();
 		LoadLocations();
 		LoadNpcs();
+		LoadRoutines();
 		CreateOrLoadConfigFile();
 	}
 	else
@@ -1380,6 +1533,21 @@ RValue& GmlScriptSetupMainScreenCallback(
 	);
 
 	return Result;
+}
+
+void CreateObjectCallback(AurieStatus& status)
+{
+	status = g_ModuleInterface->CreateCallback(
+		g_ArSelfModule,
+		EVENT_OBJECT_CALL,
+		ObjectCallback,
+		0
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook (EVENT_OBJECT_CALL)!", MOD_NAME, VERSION);
+	}
 }
 
 void CreateHookGmlScriptT2Read(AurieStatus& status)
@@ -1723,6 +1891,13 @@ EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path&
 		return AURIE_MODULE_DEPENDENCY_NOT_RESOLVED;
 
 	g_ModuleInterface->Print(CM_LIGHTAQUA, "[%s %s] - Plugin starting...", MOD_NAME, VERSION);
+
+	CreateObjectCallback(status);
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return status;
+	}
 
 	CreateHookGmlScriptT2Read(status);
 	if (!AurieSuccess(status))
