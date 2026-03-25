@@ -99,7 +99,9 @@ static const char* const RESTRICT_ITEMS_JSON_KEY = "restrict_items"; // Determin
 static const char* const RESTRICT_ARMOR_JSON_KEY = "restrict_armor"; // Determines if armor is restricted in the dungeon
 static const char* const RESTRICT_TOOLS_JSON_KEY = "restrict_tools"; // Determines if tools are restricted in the dungeon
 static const char* const RESTRICT_WEAPONS_JSON_KEY = "restrict_weapons"; // Determines if weapons are restricted in the dungeon
-static const char* const LIMIT_SALVES_JSON_KEY = "limit_salves"; // Determines if salves have a single use limit per floor
+static const char* const HEALTH_SALVE_LIMIT_JSON_KEY = "health_salve_limit"; // Controls how many health salves may be used per floor
+static const char* const STAMINA_SALVE_LIMIT_JSON_KEY = "stamina_salve_limit"; // Controls how many stamina salves may be used per floor
+static const char* const MANA_SALVE_LIMIT_JSON_KEY = "mana_salve_limit"; // Controls how many mana salves may be used per floor
 static const char* const HEALTH_SALVE_POTENCY_JSON_KEY = "health_salve_potency"; // Controls how much the health salve restores
 static const char* const STAMINA_SALVE_POTENCY_JSON_KEY = "stamina_salve_potency"; // Controls how much the stamina salve restores
 static const char* const MANA_SALVE_POTENCY_JSON_KEY = "mana_salve_potency"; // Controls how much the mana salve restores
@@ -358,13 +360,15 @@ static const bool DEFAULT_RESTRICT_ITEMS = true;
 static const bool DEFAULT_RESTRICT_ARMOR = true;
 static const bool DEFAULT_RESTRICT_TOOLS = true;
 static const bool DEFAULT_RESTRICT_WEAPONS = true;
-static const bool DEFAULT_LIMIT_SALVES = true;
-static const int DEFAULT_HEALTH_SALVE_POTENCY = 30;
-static const int DEFAULT_STAMINA_SALVE_POTENCY = 30;
+static const int DEFAULT_HEALTH_SALVE_LIMIT = 3;
+static const int DEFAULT_STAMINA_SALVE_LIMIT = 3;
+static const int DEFAULT_MANA_SALVE_LIMIT = 1;
+static const int DEFAULT_HEALTH_SALVE_POTENCY = 35;
+static const int DEFAULT_STAMINA_SALVE_POTENCY = 35;
 static const int DEFAULT_MANA_SALVE_POTENCY = 1;
 static const double DEFAULT_SUSTAINING_POTION_DURATION_MODIFIER = 0.5;
 static const bool DEFAULT_RANDOMIZE_DUNGEON_MUSIC = true;
-static const int DEFAULT_RANDOM_DREAD_BEAST_SPAWN_CHANCE = 5; // TODO: Tune this.
+static const int DEFAULT_RANDOM_DREAD_BEAST_SPAWN_CHANCE = 5;
 static const int DEFAULT_OFFERING_EVENT_CHANCE = 15;
 static const int DEFAULT_OFFERING_HEALTH_REQUIREMENT = 25; // TODO: Tune this.
 static const int DEFAULT_OFFERING_STAMINA_REQUIREMENT = 20; // TODO: Tune this.
@@ -1864,7 +1868,7 @@ static std::map<std::string, int> status_effect_name_to_id_map = {};
 static std::map<std::string, int> item_name_to_id_map = {};
 static std::map<std::string, int> bark_name_to_id_map = {};
 std::unordered_set<std::pair<int, int>, pair_hash> floor_trap_positions = {};
-static std::unordered_set<int> salves_used = {};
+static std::map<std::string, int> salves_used = {}; // TODO
 static std::map<Traps, std::pair<int, int>> active_traps = {}; // Holds the active traps and the position they most recently triggered at.
 static std::vector<CustomAOE> meteor_aoes = {};
 static std::vector<CustomAOE> gaze_aoes = {};
@@ -1915,7 +1919,9 @@ static struct Configuration {
 	bool restrict_armor = DEFAULT_RESTRICT_ARMOR;
 	bool restrict_tools = DEFAULT_RESTRICT_TOOLS;
 	bool restrict_weapons = DEFAULT_RESTRICT_WEAPONS;
-	bool limit_salves = DEFAULT_LIMIT_SALVES;
+	int health_salve_limit = DEFAULT_HEALTH_SALVE_LIMIT;
+	int stamina_salve_limit = DEFAULT_STAMINA_SALVE_LIMIT;
+	int mana_salve_limit = DEFAULT_MANA_SALVE_LIMIT;
 	int health_salve_potency = DEFAULT_HEALTH_SALVE_POTENCY;
 	int stamina_salve_potency = DEFAULT_STAMINA_SALVE_POTENCY;
 	int mana_salve_potency = DEFAULT_MANA_SALVE_POTENCY;
@@ -1966,7 +1972,9 @@ json CreateConfigJson(bool use_defaults)
 		{ RESTRICT_ARMOR_JSON_KEY, use_defaults ? DEFAULT_RESTRICT_ARMOR : configuration.restrict_armor },
 		{ RESTRICT_TOOLS_JSON_KEY, use_defaults ? DEFAULT_RESTRICT_TOOLS : configuration.restrict_tools },
 		{ RESTRICT_WEAPONS_JSON_KEY, use_defaults ? DEFAULT_RESTRICT_WEAPONS : configuration.restrict_weapons },
-		{ LIMIT_SALVES_JSON_KEY, use_defaults ? DEFAULT_LIMIT_SALVES : configuration.limit_salves },
+		{ HEALTH_SALVE_LIMIT_JSON_KEY, use_defaults ? DEFAULT_HEALTH_SALVE_LIMIT : configuration.health_salve_limit },
+		{ STAMINA_SALVE_LIMIT_JSON_KEY, use_defaults ? DEFAULT_STAMINA_SALVE_LIMIT : configuration.stamina_salve_limit },
+		{ MANA_SALVE_LIMIT_JSON_KEY, use_defaults ? DEFAULT_MANA_SALVE_LIMIT : configuration.mana_salve_limit },
 		{ HEALTH_SALVE_POTENCY_JSON_KEY, use_defaults ? DEFAULT_HEALTH_SALVE_POTENCY : configuration.health_salve_potency },
 		{ STAMINA_SALVE_POTENCY_JSON_KEY, use_defaults ? DEFAULT_STAMINA_SALVE_POTENCY : configuration.stamina_salve_potency },
 		{ MANA_SALVE_POTENCY_JSON_KEY, use_defaults ? DEFAULT_MANA_SALVE_POTENCY : configuration.mana_salve_potency },
@@ -2075,11 +2083,41 @@ void CreateOrLoadConfigFile()
 					else
 						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, RESTRICT_WEAPONS_JSON_KEY, config_file.c_str());
 
-					// Try loading the limit_salves value.
-					if (json_object.contains(LIMIT_SALVES_JSON_KEY) && json_object.at(LIMIT_SALVES_JSON_KEY).is_boolean())
-						configuration.limit_salves = json_object[LIMIT_SALVES_JSON_KEY];
+					// Try loading the health_salve_limit value.
+					if (json_object.contains(HEALTH_SALVE_LIMIT_JSON_KEY) && json_object.at(HEALTH_SALVE_LIMIT_JSON_KEY).is_number_integer())
+					{
+						int health_salve_limit = json_object[HEALTH_SALVE_LIMIT_JSON_KEY];
+						if (health_salve_limit > 0 && health_salve_limit <= 999)
+							configuration.health_salve_limit = health_salve_limit;
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, HEALTH_SALVE_LIMIT_JSON_KEY, config_file.c_str());
+					}
 					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, LIMIT_SALVES_JSON_KEY, config_file.c_str());
+						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, HEALTH_SALVE_LIMIT_JSON_KEY, config_file.c_str());
+
+					// Try loading the stamina_salve_limit value.
+					if (json_object.contains(STAMINA_SALVE_LIMIT_JSON_KEY) && json_object.at(STAMINA_SALVE_LIMIT_JSON_KEY).is_number_integer())
+					{
+						int stamina_salve_limit = json_object[STAMINA_SALVE_LIMIT_JSON_KEY];
+						if (stamina_salve_limit > 0 && stamina_salve_limit <= 999)
+							configuration.stamina_salve_limit = stamina_salve_limit;
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, STAMINA_SALVE_LIMIT_JSON_KEY, config_file.c_str());
+					}
+					else
+						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, STAMINA_SALVE_LIMIT_JSON_KEY, config_file.c_str());
+
+					// Try loading the mana_salve_limit value.
+					if (json_object.contains(MANA_SALVE_LIMIT_JSON_KEY) && json_object.at(MANA_SALVE_LIMIT_JSON_KEY).is_number_integer())
+					{
+						int mana_salve_limit = json_object[MANA_SALVE_LIMIT_JSON_KEY];
+						if (mana_salve_limit > 0 && mana_salve_limit <= 999)
+							configuration.mana_salve_limit = mana_salve_limit;
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, MANA_SALVE_LIMIT_JSON_KEY, config_file.c_str());
+					}
+					else
+						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, MANA_SALVE_LIMIT_JSON_KEY, config_file.c_str());
 
 					// Try loading the health_salve_potency value.
 					if (json_object.contains(HEALTH_SALVE_POTENCY_JSON_KEY) && json_object.at(HEALTH_SALVE_POTENCY_JSON_KEY).is_number_integer())
@@ -5619,21 +5657,21 @@ RValue GetDynamicItemSprite(int item_id)
 	}
 	else if (item_id == salve_name_to_id_map[HEALTH_SALVE_NAME])
 	{
-		if ((configuration.limit_salves && salves_used.contains(item_id)) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
+		if (salves_used[HEALTH_SALVE_NAME] >= configuration.health_salve_limit || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_salve_health_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_salve_health" });
 	}
 	else if (item_id == salve_name_to_id_map[STAMINA_SALVE_NAME])
 	{
-		if ((configuration.limit_salves && salves_used.contains(item_id)) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
+		if (salves_used[STAMINA_SALVE_NAME] >= configuration.stamina_salve_limit || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_salve_stamina_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_salve_stamina" });
 	}
 	else if (item_id == salve_name_to_id_map[MANA_SALVE_NAME])
 	{
-		if ((configuration.limit_salves && salves_used.contains(item_id)) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
+		if (salves_used[MANA_SALVE_NAME] >= configuration.mana_salve_limit || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_salve_mana_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_salve_mana" });
@@ -7541,7 +7579,12 @@ void ObjectCallback(
 								}
 								else if (held_item_id == salve_name_to_id_map[HEALTH_SALVE_NAME] || held_item_id == salve_name_to_id_map[STAMINA_SALVE_NAME] || held_item_id == salve_name_to_id_map[MANA_SALVE_NAME])
 								{
-									salves_used.insert(held_item_id);
+									if (held_item_id == salve_name_to_id_map[HEALTH_SALVE_NAME])
+										salves_used[HEALTH_SALVE_NAME]++;
+									if (held_item_id == salve_name_to_id_map[STAMINA_SALVE_NAME])
+										salves_used[STAMINA_SALVE_NAME]++;
+									if (held_item_id == salve_name_to_id_map[MANA_SALVE_NAME])
+										salves_used[MANA_SALVE_NAME]++;
 
 									if (script_name_to_reference_map.contains(GML_SCRIPT_UPDATE_TOOLBAR_MENU))
 										UpdateToolbarMenu(script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][0], script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][1]);
@@ -9557,10 +9600,10 @@ RValue& GmlScriptUseItemCallback(
 				}
 			}
 
-			// Salve Limit
-			if (configuration.limit_salves && salves_used.contains(held_item_id))
+			// Salve Limits
+			if ((held_item_id == salve_name_to_id_map[HEALTH_SALVE_NAME] && salves_used[HEALTH_SALVE_NAME] >= configuration.health_salve_limit) || (held_item_id == salve_name_to_id_map[STAMINA_SALVE_NAME] && salves_used[STAMINA_SALVE_NAME] >= configuration.stamina_salve_limit) || (held_item_id == salve_name_to_id_map[MANA_SALVE_NAME] && salves_used[MANA_SALVE_NAME] >= configuration.mana_salve_limit))
 			{
-				g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - You have already used that type of salve on the current floor!", MOD_NAME, VERSION);
+				g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - You have already used too many of that salve on the current floor!", MOD_NAME, VERSION);
 				CreateNotification(false, SALVE_LIMIT_NOTIFICATION_KEY, Self, Other);
 				return Result;
 			}
