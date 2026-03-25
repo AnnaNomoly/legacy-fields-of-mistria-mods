@@ -124,6 +124,8 @@ static const char* const METEOR_TRAP_SCALING_FACTOR_JSON_KEY = "meteor_trap_scal
 static const char* const VOID_TRAP_DURATION_SECONDS_JSON_KEY = "void_trap_duration_seconds"; // Controls the duration in seconds for void traps
 static const char* const MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY = "mistpool_equipment_store_price"; // Controls the price of mistpool equipment in stores
 static const char* const SALVES_STORE_PRICE_JSON_KEY = "salves_store_price"; // Controls the price of salves in stores
+static const char* const DREAD_BEAST_DAMAGE_MODIFIER_JSON_KEY = "dread_beast_damage_modifier"; // Controls the damage of dread beasts
+static const char* const DREAD_BEAST_HEALTH_MODIFIER_JSON_KEY = "dread_beast_health_modifier"; // Controls the health of dread beasts
 
 static const std::string SIGIL_OF_ALTERATION_NAME = "sigil_of_alteration";
 static const std::string SIGIL_OF_CONCEALMENT_NAME = "sigil_of_concealment";
@@ -381,6 +383,8 @@ static const double DEFAULT_METEOR_TRAP_SCALING_FACTOR = 2.5;
 static const int DEFAULT_VOID_TRAP_DURATION_SECONDS = 1500;
 static const int DEFAULT_MISTPOOL_EQUIPMENT_STORE_PRICE = 500;
 static const int DEFAULT_SALVES_STORE_PRICE = 50;
+static const double DEFAULT_DREAD_BEAST_DAMAGE_MODIFIER = 2;
+static const double DEFAULT_DREAD_BEAST_HEALTH_MODIFIER = 3;
 
 static enum class BossBattle {
 	NONE,
@@ -1936,6 +1940,8 @@ static struct Configuration {
 	int void_trap_duration_seconds = DEFAULT_VOID_TRAP_DURATION_SECONDS;
 	int mistpool_equipment_store_price = DEFAULT_MISTPOOL_EQUIPMENT_STORE_PRICE;
 	int salves_store_price = DEFAULT_SALVES_STORE_PRICE;
+	double dread_beast_damage_modifier = DEFAULT_DREAD_BEAST_DAMAGE_MODIFIER;
+	double dread_beast_health_modifier = DEFAULT_DREAD_BEAST_HEALTH_MODIFIER;
 };
 static Configuration configuration = Configuration();
 
@@ -1984,7 +1990,10 @@ json CreateConfigJson(bool use_defaults)
 		{ METEOR_TRAP_SCALING_FACTOR_JSON_KEY, use_defaults ? DEFAULT_METEOR_TRAP_SCALING_FACTOR : configuration.meteor_trap_scaling_factor },
 		{ VOID_TRAP_DURATION_SECONDS_JSON_KEY, use_defaults ? DEFAULT_VOID_TRAP_DURATION_SECONDS : configuration.void_trap_duration_seconds },
 		{ MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY, use_defaults ? DEFAULT_MISTPOOL_EQUIPMENT_STORE_PRICE : configuration.mistpool_equipment_store_price },
-		{ SALVES_STORE_PRICE_JSON_KEY, use_defaults ? DEFAULT_SALVES_STORE_PRICE : configuration.salves_store_price }
+		{ SALVES_STORE_PRICE_JSON_KEY, use_defaults ? DEFAULT_SALVES_STORE_PRICE : configuration.salves_store_price },
+		{ DREAD_BEAST_DAMAGE_MODIFIER_JSON_KEY, use_defaults ? DEFAULT_DREAD_BEAST_DAMAGE_MODIFIER : configuration.dread_beast_damage_modifier },
+		{ DREAD_BEAST_HEALTH_MODIFIER_JSON_KEY, use_defaults ? DEFAULT_DREAD_BEAST_HEALTH_MODIFIER : configuration.dread_beast_health_modifier }
+
 	};
 	return config_json;
 }
@@ -2348,6 +2357,29 @@ void CreateOrLoadConfigFile()
 					else
 						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, SALVES_STORE_PRICE_JSON_KEY, config_file.c_str());
 
+					// Try loading the dread_beast_damage_modifier value.
+					if (json_object.contains(DREAD_BEAST_DAMAGE_MODIFIER_JSON_KEY) && json_object.at(DREAD_BEAST_DAMAGE_MODIFIER_JSON_KEY).is_number_float())
+					{
+						double dread_beast_damage_modifier = json_object[DREAD_BEAST_DAMAGE_MODIFIER_JSON_KEY];
+						if (dread_beast_damage_modifier >= 1.0 && dread_beast_damage_modifier <= 2.0)
+							configuration.dread_beast_damage_modifier = dread_beast_damage_modifier;
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, DREAD_BEAST_DAMAGE_MODIFIER_JSON_KEY, config_file.c_str());
+					}
+					else
+						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, DREAD_BEAST_DAMAGE_MODIFIER_JSON_KEY, config_file.c_str());
+
+					// Try loading the dread_beast_health_modifier value.
+					if (json_object.contains(DREAD_BEAST_HEALTH_MODIFIER_JSON_KEY) && json_object.at(DREAD_BEAST_HEALTH_MODIFIER_JSON_KEY).is_number_float())
+					{
+						double dread_beast_health_modifier = json_object[DREAD_BEAST_HEALTH_MODIFIER_JSON_KEY];
+						if (dread_beast_health_modifier >= 1.0 && dread_beast_health_modifier <= 3.0)
+							configuration.dread_beast_health_modifier = dread_beast_health_modifier;
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, DREAD_BEAST_HEALTH_MODIFIER_JSON_KEY, config_file.c_str());
+					}
+					else
+						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, DREAD_BEAST_HEALTH_MODIFIER_JSON_KEY, config_file.c_str());
 				}
 
 				update_config_file = true;
@@ -4076,7 +4108,7 @@ void ModifyRockClodAttackPatterns(bool is_boss_battle, bool is_outbreak, RValue 
 			{
 				// Shoots a wall of 10 pellets repeatedly 5 times
 				if(!is_outbreak)
-					StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+					StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
 
 				StructVariableSet(config_clone, "launcher", false);
 				StructVariableSet(config_clone, "attack_sequence", 5.0);
@@ -4101,7 +4133,7 @@ void ModifyRockClodAttackPatterns(bool is_boss_battle, bool is_outbreak, RValue 
 				double split_angle = 40;
 
 				if (!is_outbreak)
-					StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+					StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
 
 				StructVariableSet(config_clone, "launcher", false);
 				StructVariableSet(config_clone, "attack_sequence", attack_sequence);
@@ -4126,7 +4158,7 @@ void ModifyRockClodAttackPatterns(bool is_boss_battle, bool is_outbreak, RValue 
 				double split_angle = 20;
 
 				if (!is_outbreak)
-					StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+					StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
 
 				StructVariableSet(config_clone, "launcher", false);
 				StructVariableSet(config_clone, "attack_sequence", attack_sequence);
@@ -4206,7 +4238,7 @@ void ModifyStalagmiteAttackPatterns(bool is_boss_battle, bool is_outbreak, RValu
 					}
 
 					if (!is_outbreak)
-						StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+						StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
 
 					StructVariableSet(config_clone, "secondary_spikes", secondary_spikes);
 					StructVariableSet(monster, "config", config_clone);
@@ -4224,7 +4256,7 @@ void ModifyStalagmiteAttackPatterns(bool is_boss_battle, bool is_outbreak, RValu
 					}
 
 					if (!is_outbreak)
-						StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+						StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
 
 					StructVariableSet(config_clone, "secondary_spikes", secondary_spikes);
 					StructVariableSet(monster, "config", config_clone);
@@ -4245,7 +4277,7 @@ void ModifyStalagmiteAttackPatterns(bool is_boss_battle, bool is_outbreak, RValu
 					}
 
 					if (!is_outbreak)
-						StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+						StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
 
 					StructVariableSet(config_clone, "secondary_spikes", secondary_spikes);
 					StructVariableSet(monster, "config", config_clone);
@@ -4263,7 +4295,7 @@ void ModifyStalagmiteAttackPatterns(bool is_boss_battle, bool is_outbreak, RValu
 					}
 
 					if (!is_outbreak)
-						StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+						StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
 
 					StructVariableSet(config_clone, "secondary_spikes", secondary_spikes);
 					StructVariableSet(monster, "config", config_clone);
@@ -4284,7 +4316,7 @@ void ModifyStalagmiteAttackPatterns(bool is_boss_battle, bool is_outbreak, RValu
 					}
 
 					if (!is_outbreak)
-						StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+						StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
 
 					StructVariableSet(config_clone, "secondary_spikes", secondary_spikes);
 					StructVariableSet(monster, "config", config_clone);
@@ -4302,7 +4334,7 @@ void ModifyStalagmiteAttackPatterns(bool is_boss_battle, bool is_outbreak, RValu
 					}
 
 					if (!is_outbreak)
-						StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+						StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
 
 					StructVariableSet(config_clone, "secondary_spikes", secondary_spikes);
 					StructVariableSet(monster, "config", config_clone);
@@ -4462,7 +4494,7 @@ void ModifySaplingAttackPatterns(bool is_boss_battle, RValue is_outbreak, RValue
 				boss_monsters_configured++;
 
 			if (!is_outbreak)
-				StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+				StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
 
 			StructVariableSet(config_clone, "sticky", true);
 			StructVariableSet(config_clone, "free_fly", true);
@@ -4523,7 +4555,7 @@ void ModifyShroomAttackPatterns(bool is_boss_battle, RValue is_outbreak, RValue 
 				boss_monsters_configured++;
 
 			if (!is_outbreak)
-				StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+				StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
 
 			StructVariableSet(config_clone, "spew_lava", true);
 			StructVariableSet(config_clone, "lava_damage", 1);
@@ -4536,6 +4568,7 @@ void ModifyShroomAttackPatterns(bool is_boss_battle, RValue is_outbreak, RValue 
 			StructVariableSet(config_clone, "shadow_threshold", 0.18); // 0.2
 			StructVariableSet(config_clone, "fade_in_rate", 0.18); // 0.2
 			StructVariableSet(config_clone, "fade_out_rate", 0.18); // 0.2
+
 			StructVariableSet(config_clone, "windup_friction", 0.93); // 0.93
 			StructVariableSet(config_clone, "push_force", 500);
 			StructVariableSet(config_clone, "ari_bounce_distance", 500);
@@ -4551,8 +4584,8 @@ void ModifyShroomAttackPatterns(bool is_boss_battle, RValue is_outbreak, RValue 
 			StructVariableSet(config_clone, "tired", tired);
 
 			RValue windup = g_ModuleInterface->CallBuiltin("array_create", { 2 });
-			g_ModuleInterface->CallBuiltin("array_set", { windup, 0, 1 });
-			g_ModuleInterface->CallBuiltin("array_set", { windup, 1, 1 });
+			g_ModuleInterface->CallBuiltin("array_set", { windup, 0, 10 });
+			g_ModuleInterface->CallBuiltin("array_set", { windup, 1, 20 });
 			StructVariableSet(config_clone, "windup", windup);
 
 			RValue wiggle = g_ModuleInterface->CallBuiltin("array_create", { 2 });
@@ -4585,7 +4618,7 @@ void ModifyEnchanternAttackPatterns(bool is_boss_battle, RValue is_outbreak, RVa
 				boss_monsters_configured++;
 
 			if (!is_outbreak)
-				StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+				StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
 
 			StructVariableSet(config_clone, "charge_speed", 3);
 			StructVariableSet(config_clone, "flee_speed", 2);
@@ -4627,10 +4660,10 @@ void ModifySpiritAttackPatterns(bool is_boss_battle, RValue is_outbreak, RValue 
 				boss_monsters_configured++;
 
 			if (!is_outbreak)
-				StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+				StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
 
 			if (!is_outbreak)
-				StructVariableSet(config_clone, "projectile_damage", config_clone.GetMember("projectile_damage").ToDouble() * 2);
+				StructVariableSet(config_clone, "projectile_damage", static_cast<int>(config_clone.GetMember("projectile_damage").ToDouble() * configuration.dread_beast_damage_modifier));
 
 			RValue idle_duration = g_ModuleInterface->CallBuiltin("array_create", { 2 });
 			g_ModuleInterface->CallBuiltin("array_set", { idle_duration, 0, 1 });
@@ -4698,7 +4731,7 @@ void ModifyCatAttackPatterns(bool is_boss_battle, RValue is_outbreak, RValue mon
 				boss_monsters_configured++;
 
 			if (!is_outbreak)
-				StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+				StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
 
 			StructVariableSet(config_clone, "charge_range", 192);
 			StructVariableSet(config_clone, "attack_movement_speed", 8);
@@ -4749,7 +4782,7 @@ void ModifyBatAttackPatterns(bool is_boss_battle, RValue is_outbreak, RValue mon
 				boss_monsters_configured++;
 
 			if (!is_outbreak)
-				StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+				StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
 
 			StructVariableSet(config_clone, "speed", 3);
 			StructVariableSet(config_clone, "flee_speed", 3); // -1
@@ -4796,7 +4829,7 @@ void ModifyTomeAttackPatterns(bool is_boss_battle, RValue is_outbreak, RValue mo
 				boss_monsters_configured++;
 
 			if (!is_outbreak)
-				StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+				StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
 
 			StructVariableSet(config_clone, "acknowledgment", 15); // 32
 			StructVariableSet(config_clone, "flying_speed", 6); // 2.4
@@ -4829,7 +4862,7 @@ void ModifyRockStackAttackPatterns(bool is_boss_battle, RValue is_outbreak, RVal
 				boss_monsters_configured++;
 
 			if (!is_outbreak)
-				StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+				StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
 
 			StructVariableSet(config_clone, "speed", 10); // 1.5
 			StructVariableSet(config_clone, "aggro_radius", 624); // 256
@@ -4875,7 +4908,7 @@ void ModifyGriffinStatueAttackPatterns(bool is_boss_battle, RValue is_outbreak, 
 				boss_monsters_configured++;
 
 			if (!is_outbreak)
-				StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+				StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
 
 			StructVariableSet(config_clone, "aggro_radius", 624); // 360
 			StructVariableSet(config_clone, "speed", 10); // 0.6
@@ -7849,7 +7882,7 @@ void ObjectCallback(
 					double hit_points = monster.GetMember("hit_points").ToDouble();
 					if (std::isfinite(hit_points))
 					{
-						*monster.GetRefMember("hit_points") = hit_points * 3;
+						*monster.GetRefMember("hit_points") = static_cast<int>(hit_points * configuration.dread_beast_health_modifier);
 						dread_beasts_configured++;
 						if (dread_beast_monster_id != monster_name_to_id_map["rock_stack"] || dread_beasts_configured == 2)
 							dread_beast_configured = true;
