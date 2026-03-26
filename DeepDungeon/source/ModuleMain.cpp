@@ -1804,8 +1804,10 @@ static bool biome_reward_disabled = false;
 static bool dread_beast_configured = false;
 static bool sigil_item_used = false;
 static bool greater_sigil_item_used = false;
+static bool salve_item_used = false;
 static bool lift_key_used = false;
 static bool orb_item_used = false;
+static bool heart_crystal_used = false;
 static bool inner_fire_cast = false;
 static bool reckoning_applied = false;
 static bool fairy_buff_applied = false;
@@ -1846,6 +1848,7 @@ static TreasureSpot treasure_spot = TreasureSpot();
 static std::string ari_current_location = "";
 static std::string ari_current_gm_room = "";
 static std::unordered_set<int> orb_items = {};
+static std::unordered_set<int> salve_items = {};
 static std::unordered_set<int> lift_key_items = {};
 static std::unordered_set<int> restricted_items = {};
 static std::unordered_set<int> deep_dungeon_items = {};
@@ -3055,6 +3058,14 @@ void DisableAllPerks()
 		__ari_perks_active[perk] = false;
 }
 
+bool ItemHasBeenAcquired(int item_id)
+{
+	RValue __ari = *global_instance->GetRefMember("__ari");
+	RValue items_acquired = *__ari.GetRefMember("items_acquired");
+	RValue item_acquired = g_ModuleInterface->CallBuiltin("array_get", { items_acquired, item_id });
+	return item_acquired.ToBoolean();
+}
+
 void LoadTutorials()
 {
 	size_t array_length;
@@ -3395,11 +3406,12 @@ void LoadItems()
 			if (orb_item_names.contains(item_name))
 				orb_items.insert(item_id);
 
-			// Custom potions
+			// Salve Items
 			for (std::string custom_potion : custom_potions)
 			{
 				if (item_name == custom_potion)
 				{
+					salve_items.insert(item_id);
 					deep_dungeon_items.insert(item_id);
 					salve_name_to_id_map[item_name] = item_id;
 				}
@@ -7233,8 +7245,10 @@ void ResetStaticFields(bool returned_to_title_screen)
 	dread_beast_configured = false;
 	sigil_item_used = false;
 	greater_sigil_item_used = false;
+	salve_item_used = false;
 	lift_key_used = false;
 	orb_item_used = false;
+	heart_crystal_used = false;
 	inner_fire_cast = false;
 	reckoning_applied = false;
 	fairy_buff_applied = false;
@@ -7577,8 +7591,10 @@ void ObjectCallback(
 									if (script_name_to_reference_map.contains(GML_SCRIPT_UPDATE_TOOLBAR_MENU))
 										UpdateToolbarMenu(script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][0], script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][1]);
 								}
-								else if (held_item_id == salve_name_to_id_map[HEALTH_SALVE_NAME] || held_item_id == salve_name_to_id_map[STAMINA_SALVE_NAME] || held_item_id == salve_name_to_id_map[MANA_SALVE_NAME])
+								else if (salve_item_used)
 								{
+									salve_item_used = false;
+
 									if (held_item_id == salve_name_to_id_map[HEALTH_SALVE_NAME])
 										salves_used[HEALTH_SALVE_NAME]++;
 									if (held_item_id == salve_name_to_id_map[STAMINA_SALVE_NAME])
@@ -7661,6 +7677,11 @@ void ObjectCallback(
 										boss_battle = BossBattle::RUINS_ORB;
 										EnterDungeon(79, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
 									}
+								}
+								else if (heart_crystal_used)
+								{
+									heart_crystal_used = false;
+									unmodified_base_health += 20;
 								}
 							}
 						}
@@ -9641,6 +9662,11 @@ RValue& GmlScriptUseItemCallback(
 	if (item_id_to_greater_sigil_map.contains(held_item_id))
 		greater_sigil_item_used = true;
 
+	// Salve Item
+	salve_item_used = false;
+	if (salve_items.contains(held_item_id))
+		salve_item_used = true;
+
 	// Lift Key Item
 	lift_key_used = false;
 	if (lift_key_items.contains(held_item_id))
@@ -9650,6 +9676,11 @@ RValue& GmlScriptUseItemCallback(
 	orb_item_used = false;
 	if (orb_items.contains(held_item_id))
 		orb_item_used = true;
+
+	// Heart Crystal
+	heart_crystal_used = false;
+	if (held_item_id == item_name_to_id_map["heart_crystal"])
+		heart_crystal_used = true;
 
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_USE_ITEM));
 	original(
@@ -9718,12 +9749,12 @@ RValue& GmlScriptDropItemCallback(
 				if (StructVariableExists(*array_element, "item_id"))
 				{
 					int item_id = array_element->GetMember("item_id").ToInt64();
-					if (item_id == item_name_to_id_map["ore_stone"])
+					if (item_id == item_name_to_id_map["ore_stone"] && ItemHasBeenAcquired(item_id))
 						chance_to_spawn_glowstone = true;
 				}
 			}
 		}
-		else if (Arguments[0]->m_Kind == VALUE_INT64 && Arguments[0]->ToInt64() == item_name_to_id_map["ore_stone"])
+		else if (Arguments[0]->m_Kind == VALUE_INT64 && Arguments[0]->ToInt64() == item_name_to_id_map["ore_stone"] && ItemHasBeenAcquired(Arguments[0]->ToInt64()))
 			chance_to_spawn_glowstone = true;
 
 		// TODO: Should there be some RNG for dropping glowstone?
