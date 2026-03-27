@@ -384,7 +384,7 @@ static const int DEFAULT_LURING_TRAP_MONSTER_SPAWN_COUNT = 2;
 static const int DEFAULT_INHIBITING_TRAP_DURATION_SECONDS = 900;
 static const int DEFAULT_GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT = 50;
 static const double DEFAULT_METEOR_TRAP_SCALING_FACTOR = 2.5;
-static const int DEFAULT_VOID_TRAP_DURATION_SECONDS = 1500;
+static const int DEFAULT_VOID_TRAP_DURATION_SECONDS = 1200;
 static const int DEFAULT_MISTPOOL_EQUIPMENT_STORE_PRICE = 500;
 static const int DEFAULT_SALVES_STORE_PRICE = 50;
 static const double DEFAULT_DREAD_BEAST_DAMAGE_MODIFIER = 2;
@@ -7681,7 +7681,8 @@ void ObjectCallback(
 								else if (heart_crystal_used)
 								{
 									heart_crystal_used = false;
-									unmodified_base_health += 20;
+									if (unmodified_base_health != -1)
+										unmodified_base_health += 20;
 								}
 							}
 						}
