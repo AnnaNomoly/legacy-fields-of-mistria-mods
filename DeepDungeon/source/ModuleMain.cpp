@@ -1839,7 +1839,7 @@ static int deep_wounds_damage_pool = 0;
 static int stoneskin_shield_amount = 0;
 static int spirit_link_combined_health_pool = 0;
 static int sigil_of_silence_count = 0;
-static int sigil_of_alteration_count = 0;
+static int sigil_of_alteration_monster_id = -1;
 static int dread_beast_monster_id = -1;
 static int dread_beasts_configured = 0;
 static int boss_monsters_configured = 0;
@@ -3220,6 +3220,21 @@ void LoadMonsterStates()
 		monster_category_to_state_id_map["rock_stack"][state->ToString()] = i;
 	}
 
+	// Statue States
+	size_t statue_states_length;
+	RValue statue_states = global_instance->GetMember("__statue_state__");
+	g_ModuleInterface->GetArraySize(statue_states, statue_states_length);
+	for (size_t i = 0; i < statue_states_length; i++)
+	{
+		RValue* state;
+		g_ModuleInterface->GetArrayEntry(statue_states, i, state);
+
+		monster_category_to_state_id_map["statue"][state->ToString()] = i;
+	}
+
+	// Tome States
+	size_t tome_states_length;
+	RValue tome_states = global_instance->GetMember("__tome_state__");
 	g_ModuleInterface->GetArraySize(tome_states, tome_states_length);
 	for (size_t i = 0; i < tome_states_length; i++)
 	{
@@ -6049,9 +6064,9 @@ std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floo
 				random_floor_enchantments.insert(GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
 			}
 
-			// 45% chance for Group 3
+			// 35% chance for Group 3
 			int group_three_chance = zero_to_ninety_nine_distribution(random_generator);
-			if (group_three_chance < 45)
+			if (group_three_chance < 35)
 			{
 				int gloom_chance = zero_to_ninety_nine_distribution(random_generator);
 				if (gloom_chance < 60) // 60% chance for Gloom
@@ -6079,9 +6094,9 @@ std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floo
 				random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
 			}
 
-			// 25% chance for Group 3
+			// 15% chance for Group 3
 			int group_three_chance = zero_to_ninety_nine_distribution(random_generator);
-			if (group_three_chance < 25)
+			if (group_three_chance < 15)
 			{
 				int gloom_chance = zero_to_ninety_nine_distribution(random_generator);
 				if (gloom_chance < 60) // 60% chance for Gloom
@@ -6113,9 +6128,9 @@ std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floo
 				random_floor_enchantments.insert(GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
 			}
 
-			// 50% chance for Group 3
+			// 40% chance for Group 3
 			int group_three_chance = zero_to_ninety_nine_distribution(random_generator);
-			if (group_three_chance < 50)
+			if (group_three_chance < 40)
 			{
 				int gloom_chance = zero_to_ninety_nine_distribution(random_generator);
 				if (gloom_chance < 70) // 70% chance for Gloom
@@ -6143,9 +6158,9 @@ std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floo
 				random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
 			}
 
-			// 30% chance for Group 3
+			// 20% chance for Group 3
 			int group_three_chance = zero_to_ninety_nine_distribution(random_generator);
-			if (group_three_chance < 30)
+			if (group_three_chance < 20)
 			{
 				int gloom_chance = zero_to_ninety_nine_distribution(random_generator);
 				if (gloom_chance < 70) // 70% chance for Gloom
@@ -6177,9 +6192,9 @@ std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floo
 				random_floor_enchantments.insert(GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
 			}
 
-			// 55% chance for Group 3
+			// 45% chance for Group 3
 			int group_three_chance = zero_to_ninety_nine_distribution(random_generator);
-			if (group_three_chance < 55)
+			if (group_three_chance < 45)
 			{
 				int gloom_chance = zero_to_ninety_nine_distribution(random_generator);
 				if (gloom_chance < 80) // 80% chance for Gloom
@@ -6207,9 +6222,9 @@ std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floo
 				random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
 			}
 
-			// 35% chance for Group 3
+			// 25% chance for Group 3
 			int group_three_chance = zero_to_ninety_nine_distribution(random_generator);
-			if (group_three_chance < 35)
+			if (group_three_chance < 25)
 			{
 				int gloom_chance = zero_to_ninety_nine_distribution(random_generator);
 				if (gloom_chance < 80) // 80% chance for Gloom
@@ -6241,9 +6256,9 @@ std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floo
 				random_floor_enchantments.insert(GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
 			}
 
-			// 60% chance for Group 3
+			// 50% chance for Group 3
 			int group_three_chance = zero_to_ninety_nine_distribution(random_generator);
-			if (group_three_chance < 60)
+			if (group_three_chance < 50)
 			{
 				int gloom_chance = zero_to_ninety_nine_distribution(random_generator);
 				if (gloom_chance < 90) // 90% chance for Gloom
@@ -6271,9 +6286,9 @@ std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floo
 				random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
 			}
 
-			// 40% chance for Group 3
+			// 30% chance for Group 3
 			int group_three_chance = zero_to_ninety_nine_distribution(random_generator);
-			if (group_three_chance < 40)
+			if (group_three_chance < 30)
 			{
 				int gloom_chance = zero_to_ninety_nine_distribution(random_generator);
 				if (gloom_chance < 90) // 90% chance for Gloom
@@ -8157,6 +8172,7 @@ void ObjectCallback(
 						if (std::isfinite(hit_points))
 						{
 							*monster.GetRefMember("hit_points") = std::trunc(hit_points * 1.5); // TODO: Tune this.
+							StructVariableSet(monster, "__deep_dungeon__default_hit_points", std::trunc(hit_points * 1.5));
 							StructVariableSet(monster, "__deep_dungeon__gloom_applied", true);
 						}
 					}
