@@ -3220,6 +3220,15 @@ void LoadMonsterStates()
 		monster_category_to_state_id_map["rock_stack"][state->ToString()] = i;
 	}
 
+	g_ModuleInterface->GetArraySize(tome_states, tome_states_length);
+	for (size_t i = 0; i < tome_states_length; i++)
+	{
+		RValue* state;
+		g_ModuleInterface->GetArrayEntry(tome_states, i, state);
+
+		monster_category_to_state_id_map["tome"][state->ToString()] = i;
+	}
+
 	// TODO: New monsters as added.
 }
 
@@ -6352,6 +6361,23 @@ std::vector<int> GenerateRandomMonstersIdsForCurrentFloor(int monsters_to_spawn,
 	return random_monsters;
 }
 
+int SelectRandomMonsterForAlteration()
+{
+	static thread_local std::mt19937 random_generator(std::random_device{}());
+	std::vector<int> candidate_monsters(dungeon_biome_to_candidate_monsters_map[floor_number_to_biome_name_map[floor_number]].begin(), dungeon_biome_to_candidate_monsters_map[floor_number_to_biome_name_map[floor_number]].end());
+
+	candidate_monsters.erase(std::remove(candidate_monsters.begin(), candidate_monsters.end(), monster_name_to_id_map["stalagmite"]), candidate_monsters.end());
+	candidate_monsters.erase(std::remove(candidate_monsters.begin(), candidate_monsters.end(), monster_name_to_id_map["stalagmite_green"]), candidate_monsters.end());
+	candidate_monsters.erase(std::remove(candidate_monsters.begin(), candidate_monsters.end(), monster_name_to_id_map["stalagmite_purple"]), candidate_monsters.end());
+	candidate_monsters.erase(std::remove(candidate_monsters.begin(), candidate_monsters.end(), monster_name_to_id_map["spirit"]), candidate_monsters.end());
+	candidate_monsters.erase(std::remove(candidate_monsters.begin(), candidate_monsters.end(), monster_name_to_id_map["spirit_purple"]), candidate_monsters.end());
+	candidate_monsters.erase(std::remove(candidate_monsters.begin(), candidate_monsters.end(), monster_name_to_id_map["mimic"]), candidate_monsters.end());
+	candidate_monsters.erase(std::remove(candidate_monsters.begin(), candidate_monsters.end(), monster_name_to_id_map["griffin_statue"]), candidate_monsters.end());
+
+	std::uniform_int_distribution<size_t> random_monster_distribution(0, candidate_monsters.size() - 1);
+	return candidate_monsters[random_monster_distribution(random_generator)];
+}
+
 void SpawnDreadBeast(CInstance* Self, CInstance* Other)
 {
 	if (TRAP_SPAWN_POINTS.contains(ari_current_gm_room))
@@ -7262,7 +7288,7 @@ void ResetStaticFields(bool returned_to_title_screen)
 	stoneskin_shield_amount = 0;
 	spirit_link_combined_health_pool = 0;
 	sigil_of_silence_count = 0;
-	sigil_of_alteration_count = 0;
+	sigil_of_alteration_monster_id = 0;
 	dread_beast_monster_id = -1;
 	dread_beasts_configured = 0;
 	boss_monsters_configured = 0;
@@ -7412,7 +7438,10 @@ void ObjectCallback(
 									sigil_item_used = false;
 
 									if (held_item_id == sigil_to_item_id_map[Sigils::ALTERATION])
+									{
 										active_sigils.insert(Sigils::ALTERATION);
+										sigil_of_alteration_monster_id = SelectRandomMonsterForAlteration();
+									}
 									if (held_item_id == sigil_to_item_id_map[Sigils::CONCEALMENT])
 										active_sigils.insert(Sigils::CONCEALMENT);
 									if (held_item_id == sigil_to_item_id_map[Sigils::FORTIFICATION])
@@ -8199,36 +8228,6 @@ void ObjectCallback(
 					}
 				}
 
-				// Spikes
-				//if (active_offerings.contains(Offerings::SPIKES))
-				//{
-				//	if (StructVariableExists(monster, "hit_points"))
-				//	{
-				//		double hit_points = monster.GetMember("hit_points").ToDouble();
-				//		if (std::isfinite(hit_points))
-				//		{
-				//			if (!StructVariableExists(monster, "__deep_dungeon__spikes_applied"))
-				//			{
-				//				StructVariableSet(monster, "__deep_dungeon__spikes_applied", true);
-				//				StructVariableSet(monster, "__deep_dungeon__spikes_damage", 0);
-				//			}
-				//			else if (StructVariableExists(monster, "__deep_dungeon__default_hit_points"))
-				//			{
-				//				int default_hit_points = monster.GetMember("__deep_dungeon__default_hit_points").ToInt64();
-				//				int spikes_damage = monster.GetMember("__deep_dungeon__spikes_damage").ToInt64();
-				//				if (hit_points < default_hit_points)
-				//				{
-				//					spikes_damage += (default_hit_points - hit_points - spikes_damage);
-				//					StructVariableSet(monster, "__deep_dungeon__spikes_damage", spikes_damage);
-
-				//					int reflected_amount = max(1, spikes_damage * 20 / 100);
-				//					ModifyHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], -1 * reflected_amount);
-				//				}
-				//			}
-				//		}
-				//	}
-				//}
-
 				// Sigil of Concealment
 				if (active_sigils.contains(Sigils::CONCEALMENT))
 				{
@@ -8241,7 +8240,14 @@ void ObjectCallback(
 
 						RValue original_hit_points = monster.GetMember("__deep_dungeon__conceal_hit_points");
 						if (hit_points.ToDouble() == original_hit_points.ToDouble())
+						{
 							StructVariableSet(monster, "aggro", false);
+							if (monster_id.ToInt64() == monster_name_to_id_map["cat"] || monster_id.ToInt64() == monster_name_to_id_map["cat_void"] || monster_id.ToInt64() == monster_name_to_id_map["tome"])
+							{
+								StructVariableSet(monster, "friction_coefficient", 1);
+								StructVariableSet(monster, "slippery_coefficient", 1);
+							}
+						}
 						else
 						{
 							active_sigils.erase(Sigils::CONCEALMENT);
@@ -8257,7 +8263,19 @@ void ObjectCallback(
 					}
 				}
 				else
+				{
 					StructVariableRemove(monster, "__deep_dungeon__conceal_hit_points");
+					if (StructVariableExists(monster, "config") && StructVariableExists(monster, "hit_points"))
+					{
+						double hit_points = monster.GetMember("hit_points").ToDouble();
+						if (std::isfinite(hit_points) && hit_points > 0 && (monster_id.ToInt64() == monster_name_to_id_map["cat"] || monster_id.ToInt64() == monster_name_to_id_map["cat_void"] || monster_id.ToInt64() == monster_name_to_id_map["tome"]))
+						{
+							StructVariableSet(monster, "friction_coefficient", 0.1);
+							StructVariableSet(monster, "slippery_coefficient", 0.1);
+						}
+					}
+				}
+					
 
 				// Sigil of Rage
 				if (active_sigils.contains(Sigils::RAGE))
@@ -8516,31 +8534,8 @@ RValue& GmlScriptSpawnMonsterCallback(
 		// Sigil of Alteration
 		if (active_sigils.contains(Sigils::ALTERATION))
 		{
-			int chance_to_activate = zero_to_ninety_nine_distribution(random_generator);
-
-			int activation_threshold = 100;
-			for (int i = 0; i < sigil_of_alteration_count; i++)
-			{
-				activation_threshold /= 2;
-			}
-
-			bool activate = false;
-			if (activation_threshold == 100)
-				activate = true;
-			else if (chance_to_activate < activation_threshold)
-				activate = true;
-
-			if (activate)
-			{
-				int random = zero_to_ninety_nine_distribution(random_generator);
-
-				if (random < 40) // 40% chance for flame spirit
-					*Arguments[2] = monster_name_to_id_map["spirit"];
-				else // 60% chance for mimic
-					*Arguments[2] = monster_name_to_id_map["mimic"];
-			}
-
-			sigil_of_alteration_count++;
+			if (sigil_of_alteration_monster_id != -1)
+				*Arguments[2] = sigil_of_alteration_monster_id;
 		}
 	}
 
@@ -10136,12 +10131,44 @@ RValue& GmlScriptGetLocalizerCallback(
 		else if (Arguments[0]->ToString() == FLOOR_ENCHANTMENT_PLACEHOLDER_TEXT_KEY)
 		{
 			std::string custom_text = "";
-			for (auto it = active_floor_enchantments.begin(); it != active_floor_enchantments.end();)
-			{
-				custom_text += floor_enchantments_to_localized_string_map[*it];
+			bool add_newline = false;
 
-				if (++it != active_floor_enchantments.end())
-					custom_text += "\n";
+			// Group 1 Enchantments
+			for (const auto& enchantment : GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS)
+			{
+				if (active_floor_enchantments.contains(enchantment))
+				{
+					add_newline = true;
+					custom_text += floor_enchantments_to_localized_string_map[enchantment];
+					break;
+				}
+			}
+
+			// Group 2 Enchantments
+			for (const auto& enchantment : GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS)
+			{
+				if (active_floor_enchantments.contains(enchantment))
+				{
+					if (add_newline)
+						custom_text += "\n";
+					
+					add_newline = true;
+					custom_text += floor_enchantments_to_localized_string_map[enchantment];
+					break;
+				}
+			}
+
+			// Group 3 Enchantments
+			for (const auto& enchantment : GROUP_THREE_FLOOR_ENCHANTMENTS)
+			{
+				if (active_floor_enchantments.contains(enchantment))
+				{
+					if (add_newline)
+						custom_text += "\n";
+
+					custom_text += floor_enchantments_to_localized_string_map[enchantment];
+					break;
+				}
 			}
 
 			Result = RValue(custom_text);
@@ -10426,7 +10453,7 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 	deep_wounds_damage_pool = 0;
 	stoneskin_shield_amount = 0;
 	sigil_of_silence_count = 0;
-	sigil_of_alteration_count = 0;
+	sigil_of_alteration_monster_id = 0;
 
 	// Track Unmodified Max HP
 	unmodified_base_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
@@ -10747,7 +10774,7 @@ RValue& GmlScriptGoToRoomCallback(
 		stoneskin_shield_amount = 0;
 		spirit_link_combined_health_pool = 0;
 		sigil_of_silence_count = 0;
-		sigil_of_alteration_count = 0;
+		sigil_of_alteration_monster_id = 0;
 		dread_beast_monster_id = -1;
 		dread_beasts_configured = 0;
 		boss_monsters_configured = 0;
