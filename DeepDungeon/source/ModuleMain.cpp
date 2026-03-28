@@ -355,6 +355,7 @@ static const std::string ORACLE_SET_BONUS_BLESSED_LOCALIZED_TEXT_KEY = "Items/Mo
 static const std::string ORACLE_SET_BONUS_PROPHECY_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Classes/Oracle/set_bonuses/prophecy";
 
 static const int TWO_MINUTES_IN_SECONDS = 120;
+static const int TWO_MINUTES_AND_THIRTY_SECONDS = 150;
 static const int THREE_MINUTES_IN_SECONDS = 180;
 static const int ONE_HOUR_IN_SECONDS = 3600;
 static const int TRAP_ACTIVATION_DISTANCE = 16;
@@ -7967,17 +7968,6 @@ void ObjectCallback(
 			if (current_health > 0)
 				ModifyHealth(global_instance->GetRefMember("__ari")->ToInstance(), self, -1);
 
-			for (CInstance* monster : current_floor_monsters)
-			{
-				if (StructVariableExists(monster, "monster_id") && StructVariableExists(monster, "hit_points") && StructVariableExists(monster, "__deep_dungeon__default_hit_points"))
-				{
-					RValue monster_id = monster->GetMember("monster_id");
-					double hit_points = monster->GetMember("hit_points").ToDouble();
-					if (IsNumeric(monster_id) && std::isfinite(hit_points) && hit_points > 0)
-						*monster->GetRefMember("hit_points") = hit_points - 1;
-				}
-			}
-
 			is_fumigate_tracked_interval = false;
 		}
 
@@ -9614,13 +9604,11 @@ RValue& GmlScriptPlayTextCallback(
 
 			if (is_offering)
 			{
-				const std::vector<Offerings> possible_offerings = {
-					Offerings::DREAD,
-					Offerings::INNER_FIRE,
-					Offerings::LEECH,
-					Offerings::PERIL,
-					Offerings::RECKONING
-				};
+				std::vector<Offerings> possible_offerings = {};
+				if (!configuration.experimental_extra_floor_enchantments_and_offerings)
+					possible_offerings = { Offerings::DREAD, Offerings::INNER_FIRE, Offerings::LEECH, Offerings::PERIL, Offerings::RECKONING };
+				else
+					possible_offerings = { Offerings::DREAD, Offerings::INNER_FIRE, Offerings::LEECH, Offerings::PERIL, Offerings::RECKONING, Offerings::OUTBREAK, Offerings::SPIRIT_LINK, Offerings::SPIKES, Offerings::REFLECT };
 
 				// Pick a random offering effect
 				static thread_local std::mt19937 random_generator(std::random_device{}());
@@ -10064,7 +10052,7 @@ RValue& GmlScriptGetMinutesCallback(
 		// Fumigate
 		if (active_floor_enchantments.contains(FloorEnchantments::FUMIGATE))
 		{
-			if (!is_fumigate_tracked_interval && (current_time_in_seconds - time_of_last_fumigate_tick) >= TWO_MINUTES_IN_SECONDS)
+			if (!is_fumigate_tracked_interval && (current_time_in_seconds - time_of_last_fumigate_tick) >= TWO_MINUTES_AND_THIRTY_SECONDS)
 			{
 				is_fumigate_tracked_interval = true;
 				time_of_last_fumigate_tick = current_time_in_seconds;
