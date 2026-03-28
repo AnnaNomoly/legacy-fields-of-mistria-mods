@@ -93,6 +93,7 @@ static const char* const GML_SCRIPT_ON_BEGIN_STEP = "gml_Script_on_begin_step@An
 static const char* const GML_SCRIPT_RECIPE_GENERATE_INFUSIONS = "gml_Script_generate_infusions@Recipe@Recipe";
 static const char* const GML_SCRIPT_BARK_EMITTER = "gml_Script_BarkEmitter";
 static const char* const GML_SCRIPT_BARK_EMITTER_EMIT = "gml_Script_emit@BarkEmitter@BarkEmitter";
+static const char* const CONFIG_VERSION_JSON_KEY = "__config_version"; // The config version
 static const char* const DISABLE_DUNGEON_LIFT_JSON_KEY = "disable_dungeon_lift"; // Controls the dungeon lift
 static const char* const RESTRICT_PERKS_JSON_KEY = "restrict_perks"; // Determines if perks are restricted in the dungeon
 static const char* const RESTRICT_ITEMS_JSON_KEY = "restrict_items"; // Determines if items are restricted in the dungeon
@@ -128,6 +129,11 @@ static const char* const MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY = "mistpool_equ
 static const char* const SALVES_STORE_PRICE_JSON_KEY = "salves_store_price"; // Controls the price of salves in stores
 static const char* const DREAD_BEAST_DAMAGE_MODIFIER_JSON_KEY = "dread_beast_damage_modifier"; // Controls the damage of dread beasts
 static const char* const DREAD_BEAST_HEALTH_MODIFIER_JSON_KEY = "dread_beast_health_modifier"; // Controls the health of dread beasts
+static const char* const GLOOM_DAMAGE_DEALT_MODIFIER_JSON_KEY = "gloom_monster_damage_dealt_modifier"; // Controls the damage multiplier granted by Gloom
+static const char* const GLOOM_DAMAGE_RECEIVED_MODIFIER_JSON_KEY = "gloom_monster_damage_received_modifier"; // Controls the damage mitigation granted by Gloom
+static const char* const GLOOM_HEALTH_MODIFIER_JSON_KEY = "gloom_monster_health_modifier"; // Controls the health bonus granted by Gloom
+static const char* const EXPERIMENTAL_MAX_HEALTH_BUG_FIX_JSON_KEY = "experimental_max_health_bug_fix"; // Controls the experimental fix for restoring proper max health
+static const char* const EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS_JSON_KEY = "experimental_extra_floor_enchantments_and_offerings"; // Controls the experimental option to always enable the Oracle exclusive floor enchantments and offerings
 
 static const std::string SIGIL_OF_ALTERATION_NAME = "sigil_of_alteration";
 static const std::string SIGIL_OF_CONCEALMENT_NAME = "sigil_of_concealment";
@@ -354,6 +360,7 @@ static const int ONE_HOUR_IN_SECONDS = 3600;
 static const int TRAP_ACTIVATION_DISTANCE = 16;
 
 // Configuration defaults
+static const int CONFIG_VERSION = 1;
 static const bool DEFAULT_DISABLE_DUNGEON_LIFT = true;
 static const bool DEFAULT_RESTRICT_PERKS = true;
 static const bool DEFAULT_RESTRICT_ITEMS = true;
@@ -389,6 +396,11 @@ static const int DEFAULT_MISTPOOL_EQUIPMENT_STORE_PRICE = 500;
 static const int DEFAULT_SALVES_STORE_PRICE = 50;
 static const double DEFAULT_DREAD_BEAST_DAMAGE_MODIFIER = 2;
 static const double DEFAULT_DREAD_BEAST_HEALTH_MODIFIER = 3;
+static const double DEFAULT_GLOOM_DAMAGE_DEALT_MODIFIER = 1.5;
+static const double DEFAULT_GLOOM_DAMAGE_RECEIVED_MODIFIER = 0.5;
+static const double DEFAULT_GLOOM_HEALTH_MODIFIER = 1.5;
+static const bool DEFAULT_EXPERIMENTAL_MAX_HEALTH_BUG_FIX = false;
+static const bool DEFAULT_EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS = false;
 
 static enum class BossBattle {
 	NONE,
@@ -1916,6 +1928,7 @@ static uint64_t fade_start_time = 0;
 
 // Configuration Options
 static struct Configuration {
+	int config_version = CONFIG_VERSION;
 	bool disable_dungeon_lift = DEFAULT_DISABLE_DUNGEON_LIFT;
 	bool restrict_perks = DEFAULT_RESTRICT_PERKS;
 	bool restrict_items = DEFAULT_RESTRICT_ITEMS;
@@ -1951,6 +1964,11 @@ static struct Configuration {
 	int salves_store_price = DEFAULT_SALVES_STORE_PRICE;
 	double dread_beast_damage_modifier = DEFAULT_DREAD_BEAST_DAMAGE_MODIFIER;
 	double dread_beast_health_modifier = DEFAULT_DREAD_BEAST_HEALTH_MODIFIER;
+	double gloom_damage_dealt_modifier = DEFAULT_GLOOM_DAMAGE_DEALT_MODIFIER;
+	double gloom_damage_received_modifier = DEFAULT_GLOOM_DAMAGE_RECEIVED_MODIFIER;
+	double gloom_health_modifier = DEFAULT_GLOOM_HEALTH_MODIFIER;
+	bool experimental_max_health_bug_fix = DEFAULT_EXPERIMENTAL_MAX_HEALTH_BUG_FIX;
+	bool experimental_extra_floor_enchantments_and_offerings = DEFAULT_EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS;
 };
 static Configuration configuration = Configuration();
 
@@ -1969,6 +1987,7 @@ void PrintError(std::exception_ptr eptr)
 json CreateConfigJson(bool use_defaults)
 {
 	json config_json = {
+		{ CONFIG_VERSION_JSON_KEY, use_defaults ? CONFIG_VERSION : configuration.config_version },
 		{ DISABLE_DUNGEON_LIFT_JSON_KEY, use_defaults ? DEFAULT_DISABLE_DUNGEON_LIFT : configuration.disable_dungeon_lift },
 		{ RESTRICT_PERKS_JSON_KEY, use_defaults ? DEFAULT_RESTRICT_PERKS : configuration.restrict_perks },
 		{ RESTRICT_ITEMS_JSON_KEY, use_defaults ? DEFAULT_RESTRICT_ITEMS : configuration.restrict_items },
@@ -2003,8 +2022,12 @@ json CreateConfigJson(bool use_defaults)
 		{ MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY, use_defaults ? DEFAULT_MISTPOOL_EQUIPMENT_STORE_PRICE : configuration.mistpool_equipment_store_price },
 		{ SALVES_STORE_PRICE_JSON_KEY, use_defaults ? DEFAULT_SALVES_STORE_PRICE : configuration.salves_store_price },
 		{ DREAD_BEAST_DAMAGE_MODIFIER_JSON_KEY, use_defaults ? DEFAULT_DREAD_BEAST_DAMAGE_MODIFIER : configuration.dread_beast_damage_modifier },
-		{ DREAD_BEAST_HEALTH_MODIFIER_JSON_KEY, use_defaults ? DEFAULT_DREAD_BEAST_HEALTH_MODIFIER : configuration.dread_beast_health_modifier }
-
+		{ DREAD_BEAST_HEALTH_MODIFIER_JSON_KEY, use_defaults ? DEFAULT_DREAD_BEAST_HEALTH_MODIFIER : configuration.dread_beast_health_modifier },
+		{ GLOOM_DAMAGE_DEALT_MODIFIER_JSON_KEY, use_defaults ? DEFAULT_GLOOM_DAMAGE_DEALT_MODIFIER : configuration.gloom_damage_dealt_modifier },
+		{ GLOOM_DAMAGE_RECEIVED_MODIFIER_JSON_KEY, use_defaults ? DEFAULT_GLOOM_DAMAGE_RECEIVED_MODIFIER : configuration.gloom_damage_received_modifier },
+		{ GLOOM_HEALTH_MODIFIER_JSON_KEY, use_defaults ? DEFAULT_GLOOM_HEALTH_MODIFIER : configuration.gloom_health_modifier },
+		{ EXPERIMENTAL_MAX_HEALTH_BUG_FIX_JSON_KEY, use_defaults ? DEFAULT_EXPERIMENTAL_MAX_HEALTH_BUG_FIX : configuration.experimental_max_health_bug_fix },
+		{ EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS_JSON_KEY, use_defaults ? DEFAULT_EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS : configuration.experimental_extra_floor_enchantments_and_offerings },
 	};
 	return config_json;
 }
@@ -2045,382 +2068,457 @@ void CreateOrLoadConfigFile()
 				// Check if the json_object is empty.
 				if (json_object.empty())
 				{
+					configuration.config_version = 0;
 					g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - No values found in mod configuration file: %s!", MOD_NAME, VERSION, config_file.c_str());
-					g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Add values to the configuration file, otherwise defaults will be used.", MOD_NAME, VERSION);
+					g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Writing DEFAULT VALUES to mod configuration file: %s!", MOD_NAME, VERSION, config_file.c_str());
 				}
 				else
 				{
-					// Try loading the disable_dungeon_lift value.
-					if (json_object.contains(DISABLE_DUNGEON_LIFT_JSON_KEY) && json_object.at(DISABLE_DUNGEON_LIFT_JSON_KEY).is_boolean())
-						configuration.disable_dungeon_lift = json_object[DISABLE_DUNGEON_LIFT_JSON_KEY];
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, DISABLE_DUNGEON_LIFT_JSON_KEY, config_file.c_str());
-
-					// Try loading the restrict_perks value.
-					if (json_object.contains(RESTRICT_PERKS_JSON_KEY) && json_object.at(RESTRICT_PERKS_JSON_KEY).is_boolean())
-						configuration.restrict_perks = json_object[RESTRICT_PERKS_JSON_KEY];
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, RESTRICT_PERKS_JSON_KEY, config_file.c_str());
-
-					// Try loading the restrict_items value.
-					if (json_object.contains(RESTRICT_ITEMS_JSON_KEY) && json_object.at(RESTRICT_ITEMS_JSON_KEY).is_boolean())
-						configuration.restrict_items = json_object[RESTRICT_ITEMS_JSON_KEY];
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, RESTRICT_ITEMS_JSON_KEY, config_file.c_str());
-
-					// Try loading the restrict_armor value.
-					if (json_object.contains(RESTRICT_ARMOR_JSON_KEY) && json_object.at(RESTRICT_ARMOR_JSON_KEY).is_boolean())
-						configuration.restrict_armor = json_object[RESTRICT_ARMOR_JSON_KEY];
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, RESTRICT_ARMOR_JSON_KEY, config_file.c_str());
-
-					// Try loading the restrict_tools value.
-					if (json_object.contains(RESTRICT_TOOLS_JSON_KEY) && json_object.at(RESTRICT_TOOLS_JSON_KEY).is_boolean())
-						configuration.restrict_tools = json_object[RESTRICT_TOOLS_JSON_KEY];
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, RESTRICT_TOOLS_JSON_KEY, config_file.c_str());
-
-					// Try loading the restrict_weapons value.
-					if (json_object.contains(RESTRICT_WEAPONS_JSON_KEY) && json_object.at(RESTRICT_WEAPONS_JSON_KEY).is_boolean())
-						configuration.restrict_weapons = json_object[RESTRICT_WEAPONS_JSON_KEY];
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, RESTRICT_WEAPONS_JSON_KEY, config_file.c_str());
-
-					// Try loading the health_salve_limit value.
-					if (json_object.contains(HEALTH_SALVE_LIMIT_JSON_KEY) && json_object.at(HEALTH_SALVE_LIMIT_JSON_KEY).is_number_integer())
+					// Try loading the config_version value.
+					bool missing_version = false;
+					if (json_object.contains(CONFIG_VERSION_JSON_KEY) && json_object.at(CONFIG_VERSION_JSON_KEY).is_number_integer())
 					{
-						int health_salve_limit = json_object[HEALTH_SALVE_LIMIT_JSON_KEY];
-						if (health_salve_limit > 0 && health_salve_limit <= 999)
-							configuration.health_salve_limit = health_salve_limit;
+						int config_version = json_object[CONFIG_VERSION_JSON_KEY];
+						if (config_version <= 0 || config_version > CONFIG_VERSION)
+						{
+							missing_version = true;
+							configuration.config_version = 0;
+							g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, CONFIG_VERSION_JSON_KEY, config_file.c_str());
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Writing DEFAULT VALUES to mod configuration file: %s!", MOD_NAME, VERSION, DISABLE_DUNGEON_LIFT_JSON_KEY, config_file.c_str());
+						}
+						else
+							configuration.config_version = config_version;
+					}
+					else
+					{
+						missing_version = true;
+						configuration.config_version = 0;
+						g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, CONFIG_VERSION_JSON_KEY, config_file.c_str());
+						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Writing DEFAULT VALUES to mod configuration file: %s!", MOD_NAME, VERSION, DISABLE_DUNGEON_LIFT_JSON_KEY, config_file.c_str());
+					}
+					
+					if (!missing_version)
+					{
+						// Try loading the disable_dungeon_lift value.
+						if (json_object.contains(DISABLE_DUNGEON_LIFT_JSON_KEY) && json_object.at(DISABLE_DUNGEON_LIFT_JSON_KEY).is_boolean())
+							configuration.disable_dungeon_lift = json_object[DISABLE_DUNGEON_LIFT_JSON_KEY];
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, DISABLE_DUNGEON_LIFT_JSON_KEY, config_file.c_str());
+
+						// Try loading the restrict_perks value.
+						if (json_object.contains(RESTRICT_PERKS_JSON_KEY) && json_object.at(RESTRICT_PERKS_JSON_KEY).is_boolean())
+							configuration.restrict_perks = json_object[RESTRICT_PERKS_JSON_KEY];
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, RESTRICT_PERKS_JSON_KEY, config_file.c_str());
+
+						// Try loading the restrict_items value.
+						if (json_object.contains(RESTRICT_ITEMS_JSON_KEY) && json_object.at(RESTRICT_ITEMS_JSON_KEY).is_boolean())
+							configuration.restrict_items = json_object[RESTRICT_ITEMS_JSON_KEY];
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, RESTRICT_ITEMS_JSON_KEY, config_file.c_str());
+
+						// Try loading the restrict_armor value.
+						if (json_object.contains(RESTRICT_ARMOR_JSON_KEY) && json_object.at(RESTRICT_ARMOR_JSON_KEY).is_boolean())
+							configuration.restrict_armor = json_object[RESTRICT_ARMOR_JSON_KEY];
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, RESTRICT_ARMOR_JSON_KEY, config_file.c_str());
+
+						// Try loading the restrict_tools value.
+						if (json_object.contains(RESTRICT_TOOLS_JSON_KEY) && json_object.at(RESTRICT_TOOLS_JSON_KEY).is_boolean())
+							configuration.restrict_tools = json_object[RESTRICT_TOOLS_JSON_KEY];
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, RESTRICT_TOOLS_JSON_KEY, config_file.c_str());
+
+						// Try loading the restrict_weapons value.
+						if (json_object.contains(RESTRICT_WEAPONS_JSON_KEY) && json_object.at(RESTRICT_WEAPONS_JSON_KEY).is_boolean())
+							configuration.restrict_weapons = json_object[RESTRICT_WEAPONS_JSON_KEY];
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, RESTRICT_WEAPONS_JSON_KEY, config_file.c_str());
+
+						// Try loading the health_salve_limit value.
+						if (json_object.contains(HEALTH_SALVE_LIMIT_JSON_KEY) && json_object.at(HEALTH_SALVE_LIMIT_JSON_KEY).is_number_integer())
+						{
+							int health_salve_limit = json_object[HEALTH_SALVE_LIMIT_JSON_KEY];
+							if (health_salve_limit > 0 && health_salve_limit <= 999)
+								configuration.health_salve_limit = health_salve_limit;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, HEALTH_SALVE_LIMIT_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, HEALTH_SALVE_LIMIT_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, HEALTH_SALVE_LIMIT_JSON_KEY, config_file.c_str());
 
-					// Try loading the stamina_salve_limit value.
-					if (json_object.contains(STAMINA_SALVE_LIMIT_JSON_KEY) && json_object.at(STAMINA_SALVE_LIMIT_JSON_KEY).is_number_integer())
-					{
-						int stamina_salve_limit = json_object[STAMINA_SALVE_LIMIT_JSON_KEY];
-						if (stamina_salve_limit > 0 && stamina_salve_limit <= 999)
-							configuration.stamina_salve_limit = stamina_salve_limit;
+						// Try loading the stamina_salve_limit value.
+						if (json_object.contains(STAMINA_SALVE_LIMIT_JSON_KEY) && json_object.at(STAMINA_SALVE_LIMIT_JSON_KEY).is_number_integer())
+						{
+							int stamina_salve_limit = json_object[STAMINA_SALVE_LIMIT_JSON_KEY];
+							if (stamina_salve_limit > 0 && stamina_salve_limit <= 999)
+								configuration.stamina_salve_limit = stamina_salve_limit;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, STAMINA_SALVE_LIMIT_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, STAMINA_SALVE_LIMIT_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, STAMINA_SALVE_LIMIT_JSON_KEY, config_file.c_str());
 
-					// Try loading the mana_salve_limit value.
-					if (json_object.contains(MANA_SALVE_LIMIT_JSON_KEY) && json_object.at(MANA_SALVE_LIMIT_JSON_KEY).is_number_integer())
-					{
-						int mana_salve_limit = json_object[MANA_SALVE_LIMIT_JSON_KEY];
-						if (mana_salve_limit > 0 && mana_salve_limit <= 999)
-							configuration.mana_salve_limit = mana_salve_limit;
+						// Try loading the mana_salve_limit value.
+						if (json_object.contains(MANA_SALVE_LIMIT_JSON_KEY) && json_object.at(MANA_SALVE_LIMIT_JSON_KEY).is_number_integer())
+						{
+							int mana_salve_limit = json_object[MANA_SALVE_LIMIT_JSON_KEY];
+							if (mana_salve_limit > 0 && mana_salve_limit <= 999)
+								configuration.mana_salve_limit = mana_salve_limit;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, MANA_SALVE_LIMIT_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, MANA_SALVE_LIMIT_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, MANA_SALVE_LIMIT_JSON_KEY, config_file.c_str());
 
-					// Try loading the health_salve_potency value.
-					if (json_object.contains(HEALTH_SALVE_POTENCY_JSON_KEY) && json_object.at(HEALTH_SALVE_POTENCY_JSON_KEY).is_number_integer())
-					{
-						int health_salve_potency = json_object[HEALTH_SALVE_POTENCY_JSON_KEY];
-						if (health_salve_potency > 0 && health_salve_potency <= 999)
-							configuration.health_salve_potency = health_salve_potency;
+						// Try loading the health_salve_potency value.
+						if (json_object.contains(HEALTH_SALVE_POTENCY_JSON_KEY) && json_object.at(HEALTH_SALVE_POTENCY_JSON_KEY).is_number_integer())
+						{
+							int health_salve_potency = json_object[HEALTH_SALVE_POTENCY_JSON_KEY];
+							if (health_salve_potency > 0 && health_salve_potency <= 999)
+								configuration.health_salve_potency = health_salve_potency;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, HEALTH_SALVE_POTENCY_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, HEALTH_SALVE_POTENCY_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, HEALTH_SALVE_POTENCY_JSON_KEY, config_file.c_str());
 
-					// Try loading the stamina_salve_potency value.
-					if (json_object.contains(STAMINA_SALVE_POTENCY_JSON_KEY) && json_object.at(STAMINA_SALVE_POTENCY_JSON_KEY).is_number_integer())
-					{
-						int stamina_salve_potency = json_object[STAMINA_SALVE_POTENCY_JSON_KEY];
-						if (stamina_salve_potency > 0 && stamina_salve_potency <= 999)
-							configuration.stamina_salve_potency = stamina_salve_potency;
+						// Try loading the stamina_salve_potency value.
+						if (json_object.contains(STAMINA_SALVE_POTENCY_JSON_KEY) && json_object.at(STAMINA_SALVE_POTENCY_JSON_KEY).is_number_integer())
+						{
+							int stamina_salve_potency = json_object[STAMINA_SALVE_POTENCY_JSON_KEY];
+							if (stamina_salve_potency > 0 && stamina_salve_potency <= 999)
+								configuration.stamina_salve_potency = stamina_salve_potency;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, STAMINA_SALVE_POTENCY_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, STAMINA_SALVE_POTENCY_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, STAMINA_SALVE_POTENCY_JSON_KEY, config_file.c_str());
 
-					// Try loading the mana_salve_potency value.
-					if (json_object.contains(MANA_SALVE_POTENCY_JSON_KEY) && json_object.at(MANA_SALVE_POTENCY_JSON_KEY).is_number_integer())
-					{
-						int mana_salve_potency = json_object[MANA_SALVE_POTENCY_JSON_KEY];
-						if (mana_salve_potency > 0 && mana_salve_potency <= 999)
-							configuration.mana_salve_potency = mana_salve_potency;
+						// Try loading the mana_salve_potency value.
+						if (json_object.contains(MANA_SALVE_POTENCY_JSON_KEY) && json_object.at(MANA_SALVE_POTENCY_JSON_KEY).is_number_integer())
+						{
+							int mana_salve_potency = json_object[MANA_SALVE_POTENCY_JSON_KEY];
+							if (mana_salve_potency > 0 && mana_salve_potency <= 999)
+								configuration.mana_salve_potency = mana_salve_potency;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, MANA_SALVE_POTENCY_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, MANA_SALVE_POTENCY_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, MANA_SALVE_POTENCY_JSON_KEY, config_file.c_str());
 
-					// Try loading the sustaining_potion_duration_modifier value.
-					if (json_object.contains(SUSTAINING_POTION_DURATION_MODIFIER_JSON_KEY) && json_object.at(SUSTAINING_POTION_DURATION_MODIFIER_JSON_KEY).is_number_float())
-					{
-						double sustaining_potion_duration_modifier = json_object[SUSTAINING_POTION_DURATION_MODIFIER_JSON_KEY];
-						if (sustaining_potion_duration_modifier >= 0.5 && sustaining_potion_duration_modifier <= 2.0)
-							configuration.sustaining_potion_duration_modifier = sustaining_potion_duration_modifier;
+						// Try loading the sustaining_potion_duration_modifier value.
+						if (json_object.contains(SUSTAINING_POTION_DURATION_MODIFIER_JSON_KEY) && json_object.at(SUSTAINING_POTION_DURATION_MODIFIER_JSON_KEY).is_number_float())
+						{
+							double sustaining_potion_duration_modifier = json_object[SUSTAINING_POTION_DURATION_MODIFIER_JSON_KEY];
+							if (sustaining_potion_duration_modifier >= 0.5 && sustaining_potion_duration_modifier <= 2.0)
+								configuration.sustaining_potion_duration_modifier = sustaining_potion_duration_modifier;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, SUSTAINING_POTION_DURATION_MODIFIER_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, SUSTAINING_POTION_DURATION_MODIFIER_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, SUSTAINING_POTION_DURATION_MODIFIER_JSON_KEY, config_file.c_str());
 
-					// Try loading the randomize_dungeon_music value.
-					if (json_object.contains(RANDOMIZE_DUNGEON_MUSIC_JSON_KEY) && json_object.at(RANDOMIZE_DUNGEON_MUSIC_JSON_KEY).is_boolean())
-						configuration.randomize_dungeon_music = json_object[RANDOMIZE_DUNGEON_MUSIC_JSON_KEY];
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, RANDOMIZE_DUNGEON_MUSIC_JSON_KEY, config_file.c_str());
+						// Try loading the randomize_dungeon_music value.
+						if (json_object.contains(RANDOMIZE_DUNGEON_MUSIC_JSON_KEY) && json_object.at(RANDOMIZE_DUNGEON_MUSIC_JSON_KEY).is_boolean())
+							configuration.randomize_dungeon_music = json_object[RANDOMIZE_DUNGEON_MUSIC_JSON_KEY];
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, RANDOMIZE_DUNGEON_MUSIC_JSON_KEY, config_file.c_str());
 
-					// Try loading the random_dread_beast_spawn_chance value.
-					if (json_object.contains(RANDOM_DREAD_BEAST_SPAWN_CHANCE_JSON_KEY) && json_object.at(RANDOM_DREAD_BEAST_SPAWN_CHANCE_JSON_KEY).is_number_integer())
-					{
-						int random_dread_beast_spawn_chance = json_object[RANDOM_DREAD_BEAST_SPAWN_CHANCE_JSON_KEY];
-						if (random_dread_beast_spawn_chance >= 0 && random_dread_beast_spawn_chance <= 100)
-							configuration.random_dread_beast_spawn_chance = random_dread_beast_spawn_chance;
+						// Try loading the random_dread_beast_spawn_chance value.
+						if (json_object.contains(RANDOM_DREAD_BEAST_SPAWN_CHANCE_JSON_KEY) && json_object.at(RANDOM_DREAD_BEAST_SPAWN_CHANCE_JSON_KEY).is_number_integer())
+						{
+							int random_dread_beast_spawn_chance = json_object[RANDOM_DREAD_BEAST_SPAWN_CHANCE_JSON_KEY];
+							if (random_dread_beast_spawn_chance >= 0 && random_dread_beast_spawn_chance <= 100)
+								configuration.random_dread_beast_spawn_chance = random_dread_beast_spawn_chance;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, RANDOM_DREAD_BEAST_SPAWN_CHANCE_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, RANDOM_DREAD_BEAST_SPAWN_CHANCE_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, RANDOM_DREAD_BEAST_SPAWN_CHANCE_JSON_KEY, config_file.c_str());
 
-					// Try loading the offering_event_chance value.
-					if (json_object.contains(OFFERING_EVENT_CHANCE_JSON_KEY) && json_object.at(OFFERING_EVENT_CHANCE_JSON_KEY).is_number_integer())
-					{
-						int offering_event_chance = json_object[OFFERING_EVENT_CHANCE_JSON_KEY];
-						if (offering_event_chance >= 0 && offering_event_chance <= 100)
-							configuration.offering_event_chance = offering_event_chance;
+						// Try loading the offering_event_chance value.
+						if (json_object.contains(OFFERING_EVENT_CHANCE_JSON_KEY) && json_object.at(OFFERING_EVENT_CHANCE_JSON_KEY).is_number_integer())
+						{
+							int offering_event_chance = json_object[OFFERING_EVENT_CHANCE_JSON_KEY];
+							if (offering_event_chance >= 0 && offering_event_chance <= 100)
+								configuration.offering_event_chance = offering_event_chance;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, OFFERING_EVENT_CHANCE_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, OFFERING_EVENT_CHANCE_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, OFFERING_EVENT_CHANCE_JSON_KEY, config_file.c_str());
 
-					// Try loading the offering_health_requirement value.
-					if (json_object.contains(OFFERING_HEALTH_REQUIREMENT_JSON_KEY) && json_object.at(OFFERING_HEALTH_REQUIREMENT_JSON_KEY).is_number_integer())
-					{
-						int offering_health_requirement = json_object[OFFERING_HEALTH_REQUIREMENT_JSON_KEY];
-						if (offering_health_requirement >= 0 && offering_health_requirement <= 90)
-							configuration.offering_health_requirement = offering_health_requirement;
+						// Try loading the offering_health_requirement value.
+						if (json_object.contains(OFFERING_HEALTH_REQUIREMENT_JSON_KEY) && json_object.at(OFFERING_HEALTH_REQUIREMENT_JSON_KEY).is_number_integer())
+						{
+							int offering_health_requirement = json_object[OFFERING_HEALTH_REQUIREMENT_JSON_KEY];
+							if (offering_health_requirement >= 0 && offering_health_requirement <= 90)
+								configuration.offering_health_requirement = offering_health_requirement;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, OFFERING_HEALTH_REQUIREMENT_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, OFFERING_HEALTH_REQUIREMENT_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, OFFERING_HEALTH_REQUIREMENT_JSON_KEY, config_file.c_str());
 
-					// Try loading the offering_stamina_requirement value.
-					if (json_object.contains(OFFERING_STAMINA_REQUIREMENT_JSON_KEY) && json_object.at(OFFERING_STAMINA_REQUIREMENT_JSON_KEY).is_number_integer())
-					{
-						int offering_stamina_requirement = json_object[OFFERING_STAMINA_REQUIREMENT_JSON_KEY];
-						if (offering_stamina_requirement >= 0 && offering_stamina_requirement <= 90)
-							configuration.offering_stamina_requirement = offering_stamina_requirement;
+						// Try loading the offering_stamina_requirement value.
+						if (json_object.contains(OFFERING_STAMINA_REQUIREMENT_JSON_KEY) && json_object.at(OFFERING_STAMINA_REQUIREMENT_JSON_KEY).is_number_integer())
+						{
+							int offering_stamina_requirement = json_object[OFFERING_STAMINA_REQUIREMENT_JSON_KEY];
+							if (offering_stamina_requirement >= 0 && offering_stamina_requirement <= 90)
+								configuration.offering_stamina_requirement = offering_stamina_requirement;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, OFFERING_STAMINA_REQUIREMENT_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, OFFERING_STAMINA_REQUIREMENT_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, OFFERING_STAMINA_REQUIREMENT_JSON_KEY, config_file.c_str());
 
-					// Try loading the offering_mana_requirement value.
-					if (json_object.contains(OFFERING_MANA_REQUIREMENT_JSON_KEY) && json_object.at(OFFERING_MANA_REQUIREMENT_JSON_KEY).is_number_integer())
-					{
-						int offering_mana_requirement = json_object[OFFERING_MANA_REQUIREMENT_JSON_KEY];
-						if (offering_mana_requirement >= 0 && offering_mana_requirement <= 16)
-							configuration.offering_mana_requirement = offering_mana_requirement;
+						// Try loading the offering_mana_requirement value.
+						if (json_object.contains(OFFERING_MANA_REQUIREMENT_JSON_KEY) && json_object.at(OFFERING_MANA_REQUIREMENT_JSON_KEY).is_number_integer())
+						{
+							int offering_mana_requirement = json_object[OFFERING_MANA_REQUIREMENT_JSON_KEY];
+							if (offering_mana_requirement >= 0 && offering_mana_requirement <= 16)
+								configuration.offering_mana_requirement = offering_mana_requirement;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, OFFERING_MANA_REQUIREMENT_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, OFFERING_MANA_REQUIREMENT_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, OFFERING_MANA_REQUIREMENT_JSON_KEY, config_file.c_str());
 
-					// Try loading the cursed_armor_drop_chance_modifier value.
-					if (json_object.contains(CURSED_ARMOR_DROP_CHANCE_MODIFIER_JSON_KEY) && json_object.at(CURSED_ARMOR_DROP_CHANCE_MODIFIER_JSON_KEY).is_number_float())
-					{
-						double cursed_armor_drop_chance_modifier = json_object[CURSED_ARMOR_DROP_CHANCE_MODIFIER_JSON_KEY];
-						if (cursed_armor_drop_chance_modifier >= 1.0 && cursed_armor_drop_chance_modifier <= 10.0)
-							configuration.cursed_armor_drop_chance_modifier = cursed_armor_drop_chance_modifier;
+						// Try loading the cursed_armor_drop_chance_modifier value.
+						if (json_object.contains(CURSED_ARMOR_DROP_CHANCE_MODIFIER_JSON_KEY) && json_object.at(CURSED_ARMOR_DROP_CHANCE_MODIFIER_JSON_KEY).is_number_float())
+						{
+							double cursed_armor_drop_chance_modifier = json_object[CURSED_ARMOR_DROP_CHANCE_MODIFIER_JSON_KEY];
+							if (cursed_armor_drop_chance_modifier >= 1.0 && cursed_armor_drop_chance_modifier <= 10.0)
+								configuration.cursed_armor_drop_chance_modifier = cursed_armor_drop_chance_modifier;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, CURSED_ARMOR_DROP_CHANCE_MODIFIER_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, CURSED_ARMOR_DROP_CHANCE_MODIFIER_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, CURSED_ARMOR_DROP_CHANCE_MODIFIER_JSON_KEY, config_file.c_str());
 
-					// Try loading the soul_stone_drop_chance value.
-					if (json_object.contains(SOUL_STONE_DROP_CHANCE_JSON_KEY) && json_object.at(SOUL_STONE_DROP_CHANCE_JSON_KEY).is_number_integer())
-					{
-						int soul_stone_drop_chance = json_object[SOUL_STONE_DROP_CHANCE_JSON_KEY];
-						if (soul_stone_drop_chance >= 35 && soul_stone_drop_chance <= 100)
-							configuration.soul_stone_drop_chance = soul_stone_drop_chance;
+						// Try loading the soul_stone_drop_chance value.
+						if (json_object.contains(SOUL_STONE_DROP_CHANCE_JSON_KEY) && json_object.at(SOUL_STONE_DROP_CHANCE_JSON_KEY).is_number_integer())
+						{
+							int soul_stone_drop_chance = json_object[SOUL_STONE_DROP_CHANCE_JSON_KEY];
+							if (soul_stone_drop_chance >= 35 && soul_stone_drop_chance <= 100)
+								configuration.soul_stone_drop_chance = soul_stone_drop_chance;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, SOUL_STONE_DROP_CHANCE_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, SOUL_STONE_DROP_CHANCE_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, SOUL_STONE_DROP_CHANCE_JSON_KEY, config_file.c_str());
 
-					// Try loading the lift_key_drop_chance value.
-					if (json_object.contains(LIFT_KEY_DROP_CHANCE_JSON_KEY) && json_object.at(LIFT_KEY_DROP_CHANCE_JSON_KEY).is_number_integer())
-					{
-						int lift_key_drop_chance = json_object[LIFT_KEY_DROP_CHANCE_JSON_KEY];
-						if (lift_key_drop_chance >= 2 && lift_key_drop_chance <= 100)
-							configuration.lift_key_drop_chance = lift_key_drop_chance;
+						// Try loading the lift_key_drop_chance value.
+						if (json_object.contains(LIFT_KEY_DROP_CHANCE_JSON_KEY) && json_object.at(LIFT_KEY_DROP_CHANCE_JSON_KEY).is_number_integer())
+						{
+							int lift_key_drop_chance = json_object[LIFT_KEY_DROP_CHANCE_JSON_KEY];
+							if (lift_key_drop_chance >= 2 && lift_key_drop_chance <= 100)
+								configuration.lift_key_drop_chance = lift_key_drop_chance;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, LIFT_KEY_DROP_CHANCE_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, LIFT_KEY_DROP_CHANCE_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, LIFT_KEY_DROP_CHANCE_JSON_KEY, config_file.c_str());
 
-					// Try loading the enable_boss_fight_restrictions value.
-					if (json_object.contains(ENABLE_BOSS_FIGHT_RESTRICTIONS_JSON_KEY) && json_object.at(ENABLE_BOSS_FIGHT_RESTRICTIONS_JSON_KEY).is_boolean())
-						configuration.enable_boss_fight_restrictions = json_object[ENABLE_BOSS_FIGHT_RESTRICTIONS_JSON_KEY];
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, ENABLE_BOSS_FIGHT_RESTRICTIONS_JSON_KEY, config_file.c_str());
+						// Try loading the enable_boss_fight_restrictions value.
+						if (json_object.contains(ENABLE_BOSS_FIGHT_RESTRICTIONS_JSON_KEY) && json_object.at(ENABLE_BOSS_FIGHT_RESTRICTIONS_JSON_KEY).is_boolean())
+							configuration.enable_boss_fight_restrictions = json_object[ENABLE_BOSS_FIGHT_RESTRICTIONS_JSON_KEY];
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, ENABLE_BOSS_FIGHT_RESTRICTIONS_JSON_KEY, config_file.c_str());
 
-					// Try loading confusing_trap_duration_seconds
-					if (json_object.contains(CONFUSING_TRAP_DURATION_SECONDS_JSON_KEY) && json_object.at(CONFUSING_TRAP_DURATION_SECONDS_JSON_KEY).is_number_integer())
-					{
-						int confusing_trap_duration_seconds = json_object[CONFUSING_TRAP_DURATION_SECONDS_JSON_KEY];
-						if (confusing_trap_duration_seconds >= 0 && confusing_trap_duration_seconds <= 1200)
-							configuration.confusing_trap_duration_seconds = confusing_trap_duration_seconds;
+						// Try loading confusing_trap_duration_seconds
+						if (json_object.contains(CONFUSING_TRAP_DURATION_SECONDS_JSON_KEY) && json_object.at(CONFUSING_TRAP_DURATION_SECONDS_JSON_KEY).is_number_integer())
+						{
+							int confusing_trap_duration_seconds = json_object[CONFUSING_TRAP_DURATION_SECONDS_JSON_KEY];
+							if (confusing_trap_duration_seconds >= 0 && confusing_trap_duration_seconds <= 1200)
+								configuration.confusing_trap_duration_seconds = confusing_trap_duration_seconds;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, CONFUSING_TRAP_DURATION_SECONDS_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, CONFUSING_TRAP_DURATION_SECONDS_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, CONFUSING_TRAP_DURATION_SECONDS_JSON_KEY, config_file.c_str());
 
-					// Try loading disorienting_trap_duration_seconds
-					if (json_object.contains(DISORIENTING_TRAP_DURATION_SECONDS_JSON_KEY) && json_object.at(DISORIENTING_TRAP_DURATION_SECONDS_JSON_KEY).is_number_integer())
-					{
-						int disorienting_trap_duration_seconds = json_object[DISORIENTING_TRAP_DURATION_SECONDS_JSON_KEY];
-						if (disorienting_trap_duration_seconds >= 0 && disorienting_trap_duration_seconds <= 600)
-							configuration.disorienting_trap_duration_seconds = disorienting_trap_duration_seconds;
+						// Try loading disorienting_trap_duration_seconds
+						if (json_object.contains(DISORIENTING_TRAP_DURATION_SECONDS_JSON_KEY) && json_object.at(DISORIENTING_TRAP_DURATION_SECONDS_JSON_KEY).is_number_integer())
+						{
+							int disorienting_trap_duration_seconds = json_object[DISORIENTING_TRAP_DURATION_SECONDS_JSON_KEY];
+							if (disorienting_trap_duration_seconds >= 0 && disorienting_trap_duration_seconds <= 600)
+								configuration.disorienting_trap_duration_seconds = disorienting_trap_duration_seconds;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, DISORIENTING_TRAP_DURATION_SECONDS_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, DISORIENTING_TRAP_DURATION_SECONDS_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, DISORIENTING_TRAP_DURATION_SECONDS_JSON_KEY, config_file.c_str());
 
-					// Try loading exploding_trap_current_health_damage_percent
-					if (json_object.contains(EXPLODING_TRAP_CURRENT_HEALTH_DAMAGE_PERCENT_JSON_KEY) && json_object.at(EXPLODING_TRAP_CURRENT_HEALTH_DAMAGE_PERCENT_JSON_KEY).is_number_integer())
-					{
-						int exploding_trap_current_health_damage_percent = json_object[EXPLODING_TRAP_CURRENT_HEALTH_DAMAGE_PERCENT_JSON_KEY];
-						if (exploding_trap_current_health_damage_percent >= 0 && exploding_trap_current_health_damage_percent <= 80)
-							configuration.exploding_trap_current_health_damage_percent = exploding_trap_current_health_damage_percent;
+						// Try loading exploding_trap_current_health_damage_percent
+						if (json_object.contains(EXPLODING_TRAP_CURRENT_HEALTH_DAMAGE_PERCENT_JSON_KEY) && json_object.at(EXPLODING_TRAP_CURRENT_HEALTH_DAMAGE_PERCENT_JSON_KEY).is_number_integer())
+						{
+							int exploding_trap_current_health_damage_percent = json_object[EXPLODING_TRAP_CURRENT_HEALTH_DAMAGE_PERCENT_JSON_KEY];
+							if (exploding_trap_current_health_damage_percent >= 0 && exploding_trap_current_health_damage_percent <= 80)
+								configuration.exploding_trap_current_health_damage_percent = exploding_trap_current_health_damage_percent;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, EXPLODING_TRAP_CURRENT_HEALTH_DAMAGE_PERCENT_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, EXPLODING_TRAP_CURRENT_HEALTH_DAMAGE_PERCENT_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, EXPLODING_TRAP_CURRENT_HEALTH_DAMAGE_PERCENT_JSON_KEY, config_file.c_str());
 
-					// Try loading luring_trap_monster_spawn_count
-					if (json_object.contains(LURING_TRAP_MONSTER_SPAWN_COUNT_JSON_KEY) && json_object.at(LURING_TRAP_MONSTER_SPAWN_COUNT_JSON_KEY).is_number_integer())
-					{
-						int luring_trap_monster_spawn_count = json_object[LURING_TRAP_MONSTER_SPAWN_COUNT_JSON_KEY];
-						if (luring_trap_monster_spawn_count >= 0 && luring_trap_monster_spawn_count <= 2)
-							configuration.luring_trap_monster_spawn_count = luring_trap_monster_spawn_count;
+						// Try loading luring_trap_monster_spawn_count
+						if (json_object.contains(LURING_TRAP_MONSTER_SPAWN_COUNT_JSON_KEY) && json_object.at(LURING_TRAP_MONSTER_SPAWN_COUNT_JSON_KEY).is_number_integer())
+						{
+							int luring_trap_monster_spawn_count = json_object[LURING_TRAP_MONSTER_SPAWN_COUNT_JSON_KEY];
+							if (luring_trap_monster_spawn_count >= 0 && luring_trap_monster_spawn_count <= 2)
+								configuration.luring_trap_monster_spawn_count = luring_trap_monster_spawn_count;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, LURING_TRAP_MONSTER_SPAWN_COUNT_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, LURING_TRAP_MONSTER_SPAWN_COUNT_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, LURING_TRAP_MONSTER_SPAWN_COUNT_JSON_KEY, config_file.c_str());
 
-					// Try loading inhibiting_trap_duration_seconds
-					if (json_object.contains(INHIBITING_TRAP_DURATION_SECONDS_JSON_KEY) && json_object.at(INHIBITING_TRAP_DURATION_SECONDS_JSON_KEY).is_number_integer())
-					{
-						int inhibiting_trap_duration_seconds = json_object[INHIBITING_TRAP_DURATION_SECONDS_JSON_KEY];
-						if (inhibiting_trap_duration_seconds >= 0 && inhibiting_trap_duration_seconds <= 900)
-							configuration.inhibiting_trap_duration_seconds = inhibiting_trap_duration_seconds;
+						// Try loading inhibiting_trap_duration_seconds
+						if (json_object.contains(INHIBITING_TRAP_DURATION_SECONDS_JSON_KEY) && json_object.at(INHIBITING_TRAP_DURATION_SECONDS_JSON_KEY).is_number_integer())
+						{
+							int inhibiting_trap_duration_seconds = json_object[INHIBITING_TRAP_DURATION_SECONDS_JSON_KEY];
+							if (inhibiting_trap_duration_seconds >= 0 && inhibiting_trap_duration_seconds <= 900)
+								configuration.inhibiting_trap_duration_seconds = inhibiting_trap_duration_seconds;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, INHIBITING_TRAP_DURATION_SECONDS_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, INHIBITING_TRAP_DURATION_SECONDS_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, INHIBITING_TRAP_DURATION_SECONDS_JSON_KEY, config_file.c_str());
 
-					// Try loading gaze_trap_max_health_damage_percent
-					if (json_object.contains(GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT_JSON_KEY) && json_object.at(GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT_JSON_KEY).is_number_integer())
-					{
-						int gaze_trap_max_health_damage_percent = json_object[GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT_JSON_KEY];
-						if (gaze_trap_max_health_damage_percent >= 0 && gaze_trap_max_health_damage_percent <= 99)
-							configuration.gaze_trap_max_health_damage_percent = gaze_trap_max_health_damage_percent;
+						// Try loading gaze_trap_max_health_damage_percent
+						if (json_object.contains(GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT_JSON_KEY) && json_object.at(GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT_JSON_KEY).is_number_integer())
+						{
+							int gaze_trap_max_health_damage_percent = json_object[GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT_JSON_KEY];
+							if (gaze_trap_max_health_damage_percent >= 0 && gaze_trap_max_health_damage_percent <= 99)
+								configuration.gaze_trap_max_health_damage_percent = gaze_trap_max_health_damage_percent;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT_JSON_KEY, config_file.c_str());
 
-					// Try loading meteor_trap_scaling_factor
-					if (json_object.contains(METEOR_TRAP_SCALING_FACTOR_JSON_KEY) && json_object.at(METEOR_TRAP_SCALING_FACTOR_JSON_KEY).is_number_float())
-					{
-						double meteor_trap_scaling_factor = json_object[METEOR_TRAP_SCALING_FACTOR_JSON_KEY];
-						if (meteor_trap_scaling_factor == 0 || meteor_trap_scaling_factor == 1 || meteor_trap_scaling_factor == 1.5 || meteor_trap_scaling_factor == 2 || meteor_trap_scaling_factor == 2.5 || meteor_trap_scaling_factor == 3)
-							configuration.meteor_trap_scaling_factor = meteor_trap_scaling_factor;
+						// Try loading meteor_trap_scaling_factor
+						if (json_object.contains(METEOR_TRAP_SCALING_FACTOR_JSON_KEY) && json_object.at(METEOR_TRAP_SCALING_FACTOR_JSON_KEY).is_number_float())
+						{
+							double meteor_trap_scaling_factor = json_object[METEOR_TRAP_SCALING_FACTOR_JSON_KEY];
+							if (meteor_trap_scaling_factor == 0 || meteor_trap_scaling_factor == 1 || meteor_trap_scaling_factor == 1.5 || meteor_trap_scaling_factor == 2 || meteor_trap_scaling_factor == 2.5 || meteor_trap_scaling_factor == 3)
+								configuration.meteor_trap_scaling_factor = meteor_trap_scaling_factor;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, METEOR_TRAP_SCALING_FACTOR_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, METEOR_TRAP_SCALING_FACTOR_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, METEOR_TRAP_SCALING_FACTOR_JSON_KEY, config_file.c_str());
 
-					// Try loading void_trap_duration_seconds
-					if (json_object.contains(VOID_TRAP_DURATION_SECONDS_JSON_KEY) && json_object.at(VOID_TRAP_DURATION_SECONDS_JSON_KEY).is_number_integer())
-					{
-						int void_trap_duration_seconds = json_object[VOID_TRAP_DURATION_SECONDS_JSON_KEY];
-						if (void_trap_duration_seconds >= 0 && void_trap_duration_seconds <= 1800)
-							configuration.void_trap_duration_seconds = void_trap_duration_seconds;
+						// Try loading void_trap_duration_seconds
+						if (json_object.contains(VOID_TRAP_DURATION_SECONDS_JSON_KEY) && json_object.at(VOID_TRAP_DURATION_SECONDS_JSON_KEY).is_number_integer())
+						{
+							int void_trap_duration_seconds = json_object[VOID_TRAP_DURATION_SECONDS_JSON_KEY];
+							if (void_trap_duration_seconds >= 0 && void_trap_duration_seconds <= 1800)
+								configuration.void_trap_duration_seconds = void_trap_duration_seconds;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, VOID_TRAP_DURATION_SECONDS_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, VOID_TRAP_DURATION_SECONDS_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, VOID_TRAP_DURATION_SECONDS_JSON_KEY, config_file.c_str());
 
-					// Try loading mistpool_equipment_store_price
-					if (json_object.contains(MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY) && json_object.at(MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY).is_number_integer())
-					{
-						int mistpool_equipment_store_price = json_object[MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY];
-						if (mistpool_equipment_store_price >= 1 && mistpool_equipment_store_price <= 500)
-							configuration.mistpool_equipment_store_price = mistpool_equipment_store_price;
+						// Try loading mistpool_equipment_store_price
+						if (json_object.contains(MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY) && json_object.at(MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY).is_number_integer())
+						{
+							int mistpool_equipment_store_price = json_object[MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY];
+							if (mistpool_equipment_store_price >= 1 && mistpool_equipment_store_price <= 500)
+								configuration.mistpool_equipment_store_price = mistpool_equipment_store_price;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY, config_file.c_str());
 
-					// Try loading salves_store_price
-					if (json_object.contains(SALVES_STORE_PRICE_JSON_KEY) && json_object.at(SALVES_STORE_PRICE_JSON_KEY).is_number_integer())
-					{
-						int salves_store_price = json_object[SALVES_STORE_PRICE_JSON_KEY];
-						if (salves_store_price >= 1 && salves_store_price <= 50)
-							configuration.salves_store_price = salves_store_price;
+						// Try loading salves_store_price
+						if (json_object.contains(SALVES_STORE_PRICE_JSON_KEY) && json_object.at(SALVES_STORE_PRICE_JSON_KEY).is_number_integer())
+						{
+							int salves_store_price = json_object[SALVES_STORE_PRICE_JSON_KEY];
+							if (salves_store_price >= 1 && salves_store_price <= 50)
+								configuration.salves_store_price = salves_store_price;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, SALVES_STORE_PRICE_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, SALVES_STORE_PRICE_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, SALVES_STORE_PRICE_JSON_KEY, config_file.c_str());
 
-					// Try loading the dread_beast_damage_modifier value.
-					if (json_object.contains(DREAD_BEAST_DAMAGE_MODIFIER_JSON_KEY) && json_object.at(DREAD_BEAST_DAMAGE_MODIFIER_JSON_KEY).is_number_float())
-					{
-						double dread_beast_damage_modifier = json_object[DREAD_BEAST_DAMAGE_MODIFIER_JSON_KEY];
-						if (dread_beast_damage_modifier >= 1.0 && dread_beast_damage_modifier <= 2.0)
-							configuration.dread_beast_damage_modifier = dread_beast_damage_modifier;
+						// Try loading the dread_beast_damage_modifier value.
+						if (json_object.contains(DREAD_BEAST_DAMAGE_MODIFIER_JSON_KEY) && json_object.at(DREAD_BEAST_DAMAGE_MODIFIER_JSON_KEY).is_number_float())
+						{
+							double dread_beast_damage_modifier = json_object[DREAD_BEAST_DAMAGE_MODIFIER_JSON_KEY];
+							if (dread_beast_damage_modifier >= 1.0 && dread_beast_damage_modifier <= 2.0)
+								configuration.dread_beast_damage_modifier = dread_beast_damage_modifier;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, DREAD_BEAST_DAMAGE_MODIFIER_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, DREAD_BEAST_DAMAGE_MODIFIER_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, DREAD_BEAST_DAMAGE_MODIFIER_JSON_KEY, config_file.c_str());
 
-					// Try loading the dread_beast_health_modifier value.
-					if (json_object.contains(DREAD_BEAST_HEALTH_MODIFIER_JSON_KEY) && json_object.at(DREAD_BEAST_HEALTH_MODIFIER_JSON_KEY).is_number_float())
-					{
-						double dread_beast_health_modifier = json_object[DREAD_BEAST_HEALTH_MODIFIER_JSON_KEY];
-						if (dread_beast_health_modifier >= 1.0 && dread_beast_health_modifier <= 3.0)
-							configuration.dread_beast_health_modifier = dread_beast_health_modifier;
+						// Try loading the dread_beast_health_modifier value.
+						if (json_object.contains(DREAD_BEAST_HEALTH_MODIFIER_JSON_KEY) && json_object.at(DREAD_BEAST_HEALTH_MODIFIER_JSON_KEY).is_number_float())
+						{
+							double dread_beast_health_modifier = json_object[DREAD_BEAST_HEALTH_MODIFIER_JSON_KEY];
+							if (dread_beast_health_modifier >= 1.0 && dread_beast_health_modifier <= 3.0)
+								configuration.dread_beast_health_modifier = dread_beast_health_modifier;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, DREAD_BEAST_HEALTH_MODIFIER_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, DREAD_BEAST_HEALTH_MODIFIER_JSON_KEY, config_file.c_str());
+
+						// Try loading the gloom_damage_dealt_modifier value.
+						if (json_object.contains(GLOOM_DAMAGE_DEALT_MODIFIER_JSON_KEY) && json_object.at(GLOOM_DAMAGE_DEALT_MODIFIER_JSON_KEY).is_number_float())
+						{
+							double gloom_damage_dealt_modifier = json_object[GLOOM_DAMAGE_DEALT_MODIFIER_JSON_KEY];
+							if (gloom_damage_dealt_modifier >= 1.0 && gloom_damage_dealt_modifier <= 1.5)
+								configuration.gloom_damage_dealt_modifier = gloom_damage_dealt_modifier;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, GLOOM_DAMAGE_DEALT_MODIFIER_JSON_KEY, config_file.c_str());
+						}
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, GLOOM_DAMAGE_DEALT_MODIFIER_JSON_KEY, config_file.c_str());
+
+						// Try loading the gloom_damage_received_modifier value.
+						if (json_object.contains(GLOOM_DAMAGE_RECEIVED_MODIFIER_JSON_KEY) && json_object.at(GLOOM_DAMAGE_RECEIVED_MODIFIER_JSON_KEY).is_number_float())
+						{
+							double gloom_damage_received_modifier = json_object[GLOOM_DAMAGE_RECEIVED_MODIFIER_JSON_KEY];
+							if (gloom_damage_received_modifier >= 0.5 && gloom_damage_received_modifier <= 1.0)
+								configuration.gloom_damage_received_modifier = gloom_damage_received_modifier;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, GLOOM_DAMAGE_RECEIVED_MODIFIER_JSON_KEY, config_file.c_str());
+						}
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, GLOOM_DAMAGE_RECEIVED_MODIFIER_JSON_KEY, config_file.c_str());
+
+						// Try loading the gloom_health_modifier value.
+						if (json_object.contains(GLOOM_HEALTH_MODIFIER_JSON_KEY) && json_object.at(GLOOM_HEALTH_MODIFIER_JSON_KEY).is_number_float())
+						{
+							double gloom_health_modifier = json_object[GLOOM_HEALTH_MODIFIER_JSON_KEY];
+							if (gloom_health_modifier >= 1.0 && gloom_health_modifier <= 1.5)
+								configuration.gloom_health_modifier = gloom_health_modifier;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, GLOOM_HEALTH_MODIFIER_JSON_KEY, config_file.c_str());
+						}
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, GLOOM_HEALTH_MODIFIER_JSON_KEY, config_file.c_str());
+
+						// Try loading the experimental_max_health_bug_fix value.
+						if (json_object.contains(EXPERIMENTAL_MAX_HEALTH_BUG_FIX_JSON_KEY) && json_object.at(EXPERIMENTAL_MAX_HEALTH_BUG_FIX_JSON_KEY).is_boolean())
+							configuration.experimental_max_health_bug_fix = json_object[EXPERIMENTAL_MAX_HEALTH_BUG_FIX_JSON_KEY];
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, EXPERIMENTAL_MAX_HEALTH_BUG_FIX_JSON_KEY, config_file.c_str());
+
+						// Try loading the experimental_extra_floor_enchantments_and_offerings value.
+						if (json_object.contains(EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS_JSON_KEY) && json_object.at(EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS_JSON_KEY).is_boolean())
+							configuration.experimental_extra_floor_enchantments_and_offerings = json_object[EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS_JSON_KEY];
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS_JSON_KEY, config_file.c_str());
 					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, DREAD_BEAST_HEALTH_MODIFIER_JSON_KEY, config_file.c_str());
 				}
 
 				update_config_file = true;
@@ -2450,7 +2548,11 @@ void CreateOrLoadConfigFile()
 
 		if (update_config_file)
 		{
-			json config_json = CreateConfigJson(false);
+			bool use_defaults = false;
+			if (configuration.config_version == 0)
+				use_defaults = true;
+
+			json config_json = CreateConfigJson(use_defaults);
 			std::ofstream out_stream(config_file);
 			out_stream << std::setw(4) << config_json << std::endl;
 			out_stream.close();
@@ -5824,6 +5926,13 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 		if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || (configuration.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_fire_spell_icon_disabled" });
 	}
+	// Sacred Light (Spell Icon)
+	else if (sprite_name == "spr_ui_journal_magic_sacred_light_spell_icon_main")
+	{
+		// Sacred Light Disabled
+		if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || (configuration.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_sacred_light_spell_icon_disabled" });
+	}
 	// Dungeon Backplate
 	else if (sprite_name == "spr_ui_dungeon_backplate")
 	{
@@ -6029,16 +6138,32 @@ std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floo
 			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
 			if (group_one_chance < 50)
 			{
-				std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
-				random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+				if (!configuration.experimental_extra_floor_enchantments_and_offerings)
+				{
+					std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+				}
+				else
+				{
+					std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+				}
 			}
 
 			// 25% chance for Group 2
 			int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
 			if (group_two_chance < 25)
 			{
-				std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
-				random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+				if (!configuration.experimental_extra_floor_enchantments_and_offerings)
+				{
+					std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+				}
+				else
+				{
+					std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+				}
 			}
 		}
 	}
@@ -6082,16 +6207,32 @@ std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floo
 			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
 			if (group_one_chance < 65)
 			{
-				std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
-				random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+				if (!configuration.experimental_extra_floor_enchantments_and_offerings)
+				{
+					std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+				}
+				else
+				{
+					std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+				}
 			}
 
 			// 40% chance for Group 2
 			int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
 			if (group_two_chance < 40)
 			{
-				std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
-				random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+				if (!configuration.experimental_extra_floor_enchantments_and_offerings)
+				{
+					std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+				}
+				else
+				{
+					std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+				}
 			}
 
 			// 15% chance for Group 3
@@ -6146,16 +6287,32 @@ std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floo
 			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
 			if (group_one_chance < 45)
 			{
-				std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
-				random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+				if (!configuration.experimental_extra_floor_enchantments_and_offerings)
+				{
+					std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+				}
+				else
+				{
+					std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+				}
 			}
 
 			// 65% chance for Group 2
 			int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
 			if (group_two_chance < 65)
 			{
-				std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
-				random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+				if (!configuration.experimental_extra_floor_enchantments_and_offerings)
+				{
+					std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+				}
+				else
+				{
+					std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+				}
 			}
 
 			// 20% chance for Group 3
@@ -6210,16 +6367,32 @@ std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floo
 			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
 			if (group_one_chance < 60)
 			{
-				std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
-				random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+				if (!configuration.experimental_extra_floor_enchantments_and_offerings)
+				{
+					std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+				}
+				else
+				{
+					std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+				}
 			}
 
 			// 75% chance for Group 2
 			int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
 			if (group_two_chance < 75)
 			{
-				std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
-				random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+				if (!configuration.experimental_extra_floor_enchantments_and_offerings)
+				{
+					std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+				}
+				else
+				{
+					std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+				}
 			}
 
 			// 25% chance for Group 3
@@ -6274,16 +6447,32 @@ std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floo
 			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
 			if (group_one_chance < 65)
 			{
-				std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
-				random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+				if (!configuration.experimental_extra_floor_enchantments_and_offerings)
+				{
+					std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+				}
+				else
+				{
+					std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+				}
 			}
 
 			// 75% chance for Group 2
 			int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
 			if (group_two_chance < 75)
 			{
-				std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
-				random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+				if (!configuration.experimental_extra_floor_enchantments_and_offerings)
+				{
+					std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+				}
+				else
+				{
+					std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+				}
 			}
 
 			// 30% chance for Group 3
@@ -7154,6 +7343,33 @@ void ProcessTreasureSpot(CInstance* Self, CInstance* Other)
 		}
 	}
 
+}
+
+void ProcessSpiritConcealment()
+{
+	// TODO: Update as more spirits get added
+	for (CInstance* monster : current_floor_monsters)
+	{
+		if (StructVariableExists(monster, "monster_id") && StructVariableExists(monster, "hit_points"))
+		{
+			RValue monster_id = monster->GetMember("monster_id");
+			double hit_points = monster->GetMember("hit_points").ToDouble();
+			if (IsNumeric(monster_id) && (monster_id.ToInt64() == monster_name_to_id_map["spirit_purple"]) && std::isfinite(hit_points) && hit_points > 0)
+			{
+				if (active_sigils.contains(Sigils::CONCEALMENT) && !StructVariableExists(monster, "__deep_dungeon__deactivated"))
+				{
+					StructVariableSet(monster, "__deep_dungeon__deactivated", true);
+					g_ModuleInterface->CallBuiltin("instance_deactivate_object", { monster });
+				}
+
+				else if (!active_sigils.contains(Sigils::CONCEALMENT) && StructVariableExists(monster, "__deep_dungeon__deactivated"))
+				{
+					StructVariableRemove(monster, "__deep_dungeon__deactivated");
+					g_ModuleInterface->CallBuiltin("instance_activate_object", { monster });
+				}
+			}
+		}
+	}
 }
 
 void ApplyOfferingPenalties(CInstance* Self, CInstance* Other)
@@ -8171,8 +8387,8 @@ void ObjectCallback(
 						double hit_points = monster.GetMember("hit_points").ToDouble();
 						if (std::isfinite(hit_points))
 						{
-							*monster.GetRefMember("hit_points") = std::trunc(hit_points * 1.5); // TODO: Tune this.
-							StructVariableSet(monster, "__deep_dungeon__default_hit_points", std::trunc(hit_points * 1.5));
+							*monster.GetRefMember("hit_points") = std::trunc(hit_points * configuration.gloom_health_modifier);
+							StructVariableSet(monster, "__deep_dungeon__default_hit_points", std::trunc(hit_points * configuration.gloom_health_modifier));
 							StructVariableSet(monster, "__deep_dungeon__gloom_applied", true);
 						}
 					}
@@ -8258,7 +8474,7 @@ void ObjectCallback(
 						if (hit_points.ToDouble() == original_hit_points.ToDouble())
 						{
 							StructVariableSet(monster, "aggro", false);
-							if (monster_id.ToInt64() == monster_name_to_id_map["cat"] || monster_id.ToInt64() == monster_name_to_id_map["cat_void"] || monster_id.ToInt64() == monster_name_to_id_map["tome"])
+							if (monster_id.ToInt64() == monster_name_to_id_map["cat"] || monster_id.ToInt64() == monster_name_to_id_map["cat_void"] || monster_id.ToInt64() == monster_name_to_id_map["tome"] || monster_id.ToInt64() == monster_name_to_id_map["griffin_statue"])
 							{
 								StructVariableSet(monster, "friction_coefficient", 1);
 								StructVariableSet(monster, "slippery_coefficient", 1);
@@ -8284,7 +8500,7 @@ void ObjectCallback(
 					if (StructVariableExists(monster, "config") && StructVariableExists(monster, "hit_points"))
 					{
 						double hit_points = monster.GetMember("hit_points").ToDouble();
-						if (std::isfinite(hit_points) && hit_points > 0 && (monster_id.ToInt64() == monster_name_to_id_map["cat"] || monster_id.ToInt64() == monster_name_to_id_map["cat_void"] || monster_id.ToInt64() == monster_name_to_id_map["tome"]))
+						if (std::isfinite(hit_points) && hit_points > 0 && (monster_id.ToInt64() == monster_name_to_id_map["cat"] || monster_id.ToInt64() == monster_name_to_id_map["cat_void"] || monster_id.ToInt64() == monster_name_to_id_map["tome"] || monster_id.ToInt64() == monster_name_to_id_map["griffin_statue"]))
 						{
 							StructVariableSet(monster, "friction_coefficient", 0.1);
 							StructVariableSet(monster, "slippery_coefficient", 0.1);
@@ -8974,13 +9190,13 @@ RValue& GmlScriptDamageCallback(
 			RValue target = Arguments[0]->GetMember("target");
 			if (target.ToInt64() == 1) // Ari
 			{
-				double damage = std::trunc(Arguments[0]->GetMember("damage").ToDouble() * 1.5); // 50% increased damage
+				double damage = std::trunc(Arguments[0]->GetMember("damage").ToDouble() * configuration.gloom_damage_dealt_modifier); // 50% increased damage
 				*Arguments[0]->GetRefMember("damage") = damage;
 			}
 			else
 			{
 				double damage = Arguments[0]->GetMember("damage").ToDouble();
-				int penalty = std::trunc(damage * 0.50); // 50% reduced damage
+				int penalty = std::trunc(damage * configuration.gloom_damage_received_modifier); // 50% reduced damage
 				*Arguments[0]->GetRefMember("damage") = damage - penalty;
 			}
 
@@ -9823,6 +10039,7 @@ RValue& GmlScriptGetMinutesCallback(
 		ApplyFloorTraps(Self, Other);
 		ProcessCustomAOEs();
 		ProcessTreasureSpot(Self, Other);
+		ProcessSpiritConcealment();
 		
 		// Restoration
 		if (active_floor_enchantments.contains(FloorEnchantments::RESTORATION))
@@ -10747,6 +10964,67 @@ RValue& GmlScriptGoToRoomCallback(
 		VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], unmodified_base_health);
 		VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, unmodified_base_health);
 		unmodified_base_health = -1;
+	}
+
+	// Max HP bug fix (experimental)
+	if (configuration.experimental_max_health_bug_fix)
+	{
+		int max_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+		if (floor_number == 100)
+		{
+			if (max_health < 200)
+			{
+				SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], 200);
+				int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+
+				VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], 200);
+				VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, 200);
+			}
+		}
+		else if (floor_number > 80)
+		{
+			if (max_health < 180)
+			{
+				SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], 180);
+				int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+
+				VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], 180);
+				VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, 180);
+			}
+		}
+		else if (floor_number > 60)
+		{
+			if (max_health < 160)
+			{
+				SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], 160);
+				int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+
+				VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], 160);
+				VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, 160);
+			}
+		}
+		else if (floor_number > 40)
+		{
+			if (max_health < 140)
+			{
+				SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], 140);
+				int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+
+				VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], 140);
+				VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, 140);
+			}
+		}
+		else if (floor_number > 20)
+		{
+			if (max_health < 120)
+			{
+				SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], 120);
+				int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+
+				VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], 120);
+				VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, 120);
+			}
+		}
 	}
 
 	if (floor_number != 0 && (treasure_spot.state == TreasureSpot::SPAWNED || treasure_spot.state == TreasureSpot::FOUND))
