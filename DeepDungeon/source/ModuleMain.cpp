@@ -28,10 +28,12 @@ struct pair_hash {
 };
 
 static const char* const MOD_NAME = "DeepDungeon";
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.0.0-BETA-1";
 static const char* const GML_SCRIPT_GET_LOCALIZER = "gml_Script_get@Localizer@Localizer";
 static const char* const GML_SCRIPT_SPAWN_LADDER = "gml_Script_spawn_ladder@DungeonRunner@DungeonRunner";
+static const char* const GML_SCRIPT_TELEPORT_ARI_TO_ROOM = "gml_Script_ari_teleport_to_room";
 static const char* const GML_SCRIPT_CREATE_NOTIFICATION = "gml_Script_create_notification";
+static const char* const GML_SCRIPT_CLOSE_TEXTBOX = "gml_Script_begin_close@TextboxMenu@TextboxMenu";
 static const char* const GML_SCRIPT_PLAY_CONVERSATION = "gml_Script_play_conversation";
 static const char* const GML_SCRIPT_SCENE_AUDIO_PLAYER_STOP = "gml_Script_stop@SceneAudioPlayer@SceneAudioPlayer";
 static const char* const GML_SCRIPT_SPAWN_TUTORIAL = "gml_Script_spawn_tutorial";
@@ -390,7 +392,7 @@ static const int DEFAULT_DISORIENTING_TRAP_DURATION_SECONDS = 600;
 static const int DEFAULT_EXPLODING_TRAP_CURRENT_HEALTH_DAMAGE_PERCENT = 50;
 static const int DEFAULT_LURING_TRAP_MONSTER_SPAWN_COUNT = 2;
 static const int DEFAULT_INHIBITING_TRAP_DURATION_SECONDS = 900;
-static const int DEFAULT_GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT = 50;
+static const int DEFAULT_GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT = 40;
 static const double DEFAULT_METEOR_TRAP_SCALING_FACTOR = 2.5;
 static const int DEFAULT_VOID_TRAP_DURATION_SECONDS = 1200;
 static const int DEFAULT_MISTPOOL_EQUIPMENT_STORE_PRICE = 500;
@@ -1807,6 +1809,7 @@ static YYTKInterface* g_ModuleInterface = nullptr;
 static CInstance* global_instance = nullptr;
 static RValue __YYTK;
 static bool load_on_start = true;
+static bool is_new_game = false;
 static bool localize_mod_text = false;
 static bool game_is_active = false;
 static bool unlock_recipes = true;
@@ -1881,6 +1884,7 @@ static std::map<int, std::string> monster_id_to_name_map = {};
 static std::map<std::string, int> tutorial_name_to_id_map = {};
 static std::map<std::string, int> infusion_name_to_id_map = {};
 static std::map<std::string, int> status_effect_name_to_id_map = {};
+static std::map<std::string, int> location_name_to_id_map = {};
 static std::map<std::string, int> item_name_to_id_map = {};
 static std::map<std::string, int> bark_name_to_id_map = {};
 std::unordered_set<std::pair<int, int>, pair_hash> floor_trap_positions = {};
@@ -3377,6 +3381,21 @@ void LoadStatusEffects()
 		g_ModuleInterface->GetArrayEntry(status_effects, i, status_effect);
 
 		status_effect_name_to_id_map[status_effect->ToString()] = i;
+	}
+}
+
+void LoadLocations()
+{
+	size_t array_length;
+	RValue locations = global_instance->GetMember("__location_id__");
+	g_ModuleInterface->GetArraySize(locations, array_length);
+
+	for (size_t i = 0; i < array_length; i++)
+	{
+		RValue* location;
+		g_ModuleInterface->GetArrayEntry(locations, i, location);
+
+		location_name_to_id_map[location->ToString()] = i;
 	}
 }
 
@@ -5225,6 +5244,31 @@ void UnlockLiftKeyRecipe(CInstance* Self, CInstance* Other)
 		UnlockRecipe(item_name_to_id_map[RUINS_KEY_F100_NAME], Self, Other);
 }
 
+void TeleportAriToRoom(CInstance* Self, CInstance* Other, int location_id, int x_coordinate, int y_coordinate)
+{
+	CScript* gml_script_ari_teleport_to_room = nullptr;
+	g_ModuleInterface->GetNamedRoutinePointer(
+		GML_SCRIPT_TELEPORT_ARI_TO_ROOM,
+		(PVOID*)&gml_script_ari_teleport_to_room
+	);
+
+	RValue retval;
+	RValue location = location_id;
+	RValue x = x_coordinate;
+	RValue y = y_coordinate;
+	RValue* location_ptr = &location;
+	RValue* x_ptr = &x;
+	RValue* y_ptr = &y;
+	RValue* argument_array[3] = { location_ptr, x_ptr, y_ptr };
+	gml_script_ari_teleport_to_room->m_Functions->m_ScriptFunction(
+		Self,
+		Other,
+		retval,
+		3,
+		argument_array
+	);
+}
+
 void CreateNotification(bool ignore_cooldown, std::string notification_localization_str, CInstance* Self, CInstance* Other)
 {
 	uint64_t current_system_time = GetCurrentSystemTime();
@@ -5276,6 +5320,24 @@ void PlayConversation(std::string conversation_localization_str, CInstance* Self
 		result,
 		4,
 		arguments
+	);
+}
+
+void CloseTextbox(CInstance* Self, CInstance* Other)
+{
+	CScript* gml_script_close_textbox = nullptr;
+	g_ModuleInterface->GetNamedRoutinePointer(
+		GML_SCRIPT_CLOSE_TEXTBOX,
+		(PVOID*)&gml_script_close_textbox
+	);
+
+	RValue result;
+	gml_script_close_textbox->m_Functions->m_ScriptFunction(
+		Self,
+		Other,
+		result,
+		0,
+		nullptr
 	);
 }
 
@@ -9814,6 +9876,23 @@ RValue& GmlScriptPlayTextCallback(
 						InventoryRemoveItem(item_name_to_id_map[entry.first], entry.second, script_name_to_reference_map[GML_SCRIPT_DESERIALIZE_INVENTORY][0], script_name_to_reference_map[GML_SCRIPT_DESERIALIZE_INVENTORY][1]);
 			}
 		}
+		else if (localization_key == "Conversations/Mods/Deep Dungeon/teleport_to_mines/1")
+		{
+			TeleportAriToRoom(
+				script_name_to_reference_map["obj_ari"][0],
+				script_name_to_reference_map["obj_ari"][1],
+				location_name_to_id_map["mines_entry"],
+				216,
+				198
+			);
+			CloseTextbox(Self, Other);
+			return Result;
+		}
+		else if (localization_key == "Conversations/Mods/Deep Dungeon/teleport_to_mines/2")
+		{
+			CloseTextbox(Self, Other);
+			return Result;
+		}
 	}
 
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_PLAY_TEXT));
@@ -11256,6 +11335,7 @@ RValue& GmlScriptSetupMainScreenCallback(
 		LoadSpells();
 		LoadSpellIds();
 		LoadStatusEffects();
+		LoadLocations();
 		LoadInfusions();
 		LoadObjectIds();
 		LoadItems();
@@ -11982,7 +12062,6 @@ RValue& GmlScriptRecipeGenerateInfusionsCallback(
 
 	return Result;
 }
-
 
 RValue& GmlScriptBarkEmitterCallback(
 	IN CInstance* Self,
