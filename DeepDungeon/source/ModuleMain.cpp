@@ -2085,7 +2085,7 @@ void CreateOrLoadConfigFile()
 							missing_version = true;
 							configuration.config_version = 0;
 							g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, CONFIG_VERSION_JSON_KEY, config_file.c_str());
-							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Writing DEFAULT VALUES to mod configuration file: %s!", MOD_NAME, VERSION, DISABLE_DUNGEON_LIFT_JSON_KEY, config_file.c_str());
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Writing DEFAULT VALUES to mod configuration file: %s!", MOD_NAME, VERSION, config_file.c_str());
 						}
 						else
 							configuration.config_version = config_version;
@@ -3852,6 +3852,18 @@ void ModifyMistpoolPickaxeSprites()
 	}
 }
 
+void ModifyBarkSprites()
+{
+	// TODO: Update as more custom bark sprites are implemented
+	RValue spr_ui_bark_icon_no_coin = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_bark_icon_no_coin" });
+	RValue spr_ui_bark_icon_no_coin_copy = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_bark_icon_no_coin_copy" });
+	RValue spr_ui_bark_icon_inhibiting_trap = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_bark_icon_inhibiting_trap" });
+
+	if (floor_number != 0)
+		g_ModuleInterface->CallBuiltin("sprite_assign", { spr_ui_bark_icon_no_coin, spr_ui_bark_icon_inhibiting_trap });
+	else
+		g_ModuleInterface->CallBuiltin("sprite_assign", { spr_ui_bark_icon_no_coin, spr_ui_bark_icon_no_coin_copy });
+}
 
 void ScaleMistpoolWeapon(bool in_dungeon)
 {
@@ -3880,7 +3892,7 @@ void ScaleMistpoolArmor(bool in_dungeon)
 
 		if (in_dungeon)
 		{
-			int modified_floor_number = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? floor_number + 20 : floor_number;
+			int modified_floor_number = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? floor_number + 40 : floor_number;
 			int defense = modified_floor_number / 20;
 			*mistpool_armor_piece->GetRefMember("defense") = defense;
 		}
@@ -3910,19 +3922,19 @@ void ScaleMistpoolPickaxe(bool in_dungeon)
 		}
 		else if (floor_number < 60)
 		{
-			*pick_axe_worn->GetRefMember("damage") = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? 4 : 3;
+			*pick_axe_worn->GetRefMember("damage") = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? 5 : 3;
 			*pick_axe_worn->GetRefMember("quality") = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? 3 : 2;
 		}
 
 		else if (floor_number < 80)
 		{
-			*pick_axe_worn->GetRefMember("damage") = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? 5 : 4;
+			*pick_axe_worn->GetRefMember("damage") = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? 6 : 4;
 			*pick_axe_worn->GetRefMember("quality") = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? 4 : 3;
 		}
 
 		else if (floor_number < 100)
 		{
-			*pick_axe_worn->GetRefMember("damage") = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? 6 : 5;
+			*pick_axe_worn->GetRefMember("damage") = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? 8 : 5;
 			*pick_axe_worn->GetRefMember("quality") = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? 5 : 4;
 		}
 	}
@@ -5848,7 +5860,7 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 	{
 		// Priestess Portrait Replacement
 		if (sprite_name.contains("spr_portrait_seridia") && !sprite_name.contains("flashback"))
-			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_portrait_seridia_flashback_priestess_closed_eyes" });
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_portrait_seridia_flashback_priestess_sad" });
 		// Heart Insert Icon Conversation Replacement
 		else if (sprite_name == "spr_ui_dialogue_namebar_heartinsert")
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_dialogue_namebar_circleinsert" });
@@ -11066,6 +11078,7 @@ RValue& GmlScriptGoToRoomCallback(
 
 	ModifyMistpoolWeaponSprites();
 	ModifyMistpoolPickaxeSprites();
+	ModifyBarkSprites();
 
 	if (script_name_to_reference_map.contains(GML_SCRIPT_UPDATE_TOOLBAR_MENU))
 		UpdateToolbarMenu(script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][0], script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][1]);
