@@ -1,4 +1,3 @@
-//#include <math.h>
 #include <random>
 #include <complex>
 #include <fstream>
@@ -6,6 +5,7 @@
 #include <filesystem>
 #include <unordered_set>
 #include <nlohmann/json.hpp>
+#include <pcg/pcg_random.hpp>
 #include <magic_enum/magic_enum.hpp>
 #include <YYToolkit/YYTK_Shared.hpp> // YYTK v4
 using namespace Aurie;
@@ -3954,7 +3954,13 @@ void ScaleClassArmor(bool in_dungeon)
 
 int GetRandomSoulStone()
 {
-	static thread_local std::mt19937 random_generator(std::random_device{}());
+	static thread_local pcg32 random_generator([] {
+		std::random_device rd;
+		return pcg32(
+			(static_cast<uint64_t>(rd()) << 32) | rd(),
+			(static_cast<uint64_t>(rd()) << 32) | rd()
+		);
+	}());
 	std::uniform_int_distribution<size_t> random_soul_stone_distribution(0, SOUL_STONE_NAMES.size() - 1);
 	return item_name_to_id_map[SOUL_STONE_NAMES[random_soul_stone_distribution(random_generator)]];
 }
@@ -4127,7 +4133,13 @@ int ScaleTemperanceDamage(int current_health, int max_health, int damage)
 
 ElementalSealEffects GetRandomElementalSealEffect()
 {
-	static thread_local std::mt19937 random_generator(std::random_device{}());
+	static thread_local pcg32 random_generator([] {
+		std::random_device rd;
+		return pcg32(
+			(static_cast<uint64_t>(rd()) << 32) | rd(),
+			(static_cast<uint64_t>(rd()) << 32) | rd()
+		);
+	}());
 	std::uniform_int_distribution<size_t> random_elemental_seal_effect_distribution(0, magic_enum::enum_count<ElementalSealEffects>() - 1);
 	return magic_enum::enum_value<ElementalSealEffects>(random_elemental_seal_effect_distribution(random_generator));
 }
@@ -4263,7 +4275,13 @@ void ModifyRockClodAttackPatterns(bool is_boss_battle, bool is_outbreak, RValue 
 		SPLIT // Shoots a single pellet that then splits into many that repeatedly split
 	};
 
-	static thread_local std::mt19937 random_generator(std::random_device{}());
+	static thread_local pcg32 random_generator([] {
+		std::random_device rd;
+		return pcg32(
+			(static_cast<uint64_t>(rd()) << 32) | rd(),
+			(static_cast<uint64_t>(rd()) << 32) | rd()
+		);
+	}());
 	std::uniform_int_distribution<size_t> random_pattern_distribution(0, magic_enum::enum_count<Patterns>() - 1);
 
 	RValue custom_attack_pattern_exists = g_ModuleInterface->CallBuiltin("struct_exists", { monster, "__deep_dungeon__custom_attack_pattern" });
@@ -4361,7 +4379,13 @@ void ModifyStalagmiteAttackPatterns(bool is_boss_battle, bool is_outbreak, RValu
 		CHECKERBOARD
 	};
 
-	static thread_local std::mt19937 random_generator(std::random_device{}());
+	static thread_local pcg32 random_generator([] {
+		std::random_device rd;
+		return pcg32(
+			(static_cast<uint64_t>(rd()) << 32) | rd(),
+			(static_cast<uint64_t>(rd()) << 32) | rd()
+		);
+	}());
 	std::uniform_int_distribution<size_t> zero_to_one_distribution(0, 1);
 	std::uniform_int_distribution<size_t> random_mode_distribution(0, magic_enum::enum_count<Modes>() - 1);
 
@@ -6085,7 +6109,13 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 
 std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floor, DungeonBiomes dungeon_biome)
 {
-	static thread_local std::mt19937 random_generator(std::random_device{}());
+	static thread_local pcg32 random_generator([] {
+		std::random_device rd;
+		return pcg32(
+			(static_cast<uint64_t>(rd()) << 32) | rd(),
+			(static_cast<uint64_t>(rd()) << 32) | rd()
+		);
+	}());
 	std::uniform_int_distribution<size_t> zero_to_ninety_nine_distribution(0, 99);
 
 	std::unordered_set<FloorEnchantments> random_floor_enchantments = {};
@@ -6496,7 +6526,13 @@ void GenerateFloorTraps()
 {
 	if (TRAP_SPAWN_POINTS.contains(ari_current_gm_room))
 	{
-		static thread_local std::mt19937 random_generator(std::random_device{}());
+		static thread_local pcg32 random_generator([] {
+			std::random_device rd;
+			return pcg32(
+				(static_cast<uint64_t>(rd()) << 32) | rd(),
+				(static_cast<uint64_t>(rd()) << 32) | rd()
+			);
+		}());
 		std::vector<std::pair<int, int>> spawn_points = TRAP_SPAWN_POINTS.at(ari_current_gm_room);
 
 		if (spawn_points.empty())
@@ -6529,7 +6565,13 @@ void GenerateFloorTraps()
 
 void GenerateTreasureSpot(CInstance* Self, CInstance* Other)
 {
-	static thread_local std::mt19937 random_generator(std::random_device{}());
+	static thread_local pcg32 random_generator([] {
+		std::random_device rd;
+		return pcg32(
+			(static_cast<uint64_t>(rd()) << 32) | rd(),
+			(static_cast<uint64_t>(rd()) << 32) | rd()
+		);
+	}());
 	std::uniform_int_distribution<size_t> zero_to_seven_distribution(0, 7);
 
 	int biome_adjusted_max_traps_with_peril = (floor_number / 20) + 4;
@@ -6547,7 +6589,13 @@ void GenerateTreasureSpot(CInstance* Self, CInstance* Other)
 
 std::vector<int> GenerateRandomMonstersIdsForCurrentFloor(int monsters_to_spawn, const int monster_id_to_exclude = -1)
 {
-	static thread_local std::mt19937 random_generator(std::random_device{}());
+	static thread_local pcg32 random_generator([] {
+		std::random_device rd;
+		return pcg32(
+			(static_cast<uint64_t>(rd()) << 32) | rd(),
+			(static_cast<uint64_t>(rd()) << 32) | rd()
+		);
+	}());
 	std::vector<int> candidate_monsters(dungeon_biome_to_candidate_monsters_map[floor_number_to_biome_name_map[floor_number]].begin(), dungeon_biome_to_candidate_monsters_map[floor_number_to_biome_name_map[floor_number]].end());
 
 	if (monster_id_to_exclude != -1)
@@ -6568,7 +6616,13 @@ std::vector<int> GenerateRandomMonstersIdsForCurrentFloor(int monsters_to_spawn,
 
 int SelectRandomMonsterForAlteration()
 {
-	static thread_local std::mt19937 random_generator(std::random_device{}());
+	static thread_local pcg32 random_generator([] {
+		std::random_device rd;
+		return pcg32(
+			(static_cast<uint64_t>(rd()) << 32) | rd(),
+			(static_cast<uint64_t>(rd()) << 32) | rd()
+		);
+	}());
 	std::vector<int> candidate_monsters(dungeon_biome_to_candidate_monsters_map[floor_number_to_biome_name_map[floor_number]].begin(), dungeon_biome_to_candidate_monsters_map[floor_number_to_biome_name_map[floor_number]].end());
 
 	candidate_monsters.erase(std::remove(candidate_monsters.begin(), candidate_monsters.end(), monster_name_to_id_map["stalagmite"]), candidate_monsters.end());
@@ -6587,7 +6641,13 @@ void SpawnDreadBeast(CInstance* Self, CInstance* Other)
 {
 	if (TRAP_SPAWN_POINTS.contains(ari_current_gm_room))
 	{
-		static thread_local std::mt19937 random_generator(std::random_device{}());
+		static thread_local pcg32 random_generator([] {
+			std::random_device rd;
+			return pcg32(
+				(static_cast<uint64_t>(rd()) << 32) | rd(),
+				(static_cast<uint64_t>(rd()) << 32) | rd()
+			);
+		}());
 		std::vector<std::pair<int, int>> spawn_points = TRAP_SPAWN_POINTS.at(ari_current_gm_room);
 
 		if (spawn_points.empty())
@@ -6635,7 +6695,13 @@ void SelectDreadBeast(CInstance* Self, CInstance* Other)
 
 	if (initial_floor_monsters.size() > 0)
 	{
-		static thread_local std::mt19937 random_generator(std::random_device{}());
+		static thread_local pcg32 random_generator([] {
+			std::random_device rd;
+			return pcg32(
+				(static_cast<uint64_t>(rd()) << 32) | rd(),
+				(static_cast<uint64_t>(rd()) << 32) | rd()
+			);
+		}());
 		std::uniform_int_distribution<int> initial_floor_monster_distribution(0, initial_floor_monsters.size() - 1);
 
 		dread_beast_monster_id = initial_floor_monsters[initial_floor_monster_distribution(random_generator)];
@@ -7028,7 +7094,13 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 		double distance = GetDistance(ari_x, ari_y, floor_trap->first, floor_trap->second);
 		if (distance <= 16)
 		{
-			static thread_local std::mt19937 random_generator(std::random_device{}());
+			static thread_local pcg32 random_generator([] {
+				std::random_device rd;
+				return pcg32(
+					(static_cast<uint64_t>(rd()) << 32) | rd(),
+					(static_cast<uint64_t>(rd()) << 32) | rd()
+				);
+			}());
 			std::uniform_int_distribution<size_t> random_trap_distribution(0, magic_enum::enum_count<Traps>() - 1);
 			std::uniform_int_distribution<size_t> zero_to_ninety_nine_distribution(0, 99);
 
@@ -7310,7 +7382,13 @@ void ProcessTreasureSpot(CInstance* Self, CInstance* Other)
 
 	if (treasure_spot.state == TreasureSpot::SPAWNED)
 	{
-		static thread_local std::mt19937 random_generator(std::random_device{}());
+		static thread_local pcg32 random_generator([] {
+			std::random_device rd;
+			return pcg32(
+				(static_cast<uint64_t>(rd()) << 32) | rd(),
+				(static_cast<uint64_t>(rd()) << 32) | rd()
+			);
+		}());
 		std::uniform_int_distribution<size_t> random_greater_sigil_distribution(0, magic_enum::enum_count<GreaterSigils>() - 1);
 
 		double distance = GetDistance(ari_x, ari_y, treasure_spot.x, treasure_spot.y);
@@ -7395,7 +7473,13 @@ void TrackAriResources(CInstance* Self, CInstance* Other)
 
 void GenerateTreasureChestLoot(std::string object_name, CInstance* Self, CInstance* Other)
 {
-	static thread_local std::mt19937 random_generator(std::random_device{}());
+	static thread_local pcg32 random_generator([] {
+		std::random_device rd;
+		return pcg32(
+			(static_cast<uint64_t>(rd()) << 32) | rd(),
+			(static_cast<uint64_t>(rd()) << 32) | rd()
+		);
+	}());
 	std::uniform_int_distribution<size_t> zero_to_ninety_nine_distribution(0, 99);
 	std::uniform_int_distribution<size_t> random_sigil_distribution(0, magic_enum::enum_count<Sigils>() - 1);
 
@@ -8122,7 +8206,13 @@ void ObjectCallback(
 							RValue state_id = state.GetMember("state_id");
 							if (state_id.ToInt64() == monster_category_to_state_id_map["mimic"]["gobble"] && script_name_to_reference_map.contains(GML_SCRIPT_DROP_ITEM))
 							{
-								static thread_local std::mt19937 random_generator(std::random_device{}());
+								static thread_local pcg32 random_generator([] {
+									std::random_device rd;
+									return pcg32(
+										(static_cast<uint64_t>(rd()) << 32) | rd(),
+										(static_cast<uint64_t>(rd()) << 32) | rd()
+									);
+								}());
 								std::uniform_int_distribution<size_t> random_sigil_distribution(0, magic_enum::enum_count<Sigils>() - 1);
 
 								Sigils random_sigil = magic_enum::enum_value<Sigils>(random_sigil_distribution(random_generator));
@@ -8234,7 +8324,13 @@ void ObjectCallback(
 					double hit_points = monster.GetMember("hit_points").ToDouble();
 					if (std::isfinite(hit_points) && hit_points <= 0 && script_name_to_reference_map.contains(GML_SCRIPT_DROP_ITEM))
 					{
-						static thread_local std::mt19937 random_generator(std::random_device{}());
+						static thread_local pcg32 random_generator([] {
+							std::random_device rd;
+							return pcg32(
+								(static_cast<uint64_t>(rd()) << 32) | rd(),
+								(static_cast<uint64_t>(rd()) << 32) | rd()
+							);
+						}());
 						std::uniform_int_distribution<size_t> zero_to_ninety_nine_distribution(0, 99);
 						bool drop_lift_key = zero_to_ninety_nine_distribution(random_generator) < configuration.lift_key_drop_chance ? true : false;
 
@@ -8332,7 +8428,13 @@ void ObjectCallback(
 					double hit_points = monster.GetMember("hit_points").ToDouble();
 					if (std::isfinite(hit_points) && hit_points <= 0)
 					{
-						static thread_local std::mt19937 random_generator(std::random_device{}());
+						static thread_local pcg32 random_generator([] {
+							std::random_device rd;
+							return pcg32(
+								(static_cast<uint64_t>(rd()) << 32) | rd(),
+								(static_cast<uint64_t>(rd()) << 32) | rd()
+							);
+						}());
 						std::uniform_int_distribution<size_t> zero_to_ninety_nine_distribution(0, 99);
 
 						bool aspir_proc = zero_to_ninety_nine_distribution(random_generator) < 15 ? true : false; // TODO: Tune this. Should Aspir have a 15% chance to proc?
@@ -8725,7 +8827,13 @@ RValue& GmlScriptSpawnMonsterCallback(
 {
 	if (!active_traps.contains(Traps::LURING))
 	{
-		static thread_local std::mt19937 random_generator(std::random_device{}());
+		static thread_local pcg32 random_generator([] {
+			std::random_device rd;
+			return pcg32(
+				(static_cast<uint64_t>(rd()) << 32) | rd(),
+				(static_cast<uint64_t>(rd()) << 32) | rd()
+			);
+		}());
 		std::uniform_int_distribution<size_t> zero_to_ninety_nine_distribution(0, 99);
 
 		// Sigil of Silence
@@ -8960,7 +9068,13 @@ RValue& GmlScriptCastSpellCallback(
 	// Condemn (Oracle Set Bonus)
 	if (Arguments[0]->ToInt64() == spell_name_to_id_map["growth"] && CountEquippedClassArmor()[Classes::ORACLE] >= 5 && AriCurrentGmRoomIsDungeonFloor())
 	{
-		static thread_local std::mt19937 random_generator(std::random_device{}());
+		static thread_local pcg32 random_generator([] {
+			std::random_device rd;
+			return pcg32(
+				(static_cast<uint64_t>(rd()) << 32) | rd(),
+				(static_cast<uint64_t>(rd()) << 32) | rd()
+			);
+		}());
 		std::uniform_int_distribution<size_t> random_offering_distribution(0, magic_enum::enum_count<Offerings>() - 1);
 
 		Offerings offering = magic_enum::enum_value<Offerings>(random_offering_distribution(random_generator));
@@ -9075,7 +9189,13 @@ RValue& GmlScriptDamageCallback(
 	IN RValue** Arguments
 )
 {
-	static thread_local std::mt19937 random_generator(std::random_device{}());
+	static thread_local pcg32 random_generator([] {
+		std::random_device rd;
+		return pcg32(
+			(static_cast<uint64_t>(rd()) << 32) | rd(),
+			(static_cast<uint64_t>(rd()) << 32) | rd()
+		);
+	}());
 
 	// Frailty
 	if (active_floor_enchantments.contains(FloorEnchantments::FRAILTY))
@@ -9448,7 +9568,13 @@ RValue& GmlScriptTakePressCallback(
 	// Chance for an Offering event when using a ladder on a dungeon floor.
 	if (game_is_active && !GameIsPaused() && obj_dungeon_ladder_down_focused && Arguments[0]->ToInt64() == 6 && Result.ToBoolean() && !offering_chance_occurred && (floor_number < 19 || floor_number % 10 != 9))
 	{
-		static thread_local std::mt19937 random_generator(std::random_device{}());
+		static thread_local pcg32 random_generator([] {
+			std::random_device rd;
+			return pcg32(
+				(static_cast<uint64_t>(rd()) << 32) | rd(),
+				(static_cast<uint64_t>(rd()) << 32) | rd()
+			);
+		}());
 		std::uniform_int_distribution<size_t> zero_to_ninety_nine_distribution(0, 99);
 
 		int roll = zero_to_ninety_nine_distribution(random_generator);
@@ -9611,7 +9737,13 @@ RValue& GmlScriptPlayTextCallback(
 					possible_offerings = { Offerings::DREAD, Offerings::INNER_FIRE, Offerings::LEECH, Offerings::PERIL, Offerings::RECKONING, Offerings::OUTBREAK, Offerings::SPIRIT_LINK, Offerings::SPIKES, Offerings::REFLECT };
 
 				// Pick a random offering effect
-				static thread_local std::mt19937 random_generator(std::random_device{}());
+				static thread_local pcg32 random_generator([] {
+					std::random_device rd;
+					return pcg32(
+						(static_cast<uint64_t>(rd()) << 32) | rd(),
+						(static_cast<uint64_t>(rd()) << 32) | rd()
+					);
+				}());
 				std::uniform_int_distribution<size_t> random_offering_distribution(0, possible_offerings.size() - 1);
 				Offerings offering = magic_enum::enum_value<Offerings>(random_offering_distribution(random_generator));
 				queued_offerings.insert(offering);
@@ -10640,7 +10772,13 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 	boss_monsters_configured = 0;
 	if (active_offerings.empty() && ari_current_gm_room != "rm_mines_entry" && ari_current_gm_room != "rm_priestess_quarters" && !ari_current_gm_room.contains("seal") && !ari_current_gm_room.contains("ritual") && !ari_current_gm_room.contains("treasure"))
 	{
-		static thread_local std::mt19937 random_generator(std::random_device{}());
+		static thread_local pcg32 random_generator([] {
+			std::random_device rd;
+			return pcg32(
+				(static_cast<uint64_t>(rd()) << 32) | rd(),
+				(static_cast<uint64_t>(rd()) << 32) | rd()
+			);
+		}());
 		std::uniform_int_distribution<size_t> zero_to_ninety_nine_distribution(0, 99);
 
 		int random = zero_to_ninety_nine_distribution(random_generator);
@@ -10691,7 +10829,13 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 	// Prophecy (Oracle Set Bonus)
 	if (CountEquippedClassArmor()[Classes::ORACLE] >= 5 && class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] == 1 && class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::CONDEMN] == 1)
 	{
-		static thread_local std::mt19937 random_generator(std::random_device{}());
+		static thread_local pcg32 random_generator([] {
+			std::random_device rd;
+			return pcg32(
+				(static_cast<uint64_t>(rd()) << 32) | rd(),
+				(static_cast<uint64_t>(rd()) << 32) | rd()
+			);
+		}());
 		std::uniform_int_distribution<size_t> zero_to_ninety_nine_distribution(0, 99);
 
 		int random = zero_to_ninety_nine_distribution(random_generator);
@@ -11622,7 +11766,13 @@ RValue& GmlScriptSceneAudioPlayerPlayCallback(
 
 	if (game_is_active && configuration.randomize_dungeon_music && AriCurrentGmRoomIsDungeonFloor() && floor_number != 91)
 	{
-		static thread_local std::mt19937 random_generator(std::random_device{}());
+		static thread_local pcg32 random_generator([] {
+			std::random_device rd;
+			return pcg32(
+				(static_cast<uint64_t>(rd()) << 32) | rd(),
+				(static_cast<uint64_t>(rd()) << 32) | rd()
+			);
+		}());
 		std::uniform_int_distribution<size_t> game_music_distribution(0, MUSIC_INTERNAL_NAMES.size() - 1);
 		*Arguments[0] = RValue(MUSIC_INTERNAL_NAMES.at(game_music_distribution(random_generator)));
 	}
