@@ -8,7 +8,7 @@ using namespace YYTK;
 using json = nlohmann::json;
 
 static const char* const MOD_NAME = "RemindMe";
-static const char* const VERSION = "1.1.1";
+static const char* const VERSION = "1.2.0";
 static const char* const GML_SCRIPT_CREATE_NOTIFICATION = "gml_Script_create_notification";
 static const char* const GML_SCRIPT_GET_LOCALIZER = "gml_Script_get@Localizer@Localizer";
 static const char* const GML_SCRIPT_GO_TO_ROOM = "gml_Script_goto_gm_room";
@@ -110,9 +110,9 @@ static const std::string MARCH = "march";
 static const std::string MERRI = "merri";
 static const std::string NORA = "nora";
 static const std::string OLRIC = "olric";
-//static const std::string PRIESTESS = "priestess";
 static const std::string REINA = "reina";
 static const std::string RYIS = "ryis";
+static const std::string SERIDIA = "seridia";
 //static const std::string STILLWELL = "stillwell";
 static const std::string TALIFERRO = "taliferro";
 static const std::string TERITHIA = "terithia";
@@ -120,11 +120,11 @@ static const std::string VALEN = "valen";
 static const std::string VERA = "vera";
 static const std::string WHEEDLE = "wheedle";
 //static const std::string ZOREL = "zorel";
-static const std::unordered_set<std::string> NPC_NAMES = {
+static const std::unordered_set<std::string> NPC_NAMES = { // As of 0.15
 	ADELINE, BALOR, CALDARUS, CELINE, DARCY, DELL, DOZY, EILAND,
 	ELSIE, ERROL, HAYDEN, HEMLOCK, HENRIETTA, HOLT, JOSEPHINE, JUNIPER,
 	LANDEN, LOUIS, LUC, MAPLE, MARCH, MERRI, NORA, OLRIC,
-	REINA, RYIS, TALIFERRO, TERITHIA, VALEN, VERA, WHEEDLE
+	REINA, RYIS, SERIDIA, TALIFERRO, TERITHIA, VALEN, VERA, WHEEDLE
 };
 
 static struct Reminder {
@@ -1014,12 +1014,12 @@ void ObjectCallback(
 			TrackNPC(self, NORA);
 		else if (strstr(self->m_Object->m_Name, "obj_olric"))
 			TrackNPC(self, OLRIC);
-		//else if (strstr(self->m_Object->m_Name, "obj_priestess"))
-		//	TrackNPC(self, PRIESTESS);
 		else if (strstr(self->m_Object->m_Name, "obj_reina"))
 			TrackNPC(self, REINA);
 		else if ( strstr(self->m_Object->m_Name, "obj_ryis"))
 			TrackNPC(self, RYIS);
+		else if (strstr(self->m_Object->m_Name, "obj_seridia"))
+			TrackNPC(self, SERIDIA);
 		//else if (strstr(self->m_Object->m_Name, "obj_stillwell"))
 		//	TrackNPC(self, STILLWELL);
 		else if (strstr(self->m_Object->m_Name, "obj_taliferro"))
