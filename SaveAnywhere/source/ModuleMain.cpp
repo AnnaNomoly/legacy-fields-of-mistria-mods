@@ -9,7 +9,7 @@ using namespace YYTK;
 using json = nlohmann::json;
 
 static const char* const MOD_NAME = "SaveAnywhere";
-static const char* const VERSION = "1.2.3";
+static const char* const VERSION = "1.2.4";
 static const char* const ACTIVATION_BUTTON_KEY = "activation_button";
 static const char* const SAVE_LOCATION_KEY = "save_location";
 static const char* const SAVE_X_POSITION_KEY = "save_x_position";
@@ -42,6 +42,9 @@ static const std::string WATER_SEAL = "water_seal";
 static const std::string EARTH_SEAL = "earth_seal";
 static const std::string FIRE_SEAL = "fire_seal";
 static const std::string RUINS_SEAL = "ruins_seal";
+static const std::string VOID_SEAL = "void_seal";
+static const std::string PRIESTESS_QUARTERS = "priestess_quarters";
+static const std::string SERIDIAS_CHAMBER = "seridias_chamber";
 static const std::string FARM = "farm";
 static const double UNSET_INT = -1;
 static const std::string DEFAULT_ACTIVATION_BUTTON = "HOME";
@@ -549,7 +552,10 @@ void WriteModSaveFile(CInstance* Self, CInstance* Other)
 			location_id_to_name_map[ari_room_id] == WATER_SEAL ||
 			location_id_to_name_map[ari_room_id] == EARTH_SEAL ||
 			location_id_to_name_map[ari_room_id] == FIRE_SEAL ||
-			location_id_to_name_map[ari_room_id] == RUINS_SEAL)
+			location_id_to_name_map[ari_room_id] == RUINS_SEAL ||
+			location_id_to_name_map[ari_room_id] == VOID_SEAL ||
+			location_id_to_name_map[ari_room_id] == PRIESTESS_QUARTERS ||
+			location_id_to_name_map[ari_room_id] == SERIDIAS_CHAMBER)
 		{
 			mod_save_data[SAVE_LOCATION_KEY] = MINES_ENTRY;
 			mod_save_data[SAVE_X_POSITION_KEY] = 216;
@@ -971,7 +977,7 @@ RValue& GmlScriptEndDayCallback(
 	if (mod_healthy)
 	{
 		// Remove the mod file for this save (if one exists).
-		std::string file_name = mod_folder + "\\" + save_prefix + "autosave.sav";
+		std::string file_name = mod_folder + "\\" + save_prefix + ".json";
 		std::remove(file_name.c_str());
 
 		ResetStaticFields(false);
