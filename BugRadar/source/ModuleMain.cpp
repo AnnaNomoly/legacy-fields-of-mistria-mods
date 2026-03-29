@@ -7,9 +7,10 @@ using namespace YYTK;
 using json = nlohmann::json;
 
 static const char* const MOD_NAME = "BugRadar";
-static const char* const VERSION = "1.0.1";
+static const char* const VERSION = "1.0.2";
 static const char* const BUG_LIST_KEY = "bug_list";
 static const char* const MODIFY_BUG_SPAWN_LOCATION_KEY = "modify_bug_spawn_location";
+static const char* const DISPLAY_NOTIFICATIONS_JSON_KEY = "display_notifications";
 static const std::string BUG_NAME_PLACEHOLDER_TEXT = "<BUG>";
 static const char* const BUG_DETECTED_NOTIFICATION_KEY = "Notifications/Mods/Bug Radar/bug_detected";
 static const char* const GML_SCRIPT_CREATE_NOTIFICATION = "gml_Script_create_notification";
@@ -22,6 +23,7 @@ static const char* const GML_SCRIPT_SETUP_MAIN_SCREEN = "gml_Script_setup_main_s
 static const char* const GML_SCRIPT_INVENTORY_SLOT_POP = "gml_Script_drain@InventorySlot@Inventory";
 static const std::vector<std::string> DEFAULT_BUG_LIST = {"Fairy Bee", "Flower Crown Beetle", "Snowball Beetle", "Speedy Snail", "Strobe Firefly"};
 static const bool DEFAULT_MODIFY_BUG_SPAWN_LOCATION = true;
+static const bool DEFAULT_DISPLAY_NOTIFICATIONS = true;
 
 static const std::map<std::string, std::vector<std::vector<std::pair<int, int>>>> ROOM_BUG_SPAWN_BOUNDING_BOXES_MAP = {
 	{ "western_ruins", {
@@ -761,6 +763,7 @@ static std::string bug_name = "";
 static std::string ari_current_location = "";
 static std::vector<std::string> bug_list = DEFAULT_BUG_LIST;
 static bool modify_bug_spawn_location = DEFAULT_MODIFY_BUG_SPAWN_LOCATION;
+static bool display_notifications = DEFAULT_DISPLAY_NOTIFICATIONS;
 static std::map<std::string, int> item_name_to_id_map = {};
 static std::map<int, std::string> item_id_to_name_map = {};
 static std::map<std::string, std::string> item_name_to_localized_name_map = {};
@@ -828,7 +831,8 @@ json CreateConfigJson(bool use_defaults)
 {
 	json config_json = {
 		{ BUG_LIST_KEY, use_defaults ? DEFAULT_BUG_LIST : bug_list },
-		{ MODIFY_BUG_SPAWN_LOCATION_KEY, use_defaults ? DEFAULT_MODIFY_BUG_SPAWN_LOCATION : modify_bug_spawn_location}
+		{ MODIFY_BUG_SPAWN_LOCATION_KEY, use_defaults ? DEFAULT_MODIFY_BUG_SPAWN_LOCATION : modify_bug_spawn_location },
+		{ DISPLAY_NOTIFICATIONS_JSON_KEY, use_defaults ? DEFAULT_DISPLAY_NOTIFICATIONS : display_notifications }
 	};
 	return config_json;
 }
@@ -837,9 +841,11 @@ void LogDefaultConfigValues()
 {
 	bug_list = DEFAULT_BUG_LIST;
 	modify_bug_spawn_location = DEFAULT_MODIFY_BUG_SPAWN_LOCATION;
+	display_notifications = DEFAULT_DISPLAY_NOTIFICATIONS;
 
 	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, BUG_LIST_KEY, "[\"Fairy Bee\", \"Flower Crown Beetle\", \"Snowball Beetle\", \"Speedy Snail\", \"Strobe Firefly\"]");
 	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, MODIFY_BUG_SPAWN_LOCATION_KEY, DEFAULT_MODIFY_BUG_SPAWN_LOCATION ? "true" : "false");
+	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, DISPLAY_NOTIFICATIONS_JSON_KEY, DEFAULT_DISPLAY_NOTIFICATIONS ? "true" : "false");
 }
 
 void CreateOrLoadConfigFile()
@@ -906,6 +912,18 @@ void CreateOrLoadConfigFile()
 					{
 						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, MODIFY_BUG_SPAWN_LOCATION_KEY, config_file.c_str());
 						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, MODIFY_BUG_SPAWN_LOCATION_KEY, DEFAULT_MODIFY_BUG_SPAWN_LOCATION ? "true" : "false");
+					}
+
+					// Try loading the display_notifications value.
+					if (json_object.contains(DISPLAY_NOTIFICATIONS_JSON_KEY))
+					{
+						display_notifications = json_object[DISPLAY_NOTIFICATIONS_JSON_KEY];
+						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using CUSTOM \"%s\" value: %s!", MOD_NAME, VERSION, DISPLAY_NOTIFICATIONS_JSON_KEY, display_notifications ? "true" : "false");
+					}
+					else
+					{
+						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, DISPLAY_NOTIFICATIONS_JSON_KEY, config_file.c_str());
+						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, DISPLAY_NOTIFICATIONS_JSON_KEY, DEFAULT_DISPLAY_NOTIFICATIONS ? "true" : "false");
 					}
 				}
 
@@ -1111,7 +1129,8 @@ void ObjectCallback(
 				if (it != bug_list.end())
 				{
 					bug_name = item_name_to_localized_name_map[item_name];
-					CreateNotification(BUG_DETECTED_NOTIFICATION_KEY, self, self);
+					if (display_notifications)
+						CreateNotification(BUG_DETECTED_NOTIFICATION_KEY, self, self);
 
 					if (modify_bug_spawn_location)
 					{
