@@ -87,6 +87,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "NoTrespassing", "NoTrespass
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SandboxModeCrafting", "SandboxModeCrafting\SandboxModeCrafting.vcxproj", "{45bad65e-8aa7-4e31-996f-9c59408c9278}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "EnemyHealthBars", "EnemyHealthBars\EnemyHealthBars.vcxproj", "{cdbfc662-0a40-4c04-b348-7402111cbb82}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -431,6 +433,14 @@ Global
 		{45BAD65E-8AA7-4E31-996F-9C59408C9278}.Release|x64.Build.0 = Release|x64
 		{45BAD65E-8AA7-4E31-996F-9C59408C9278}.Release|x86.ActiveCfg = Release|Win32
 		{45BAD65E-8AA7-4E31-996F-9C59408C9278}.Release|x86.Build.0 = Release|Win32
+		{CDBFC662-0A40-4C04-B348-7402111CBB82}.Debug|x64.ActiveCfg = Debug|x64
+		{CDBFC662-0A40-4C04-B348-7402111CBB82}.Debug|x64.Build.0 = Debug|x64
+		{CDBFC662-0A40-4C04-B348-7402111CBB82}.Debug|x86.ActiveCfg = Debug|Win32
+		{CDBFC662-0A40-4C04-B348-7402111CBB82}.Debug|x86.Build.0 = Debug|Win32
+		{CDBFC662-0A40-4C04-B348-7402111CBB82}.Release|x64.ActiveCfg = Release|x64
+		{CDBFC662-0A40-4C04-B348-7402111CBB82}.Release|x64.Build.0 = Release|x64
+		{CDBFC662-0A40-4C04-B348-7402111CBB82}.Release|x86.ActiveCfg = Release|Win32
+		{CDBFC662-0A40-4C04-B348-7402111CBB82}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
