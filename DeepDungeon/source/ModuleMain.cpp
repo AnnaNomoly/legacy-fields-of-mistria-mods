@@ -359,7 +359,8 @@ static const std::string ORACLE_SET_BONUS_PROPHECY_LOCALIZED_TEXT_KEY = "Items/M
 static const int TWO_MINUTES_IN_SECONDS = 120;
 static const int TWO_MINUTES_AND_THIRTY_SECONDS = 150;
 static const int THREE_MINUTES_IN_SECONDS = 180;
-static const int ONE_HOUR_IN_SECONDS = 3600;
+static const int TWENTY_FIVE_MINUTES_IN_SECONDS = 1600;
+static const int THIRTY_MINUTES_IN_SECONDS = 1800;
 static const int TRAP_ACTIVATION_DISTANCE = 16;
 
 // Configuration defaults
@@ -7281,7 +7282,7 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 					RValue instance_layer_exists = g_ModuleInterface->CallBuiltin("layer_exists", { "Instances" });
 					if (instance_layer_exists)
 					{
-						PlaySoundEffect("snd_VoidPortalSpawn", 100, 1);
+						PlaySoundEffect("snd_VoidPortalSpawn", 100, 0.7);
 						CreateNotification(true, METEOR_TRAP_NOTIFICATION_KEY, Self, Other);
 						EmitBark(script_name_to_reference_map[GML_SCRIPT_BARK_EMITTER][0], script_name_to_reference_map["obj_ari"][1], bark_name_to_id_map["exclamation_mark"], 0);
 
@@ -10295,7 +10296,7 @@ RValue& GmlScriptGetMinutesCallback(
 		// Outbreak
 		if (active_offerings.contains(Offerings::OUTBREAK))
 		{
-			if ((current_time_in_seconds - time_of_last_outbreak_tick) >= ONE_HOUR_IN_SECONDS)
+			if ((current_time_in_seconds - time_of_last_outbreak_tick) >= THIRTY_MINUTES_IN_SECONDS)
 			{
 				const std::unordered_set<int> restricted_monsters = { // TODO: Update as needed with new monsters
 					monster_name_to_id_map["barrel"],
@@ -11003,7 +11004,7 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 		if (active_floor_enchantments.contains(FloorEnchantments::DEEP_WOUNDS))
 			time_of_last_deep_wounds_tick = current_time_in_seconds;
 		if (active_offerings.contains(Offerings::OUTBREAK))
-			time_of_last_outbreak_tick = current_time_in_seconds;
+			time_of_last_outbreak_tick = current_time_in_seconds - TWENTY_FIVE_MINUTES_IN_SECONDS;
 		if (CountEquippedClassArmor()[Classes::CLERIC] > 0)
 			class_name_to_set_bonus_effect_value_map[Classes::CLERIC][ManagedSetBonuses::AUTO_REGEN] = current_time_in_seconds;
 
@@ -11461,10 +11462,9 @@ RValue& GmlScriptOnDrawGuiCallback(
 		auto gloom = std::find(active_floor_enchantments.begin(), active_floor_enchantments.end(), FloorEnchantments::GLOOM);
 		if (gloom != active_floor_enchantments.end())
 		{
-			// Draw semi-transparent overlay
 			g_ModuleInterface->CallBuiltin(
 				"draw_set_alpha",
-				{ 0.45 }
+				{ 0.45 } // Set to semi-transparent for overlay
 			);
 
 			g_ModuleInterface->CallBuiltin(
@@ -11476,6 +11476,11 @@ RValue& GmlScriptOnDrawGuiCallback(
 			g_ModuleInterface->CallBuiltin(
 				"draw_rectangle",
 				{ 0, 0, window_width, window_height, false }
+			);
+
+			g_ModuleInterface->CallBuiltin(
+				"draw_set_alpha",
+				{ 1.0 } // Reset transparency
 			);
 		}
 
