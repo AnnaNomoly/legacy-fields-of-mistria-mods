@@ -12,7 +12,7 @@ static const char* const MOD_NAME = "EnemyHealthBars";
 static const char* const VERSION = "1.0.0";
 static const char* const GML_SCRIPT_DRAW_MONSTER = "gml_Script_draw@gml_Object_par_monster_Create_0";
 static const char* const GML_SCRIPT_SETUP_MAIN_SCREEN = "gml_Script_setup_main_screen@TitleMenu@TitleMenu";
-static const int HEALTH_BAR_HEIGHT = 6;
+static const int HEALTH_BAR_HEIGHT = 9;
 static const int HEALTH_BAR_WIDTH = 40;
 static const std::map<std::string, int> MONSTER_NAME_TO_SPRITE_SIZE_MAP = { // Uses the monster's "idle south" sprite, divided by 2 or 3
 	{ "bat", 40 * 0.65 }, // spr_monster_essence_bat_main_idle_south
@@ -191,15 +191,41 @@ RValue& GmlScriptDrawMonsterCallback(
 	double hp_percent = health.ToDouble() / max_health.ToDouble();
 	hp_percent = std::clamp(hp_percent, 0.0, 1.0);
 
-	int left = bar_x - HEALTH_BAR_WIDTH * 0.5;
-	int right = bar_x + HEALTH_BAR_WIDTH * 0.5;
-	int top = bar_y - HEALTH_BAR_HEIGHT * 0.5;
-	int bottom = bar_y + HEALTH_BAR_HEIGHT * 0.5;
+	// Centered bounds
+	int left = bar_x - HEALTH_BAR_WIDTH / 2;
+	int right = bar_x + HEALTH_BAR_WIDTH / 2;
+	int top = bar_y - HEALTH_BAR_HEIGHT / 2;
+	int bottom = bar_y + HEALTH_BAR_HEIGHT / 2;
 
-	int fill_right = left + (int)(HEALTH_BAR_WIDTH * hp_percent);
-	DrawRectangle(0, left, top, right, bottom, false);
-	DrawRectangle(65280, left, top, fill_right, bottom, false);
-	DrawRectangle(0, left, top, right, bottom, true);
+	// Fill only middle 3 rows
+	int fill_top = top + 3;
+	int fill_bottom = top + 6;
+
+	// Compute fill width
+	int fill_right = left + (int)(HEALTH_BAR_WIDTH * hp_percent) - 1;
+
+	// Draw fill (black background first)
+	DrawRectangle(0, left, fill_top, right - 1, fill_bottom, false);
+
+	// Draw green HP
+	DrawRectangle(65280, left, fill_top, fill_right, fill_bottom, false);
+
+	RValue sprite_index = g_ModuleInterface->CallBuiltin(
+		"asset_get_index", {
+			"enemy_health_bar"
+		}
+	);
+
+	// Draw sprite on top (centered)
+	g_ModuleInterface->CallBuiltin(
+		"draw_sprite",
+		{
+			RValue(sprite_index),
+			RValue(-1),
+			RValue(left),
+			RValue(top)
+		}
+	);
 
 	return Result;
 }
