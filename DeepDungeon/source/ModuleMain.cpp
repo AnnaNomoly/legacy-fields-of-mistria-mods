@@ -95,6 +95,7 @@ static const char* const GML_SCRIPT_ON_BEGIN_STEP = "gml_Script_on_begin_step@An
 static const char* const GML_SCRIPT_RECIPE_GENERATE_INFUSIONS = "gml_Script_generate_infusions@Recipe@Recipe";
 static const char* const GML_SCRIPT_BARK_EMITTER = "gml_Script_BarkEmitter";
 static const char* const GML_SCRIPT_BARK_EMITTER_EMIT = "gml_Script_emit@BarkEmitter@BarkEmitter";
+static const char* const GML_SCRIPT_T2_READ = "gml_Script_read@T2r@T2r";
 static const char* const CONFIG_VERSION_JSON_KEY = "__config_version"; // The config version
 static const char* const DISABLE_DUNGEON_LIFT_JSON_KEY = "disable_dungeon_lift"; // Controls the dungeon lift
 static const char* const RESTRICT_PERKS_JSON_KEY = "restrict_perks"; // Determines if perks are restricted in the dungeon
@@ -136,6 +137,7 @@ static const char* const GLOOM_DAMAGE_RECEIVED_MODIFIER_JSON_KEY = "gloom_monste
 static const char* const GLOOM_HEALTH_MODIFIER_JSON_KEY = "gloom_monster_health_modifier"; // Controls the health bonus granted by Gloom
 static const char* const EXPERIMENTAL_MAX_HEALTH_BUG_FIX_JSON_KEY = "experimental_max_health_bug_fix"; // Controls the experimental fix for restoring proper max health
 static const char* const EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS_JSON_KEY = "experimental_extra_floor_enchantments_and_offerings"; // Controls the experimental option to always enable the Oracle exclusive floor enchantments and offerings
+static const char* const EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER_JSON_KEY = "experimental_monster_base_stat_difficulty_modifier"; // Controls the experimental option to scale base monster health and damage
 
 static const std::string SIGIL_OF_ALTERATION_NAME = "sigil_of_alteration";
 static const std::string SIGIL_OF_CONCEALMENT_NAME = "sigil_of_concealment";
@@ -405,6 +407,7 @@ static const double DEFAULT_GLOOM_DAMAGE_RECEIVED_MODIFIER = 0.5;
 static const double DEFAULT_GLOOM_HEALTH_MODIFIER = 1.5;
 static const bool DEFAULT_EXPERIMENTAL_MAX_HEALTH_BUG_FIX = false;
 static const bool DEFAULT_EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS = false;
+static const double DEFAULT_EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER = 1.0;
 
 static enum class BossBattle {
 	NONE,
@@ -1834,6 +1837,7 @@ static bool is_second_wind_tracked_interval = false;
 static bool is_fumigate_tracked_interval = false;
 static bool is_deep_wounds_tracked_interval = false;
 static bool offering_chance_occurred = false;
+static bool obj_dragonshrine_focused = false;
 static bool obj_dungeon_elevator_focused = false;
 static bool obj_dungeon_ladder_down_focused = false;
 static double ari_x = -1;
@@ -1975,6 +1979,7 @@ static struct Configuration {
 	double gloom_health_modifier = DEFAULT_GLOOM_HEALTH_MODIFIER;
 	bool experimental_max_health_bug_fix = DEFAULT_EXPERIMENTAL_MAX_HEALTH_BUG_FIX;
 	bool experimental_extra_floor_enchantments_and_offerings = DEFAULT_EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS;
+	double experimental_monster_base_stat_difficulty_modifier = DEFAULT_EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER;
 };
 static Configuration configuration = Configuration();
 
@@ -2034,6 +2039,7 @@ json CreateConfigJson(bool use_defaults)
 		{ GLOOM_HEALTH_MODIFIER_JSON_KEY, use_defaults ? DEFAULT_GLOOM_HEALTH_MODIFIER : configuration.gloom_health_modifier },
 		{ EXPERIMENTAL_MAX_HEALTH_BUG_FIX_JSON_KEY, use_defaults ? DEFAULT_EXPERIMENTAL_MAX_HEALTH_BUG_FIX : configuration.experimental_max_health_bug_fix },
 		{ EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS_JSON_KEY, use_defaults ? DEFAULT_EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS : configuration.experimental_extra_floor_enchantments_and_offerings },
+		{ EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER_JSON_KEY, use_defaults ? DEFAULT_EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER : configuration.experimental_monster_base_stat_difficulty_modifier }
 	};
 	return config_json;
 }
@@ -2524,6 +2530,18 @@ void CreateOrLoadConfigFile()
 							configuration.experimental_extra_floor_enchantments_and_offerings = json_object[EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS_JSON_KEY];
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS_JSON_KEY, config_file.c_str());
+
+						// Try loading the experimental_monster_base_stat_difficulty_modifier value.
+						if (json_object.contains(EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER_JSON_KEY) && json_object.at(EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER_JSON_KEY).is_number_float())
+						{
+							double experimental_monster_base_stat_difficulty_modifier = json_object[EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER_JSON_KEY];
+							if (experimental_monster_base_stat_difficulty_modifier >= 1.0 && experimental_monster_base_stat_difficulty_modifier <= 3.0)
+								configuration.experimental_monster_base_stat_difficulty_modifier = experimental_monster_base_stat_difficulty_modifier;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER_JSON_KEY, config_file.c_str());
+						}
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER_JSON_KEY, config_file.c_str());
 					}
 				}
 
@@ -3428,6 +3446,41 @@ void LoadMonsters()
 
 		monster_name_to_id_map[monster_name->ToString()] = i;
 		monster_id_to_name_map[i] = monster_name->ToString();
+	}
+}
+
+void ModifyMonsterPrototypes()
+{
+	size_t array_length;
+	RValue monster_prototypes = global_instance->GetMember("__monster_prototypes");
+	g_ModuleInterface->GetArraySize(monster_prototypes, array_length);
+
+	for (size_t i = 0; i < array_length; i++)
+	{
+		RValue* monster_prototype;
+		g_ModuleInterface->GetArrayEntry(monster_prototypes, i, monster_prototype);
+
+		if (!StructVariableExists(*monster_prototype, "monster_id") || !StructVariableExists(*monster_prototype, "hp") || !StructVariableExists(*monster_prototype, "damage"))
+			continue;
+
+		int monster_id = monster_prototype->GetMember("monster_id").ToInt64();
+		if (monster_id == monster_name_to_id_map["barrel"])
+			continue;
+
+		double hp = monster_prototype->GetMember("hp").ToDouble();
+		hp = std::trunc(hp * configuration.experimental_monster_base_stat_difficulty_modifier);
+		*monster_prototype->GetRefMember("hp") = hp;
+
+		double damage = monster_prototype->GetMember("damage").ToDouble();
+		damage = std::trunc(damage * configuration.experimental_monster_base_stat_difficulty_modifier);
+		*monster_prototype->GetRefMember("damage") = damage;
+
+		if (StructVariableExists(*monster_prototype, "projectile_damage"))
+		{
+			double projectile_damage = monster_prototype->GetMember("projectile_damage").ToDouble();
+			projectile_damage = std::trunc(projectile_damage * configuration.experimental_monster_base_stat_difficulty_modifier);
+			*monster_prototype->GetRefMember("projectile_damage") = projectile_damage;
+		}
 	}
 }
 
@@ -5362,6 +5415,28 @@ void EmitBark(CInstance* Self, CInstance* Other, RValue bark_id, RValue bark_typ
 		2,
 		argument_array
 	);
+}
+
+RValue T2Read(CInstance* Self, CInstance* Other, std::string key)
+{
+	CScript* gml_script_get_localizer = nullptr;
+	g_ModuleInterface->GetNamedRoutinePointer(
+		GML_SCRIPT_T2_READ,
+		(PVOID*)&gml_script_get_localizer
+	);
+
+	RValue result;
+	RValue input = RValue(key);
+	RValue* input_ptr = &input;
+	gml_script_get_localizer->m_Functions->m_ScriptFunction(
+		Self,
+		Other,
+		result,
+		1,
+		{ &input_ptr }
+	);
+
+	return result;
 }
 
 void SceneAudioPlayerStop(CInstance* Self, CInstance* Other)
@@ -7671,6 +7746,7 @@ void ResetStaticFields(bool returned_to_title_screen)
 	fairy_buff_applied = false;
 	stoneskin_applied = false;
 	offering_chance_occurred = false;
+	obj_dragonshrine_focused = false;
 	obj_dungeon_elevator_focused = false;
 	obj_dungeon_ladder_down_focused = false;
 	frailty_hit_counter = 0;
@@ -9679,6 +9755,11 @@ RValue& GmlScriptTakePressCallback(
 		PlayConversation(ELEVATOR_LOCKED_CONVERSATION_KEY, Self, Other);
 		Result = false;
 	}
+	else if (game_is_active && !GameIsPaused() && ari_current_gm_room == "rm_farm" && obj_dragonshrine_focused && Arguments[0]->ToInt64() == 6 && Result.ToBoolean() && T2Read(script_name_to_reference_map[GML_SCRIPT_T2_READ][0], script_name_to_reference_map[GML_SCRIPT_T2_READ][1], "caldarus_has_met").ToBoolean())
+	{
+		PlayConversation("Conversations/Mods/Deep Dungeon/teleport_to_mines_or_deep_woods", Self, Other);
+		Result = false;
+	}
 
 	return Result;
 }
@@ -9748,16 +9829,22 @@ RValue& GmlScriptAttemptInteractCallback(
 
 			obj_dungeon_ladder_down_focused = false;
 		}
+		else if (self_name == "obj_dragonshrine" && ari_current_gm_room == "rm_farm")
+		{
+			obj_dragonshrine_focused = true;
+		}
 		else
 		{
-			obj_dungeon_ladder_down_focused = false;
+			obj_dragonshrine_focused = false;
 			obj_dungeon_elevator_focused = false;
+			obj_dungeon_ladder_down_focused = false;
 		}
 	}
 	else
 	{
-		obj_dungeon_ladder_down_focused = false;
+		obj_dragonshrine_focused = false;
 		obj_dungeon_elevator_focused = false;
+		obj_dungeon_ladder_down_focused = false;
 	}
 
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_ATTEMPT_INTERACT));
@@ -9877,8 +9964,9 @@ RValue& GmlScriptPlayTextCallback(
 						InventoryRemoveItem(item_name_to_id_map[entry.first], entry.second, script_name_to_reference_map[GML_SCRIPT_DESERIALIZE_INVENTORY][0], script_name_to_reference_map[GML_SCRIPT_DESERIALIZE_INVENTORY][1]);
 			}
 		}
-		else if (localization_key == "Conversations/Mods/Deep Dungeon/teleport_to_mines/1")
+		else if (localization_key == "Conversations/Mods/Deep Dungeon/teleport_to_mines/1" || localization_key == "Conversations/Mods/Deep Dungeon/teleport_to_mines_or_deep_woods/1")
 		{
+			CloseTextbox(Self, Other);
 			TeleportAriToRoom(
 				script_name_to_reference_map["obj_ari"][0],
 				script_name_to_reference_map["obj_ari"][1],
@@ -9886,10 +9974,21 @@ RValue& GmlScriptPlayTextCallback(
 				216,
 				198
 			);
-			CloseTextbox(Self, Other);
 			return Result;
 		}
-		else if (localization_key == "Conversations/Mods/Deep Dungeon/teleport_to_mines/2")
+		else if (localization_key == "Conversations/Mods/Deep Dungeon/teleport_to_mines_or_deep_woods/2")
+		{
+			CloseTextbox(Self, Other);
+			TeleportAriToRoom(
+				script_name_to_reference_map["obj_ari"][0],
+				script_name_to_reference_map["obj_ari"][1],
+				location_name_to_id_map["caldarus_house"],
+				312,
+				328
+			);
+			return Result;
+		}
+		else if (localization_key == "Conversations/Mods/Deep Dungeon/teleport_to_mines/2" || localization_key == "Conversations/Mods/Deep Dungeon/teleport_to_mines_or_deep_woods/3")
 		{
 			CloseTextbox(Self, Other);
 			return Result;
@@ -11341,6 +11440,7 @@ RValue& GmlScriptSetupMainScreenCallback(
 		LoadObjectIds();
 		LoadItems();
 		LoadMonsters();
+		ModifyMonsterPrototypes();
 		LoadDungeonBiomeCandidateMonsters();
 		LoadPlayerStates();
 		LoadMonsterStates();
@@ -12080,6 +12180,29 @@ RValue& GmlScriptBarkEmitterCallback(
 		script_name_to_reference_map[GML_SCRIPT_BARK_EMITTER] = { Self, Other };
 
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_BARK_EMITTER));
+	original(
+		Self,
+		Other,
+		Result,
+		ArgumentCount,
+		Arguments
+	);
+
+	return Result;
+}
+
+RValue& GmlScriptT2ReadCallback(
+	IN CInstance* Self,
+	IN CInstance* Other,
+	OUT RValue& Result,
+	IN int ArgumentCount,
+	IN RValue** Arguments
+)
+{
+	if (!script_name_to_reference_map.contains(GML_SCRIPT_T2_READ))
+		script_name_to_reference_map[GML_SCRIPT_T2_READ] = { Self, Other };
+
+	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_T2_READ));
 	original(
 		Self,
 		Other,
@@ -13456,6 +13579,33 @@ void CreateHookGmlScriptBarkEmitter(AurieStatus& status)
 	}
 }
 
+void CreateHookGmlScriptT2Read(AurieStatus& status)
+{
+	CScript* gml_script_t2_read = nullptr;
+	status = g_ModuleInterface->GetNamedRoutinePointer(
+		GML_SCRIPT_T2_READ,
+		(PVOID*)&gml_script_t2_read
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_T2_READ);
+	}
+
+	status = MmCreateHook(
+		g_ArSelfModule,
+		GML_SCRIPT_T2_READ,
+		gml_script_t2_read->m_Functions->m_ScriptFunction,
+		GmlScriptT2ReadCallback,
+		nullptr
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_T2_READ);
+	}
+}
+
 void CreateHookGmlScriptGetUnifiedTime(AurieStatus& status)
 {
 	CScript* gml_script_get_unified_time = nullptr;
@@ -13846,6 +13996,13 @@ EXPORTED AurieStatus ModuleInitialize(
 	}
 
 	CreateHookGmlScriptBarkEmitter(status);
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return status;
+	}
+
+	CreateHookGmlScriptT2Read(status);
 	if (!AurieSuccess(status))
 	{
 		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
