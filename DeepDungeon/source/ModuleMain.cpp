@@ -4028,7 +4028,7 @@ void ScaleClassArmor(bool in_dungeon)
 
 		if (in_dungeon)
 		{
-			int modified_floor_number = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? floor_number + 20 : floor_number;
+			int modified_floor_number = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? floor_number + 40 : floor_number;
 			int defense = modified_floor_number / 20;
 			*class_armor_piece->GetRefMember("defense") = defense;
 		}
