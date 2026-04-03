@@ -91,6 +91,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "EnemyHealthBars", "EnemyHea
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "BulkBuy", "BulkBuy\BulkBuy.vcxproj", "{608b10da-4763-463c-a81e-31b441e290bb}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "BetterChargedTools", "BetterChargedTools\BetterChargedTools.vcxproj", "{8a5d86cf-f78e-4fc2-905e-41dfb30797e2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -451,6 +453,14 @@ Global
 		{608B10DA-4763-463C-A81E-31B441E290BB}.Release|x64.Build.0 = Release|x64
 		{608B10DA-4763-463C-A81E-31B441E290BB}.Release|x86.ActiveCfg = Release|Win32
 		{608B10DA-4763-463C-A81E-31B441E290BB}.Release|x86.Build.0 = Release|Win32
+		{8A5D86CF-F78E-4FC2-905E-41DFB30797E2}.Debug|x64.ActiveCfg = Debug|x64
+		{8A5D86CF-F78E-4FC2-905E-41DFB30797E2}.Debug|x64.Build.0 = Debug|x64
+		{8A5D86CF-F78E-4FC2-905E-41DFB30797E2}.Debug|x86.ActiveCfg = Debug|Win32
+		{8A5D86CF-F78E-4FC2-905E-41DFB30797E2}.Debug|x86.Build.0 = Debug|Win32
+		{8A5D86CF-F78E-4FC2-905E-41DFB30797E2}.Release|x64.ActiveCfg = Release|x64
+		{8A5D86CF-F78E-4FC2-905E-41DFB30797E2}.Release|x64.Build.0 = Release|x64
+		{8A5D86CF-F78E-4FC2-905E-41DFB30797E2}.Release|x86.ActiveCfg = Release|Win32
+		{8A5D86CF-F78E-4FC2-905E-41DFB30797E2}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
