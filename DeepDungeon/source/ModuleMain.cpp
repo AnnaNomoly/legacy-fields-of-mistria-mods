@@ -28,7 +28,7 @@ struct pair_hash {
 };
 
 static const char* const MOD_NAME = "DeepDungeon";
-static const char* const VERSION = "1.0.0-BETA-2";
+static const char* const VERSION = "1.0.0-BETA-3";
 static const char* const GML_SCRIPT_GET_LOCALIZER = "gml_Script_get@Localizer@Localizer";
 static const char* const GML_SCRIPT_SPAWN_LADDER = "gml_Script_spawn_ladder@DungeonRunner@DungeonRunner";
 static const char* const GML_SCRIPT_TELEPORT_ARI_TO_ROOM = "gml_Script_ari_teleport_to_room";
@@ -7255,7 +7255,6 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 			std::uniform_int_distribution<size_t> zero_to_ninety_nine_distribution(0, 99);
 
 			Traps trap = magic_enum::enum_value<Traps>(random_trap_distribution(random_generator));
-			trap = Traps::GAZE;
 
 			// Hallowed Ground (Paladin Set Bonus)
 			bool malfunction = zero_to_ninety_nine_distribution(random_generator) < 50 ? true : false;
