@@ -98,7 +98,7 @@ RValue& GmlScriptAriFsmHoeCallback(
 	IN RValue** Arguments
 )
 {
-	script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_HOE] += 1;
+	stamina_consumed = false;
 
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_ARI_FSM_HOE));
 	original(
@@ -108,6 +108,14 @@ RValue& GmlScriptAriFsmHoeCallback(
 		ArgumentCount,
 		Arguments
 	);
+
+	if (stamina_consumed)
+	{
+		script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_HOE] += 1;
+		if (script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_HOE] % 3 == 0)
+			ModifyStamina(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], 1);
+	}
+	stamina_consumed = false;
 
 	return Result;
 }
@@ -120,7 +128,7 @@ RValue& GmlScriptAriFsmAxeCallback(
 	IN RValue** Arguments
 )
 {
-	script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_AXE] += 1;
+	stamina_consumed = false;
 
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_ARI_FSM_AXE));
 	original(
@@ -130,6 +138,14 @@ RValue& GmlScriptAriFsmAxeCallback(
 		ArgumentCount,
 		Arguments
 	);
+
+	if (stamina_consumed)
+	{
+		script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_AXE] += 1;
+		if (script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_AXE] % 3 == 0)
+			ModifyStamina(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], 1);
+	}
+	stamina_consumed = false;
 
 	return Result;
 }
@@ -142,7 +158,7 @@ RValue& GmlScriptAriFsmPickAxeCallback(
 	IN RValue** Arguments
 )
 {
-	script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_PICK_AXE] += 1;
+	stamina_consumed = false;
 
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_ARI_FSM_PICK_AXE));
 	original(
@@ -152,6 +168,14 @@ RValue& GmlScriptAriFsmPickAxeCallback(
 		ArgumentCount,
 		Arguments
 	);
+
+	if (stamina_consumed)
+	{
+		script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_PICK_AXE] += 1;
+		if (script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_PICK_AXE] % 3 == 0)
+			ModifyStamina(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], 1);
+	}
+	stamina_consumed = false;
 
 	return Result;
 }
@@ -164,7 +188,6 @@ RValue& GmlScriptAriFsmShovelCallback(
 	IN RValue** Arguments
 )
 {
-	// WIP
 	stamina_consumed = false;
 
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_ARI_FSM_SHOVEL));
@@ -182,7 +205,6 @@ RValue& GmlScriptAriFsmShovelCallback(
 		if (script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_SHOVEL] % 3 == 0)
 			ModifyStamina(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], 1);
 	}
-		
 	stamina_consumed = false;
 
 	return Result;
@@ -196,7 +218,7 @@ RValue& GmlScriptAriFsmNetCallback(
 	IN RValue** Arguments
 )
 {
-	script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_NET] += 1;
+	stamina_consumed = false;
 
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_ARI_FSM_NET));
 	original(
@@ -206,6 +228,14 @@ RValue& GmlScriptAriFsmNetCallback(
 		ArgumentCount,
 		Arguments
 	);
+
+	if (stamina_consumed)
+	{
+		script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_NET] += 1;
+		if (script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_NET] % 3 == 0)
+			ModifyStamina(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], 1);
+	}
+	stamina_consumed = false;
 
 	return Result;
 }
@@ -240,7 +270,7 @@ RValue& GmlScriptAriFsmSowCallback(
 	IN RValue** Arguments
 )
 {
-	script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_SOW] += 1;
+	stamina_consumed = false;
 
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_ARI_FSM_SOW));
 	original(
@@ -250,6 +280,14 @@ RValue& GmlScriptAriFsmSowCallback(
 		ArgumentCount,
 		Arguments
 	);
+
+	if (stamina_consumed)
+	{
+		script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_SOW] += 1;
+		if (script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_SOW] % 3 == 0)
+			ModifyStamina(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], 1);
+	}
+	stamina_consumed = false;
 
 	return Result;
 }
@@ -262,6 +300,14 @@ RValue& GmlScriptModifyStaminaCallback(
 	IN RValue** Arguments
 )
 {
+	if (Arguments[0]->ToInt64() < 0)
+	{
+		if (script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_WATERING_CAN] % 3 == 0)
+			*Arguments[0] = 0;
+		if (script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_WATERING_CAN] > 0)
+			script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_WATERING_CAN] -= 1;
+	}
+
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_MODIFY_STAMINA));
 	original(
 		Self,
