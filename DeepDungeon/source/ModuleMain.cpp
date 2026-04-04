@@ -28,7 +28,7 @@ struct pair_hash {
 };
 
 static const char* const MOD_NAME = "DeepDungeon";
-static const char* const VERSION = "1.0.0-BETA-1";
+static const char* const VERSION = "1.0.0-BETA-2";
 static const char* const GML_SCRIPT_GET_LOCALIZER = "gml_Script_get@Localizer@Localizer";
 static const char* const GML_SCRIPT_SPAWN_LADDER = "gml_Script_spawn_ladder@DungeonRunner@DungeonRunner";
 static const char* const GML_SCRIPT_TELEPORT_ARI_TO_ROOM = "gml_Script_ari_teleport_to_room";
@@ -7255,6 +7255,7 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 			std::uniform_int_distribution<size_t> zero_to_ninety_nine_distribution(0, 99);
 
 			Traps trap = magic_enum::enum_value<Traps>(random_trap_distribution(random_generator));
+			trap = Traps::GAZE;
 
 			// Hallowed Ground (Paladin Set Bonus)
 			bool malfunction = zero_to_ninety_nine_distribution(random_generator) < 50 ? true : false;
@@ -12106,9 +12107,25 @@ RValue& GmlScriptOnBeginStepCallback(
 	{
 		if (gaze_aoes[i].is_active)
 		{
-			RValue spr_trap_gaze = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_trap_gaze" });
-			g_ModuleInterface->CallBuiltin("variable_instance_set", { gaze_aoes[i].instance, "sprite_index", spr_trap_gaze });
-			g_ModuleInterface->CallBuiltin("variable_instance_set", { gaze_aoes[i].instance, "image_speed", 0.6 });
+			// if (gaze.is_active && current_time_in_seconds >= gaze.spawned_time + gaze.duration)
+			if (current_time_in_seconds < gaze_aoes[i].spawned_time + gaze_aoes[i].duration - 120)
+			{
+				RValue spr_trap_gaze = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_trap_gaze" });
+				g_ModuleInterface->CallBuiltin("variable_instance_set", { gaze_aoes[i].instance, "sprite_index", spr_trap_gaze });
+				g_ModuleInterface->CallBuiltin("variable_instance_set", { gaze_aoes[i].instance, "image_speed", 0.6 });
+			}
+			else
+			{
+				RValue spr_trap_gaze_vanish = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_trap_gaze_vanish" });
+				g_ModuleInterface->CallBuiltin("variable_instance_set", { gaze_aoes[i].instance, "sprite_index", spr_trap_gaze_vanish });
+				g_ModuleInterface->CallBuiltin("variable_instance_set", { gaze_aoes[i].instance, "image_speed", 0.6 });
+
+				if (!StructVariableExists(gaze_aoes[i].instance, "__deep_dungeon__reset_image_index"))
+				{
+					StructVariableSet(gaze_aoes[i].instance, "__deep_dungeon__reset_image_index", true);
+					g_ModuleInterface->CallBuiltin("variable_instance_set", { gaze_aoes[i].instance, "image_index", 0 });   // Reset frame
+				}
+			}
 		}
 	}
 
