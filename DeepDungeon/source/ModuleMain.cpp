@@ -7304,7 +7304,7 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 				}
 				else if (trap == Traps::EXPLODING)
 				{
-					PlaySoundEffect("snd_Explosion_CaveReverb", 100, 0.30);
+					PlaySoundEffect("snd_Explosion_CaveReverb", 100, 0.35);
 					CreateNotification(true, EXPLODING_TRAP_NOTIFICATION_KEY, Self, Other);
 					EmitBark(script_name_to_reference_map[GML_SCRIPT_BARK_EMITTER][0], script_name_to_reference_map["obj_ari"][1], bark_name_to_id_map["angry"], 0);
 				}
@@ -12172,7 +12172,7 @@ RValue& GmlScriptRecipeGenerateInfusionsCallback(
 	if (StructVariableExists(Self, "item_id"))
 	{
 		int item_id = Self->GetMember("item_id").ToInt64();
-		if (item_id_to_sigil_map.contains(item_id))
+		if (item_id_to_sigil_map.contains(item_id) || lift_key_items.contains(item_id))
 		{
 			RValue empty_array = g_ModuleInterface->CallBuiltin("array_create", { 0 });
 			*Result.GetRefMember("__count") = 0;
