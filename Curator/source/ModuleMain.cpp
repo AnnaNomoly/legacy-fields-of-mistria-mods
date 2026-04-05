@@ -8,7 +8,7 @@ using namespace Aurie;
 using namespace YYTK;
 using json = nlohmann::json;
 
-static const char* const VERSION = "1.1.1";
+static const char* const VERSION = "1.1.2";
 static const char* const MOD_NAME = "Curator";
 static const char* const GML_SCRIPT_CHOOSE_RANDOM_ARTIFACT = "gml_Script_choose_random_artifact@Archaeology@Archaeology";
 static const char* const GML_SCRIPT_SETUP_MAIN_SCREEN = "gml_Script_setup_main_screen@TitleMenu@TitleMenu";
@@ -18,7 +18,7 @@ static const char* const YYTK_KEY = "__YYTK";
 static const char* const VERSION_KEY = "version";
 static const char* const IGNORE_NEXT_DIG_SPOT_KEY = "ignore_next_dig_spot";
 static const char* const UNPEATABLE = "unpeatable";
-static const std::vector<std::string> DISABLED_ITEMS = { "perfect_mistril_ore", "perfect_pink_diamond", "dragon_claw", "dragon_forged_bracelet", "dragon_pact_tablet", "dragon_scale", "hardened_essence" };
+static const std::vector<std::string> DISABLED_ITEMS = { }; // TODO: Update as needed in future patches
 static const std::vector<std::string> COMMON_FINDS_SET_ITEMS = { "clay", "peat", "shard_mass", "shards", "sod" };
 static const bool PERK_MOD_VARIANT = true; // Indicates if the mod uses the custom perk.
 static const bool DEFAULT_ALLOW_ARTIFACTS_FROM_ANY_SET = false;
