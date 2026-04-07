@@ -45,6 +45,14 @@ RValue StructVariableGet(RValue the_struct, const char* variable_name)
 	);
 }
 
+RValue StructVariableSet(RValue the_struct, const char* variable_name, RValue value)
+{
+	return g_ModuleInterface->CallBuiltin(
+		"struct_set",
+		{ the_struct, variable_name, value }
+	);
+}
+
 // TODO: Remove this after debugging. It shouldn't be needed by the mod.
 void LoadItemData()
 {
@@ -113,6 +121,85 @@ bool ItemHasBeenDonated(int item_id)
 	return item_donated.ToBoolean();
 }
 
+void ObjectCallback(
+	IN FWCodeEvent& CodeEvent
+)
+{
+	auto& [self, other, code, argc, argv] = CodeEvent.Arguments();
+
+	if (!self)
+		return;
+
+	if (!self->m_Object)
+		return;
+
+	if (strstr(self->m_Object->m_Name, "obj_fish") && !StructVariableExists(self, "__donate_it__processed_fish") && StructVariableExists(self, "fish_loot"))
+	{
+		StructVariableSet(self, "__donate_it__processed_fish", true);
+
+		int item_id = self->GetMember("fish_loot").GetMember("item").GetMember("item_id").ToInt64();
+		if (donatable_items.contains(item_id) && !ItemHasBeenDonated(item_id))
+		{
+			// move_sprites
+			RValue move_sprites = self->GetMember("move_sprites");
+			RValue move_sprites_length = g_ModuleInterface->CallBuiltin("array_length", { move_sprites });
+			for (int i = 0; i < move_sprites_length.ToInt64(); i++)
+			{
+				RValue original_move_sprite = g_ModuleInterface->CallBuiltin("array_get", { move_sprites, i });
+				if (original_move_sprite.m_Kind == VALUE_REF)
+				{
+					RValue original_move_sprite_name = g_ModuleInterface->CallBuiltin("sprite_get_name", { original_move_sprite });
+
+					std::string replacement_move_sprite_name = original_move_sprite_name.ToString() + "_donatable";
+					RValue replacement_move_sprite = g_ModuleInterface->CallBuiltin("asset_get_index", { replacement_move_sprite_name.c_str() });
+					if (replacement_move_sprite.m_Kind == VALUE_REF)
+						g_ModuleInterface->CallBuiltin("array_set", { move_sprites, i, replacement_move_sprite });
+				}
+			}
+
+			// idle_sprites
+			RValue idle_sprites = self->GetMember("idle_sprites");
+			RValue idle_sprites_length = g_ModuleInterface->CallBuiltin("array_length", { idle_sprites });
+			for (int i = 0; i < idle_sprites_length.ToInt64(); i++)
+			{
+				RValue original_idle_sprite = g_ModuleInterface->CallBuiltin("array_get", { idle_sprites, i });
+				if (original_idle_sprite.m_Kind == VALUE_REF)
+				{
+					RValue original_idle_sprite_name = g_ModuleInterface->CallBuiltin("sprite_get_name", { original_idle_sprite });
+
+					std::string replacement_idle_sprite_name = original_idle_sprite_name.ToString() + "_donatable";
+					RValue replacement_idle_sprite = g_ModuleInterface->CallBuiltin("asset_get_index", { replacement_idle_sprite_name.c_str() });
+					if (replacement_idle_sprite.m_Kind == VALUE_REF)
+						g_ModuleInterface->CallBuiltin("array_set", { idle_sprites, i, replacement_idle_sprite });
+				}
+			}
+		}
+	}
+
+	if (strstr(self->m_Object->m_Name, "obj_bug") && !StructVariableExists(self, "__donate_it__processed_bug") && StructVariableExists(self, "item_id"))
+	{
+		StructVariableSet(self, "__donate_it__processed_bug", true);
+
+		int item_id = self->GetMember("item_id").ToInt64();
+		if (donatable_items.contains(item_id) && !ItemHasBeenDonated(item_id))
+		{
+			// move_sprite
+			RValue original_move_sprite_name = g_ModuleInterface->CallBuiltin("sprite_get_name", { self->GetMember("move_sprite") });
+			std::string replacement_move_sprite_name = original_move_sprite_name.ToString() + "_donatable";
+			RValue replacement_move_sprite = g_ModuleInterface->CallBuiltin("asset_get_index", { replacement_move_sprite_name.c_str() });
+			if (replacement_move_sprite.m_Kind == VALUE_REF)
+				StructVariableSet(self, "move_sprite", replacement_move_sprite);
+
+			// idle_sprite
+			RValue original_idle_sprite_name = g_ModuleInterface->CallBuiltin("sprite_get_name", { self->GetMember("idle_sprite") });
+			std::string replacement_idle_sprite_name = original_idle_sprite_name.ToString() + "_donatable";
+			RValue replacement_idle_sprite = g_ModuleInterface->CallBuiltin("asset_get_index", { replacement_idle_sprite_name.c_str() });
+			if (replacement_idle_sprite.m_Kind == VALUE_REF)
+				StructVariableSet(self, "idle_sprite", replacement_idle_sprite);
+		}
+	}
+}
+
 RValue& GmlScriptGetUiIconCallback(
 	IN CInstance* Self,
 	IN CInstance* Other,
@@ -142,6 +229,10 @@ RValue& GmlScriptGetUiIconCallback(
 				if (type.ToInt64() == 1) // asset_sprite
 				{
 					RValue original_sprite_name = g_ModuleInterface->CallBuiltin("sprite_get_name", { Result });
+
+					if (original_sprite_name.ToString().contains("spr_insect"))
+						int temp = 5;
+
 					std::string replacement_sprite_name = original_sprite_name.ToString() + "_donatable";
 
 					RValue sprite = g_ModuleInterface->CallBuiltin("asset_get_index", { replacement_sprite_name.c_str() });
@@ -190,6 +281,21 @@ RValue& GmlScriptSetupMainScreenCallback(
 	);
 
 	return Result;
+}
+
+void CreateObjectCallback(AurieStatus& status)
+{
+	status = g_ModuleInterface->CreateCallback(
+		g_ArSelfModule,
+		EVENT_OBJECT_CALL,
+		ObjectCallback,
+		0
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook (EVENT_OBJECT_CALL)!", MOD_NAME, VERSION);
+	}
 }
 
 void CreateHookGmlScriptGetUiIcon(AurieStatus& status)
@@ -265,6 +371,13 @@ EXPORTED AurieStatus ModuleInitialize(
 		return AURIE_MODULE_DEPENDENCY_NOT_RESOLVED;
 
 	g_ModuleInterface->Print(CM_LIGHTAQUA, "[%s %s] - Plugin starting...", MOD_NAME, VERSION);
+
+	CreateObjectCallback(status);
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return status;
+	}
 
 	CreateHookGmlScriptGetUiIcon(status);
 	if (!AurieSuccess(status))
