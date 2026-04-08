@@ -5684,8 +5684,22 @@ bool AriCurrentGmRoomIsDungeonFloor()
 
 void SetFloorNumber()
 {
-	// Update the floor number.
-	if (ari_current_gm_room == "rm_mines_upper_floor1")
+	if (boss_battle != BossBattle::NONE)
+	{
+		if (ari_current_gm_room == "rm_mines_tide_ritual_chamber")
+			floor_number = 20;
+		else if (ari_current_gm_room == "rm_mines_deep_ritual_chamber")
+			floor_number = 40;
+		else if (ari_current_gm_room == "rm_mines_lava_ritual_chamber")
+			floor_number = 60;
+		else if (ari_current_gm_room == "rm_mines_ruins_ritual_chamber")
+			floor_number = 80;
+	}
+	else if (ari_current_gm_room.contains("treasure") || ari_current_gm_room.contains("milestone"))
+		return; // Update 0.15.0 changed treasure rooms to "be considered side rooms rather than level-progressing rooms"
+	else if (ari_current_gm_room.contains("ritual"))
+		return; // Update 0.15.0 changed ritual rooms to "be considered side rooms rather than level-progressing rooms"
+	else if (ari_current_gm_room == "rm_mines_upper_floor1")
 		floor_number = 1;
 	else if (ari_current_gm_room == "rm_mines_upper_elevator5")
 		floor_number = 5;
@@ -5693,7 +5707,7 @@ void SetFloorNumber()
 		floor_number = 10;
 	else if (ari_current_gm_room == "rm_mines_upper_elevator15")
 		floor_number = 15;
-	else if (ari_current_gm_room == "rm_water_seal" || ari_current_gm_room == "rm_mines_tide_ritual_chamber")
+	else if (ari_current_gm_room == "rm_water_seal")
 		floor_number = 20;
 	else if (ari_current_gm_room == "rm_mines_tide_floor21")
 		floor_number = 21;
@@ -5703,7 +5717,7 @@ void SetFloorNumber()
 		floor_number = 30;
 	else if (ari_current_gm_room == "rm_mines_tide_elevator35")
 		floor_number = 35;
-	else if (ari_current_gm_room == "rm_earth_seal" || ari_current_gm_room == "rm_mines_deep_ritual_chamber")
+	else if (ari_current_gm_room == "rm_earth_seal")
 		floor_number = 40;
 	else if (ari_current_gm_room == "rm_mines_deep_41")
 		floor_number = 41;
@@ -5713,7 +5727,7 @@ void SetFloorNumber()
 		floor_number = 50;
 	else if (ari_current_gm_room == "rm_mines_deep_55")
 		floor_number = 55;
-	else if (ari_current_gm_room == "rm_fire_seal" || ari_current_gm_room == "rm_mines_lava_ritual_chamber")
+	else if (ari_current_gm_room == "rm_fire_seal")
 		floor_number = 60;
 	else if (ari_current_gm_room == "rm_mines_lava_61")
 		floor_number = 61;
@@ -5723,7 +5737,7 @@ void SetFloorNumber()
 		floor_number = 70;
 	else if (ari_current_gm_room == "rm_mines_lava_75")
 		floor_number = 75;
-	else if (ari_current_gm_room == "rm_ruins_seal" || ari_current_gm_room == "rm_mines_ruins_ritual_chamber")
+	else if (ari_current_gm_room == "rm_ruins_seal" || ari_current_gm_room == "rm_void_seal")
 		floor_number = 80;
 	else if (ari_current_gm_room == "rm_mines_ruins_85")
 		floor_number = 85;
@@ -5731,6 +5745,8 @@ void SetFloorNumber()
 		floor_number = 90;
 	else if (ari_current_gm_room == "rm_mines_ruins_95")
 		floor_number = 95;
+	else if (ari_current_gm_room == "rm_seridias_chamber")
+		floor_number = 100;
 	else
 		floor_number++;
 }
@@ -10112,7 +10128,7 @@ RValue& GmlScriptUseItemCallback(
 				// Great Sigils Restricted
 				if (item_id_to_greater_sigil_map.contains(held_item_id))
 				{
-					g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - You are unable to use greater sigils during boss battles!", MOD_NAME, VERSION);
+					g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - You are unable to use lost scrolls during boss battles!", MOD_NAME, VERSION);
 					CreateNotification(false, GREATER_SIGIL_RESTRICTED_NOTIFICATION_KEY, Self, Other);
 					return Result;
 				}
@@ -10130,7 +10146,7 @@ RValue& GmlScriptUseItemCallback(
 				// Greater Sigil Already Used
 				if (item_id_to_greater_sigil_map.contains(held_item_id) && !active_greater_sigils.empty())
 				{
-					g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - A greater sigil has already been used!", MOD_NAME, VERSION);
+					g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - A lost scroll has already been used!", MOD_NAME, VERSION);
 					CreateNotification(false, GREATER_SIGIL_LIMIT_NOTIFICATION_KEY, Self, Other);
 					return Result;
 				}
@@ -10961,7 +10977,7 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 	dread_beast_monster_id = -1;
 	dread_beasts_configured = 0;
 	boss_monsters_configured = 0;
-	if (active_offerings.empty() && ari_current_gm_room != "rm_mines_entry" && ari_current_gm_room != "rm_priestess_quarters" && !ari_current_gm_room.contains("seal") && !ari_current_gm_room.contains("ritual") && !ari_current_gm_room.contains("treasure"))
+	if (active_offerings.empty() && ari_current_gm_room != "rm_mines_entry" && ari_current_gm_room != "rm_priestess_quarters" && ari_current_gm_room != "rm_seridias_chamber" && !ari_current_gm_room.contains("seal") && !ari_current_gm_room.contains("ritual") && !ari_current_gm_room.contains("treasure") && !ari_current_gm_room.contains("milestone"))
 	{
 		static thread_local pcg32 random_generator([] {
 			std::random_device rd;
@@ -11009,59 +11025,59 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 	unmodified_base_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
 
 	// Toggle reward on seal rooms when dungeon lift is disabled
-	if (configuration.disable_dungeon_lift && ari_current_gm_room.contains("seal") && ari_current_gm_room != "rm_void_seal" && !biome_reward_disabled)
+	if (configuration.disable_dungeon_lift && (ari_current_gm_room.contains("seal") || ari_current_gm_room == "rm_seridias_chamber") && ari_current_gm_room != "rm_void_seal" && !biome_reward_disabled)
 		drop_biome_reward = true;
 	biome_reward_disabled = false;
 
-	// Hide (Rogue Set Bonus)
-	if (CountEquippedClassArmor()[Classes::ROGUE] > 0)
-		active_sigils.insert(Sigils::CONCEALMENT);
-
-	// Prophecy (Oracle Set Bonus)
-	if (CountEquippedClassArmor()[Classes::ORACLE] >= 5 && class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] == 1 && class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::CONDEMN] == 1)
+	if (ari_current_gm_room != "rm_mines_entry" && ari_current_gm_room != "rm_priestess_quarters" && ari_current_gm_room != "rm_seridias_chamber" && !ari_current_gm_room.contains("seal") && !ari_current_gm_room.contains("ritual") && !ari_current_gm_room.contains("treasure") && !ari_current_gm_room.contains("milestone"))
 	{
-		static thread_local pcg32 random_generator([] {
-			std::random_device rd;
-			return pcg32(
-				(static_cast<uint64_t>(rd()) << 32) | rd(),
-				(static_cast<uint64_t>(rd()) << 32) | rd()
-			);
-		}());
-		std::uniform_int_distribution<size_t> zero_to_ninety_nine_distribution(0, 99);
-
-		int random = zero_to_ninety_nine_distribution(random_generator);
-		if (random < 30)
-		{
-			active_sigils.insert(Sigils::FORTIFICATION);
-			CreateNotification(false, PROPHECY_FORTIFICATION_NOTIFICATION_KEY, Self, Other);
-		}
-		else if (random < 60)
-		{
-			active_sigils.insert(Sigils::STRENGTH);
-			CreateNotification(false, PROPHECY_STRENGTH_NOTIFICATION_KEY, Self, Other);
-		}
-		else if (random < 75)
-		{
-			active_sigils.insert(Sigils::PROTECTION);
-			CreateNotification(false, PROPHECY_PROTECTION_NOTIFICATION_KEY, Self, Other);
-
-			RegisterStatusEffect(script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1], status_effect_name_to_id_map["guardians_shield"], RValue(), 1, 2147483647.0);
-			SetInvulnerabilityHits(2);
-		}
-		else if (random < 90)
-		{
+		// Hide (Rogue Set Bonus)
+		if (CountEquippedClassArmor()[Classes::ROGUE] > 0)
 			active_sigils.insert(Sigils::CONCEALMENT);
-			CreateNotification(false, PROPHECY_CONCEALMENT_NOTIFICATION_KEY, Self, Other);
-		}
-		else
-		{
-			active_sigils.insert(Sigils::SAFETY);
-			CreateNotification(false, PROPHECY_SAFETY_NOTIFICATION_KEY, Self, Other);
-		}
-	}
 
-	if (ari_current_gm_room != "rm_mines_entry" && ari_current_gm_room != "rm_priestess_quarters" && !ari_current_gm_room.contains("seal") && !ari_current_gm_room.contains("ritual") && !ari_current_gm_room.contains("treasure"))
-	{
+		// Prophecy (Oracle Set Bonus)
+		if (CountEquippedClassArmor()[Classes::ORACLE] >= 5 && class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] == 1 && class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::CONDEMN] == 1)
+		{
+			static thread_local pcg32 random_generator([] {
+				std::random_device rd;
+				return pcg32(
+					(static_cast<uint64_t>(rd()) << 32) | rd(),
+					(static_cast<uint64_t>(rd()) << 32) | rd()
+				);
+				}());
+			std::uniform_int_distribution<size_t> zero_to_ninety_nine_distribution(0, 99);
+
+			int random = zero_to_ninety_nine_distribution(random_generator);
+			if (random < 30)
+			{
+				active_sigils.insert(Sigils::FORTIFICATION);
+				CreateNotification(false, PROPHECY_FORTIFICATION_NOTIFICATION_KEY, Self, Other);
+			}
+			else if (random < 60)
+			{
+				active_sigils.insert(Sigils::STRENGTH);
+				CreateNotification(false, PROPHECY_STRENGTH_NOTIFICATION_KEY, Self, Other);
+			}
+			else if (random < 75)
+			{
+				active_sigils.insert(Sigils::PROTECTION);
+				CreateNotification(false, PROPHECY_PROTECTION_NOTIFICATION_KEY, Self, Other);
+
+				RegisterStatusEffect(script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1], status_effect_name_to_id_map["guardians_shield"], RValue(), 1, 2147483647.0);
+				SetInvulnerabilityHits(2);
+			}
+			else if (random < 90)
+			{
+				active_sigils.insert(Sigils::CONCEALMENT);
+				CreateNotification(false, PROPHECY_CONCEALMENT_NOTIFICATION_KEY, Self, Other);
+			}
+			else
+			{
+				active_sigils.insert(Sigils::SAFETY);
+				CreateNotification(false, PROPHECY_SAFETY_NOTIFICATION_KEY, Self, Other);
+			}
+		}
+
 		if (!active_sigils.contains(Sigils::SAFETY)) // This should only happen after Prophecy (Oracle Set Bonus)
 			GenerateFloorTraps();
 
@@ -11247,7 +11263,7 @@ RValue& GmlScriptGoToRoomCallback(
 	RValue room_name = g_ModuleInterface->CallBuiltin("room_get_name", { gm_room });
 	ari_current_gm_room = room_name.ToString();
 
-	if ((ari_current_gm_room.contains("rm_mines") || ari_current_gm_room.contains("seal") || ari_current_gm_room == "rm_priestess_quarters") && ari_current_gm_room != "rm_mines_entry")
+	if ((ari_current_gm_room.contains("rm_mines") || ari_current_gm_room.contains("seal") || ari_current_gm_room == "rm_priestess_quarters" || ari_current_gm_room == "rm_seridias_chamber") && ari_current_gm_room != "rm_mines_entry")
 		SetFloorNumber();
 	else
 		floor_number = 0;
@@ -12077,6 +12093,7 @@ RValue& GmlScriptOnBeginStepCallback(
 		{
 			RValue spr_revealed_floor_trap = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_revealed_floor_trap" });
 			g_ModuleInterface->CallBuiltin("variable_instance_set", { revealed_floor_traps[i].instance, "sprite_index", spr_revealed_floor_trap });
+			g_ModuleInterface->CallBuiltin("variable_instance_set", { revealed_floor_traps[i].instance, "image_speed", 0.10 }); // 0.15
 			g_ModuleInterface->CallBuiltin("variable_instance_set", { revealed_floor_traps[i].instance, "depth", 350 });
 		}
 	}
@@ -12086,6 +12103,7 @@ RValue& GmlScriptOnBeginStepCallback(
 	{
 		RValue spr_treasure_spot = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_treasure_spot" });
 		g_ModuleInterface->CallBuiltin("variable_instance_set", { treasure_spot.instance, "sprite_index", spr_treasure_spot });
+		g_ModuleInterface->CallBuiltin("variable_instance_set", { treasure_spot.instance, "image_speed", 0.3 }); // 0.6
 		g_ModuleInterface->CallBuiltin("variable_instance_set", { treasure_spot.instance, "depth", 350 });
 	}
 	
