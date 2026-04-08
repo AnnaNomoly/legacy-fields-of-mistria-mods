@@ -1,4 +1,3 @@
-//#include <math.h>
 #include <random>
 #include <complex>
 #include <fstream>
@@ -6,6 +5,7 @@
 #include <filesystem>
 #include <unordered_set>
 #include <nlohmann/json.hpp>
+#include <pcg/pcg_random.hpp>
 #include <magic_enum/magic_enum.hpp>
 #include <YYToolkit/YYTK_Shared.hpp> // YYTK v4
 using namespace Aurie;
@@ -28,10 +28,12 @@ struct pair_hash {
 };
 
 static const char* const MOD_NAME = "DeepDungeon";
-static const char* const VERSION = "0.9.0";
+static const char* const VERSION = "1.0.0-BETA-3";
 static const char* const GML_SCRIPT_GET_LOCALIZER = "gml_Script_get@Localizer@Localizer";
 static const char* const GML_SCRIPT_SPAWN_LADDER = "gml_Script_spawn_ladder@DungeonRunner@DungeonRunner";
+static const char* const GML_SCRIPT_TELEPORT_ARI_TO_ROOM = "gml_Script_ari_teleport_to_room";
 static const char* const GML_SCRIPT_CREATE_NOTIFICATION = "gml_Script_create_notification";
+static const char* const GML_SCRIPT_CLOSE_TEXTBOX = "gml_Script_begin_close@TextboxMenu@TextboxMenu";
 static const char* const GML_SCRIPT_PLAY_CONVERSATION = "gml_Script_play_conversation";
 static const char* const GML_SCRIPT_SCENE_AUDIO_PLAYER_STOP = "gml_Script_stop@SceneAudioPlayer@SceneAudioPlayer";
 static const char* const GML_SCRIPT_SPAWN_TUTORIAL = "gml_Script_spawn_tutorial";
@@ -91,13 +93,19 @@ static const char* const GML_SCRIPT_SAVE_GAME = "gml_Script_save_game";
 static const char* const GML_SCRIPT_ARI_FACE_DIR = "gml_Script_face_dir@gml_Object_obj_ari_Create_0";
 static const char* const GML_SCRIPT_ON_BEGIN_STEP = "gml_Script_on_begin_step@Anchor@Anchor";
 static const char* const GML_SCRIPT_RECIPE_GENERATE_INFUSIONS = "gml_Script_generate_infusions@Recipe@Recipe";
+static const char* const GML_SCRIPT_BARK_EMITTER = "gml_Script_BarkEmitter";
+static const char* const GML_SCRIPT_BARK_EMITTER_EMIT = "gml_Script_emit@BarkEmitter@BarkEmitter";
+static const char* const GML_SCRIPT_T2_READ = "gml_Script_read@T2r@T2r";
+static const char* const CONFIG_VERSION_JSON_KEY = "__config_version"; // The config version
 static const char* const DISABLE_DUNGEON_LIFT_JSON_KEY = "disable_dungeon_lift"; // Controls the dungeon lift
 static const char* const RESTRICT_PERKS_JSON_KEY = "restrict_perks"; // Determines if perks are restricted in the dungeon
 static const char* const RESTRICT_ITEMS_JSON_KEY = "restrict_items"; // Determines if items are restricted in the dungeon
 static const char* const RESTRICT_ARMOR_JSON_KEY = "restrict_armor"; // Determines if armor is restricted in the dungeon
 static const char* const RESTRICT_TOOLS_JSON_KEY = "restrict_tools"; // Determines if tools are restricted in the dungeon
 static const char* const RESTRICT_WEAPONS_JSON_KEY = "restrict_weapons"; // Determines if weapons are restricted in the dungeon
-static const char* const LIMIT_SALVES_JSON_KEY = "limit_salves"; // Determines if salves have a single use limit per floor
+static const char* const HEALTH_SALVE_LIMIT_JSON_KEY = "health_salve_limit"; // Controls how many health salves may be used per floor
+static const char* const STAMINA_SALVE_LIMIT_JSON_KEY = "stamina_salve_limit"; // Controls how many stamina salves may be used per floor
+static const char* const MANA_SALVE_LIMIT_JSON_KEY = "mana_salve_limit"; // Controls how many mana salves may be used per floor
 static const char* const HEALTH_SALVE_POTENCY_JSON_KEY = "health_salve_potency"; // Controls how much the health salve restores
 static const char* const STAMINA_SALVE_POTENCY_JSON_KEY = "stamina_salve_potency"; // Controls how much the stamina salve restores
 static const char* const MANA_SALVE_POTENCY_JSON_KEY = "mana_salve_potency"; // Controls how much the mana salve restores
@@ -119,8 +127,17 @@ static const char* const INHIBITING_TRAP_DURATION_SECONDS_JSON_KEY = "inhibiting
 static const char* const LURING_TRAP_MONSTER_SPAWN_COUNT_JSON_KEY = "luring_trap_monster_spawn_count"; // Controls the number of monsters spawned for luring traps
 static const char* const GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT_JSON_KEY = "gaze_trap_max_health_damage_percent"; // Controls the number of monsters spawned for luring traps
 static const char* const METEOR_TRAP_SCALING_FACTOR_JSON_KEY = "meteor_trap_scaling_factor"; // Controls the scaling factor of the meteor trap
+static const char* const VOID_TRAP_DURATION_SECONDS_JSON_KEY = "void_trap_duration_seconds"; // Controls the duration in seconds for void traps
 static const char* const MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY = "mistpool_equipment_store_price"; // Controls the price of mistpool equipment in stores
 static const char* const SALVES_STORE_PRICE_JSON_KEY = "salves_store_price"; // Controls the price of salves in stores
+static const char* const DREAD_BEAST_DAMAGE_MODIFIER_JSON_KEY = "dread_beast_damage_modifier"; // Controls the damage of dread beasts
+static const char* const DREAD_BEAST_HEALTH_MODIFIER_JSON_KEY = "dread_beast_health_modifier"; // Controls the health of dread beasts
+static const char* const GLOOM_DAMAGE_DEALT_MODIFIER_JSON_KEY = "gloom_monster_damage_dealt_modifier"; // Controls the damage multiplier granted by Gloom
+static const char* const GLOOM_DAMAGE_RECEIVED_MODIFIER_JSON_KEY = "gloom_monster_damage_received_modifier"; // Controls the damage mitigation granted by Gloom
+static const char* const GLOOM_HEALTH_MODIFIER_JSON_KEY = "gloom_monster_health_modifier"; // Controls the health bonus granted by Gloom
+static const char* const EXPERIMENTAL_MAX_HEALTH_BUG_FIX_JSON_KEY = "experimental_max_health_bug_fix"; // Controls the experimental fix for restoring proper max health
+static const char* const EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS_JSON_KEY = "experimental_extra_floor_enchantments_and_offerings"; // Controls the experimental option to always enable the Oracle exclusive floor enchantments and offerings
+static const char* const EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER_JSON_KEY = "experimental_monster_base_stat_difficulty_modifier"; // Controls the experimental option to scale base monster health and damage
 
 static const std::string SIGIL_OF_ALTERATION_NAME = "sigil_of_alteration";
 static const std::string SIGIL_OF_CONCEALMENT_NAME = "sigil_of_concealment";
@@ -134,6 +151,13 @@ static const std::string SIGIL_OF_SERENITY_NAME = "sigil_of_serenity";
 static const std::string SIGIL_OF_SILENCE_NAME = "sigil_of_silence";
 static const std::string SIGIL_OF_STRENGTH_NAME = "sigil_of_strength";
 static const std::string SIGIL_OF_TEMPTATION_NAME = "sigil_of_temptation";
+static const std::string SIGIL_OF_SIGHT_NAME = "sigil_of_sight";
+static const std::string SIGIL_OF_INTUITION_NAME = "sigil_of_intuition";
+static const std::string GREATER_SIGIL_OF_BENEDICTION_NAME = "greater_sigil_of_benediction";
+static const std::string GREATER_SIGIL_OF_ASTRAL_FLOW_NAME = "greater_sigil_of_astral_flow";
+static const std::string GREATER_SIGIL_OF_CHAIN_SPELL_NAME = "greater_sigil_of_chain_spell";
+static const std::string GREATER_SIGIL_OF_SPIRIT_SURGE_NAME = "greater_sigil_of_spirit_surge";
+static const std::string GREATER_SIGIL_OF_MEIKYO_SHISUI_NAME = "greater_sigil_of_meikyo_shisui";
 static const std::string SUSTAINING_POTION_NAME = "sustaining_potion";
 static const std::string HEALTH_SALVE_NAME = "health_salve";
 static const std::string STAMINA_SALVE_NAME = "stamina_salve";
@@ -175,14 +199,35 @@ static const std::string ROGUE_CHESTPIECE_NAME = "rogue_chestpiece";
 static const std::string ROGUE_GLOVES_NAME = "rogue_gloves";
 static const std::string ROGUE_PANTS_NAME = "rogue_pants";
 static const std::string ROGUE_BOOTS_NAME = "rogue_boots";
+static const std::string ORACLE_HELMET_NAME = "oracle_helmet";
+static const std::string ORACLE_CHESTPIECE_NAME = "oracle_chestpiece";
+static const std::string ORACLE_GLOVES_NAME = "oracle_gloves";
+static const std::string ORACLE_PANTS_NAME = "oracle_pants";
+static const std::string ORACLE_BOOTS_NAME = "oracle_boots";
 static const std::string TREASURE_CHEST_WOOD_NAME = "treasure_chest_wood";
 static const std::string TREASURE_CHEST_COPPER_NAME = "treasure_chest_copper";
 static const std::string TREASURE_CHEST_SILVER_NAME = "treasure_chest_silver";
 static const std::string TREASURE_CHEST_GOLD_NAME = "treasure_chest_gold";
-static const std::string TIDE_CAVERNS_KEY_NAME = "tide_caverns_key";
-static const std::string DEEP_EARTH_KEY_NAME = "deep_earth_key";
-static const std::string LAVA_CAVES_KEY_NAME = "lava_caves_key";
-static const std::string RUINS_KEY_NAME = "ruins_key";
+static const std::string UPPER_MINES_KEY_F5_NAME = "upper_mines_key_f5";
+static const std::string UPPER_MINES_KEY_F10_NAME = "upper_mines_key_f10";
+static const std::string UPPER_MINES_KEY_F15_NAME = "upper_mines_key_f15";
+static const std::string TIDE_CAVERNS_KEY_F20_NAME = "tide_caverns_key_f20";
+static const std::string TIDE_CAVERNS_KEY_F25_NAME = "tide_caverns_key_f25";
+static const std::string TIDE_CAVERNS_KEY_F30_NAME = "tide_caverns_key_f30";
+static const std::string TIDE_CAVERNS_KEY_F35_NAME = "tide_caverns_key_f35";
+static const std::string DEEP_EARTH_KEY_F40_NAME = "deep_earth_key_f40";
+static const std::string DEEP_EARTH_KEY_F45_NAME = "deep_earth_key_f45";
+static const std::string DEEP_EARTH_KEY_F50_NAME = "deep_earth_key_f50";
+static const std::string DEEP_EARTH_KEY_F55_NAME = "deep_earth_key_f55";
+static const std::string LAVA_CAVES_KEY_F60_NAME = "lava_caves_key_f60";
+static const std::string LAVA_CAVES_KEY_F65_NAME = "lava_caves_key_f65";
+static const std::string LAVA_CAVES_KEY_F70_NAME = "lava_caves_key_f70";
+static const std::string LAVA_CAVES_KEY_F75_NAME = "lava_caves_key_f75";
+static const std::string RUINS_KEY_F80_NAME = "ruins_key_f80";
+static const std::string RUINS_KEY_F85_NAME = "ruins_key_f85";
+static const std::string RUINS_KEY_F90_NAME = "ruins_key_f90";
+static const std::string RUINS_KEY_F95_NAME = "ruins_key_f95";
+static const std::string RUINS_KEY_F100_NAME = "ruins_key_f100";
 static const std::string TIDE_CAVERNS_ORB = "tide_caverns_orb";
 static const std::string DEEP_EARTH_ORB = "deep_earth_orb";
 static const std::string LAVA_CAVES_ORB = "lava_caves_orb";
@@ -192,11 +237,14 @@ static const std::string SOUL_STONE_DARK_KNIGHT = "soul_stone_dark_knight";
 static const std::string SOUL_STONE_MAGE = "soul_stone_mage";
 static const std::string SOUL_STONE_PALADIN = "soul_stone_paladin";
 static const std::string SOUL_STONE_ROGUE = "soul_stone_rogue";
+static const std::string SOUL_STONE_ORACLE = "soul_stone_oracle";
 static const std::string SAVING_DISABLED_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/saving_disabled";
 static const std::string LIFT_KEY_RESTRICTED_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/lift_key_restricted";
 static const std::string ORB_RESTRICTED_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/orb_restricted";
 static const std::string SIGIL_RESTRICTED_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/sigil_restricted";
+static const std::string GREATER_SIGIL_RESTRICTED_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/greater_sigil_restricted";
 static const std::string SIGIL_LIMIT_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/sigil_limit";
+static const std::string GREATER_SIGIL_LIMIT_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/greater_sigil_limit";
 static const std::string SALVE_LIMIT_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/salve_limit";
 static const std::string ITEM_PENALTY_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/item_penalty";
 static const std::string ITEM_PROHIBITED_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/item_prohibited";
@@ -213,6 +261,16 @@ static const std::string INHIBITING_TRAP_NOTIFICATION_KEY = "Notifications/Mods/
 static const std::string LURING_TRAP_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Traps/luring";
 static const std::string METEOR_TRAP_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Traps/meteor";
 static const std::string GAZE_TRAP_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Traps/gaze";
+static const std::string VOID_TRAP_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Traps/void";
+static const std::string PREDICT_SPELL_CAST_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/predict";
+static const std::string PROPHECY_FORTIFICATION_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Prophecy/fortification";
+static const std::string PROPHECY_STRENGTH_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Prophecy/strength";
+static const std::string PROPHECY_PROTECTION_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Prophecy/protection";
+static const std::string PROPHECY_CONCEALMENT_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Prophecy/concealment";
+static const std::string PROPHECY_SAFETY_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Prophecy/safety";
+static const std::string TREASURE_SPOT_NOT_PRESENT_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Treasure Spot/not_present";
+static const std::string TREASURE_SPOT_SPAWNED_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Treasure Spot/spawned";
+static const std::string TREASURE_SPOT_FOUND_NOTIFICATION_KEY = "Notifications/Mods/Deep Dungeon/Treasure Spot/found";
 static const std::string FLOOR_ENCHANTMENT_CONVERSATION_KEY = "Conversations/Mods/Deep Dungeon/floor_enchantments";
 static const std::string DREAD_BEAST_WARNING_CONVERSATION_KEY = "Conversations/Mods/Deep Dungeon/dread_beast_warning";
 static const std::string FLOOR_TEN_CONVERSATION_KEY = "Conversations/floor_10/mines_floor_ten";
@@ -222,6 +280,7 @@ static const std::string BOSS_BATTLE_TIDE_CAVERNS_ORB_CONVERSATION_KEY = "Conver
 static const std::string BOSS_BATTLE_DEEP_EARTH_ORB_CONVERSATION_KEY = "Conversations/Mods/Deep Dungeon/Boss Battles/deep_earth_orb";
 static const std::string BOSS_BATTLE_LAVA_CAVES_ORB_CONVERSATION_KEY = "Conversations/Mods/Deep Dungeon/Boss Battles/lava_caves_orb";
 static const std::string BOSS_BATTLE_RUINS_ORB_CONVERSATION_KEY = "Conversations/Mods/Deep Dungeon/Boss Battles/ruins_orb";
+static const std::string CONDEMN_PLACEHOLDER_TEXT_KEY = "Conversations/Mods/Deep Dungeon/placeholders/condemn/result";
 static const std::string OFFERINGS_PLACEHOLDER_TEXT_KEY = "Conversations/Mods/Deep Dungeon/placeholders/offerings/result";
 static const std::string FLOOR_ENCHANTMENT_PLACEHOLDER_TEXT_KEY = "Conversations/Mods/Deep Dungeon/placeholders/floor_enchantments/init";
 static const std::string DREAD_BEAST_WARNING_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Special/dread";
@@ -237,11 +296,22 @@ static const std::string FEY_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY = "Conversatio
 static const std::string RESTORATION_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Floor Enchantments/Positive/restoration";
 static const std::string SECOND_WIND_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Floor Enchantments/Positive/second_wind";
 static const std::string HASTE_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Floor Enchantments/Positive/haste";
+static const std::string FUMIGATE_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Floor Enchantments/Predict/fumigate";
+static const std::string FRAILTY_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Floor Enchantments/Predict/frailty";
+static const std::string GRUDGE_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Floor Enchantments/Predict/grudge";
+static const std::string DEEP_WOUNDS_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Floor Enchantments/Predict/deep_wounds";
+static const std::string BLINK_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Floor Enchantments/Predict/blink";
+static const std::string STONESKIN_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Floor Enchantments/Predict/stoneskin";
+static const std::string PHALANX_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Floor Enchantments/Predict/phalanx";
 static const std::string DREAD_OFFERING_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Offerings/Negative/dread";
 static const std::string INNER_FIRE_OFFERING_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Offerings/Positive/inner_fire";
 static const std::string LEECH_OFFERING_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Offerings/Positive/leech";
 static const std::string PERIL_OFFERING_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Offerings/Negative/peril";
 static const std::string RECKONING_OFFERING_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Offerings/Negative/reckoning";
+static const std::string OUTBREAK_OFFERING_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Offerings/Condemn/outbreak";
+static const std::string SPIRIT_LINK_OFFERING_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Offerings/Condemn/spirit_link";
+static const std::string SPIKES_OFFERING_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Offerings/Condemn/spikes";
+static const std::string REFLECT_OFFERING_LOCALIZED_TEXT_KEY = "Conversations/Mods/Deep Dungeon/Offerings/Condemn/reflect";
 static const std::string TIDE_CAVERNS_ORB_DESCRIPTION_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Orbs/tide_caverns_orb/description";
 static const std::string DEEP_EARTH_ORB_DESCRIPTION_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Orbs/deep_earth_orb/description";
 static const std::string LAVA_CAVES_ORB_DESCRIPTION_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Orbs/lava_caves_orb/description";
@@ -255,6 +325,7 @@ static const std::string DARK_KNIGHT_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY = "Ite
 static const std::string MAGE_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Armor/mage/description";
 static const std::string PALADIN_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Armor/paladin/description";
 static const std::string ROGUE_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Armor/rogue/description";
+static const std::string ORACLE_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Armor/oracle/description";
 static const std::string SET_PIECES_EQUIPPED_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/set_bonuses/equipped";
 static const std::string CLERIC_SET_BONUS_AUTO_REGEN_ONE_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Classes/Cleric/set_bonuses/auto_regen/1";
 static const std::string CLERIC_SET_BONUS_AUTO_REGEN_TWO_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Classes/Cleric/set_bonuses/auto_regen/2";
@@ -281,25 +352,36 @@ static const std::string ROGUE_SET_BONUS_HIDE_LOCALIZED_TEXT_KEY = "Items/Mods/D
 static const std::string ROGUE_SET_BONUS_SNEAK_ATTACK_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Classes/Rogue/set_bonuses/sneak_attack";
 static const std::string ROGUE_SET_BONUS_DISARM_TRAP_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Classes/Rogue/set_bonuses/disarm_trap";
 static const std::string ROGUE_SET_BONUS_TREASURE_HUNTER_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Classes/Rogue/set_bonuses/treasure_hunter";
+static const std::string ORACLE_SET_BONUS_PREDICT_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Classes/Oracle/set_bonuses/predict";
+static const std::string ORACLE_SET_BONUS_CONDEMN_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Classes/Oracle/set_bonuses/condemn";
+static const std::string ORACLE_SET_BONUS_DIVINATION_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Classes/Oracle/set_bonuses/divination";
+static const std::string ORACLE_SET_BONUS_BLESSED_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Classes/Oracle/set_bonuses/blessed";
+static const std::string ORACLE_SET_BONUS_PROPHECY_LOCALIZED_TEXT_KEY = "Items/Mods/Deep Dungeon/Classes/Oracle/set_bonuses/prophecy";
 
 static const int TWO_MINUTES_IN_SECONDS = 120;
+static const int TWO_MINUTES_AND_THIRTY_SECONDS = 150;
 static const int THREE_MINUTES_IN_SECONDS = 180;
+static const int TWENTY_FIVE_MINUTES_IN_SECONDS = 1600;
+static const int THIRTY_MINUTES_IN_SECONDS = 1800;
 static const int TRAP_ACTIVATION_DISTANCE = 16;
 
 // Configuration defaults
+static const int CONFIG_VERSION = 1;
 static const bool DEFAULT_DISABLE_DUNGEON_LIFT = true;
 static const bool DEFAULT_RESTRICT_PERKS = true;
 static const bool DEFAULT_RESTRICT_ITEMS = true;
 static const bool DEFAULT_RESTRICT_ARMOR = true;
 static const bool DEFAULT_RESTRICT_TOOLS = true;
 static const bool DEFAULT_RESTRICT_WEAPONS = true;
-static const bool DEFAULT_LIMIT_SALVES = true;
-static const int DEFAULT_HEALTH_SALVE_POTENCY = 30;
-static const int DEFAULT_STAMINA_SALVE_POTENCY = 30;
+static const int DEFAULT_HEALTH_SALVE_LIMIT = 3;
+static const int DEFAULT_STAMINA_SALVE_LIMIT = 3;
+static const int DEFAULT_MANA_SALVE_LIMIT = 1;
+static const int DEFAULT_HEALTH_SALVE_POTENCY = 35;
+static const int DEFAULT_STAMINA_SALVE_POTENCY = 35;
 static const int DEFAULT_MANA_SALVE_POTENCY = 1;
 static const double DEFAULT_SUSTAINING_POTION_DURATION_MODIFIER = 0.5;
 static const bool DEFAULT_RANDOMIZE_DUNGEON_MUSIC = true;
-static const int DEFAULT_RANDOM_DREAD_BEAST_SPAWN_CHANCE = 5; // TODO: Tune this.
+static const int DEFAULT_RANDOM_DREAD_BEAST_SPAWN_CHANCE = 5;
 static const int DEFAULT_OFFERING_EVENT_CHANCE = 15;
 static const int DEFAULT_OFFERING_HEALTH_REQUIREMENT = 25; // TODO: Tune this.
 static const int DEFAULT_OFFERING_STAMINA_REQUIREMENT = 20; // TODO: Tune this.
@@ -313,10 +395,19 @@ static const int DEFAULT_DISORIENTING_TRAP_DURATION_SECONDS = 600;
 static const int DEFAULT_EXPLODING_TRAP_CURRENT_HEALTH_DAMAGE_PERCENT = 50;
 static const int DEFAULT_LURING_TRAP_MONSTER_SPAWN_COUNT = 2;
 static const int DEFAULT_INHIBITING_TRAP_DURATION_SECONDS = 900;
-static const int DEFAULT_GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT = 50;
+static const int DEFAULT_GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT = 40;
 static const double DEFAULT_METEOR_TRAP_SCALING_FACTOR = 2.5;
+static const int DEFAULT_VOID_TRAP_DURATION_SECONDS = 1200;
 static const int DEFAULT_MISTPOOL_EQUIPMENT_STORE_PRICE = 500;
 static const int DEFAULT_SALVES_STORE_PRICE = 50;
+static const double DEFAULT_DREAD_BEAST_DAMAGE_MODIFIER = 2;
+static const double DEFAULT_DREAD_BEAST_HEALTH_MODIFIER = 3;
+static const double DEFAULT_GLOOM_DAMAGE_DEALT_MODIFIER = 1.5;
+static const double DEFAULT_GLOOM_DAMAGE_RECEIVED_MODIFIER = 0.5;
+static const double DEFAULT_GLOOM_HEALTH_MODIFIER = 1.5;
+static const bool DEFAULT_EXPERIMENTAL_MAX_HEALTH_BUG_FIX = false;
+static const bool DEFAULT_EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS = false;
+static const double DEFAULT_EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER = 1.0;
 
 static enum class BossBattle {
 	NONE,
@@ -331,7 +422,8 @@ static enum class Classes {
 	MAGE,
 	PALADIN,
 	DARK_KNIGHT,
-	ROGUE
+	ROGUE,
+	ORACLE
 };
 
 static enum class ManagedSetBonuses { // Set bonuses that have actively managed values.
@@ -348,7 +440,10 @@ static enum class ManagedSetBonuses { // Set bonuses that have actively managed 
 	ENPOISON, // Mage
 	QUAKE, // Mage
 	MANA_FONT, // Mage
-	FLEE // Rogue
+	FLEE, // Rogue
+	PREDICT, // Oracle
+	CONDEMN, // Oracle
+	BLESSED // Oracle
 };
 
 static enum class ElementalSealEffects {
@@ -388,6 +483,15 @@ static enum class FloorEnchantments {
 	SECOND_WIND, // Group 1
 	HASTE, // Group 1
 	FEY, // Group 3
+
+	// Predict Exclusive Effects
+	FUMIGATE, // Group 1
+	FRAILTY, // Group 2
+	GRUDGE, // Group 2
+	DEEP_WOUNDS, // Group 1
+	BLINK, // Group 1
+	STONESKIN, // Group 1
+	PHALANX // Group 1
 };
 
 static enum class Offerings {
@@ -396,6 +500,12 @@ static enum class Offerings {
 	LEECH,
 	PERIL,
 	RECKONING,
+
+	// Condemn Exclusive Offerings
+	OUTBREAK,
+	SPIRIT_LINK,
+	SPIKES,
+	REFLECT
 };
 
 static enum class Sigils {
@@ -410,7 +520,17 @@ static enum class Sigils {
 	REDEMPTION,
 	ALTERATION,
 	CONCEALMENT,
-	TEMPTATION
+	TEMPTATION,
+	SIGHT,
+	INTUITION
+};
+
+static enum class GreaterSigils {
+	BENEDICTION,
+	ASTRAL_FLOW,
+	CHAIN_SPELL,
+	SPIRIT_SURGE,
+	MEIKYO_SHISUI
 };
 
 static enum class Traps {
@@ -420,12 +540,14 @@ static enum class Traps {
 	INHIBITING,
 	LURING,
 	METEOR,
-	GAZE
+	GAZE,
+	_VOID
 };
 
 static enum class CustomAOETypes {
 	METEOR,
-	GAZE
+	GAZE,
+	_VOID
 };
 
 static struct CustomAOE {
@@ -433,9 +555,28 @@ static struct CustomAOE {
 	int y;
 	int spawned_time;
 	int duration;
+	int last_application;
 	bool is_active;
 	RValue instance;
 	CustomAOETypes type;
+};
+
+static struct RevealedFloorTrap {
+	int x;
+	int y;
+	bool is_active;
+	RValue instance;
+};
+
+static struct TreasureSpot {
+	enum TreasureSpotState { INACTIVE, WAITING_TO_SPAWN, SPAWNED, FOUND };
+
+	int x;
+	int y;
+	int floors_to_descend;
+	bool is_active;
+	RValue instance;
+	TreasureSpotState state = INACTIVE;
 };
 
 static const std::unordered_set<std::string> DUNGEON_TREASURE_CHEST_NAMES = {
@@ -458,7 +599,8 @@ static const std::unordered_set<std::string> CLASS_ARMOR_NAMES = {
 	DARK_KNIGHT_HELMET_NAME, DARK_KNIGHT_CHESTPIECE_NAME, DARK_KNIGHT_GLOVES_NAME, DARK_KNIGHT_PANTS_NAME, DARK_KNIGHT_BOOTS_NAME,
 	MAGE_HELMET_NAME, MAGE_CHESTPIECE_NAME, MAGE_GLOVES_NAME, MAGE_PANTS_NAME, MAGE_BOOTS_NAME,
 	PALADIN_HELMET_NAME, PALADIN_CHESTPIECE_NAME, PALADIN_GLOVES_NAME, PALADIN_PANTS_NAME, PALADIN_BOOTS_NAME,
-	ROGUE_HELMET_NAME, ROGUE_CHESTPIECE_NAME, ROGUE_GLOVES_NAME, ROGUE_PANTS_NAME, ROGUE_BOOTS_NAME
+	ROGUE_HELMET_NAME, ROGUE_CHESTPIECE_NAME, ROGUE_GLOVES_NAME, ROGUE_PANTS_NAME, ROGUE_BOOTS_NAME,
+	ORACLE_HELMET_NAME, ORACLE_CHESTPIECE_NAME, ORACLE_GLOVES_NAME, ORACLE_PANTS_NAME, ORACLE_BOOTS_NAME
 };
 
 static const std::map<Classes, std::unordered_set<std::string>> CLASS_NAME_TO_ARMOR_NAMES_MAP = {
@@ -466,7 +608,8 @@ static const std::map<Classes, std::unordered_set<std::string>> CLASS_NAME_TO_AR
 	{ Classes::DARK_KNIGHT, { DARK_KNIGHT_HELMET_NAME, DARK_KNIGHT_CHESTPIECE_NAME, DARK_KNIGHT_GLOVES_NAME, DARK_KNIGHT_PANTS_NAME, DARK_KNIGHT_BOOTS_NAME } },
 	{ Classes::MAGE, { MAGE_HELMET_NAME, MAGE_CHESTPIECE_NAME, MAGE_GLOVES_NAME, MAGE_PANTS_NAME, MAGE_BOOTS_NAME } },
 	{ Classes::PALADIN, { PALADIN_HELMET_NAME, PALADIN_CHESTPIECE_NAME, PALADIN_GLOVES_NAME, PALADIN_PANTS_NAME, PALADIN_BOOTS_NAME } },
-	{ Classes::ROGUE, { ROGUE_HELMET_NAME, ROGUE_CHESTPIECE_NAME, ROGUE_GLOVES_NAME, ROGUE_PANTS_NAME, ROGUE_BOOTS_NAME } }
+	{ Classes::ROGUE, { ROGUE_HELMET_NAME, ROGUE_CHESTPIECE_NAME, ROGUE_GLOVES_NAME, ROGUE_PANTS_NAME, ROGUE_BOOTS_NAME } },
+	{ Classes::ORACLE, { ORACLE_HELMET_NAME, ORACLE_CHESTPIECE_NAME, ORACLE_GLOVES_NAME, ORACLE_PANTS_NAME, ORACLE_BOOTS_NAME } }
 };
 
 static const std::vector<std::string> SOUL_STONE_NAMES = {
@@ -474,7 +617,8 @@ static const std::vector<std::string> SOUL_STONE_NAMES = {
 	SOUL_STONE_DARK_KNIGHT,
 	SOUL_STONE_MAGE,
 	SOUL_STONE_PALADIN,
-	SOUL_STONE_ROGUE
+	SOUL_STONE_ROGUE,
+	SOUL_STONE_ORACLE
 };
 
 static const std::vector<std::string> ORB_NAMES = {
@@ -494,11 +638,34 @@ static const std::vector<FloorEnchantments> GROUP_ONE_FLOOR_ENCHANTMENTS = {
 	FloorEnchantments::HASTE,
 };
 
+static const std::vector<FloorEnchantments> GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS = {
+	FloorEnchantments::HP_PENALTY,
+	FloorEnchantments::EXHAUSTION,
+	FloorEnchantments::GRAVITY,
+	FloorEnchantments::RESTORATION,
+	FloorEnchantments::SECOND_WIND,
+	FloorEnchantments::HASTE,
+	FloorEnchantments::FUMIGATE,
+	FloorEnchantments::DEEP_WOUNDS,
+	FloorEnchantments::BLINK,
+	FloorEnchantments::STONESKIN,
+	FloorEnchantments::PHALANX
+};
+
 static const std::vector<FloorEnchantments> GROUP_TWO_FLOOR_ENCHANTMENTS = {
 	FloorEnchantments::AMNESIA,
 	FloorEnchantments::ITEM_PENALTY,
 	FloorEnchantments::DISTORTION,
 	FloorEnchantments::DAMAGE_DOWN,
+};
+
+static const std::vector<FloorEnchantments> GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS = {
+	FloorEnchantments::AMNESIA,
+	FloorEnchantments::ITEM_PENALTY,
+	FloorEnchantments::DISTORTION,
+	FloorEnchantments::DAMAGE_DOWN,
+	FloorEnchantments::FRAILTY,
+	FloorEnchantments::GRUDGE
 };
 
 static const std::vector<FloorEnchantments> GROUP_THREE_FLOOR_ENCHANTMENTS = {
@@ -518,7 +685,17 @@ static const std::map<std::string, Sigils> item_name_to_sigil_map = {
 	{ SIGIL_OF_SERENITY_NAME, Sigils::SERENITY },
 	{ SIGIL_OF_SILENCE_NAME, Sigils::SILENCE },
 	{ SIGIL_OF_STRENGTH_NAME, Sigils::STRENGTH },
-	{ SIGIL_OF_TEMPTATION_NAME, Sigils::TEMPTATION }
+	{ SIGIL_OF_TEMPTATION_NAME, Sigils::TEMPTATION },
+	{ SIGIL_OF_SIGHT_NAME, Sigils::SIGHT },
+	{ SIGIL_OF_INTUITION_NAME, Sigils::INTUITION }
+};
+
+static const std::map<std::string, GreaterSigils> item_name_to_greater_sigil_map = {
+	{ GREATER_SIGIL_OF_BENEDICTION_NAME, GreaterSigils::BENEDICTION },
+	{ GREATER_SIGIL_OF_ASTRAL_FLOW_NAME, GreaterSigils::ASTRAL_FLOW },
+	{ GREATER_SIGIL_OF_CHAIN_SPELL_NAME, GreaterSigils::CHAIN_SPELL },
+	{ GREATER_SIGIL_OF_SPIRIT_SURGE_NAME, GreaterSigils::SPIRIT_SURGE },
+	{ GREATER_SIGIL_OF_MEIKYO_SHISUI_NAME, GreaterSigils::MEIKYO_SHISUI }
 };
 
 static const std::map<std::string, std::vector<std::pair<int, int>>> TRAP_SPAWN_POINTS = {
@@ -1636,6 +1813,7 @@ static YYTKInterface* g_ModuleInterface = nullptr;
 static CInstance* global_instance = nullptr;
 static RValue __YYTK;
 static bool load_on_start = true;
+static bool is_new_game = false;
 static bool localize_mod_text = false;
 static bool game_is_active = false;
 static bool unlock_recipes = true;
@@ -1645,14 +1823,21 @@ static bool drop_biome_reward = false;
 static bool biome_reward_disabled = false;
 static bool dread_beast_configured = false;
 static bool sigil_item_used = false;
+static bool greater_sigil_item_used = false;
+static bool salve_item_used = false;
 static bool lift_key_used = false;
 static bool orb_item_used = false;
+static bool heart_crystal_used = false;
 static bool inner_fire_cast = false;
 static bool reckoning_applied = false;
 static bool fairy_buff_applied = false;
+static bool stoneskin_applied = false;
 static bool is_restoration_tracked_interval = false;
 static bool is_second_wind_tracked_interval = false;
+static bool is_fumigate_tracked_interval = false;
+static bool is_deep_wounds_tracked_interval = false;
 static bool offering_chance_occurred = false;
+static bool obj_dragonshrine_focused = false;
 static bool obj_dungeon_elevator_focused = false;
 static bool obj_dungeon_ladder_down_focused = false;
 static double ari_x = -1;
@@ -1660,25 +1845,38 @@ static double ari_y = -1;
 static double ari_facing_dir = -1;
 static int floor_number = 0;
 static int unmodified_base_health = -1;
+static int hp_penalty_amount = -1;
 static int floor_start_time = 0;
 static int current_time_in_seconds = -1;
 static int time_of_last_restoration_tick = -1;
 static int time_of_last_second_wind_tick = -1;
+static int time_of_last_fumigate_tick = -1;
+static int time_of_last_deep_wounds_tick = -1;
+static int time_of_last_outbreak_tick = -1;
 static int held_item_id = -1;
+static int frailty_hit_counter = 0;
+static int grudge_counter = 0;
+static int deep_wounds_damage_pool = 0;
+static int stoneskin_shield_amount = 0;
+static int spirit_link_combined_health_pool = 0;
 static int sigil_of_silence_count = 0;
-static int sigil_of_alteration_count = 0;
+static int sigil_of_alteration_monster_id = -1;
 static int dread_beast_monster_id = -1;
 static int dread_beasts_configured = 0;
 static int boss_monsters_configured = 0;
 static BossBattle boss_battle = BossBattle::NONE;
+static TreasureSpot treasure_spot = TreasureSpot();
 static std::string ari_current_location = "";
 static std::string ari_current_gm_room = "";
 static std::unordered_set<int> orb_items = {};
+static std::unordered_set<int> salve_items = {};
 static std::unordered_set<int> lift_key_items = {};
 static std::unordered_set<int> restricted_items = {};
 static std::unordered_set<int> deep_dungeon_items = {};
 static std::map<Sigils, int> sigil_to_item_id_map = {};
 static std::map<int, Sigils> item_id_to_sigil_map = {};
+static std::map<GreaterSigils, int> greater_sigil_to_item_id_map = {};
+static std::map<int, GreaterSigils> item_id_to_greater_sigil_map = {};
 static std::map<std::string, int> perk_name_to_id_map = {};
 static std::map<std::string, int> spell_name_to_id_map = {};
 static std::map<int, int> spell_id_to_default_cost_map = {};
@@ -1691,13 +1889,18 @@ static std::map<int, std::string> monster_id_to_name_map = {};
 static std::map<std::string, int> tutorial_name_to_id_map = {};
 static std::map<std::string, int> infusion_name_to_id_map = {};
 static std::map<std::string, int> status_effect_name_to_id_map = {};
+static std::map<std::string, int> location_name_to_id_map = {};
 static std::map<std::string, int> item_name_to_id_map = {};
+static std::map<std::string, int> bark_name_to_id_map = {};
 std::unordered_set<std::pair<int, int>, pair_hash> floor_trap_positions = {};
-static std::unordered_set<int> salves_used = {};
+static std::map<std::string, int> salves_used = {}; // TODO
 static std::map<Traps, std::pair<int, int>> active_traps = {}; // Holds the active traps and the position they most recently triggered at.
 static std::vector<CustomAOE> meteor_aoes = {};
 static std::vector<CustomAOE> gaze_aoes = {};
+static std::vector<CustomAOE> void_aoes = {};
+static std::vector<RevealedFloorTrap> revealed_floor_traps = {};
 static std::unordered_set<Sigils> active_sigils = {};
+static std::unordered_set<GreaterSigils> active_greater_sigils = {};
 static std::unordered_set<Offerings> queued_offerings = {};
 static std::unordered_set<Offerings> active_offerings = {};
 static std::unordered_set<FloorEnchantments> active_floor_enchantments = {};
@@ -1735,13 +1938,16 @@ static uint64_t fade_start_time = 0;
 
 // Configuration Options
 static struct Configuration {
+	int config_version = CONFIG_VERSION;
 	bool disable_dungeon_lift = DEFAULT_DISABLE_DUNGEON_LIFT;
 	bool restrict_perks = DEFAULT_RESTRICT_PERKS;
 	bool restrict_items = DEFAULT_RESTRICT_ITEMS;
 	bool restrict_armor = DEFAULT_RESTRICT_ARMOR;
 	bool restrict_tools = DEFAULT_RESTRICT_TOOLS;
 	bool restrict_weapons = DEFAULT_RESTRICT_WEAPONS;
-	bool limit_salves = DEFAULT_LIMIT_SALVES;
+	int health_salve_limit = DEFAULT_HEALTH_SALVE_LIMIT;
+	int stamina_salve_limit = DEFAULT_STAMINA_SALVE_LIMIT;
+	int mana_salve_limit = DEFAULT_MANA_SALVE_LIMIT;
 	int health_salve_potency = DEFAULT_HEALTH_SALVE_POTENCY;
 	int stamina_salve_potency = DEFAULT_STAMINA_SALVE_POTENCY;
 	int mana_salve_potency = DEFAULT_MANA_SALVE_POTENCY;
@@ -1763,8 +1969,17 @@ static struct Configuration {
 	int luring_trap_monster_spawn_count = DEFAULT_LURING_TRAP_MONSTER_SPAWN_COUNT;
 	int gaze_trap_max_health_damage_percent = DEFAULT_GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT;
 	double meteor_trap_scaling_factor = DEFAULT_METEOR_TRAP_SCALING_FACTOR;
+	int void_trap_duration_seconds = DEFAULT_VOID_TRAP_DURATION_SECONDS;
 	int mistpool_equipment_store_price = DEFAULT_MISTPOOL_EQUIPMENT_STORE_PRICE;
 	int salves_store_price = DEFAULT_SALVES_STORE_PRICE;
+	double dread_beast_damage_modifier = DEFAULT_DREAD_BEAST_DAMAGE_MODIFIER;
+	double dread_beast_health_modifier = DEFAULT_DREAD_BEAST_HEALTH_MODIFIER;
+	double gloom_damage_dealt_modifier = DEFAULT_GLOOM_DAMAGE_DEALT_MODIFIER;
+	double gloom_damage_received_modifier = DEFAULT_GLOOM_DAMAGE_RECEIVED_MODIFIER;
+	double gloom_health_modifier = DEFAULT_GLOOM_HEALTH_MODIFIER;
+	bool experimental_max_health_bug_fix = DEFAULT_EXPERIMENTAL_MAX_HEALTH_BUG_FIX;
+	bool experimental_extra_floor_enchantments_and_offerings = DEFAULT_EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS;
+	double experimental_monster_base_stat_difficulty_modifier = DEFAULT_EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER;
 };
 static Configuration configuration = Configuration();
 
@@ -1783,13 +1998,16 @@ void PrintError(std::exception_ptr eptr)
 json CreateConfigJson(bool use_defaults)
 {
 	json config_json = {
+		{ CONFIG_VERSION_JSON_KEY, use_defaults ? CONFIG_VERSION : configuration.config_version },
 		{ DISABLE_DUNGEON_LIFT_JSON_KEY, use_defaults ? DEFAULT_DISABLE_DUNGEON_LIFT : configuration.disable_dungeon_lift },
 		{ RESTRICT_PERKS_JSON_KEY, use_defaults ? DEFAULT_RESTRICT_PERKS : configuration.restrict_perks },
 		{ RESTRICT_ITEMS_JSON_KEY, use_defaults ? DEFAULT_RESTRICT_ITEMS : configuration.restrict_items },
 		{ RESTRICT_ARMOR_JSON_KEY, use_defaults ? DEFAULT_RESTRICT_ARMOR : configuration.restrict_armor },
 		{ RESTRICT_TOOLS_JSON_KEY, use_defaults ? DEFAULT_RESTRICT_TOOLS : configuration.restrict_tools },
 		{ RESTRICT_WEAPONS_JSON_KEY, use_defaults ? DEFAULT_RESTRICT_WEAPONS : configuration.restrict_weapons },
-		{ LIMIT_SALVES_JSON_KEY, use_defaults ? DEFAULT_LIMIT_SALVES : configuration.limit_salves },
+		{ HEALTH_SALVE_LIMIT_JSON_KEY, use_defaults ? DEFAULT_HEALTH_SALVE_LIMIT : configuration.health_salve_limit },
+		{ STAMINA_SALVE_LIMIT_JSON_KEY, use_defaults ? DEFAULT_STAMINA_SALVE_LIMIT : configuration.stamina_salve_limit },
+		{ MANA_SALVE_LIMIT_JSON_KEY, use_defaults ? DEFAULT_MANA_SALVE_LIMIT : configuration.mana_salve_limit },
 		{ HEALTH_SALVE_POTENCY_JSON_KEY, use_defaults ? DEFAULT_HEALTH_SALVE_POTENCY : configuration.health_salve_potency },
 		{ STAMINA_SALVE_POTENCY_JSON_KEY, use_defaults ? DEFAULT_STAMINA_SALVE_POTENCY : configuration.stamina_salve_potency },
 		{ MANA_SALVE_POTENCY_JSON_KEY, use_defaults ? DEFAULT_MANA_SALVE_POTENCY : configuration.mana_salve_potency },
@@ -1811,8 +2029,17 @@ json CreateConfigJson(bool use_defaults)
 		{ LURING_TRAP_MONSTER_SPAWN_COUNT_JSON_KEY, use_defaults ? DEFAULT_LURING_TRAP_MONSTER_SPAWN_COUNT : configuration.luring_trap_monster_spawn_count },
 		{ GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT_JSON_KEY, use_defaults ? DEFAULT_GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT : configuration.gaze_trap_max_health_damage_percent },
 		{ METEOR_TRAP_SCALING_FACTOR_JSON_KEY, use_defaults ? DEFAULT_METEOR_TRAP_SCALING_FACTOR : configuration.meteor_trap_scaling_factor },
+		{ VOID_TRAP_DURATION_SECONDS_JSON_KEY, use_defaults ? DEFAULT_VOID_TRAP_DURATION_SECONDS : configuration.void_trap_duration_seconds },
 		{ MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY, use_defaults ? DEFAULT_MISTPOOL_EQUIPMENT_STORE_PRICE : configuration.mistpool_equipment_store_price },
-		{ SALVES_STORE_PRICE_JSON_KEY, use_defaults ? DEFAULT_SALVES_STORE_PRICE : configuration.salves_store_price }
+		{ SALVES_STORE_PRICE_JSON_KEY, use_defaults ? DEFAULT_SALVES_STORE_PRICE : configuration.salves_store_price },
+		{ DREAD_BEAST_DAMAGE_MODIFIER_JSON_KEY, use_defaults ? DEFAULT_DREAD_BEAST_DAMAGE_MODIFIER : configuration.dread_beast_damage_modifier },
+		{ DREAD_BEAST_HEALTH_MODIFIER_JSON_KEY, use_defaults ? DEFAULT_DREAD_BEAST_HEALTH_MODIFIER : configuration.dread_beast_health_modifier },
+		{ GLOOM_DAMAGE_DEALT_MODIFIER_JSON_KEY, use_defaults ? DEFAULT_GLOOM_DAMAGE_DEALT_MODIFIER : configuration.gloom_damage_dealt_modifier },
+		{ GLOOM_DAMAGE_RECEIVED_MODIFIER_JSON_KEY, use_defaults ? DEFAULT_GLOOM_DAMAGE_RECEIVED_MODIFIER : configuration.gloom_damage_received_modifier },
+		{ GLOOM_HEALTH_MODIFIER_JSON_KEY, use_defaults ? DEFAULT_GLOOM_HEALTH_MODIFIER : configuration.gloom_health_modifier },
+		{ EXPERIMENTAL_MAX_HEALTH_BUG_FIX_JSON_KEY, use_defaults ? DEFAULT_EXPERIMENTAL_MAX_HEALTH_BUG_FIX : configuration.experimental_max_health_bug_fix },
+		{ EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS_JSON_KEY, use_defaults ? DEFAULT_EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS : configuration.experimental_extra_floor_enchantments_and_offerings },
+		{ EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER_JSON_KEY, use_defaults ? DEFAULT_EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER : configuration.experimental_monster_base_stat_difficulty_modifier }
 	};
 	return config_json;
 }
@@ -1853,317 +2080,469 @@ void CreateOrLoadConfigFile()
 				// Check if the json_object is empty.
 				if (json_object.empty())
 				{
+					configuration.config_version = 0;
 					g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - No values found in mod configuration file: %s!", MOD_NAME, VERSION, config_file.c_str());
-					g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Add values to the configuration file, otherwise defaults will be used.", MOD_NAME, VERSION);
+					g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Writing DEFAULT VALUES to mod configuration file: %s!", MOD_NAME, VERSION, config_file.c_str());
 				}
 				else
 				{
-					// Try loading the disable_dungeon_lift value.
-					if (json_object.contains(DISABLE_DUNGEON_LIFT_JSON_KEY) && json_object.at(DISABLE_DUNGEON_LIFT_JSON_KEY).is_boolean())
-						configuration.disable_dungeon_lift = json_object[DISABLE_DUNGEON_LIFT_JSON_KEY];
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, DISABLE_DUNGEON_LIFT_JSON_KEY, config_file.c_str());
-
-					// Try loading the restrict_perks value.
-					if (json_object.contains(RESTRICT_PERKS_JSON_KEY) && json_object.at(RESTRICT_PERKS_JSON_KEY).is_boolean())
-						configuration.restrict_perks = json_object[RESTRICT_PERKS_JSON_KEY];
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, RESTRICT_PERKS_JSON_KEY, config_file.c_str());
-
-					// Try loading the restrict_items value.
-					if (json_object.contains(RESTRICT_ITEMS_JSON_KEY) && json_object.at(RESTRICT_ITEMS_JSON_KEY).is_boolean())
-						configuration.restrict_items = json_object[RESTRICT_ITEMS_JSON_KEY];
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, RESTRICT_ITEMS_JSON_KEY, config_file.c_str());
-
-					// Try loading the restrict_armor value.
-					if (json_object.contains(RESTRICT_ARMOR_JSON_KEY) && json_object.at(RESTRICT_ARMOR_JSON_KEY).is_boolean())
-						configuration.restrict_armor = json_object[RESTRICT_ARMOR_JSON_KEY];
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, RESTRICT_ARMOR_JSON_KEY, config_file.c_str());
-
-					// Try loading the restrict_tools value.
-					if (json_object.contains(RESTRICT_TOOLS_JSON_KEY) && json_object.at(RESTRICT_TOOLS_JSON_KEY).is_boolean())
-						configuration.restrict_tools = json_object[RESTRICT_TOOLS_JSON_KEY];
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, RESTRICT_TOOLS_JSON_KEY, config_file.c_str());
-
-					// Try loading the restrict_weapons value.
-					if (json_object.contains(RESTRICT_WEAPONS_JSON_KEY) && json_object.at(RESTRICT_WEAPONS_JSON_KEY).is_boolean())
-						configuration.restrict_weapons = json_object[RESTRICT_WEAPONS_JSON_KEY];
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, RESTRICT_WEAPONS_JSON_KEY, config_file.c_str());
-
-					// Try loading the limit_salves value.
-					if (json_object.contains(LIMIT_SALVES_JSON_KEY) && json_object.at(LIMIT_SALVES_JSON_KEY).is_boolean())
-						configuration.limit_salves = json_object[LIMIT_SALVES_JSON_KEY];
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, LIMIT_SALVES_JSON_KEY, config_file.c_str());
-
-					// Try loading the health_salve_potency value.
-					if (json_object.contains(HEALTH_SALVE_POTENCY_JSON_KEY) && json_object.at(HEALTH_SALVE_POTENCY_JSON_KEY).is_number_integer())
+					// Try loading the config_version value.
+					bool missing_version = false;
+					if (json_object.contains(CONFIG_VERSION_JSON_KEY) && json_object.at(CONFIG_VERSION_JSON_KEY).is_number_integer())
 					{
-						int health_salve_potency = json_object[HEALTH_SALVE_POTENCY_JSON_KEY];
-						if (health_salve_potency > 0 && health_salve_potency <= 999)
-							configuration.health_salve_potency = health_salve_potency;
+						int config_version = json_object[CONFIG_VERSION_JSON_KEY];
+						if (config_version <= 0 || config_version > CONFIG_VERSION)
+						{
+							missing_version = true;
+							configuration.config_version = 0;
+							g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, CONFIG_VERSION_JSON_KEY, config_file.c_str());
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Writing DEFAULT VALUES to mod configuration file: %s!", MOD_NAME, VERSION, config_file.c_str());
+						}
+						else
+							configuration.config_version = config_version;
+					}
+					else
+					{
+						missing_version = true;
+						configuration.config_version = 0;
+						g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, CONFIG_VERSION_JSON_KEY, config_file.c_str());
+						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Writing DEFAULT VALUES to mod configuration file: %s!", MOD_NAME, VERSION, DISABLE_DUNGEON_LIFT_JSON_KEY, config_file.c_str());
+					}
+					
+					if (!missing_version)
+					{
+						// Try loading the disable_dungeon_lift value.
+						if (json_object.contains(DISABLE_DUNGEON_LIFT_JSON_KEY) && json_object.at(DISABLE_DUNGEON_LIFT_JSON_KEY).is_boolean())
+							configuration.disable_dungeon_lift = json_object[DISABLE_DUNGEON_LIFT_JSON_KEY];
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, DISABLE_DUNGEON_LIFT_JSON_KEY, config_file.c_str());
+
+						// Try loading the restrict_perks value.
+						if (json_object.contains(RESTRICT_PERKS_JSON_KEY) && json_object.at(RESTRICT_PERKS_JSON_KEY).is_boolean())
+							configuration.restrict_perks = json_object[RESTRICT_PERKS_JSON_KEY];
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, RESTRICT_PERKS_JSON_KEY, config_file.c_str());
+
+						// Try loading the restrict_items value.
+						if (json_object.contains(RESTRICT_ITEMS_JSON_KEY) && json_object.at(RESTRICT_ITEMS_JSON_KEY).is_boolean())
+							configuration.restrict_items = json_object[RESTRICT_ITEMS_JSON_KEY];
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, RESTRICT_ITEMS_JSON_KEY, config_file.c_str());
+
+						// Try loading the restrict_armor value.
+						if (json_object.contains(RESTRICT_ARMOR_JSON_KEY) && json_object.at(RESTRICT_ARMOR_JSON_KEY).is_boolean())
+							configuration.restrict_armor = json_object[RESTRICT_ARMOR_JSON_KEY];
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, RESTRICT_ARMOR_JSON_KEY, config_file.c_str());
+
+						// Try loading the restrict_tools value.
+						if (json_object.contains(RESTRICT_TOOLS_JSON_KEY) && json_object.at(RESTRICT_TOOLS_JSON_KEY).is_boolean())
+							configuration.restrict_tools = json_object[RESTRICT_TOOLS_JSON_KEY];
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, RESTRICT_TOOLS_JSON_KEY, config_file.c_str());
+
+						// Try loading the restrict_weapons value.
+						if (json_object.contains(RESTRICT_WEAPONS_JSON_KEY) && json_object.at(RESTRICT_WEAPONS_JSON_KEY).is_boolean())
+							configuration.restrict_weapons = json_object[RESTRICT_WEAPONS_JSON_KEY];
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, RESTRICT_WEAPONS_JSON_KEY, config_file.c_str());
+
+						// Try loading the health_salve_limit value.
+						if (json_object.contains(HEALTH_SALVE_LIMIT_JSON_KEY) && json_object.at(HEALTH_SALVE_LIMIT_JSON_KEY).is_number_integer())
+						{
+							int health_salve_limit = json_object[HEALTH_SALVE_LIMIT_JSON_KEY];
+							if (health_salve_limit > 0 && health_salve_limit <= 999)
+								configuration.health_salve_limit = health_salve_limit;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, HEALTH_SALVE_LIMIT_JSON_KEY, config_file.c_str());
+						}
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, HEALTH_SALVE_LIMIT_JSON_KEY, config_file.c_str());
+
+						// Try loading the stamina_salve_limit value.
+						if (json_object.contains(STAMINA_SALVE_LIMIT_JSON_KEY) && json_object.at(STAMINA_SALVE_LIMIT_JSON_KEY).is_number_integer())
+						{
+							int stamina_salve_limit = json_object[STAMINA_SALVE_LIMIT_JSON_KEY];
+							if (stamina_salve_limit > 0 && stamina_salve_limit <= 999)
+								configuration.stamina_salve_limit = stamina_salve_limit;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, STAMINA_SALVE_LIMIT_JSON_KEY, config_file.c_str());
+						}
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, STAMINA_SALVE_LIMIT_JSON_KEY, config_file.c_str());
+
+						// Try loading the mana_salve_limit value.
+						if (json_object.contains(MANA_SALVE_LIMIT_JSON_KEY) && json_object.at(MANA_SALVE_LIMIT_JSON_KEY).is_number_integer())
+						{
+							int mana_salve_limit = json_object[MANA_SALVE_LIMIT_JSON_KEY];
+							if (mana_salve_limit > 0 && mana_salve_limit <= 999)
+								configuration.mana_salve_limit = mana_salve_limit;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, MANA_SALVE_LIMIT_JSON_KEY, config_file.c_str());
+						}
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, MANA_SALVE_LIMIT_JSON_KEY, config_file.c_str());
+
+						// Try loading the health_salve_potency value.
+						if (json_object.contains(HEALTH_SALVE_POTENCY_JSON_KEY) && json_object.at(HEALTH_SALVE_POTENCY_JSON_KEY).is_number_integer())
+						{
+							int health_salve_potency = json_object[HEALTH_SALVE_POTENCY_JSON_KEY];
+							if (health_salve_potency > 0 && health_salve_potency <= 999)
+								configuration.health_salve_potency = health_salve_potency;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, HEALTH_SALVE_POTENCY_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, HEALTH_SALVE_POTENCY_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, HEALTH_SALVE_POTENCY_JSON_KEY, config_file.c_str());
 
-					// Try loading the stamina_salve_potency value.
-					if (json_object.contains(STAMINA_SALVE_POTENCY_JSON_KEY) && json_object.at(STAMINA_SALVE_POTENCY_JSON_KEY).is_number_integer())
-					{
-						int stamina_salve_potency = json_object[STAMINA_SALVE_POTENCY_JSON_KEY];
-						if (stamina_salve_potency > 0 && stamina_salve_potency <= 999)
-							configuration.stamina_salve_potency = stamina_salve_potency;
+						// Try loading the stamina_salve_potency value.
+						if (json_object.contains(STAMINA_SALVE_POTENCY_JSON_KEY) && json_object.at(STAMINA_SALVE_POTENCY_JSON_KEY).is_number_integer())
+						{
+							int stamina_salve_potency = json_object[STAMINA_SALVE_POTENCY_JSON_KEY];
+							if (stamina_salve_potency > 0 && stamina_salve_potency <= 999)
+								configuration.stamina_salve_potency = stamina_salve_potency;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, STAMINA_SALVE_POTENCY_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, STAMINA_SALVE_POTENCY_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, STAMINA_SALVE_POTENCY_JSON_KEY, config_file.c_str());
 
-					// Try loading the mana_salve_potency value.
-					if (json_object.contains(MANA_SALVE_POTENCY_JSON_KEY) && json_object.at(MANA_SALVE_POTENCY_JSON_KEY).is_number_integer())
-					{
-						int mana_salve_potency = json_object[MANA_SALVE_POTENCY_JSON_KEY];
-						if (mana_salve_potency > 0 && mana_salve_potency <= 999)
-							configuration.mana_salve_potency = mana_salve_potency;
+						// Try loading the mana_salve_potency value.
+						if (json_object.contains(MANA_SALVE_POTENCY_JSON_KEY) && json_object.at(MANA_SALVE_POTENCY_JSON_KEY).is_number_integer())
+						{
+							int mana_salve_potency = json_object[MANA_SALVE_POTENCY_JSON_KEY];
+							if (mana_salve_potency > 0 && mana_salve_potency <= 999)
+								configuration.mana_salve_potency = mana_salve_potency;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, MANA_SALVE_POTENCY_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, MANA_SALVE_POTENCY_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, MANA_SALVE_POTENCY_JSON_KEY, config_file.c_str());
 
-					// Try loading the sustaining_potion_duration_modifier value.
-					if (json_object.contains(SUSTAINING_POTION_DURATION_MODIFIER_JSON_KEY) && json_object.at(SUSTAINING_POTION_DURATION_MODIFIER_JSON_KEY).is_number_float())
-					{
-						double sustaining_potion_duration_modifier = json_object[SUSTAINING_POTION_DURATION_MODIFIER_JSON_KEY];
-						if (sustaining_potion_duration_modifier >= 0.5 && sustaining_potion_duration_modifier <= 2.0)
-							configuration.sustaining_potion_duration_modifier = sustaining_potion_duration_modifier;
+						// Try loading the sustaining_potion_duration_modifier value.
+						if (json_object.contains(SUSTAINING_POTION_DURATION_MODIFIER_JSON_KEY) && json_object.at(SUSTAINING_POTION_DURATION_MODIFIER_JSON_KEY).is_number_float())
+						{
+							double sustaining_potion_duration_modifier = json_object[SUSTAINING_POTION_DURATION_MODIFIER_JSON_KEY];
+							if (sustaining_potion_duration_modifier >= 0.5 && sustaining_potion_duration_modifier <= 2.0)
+								configuration.sustaining_potion_duration_modifier = sustaining_potion_duration_modifier;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, SUSTAINING_POTION_DURATION_MODIFIER_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, SUSTAINING_POTION_DURATION_MODIFIER_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, SUSTAINING_POTION_DURATION_MODIFIER_JSON_KEY, config_file.c_str());
 
-					// Try loading the randomize_dungeon_music value.
-					if (json_object.contains(RANDOMIZE_DUNGEON_MUSIC_JSON_KEY) && json_object.at(RANDOMIZE_DUNGEON_MUSIC_JSON_KEY).is_boolean())
-						configuration.randomize_dungeon_music = json_object[RANDOMIZE_DUNGEON_MUSIC_JSON_KEY];
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, RANDOMIZE_DUNGEON_MUSIC_JSON_KEY, config_file.c_str());
+						// Try loading the randomize_dungeon_music value.
+						if (json_object.contains(RANDOMIZE_DUNGEON_MUSIC_JSON_KEY) && json_object.at(RANDOMIZE_DUNGEON_MUSIC_JSON_KEY).is_boolean())
+							configuration.randomize_dungeon_music = json_object[RANDOMIZE_DUNGEON_MUSIC_JSON_KEY];
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, RANDOMIZE_DUNGEON_MUSIC_JSON_KEY, config_file.c_str());
 
-					// Try loading the random_dread_beast_spawn_chance value.
-					if (json_object.contains(RANDOM_DREAD_BEAST_SPAWN_CHANCE_JSON_KEY) && json_object.at(RANDOM_DREAD_BEAST_SPAWN_CHANCE_JSON_KEY).is_number_integer())
-					{
-						int random_dread_beast_spawn_chance = json_object[RANDOM_DREAD_BEAST_SPAWN_CHANCE_JSON_KEY];
-						if (random_dread_beast_spawn_chance >= 0 && random_dread_beast_spawn_chance <= 100)
-							configuration.random_dread_beast_spawn_chance = random_dread_beast_spawn_chance;
+						// Try loading the random_dread_beast_spawn_chance value.
+						if (json_object.contains(RANDOM_DREAD_BEAST_SPAWN_CHANCE_JSON_KEY) && json_object.at(RANDOM_DREAD_BEAST_SPAWN_CHANCE_JSON_KEY).is_number_integer())
+						{
+							int random_dread_beast_spawn_chance = json_object[RANDOM_DREAD_BEAST_SPAWN_CHANCE_JSON_KEY];
+							if (random_dread_beast_spawn_chance >= 0 && random_dread_beast_spawn_chance <= 100)
+								configuration.random_dread_beast_spawn_chance = random_dread_beast_spawn_chance;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, RANDOM_DREAD_BEAST_SPAWN_CHANCE_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, RANDOM_DREAD_BEAST_SPAWN_CHANCE_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, RANDOM_DREAD_BEAST_SPAWN_CHANCE_JSON_KEY, config_file.c_str());
 
-					// Try loading the offering_event_chance value.
-					if (json_object.contains(OFFERING_EVENT_CHANCE_JSON_KEY) && json_object.at(OFFERING_EVENT_CHANCE_JSON_KEY).is_number_integer())
-					{
-						int offering_event_chance = json_object[OFFERING_EVENT_CHANCE_JSON_KEY];
-						if (offering_event_chance >= 0 && offering_event_chance <= 100)
-							configuration.offering_event_chance = offering_event_chance;
+						// Try loading the offering_event_chance value.
+						if (json_object.contains(OFFERING_EVENT_CHANCE_JSON_KEY) && json_object.at(OFFERING_EVENT_CHANCE_JSON_KEY).is_number_integer())
+						{
+							int offering_event_chance = json_object[OFFERING_EVENT_CHANCE_JSON_KEY];
+							if (offering_event_chance >= 0 && offering_event_chance <= 100)
+								configuration.offering_event_chance = offering_event_chance;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, OFFERING_EVENT_CHANCE_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, OFFERING_EVENT_CHANCE_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, OFFERING_EVENT_CHANCE_JSON_KEY, config_file.c_str());
 
-					// Try loading the offering_health_requirement value.
-					if (json_object.contains(OFFERING_HEALTH_REQUIREMENT_JSON_KEY) && json_object.at(OFFERING_HEALTH_REQUIREMENT_JSON_KEY).is_number_integer())
-					{
-						int offering_health_requirement = json_object[OFFERING_HEALTH_REQUIREMENT_JSON_KEY];
-						if (offering_health_requirement >= 0 && offering_health_requirement <= 90)
-							configuration.offering_health_requirement = offering_health_requirement;
+						// Try loading the offering_health_requirement value.
+						if (json_object.contains(OFFERING_HEALTH_REQUIREMENT_JSON_KEY) && json_object.at(OFFERING_HEALTH_REQUIREMENT_JSON_KEY).is_number_integer())
+						{
+							int offering_health_requirement = json_object[OFFERING_HEALTH_REQUIREMENT_JSON_KEY];
+							if (offering_health_requirement >= 0 && offering_health_requirement <= 90)
+								configuration.offering_health_requirement = offering_health_requirement;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, OFFERING_HEALTH_REQUIREMENT_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, OFFERING_HEALTH_REQUIREMENT_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, OFFERING_HEALTH_REQUIREMENT_JSON_KEY, config_file.c_str());
 
-					// Try loading the offering_stamina_requirement value.
-					if (json_object.contains(OFFERING_STAMINA_REQUIREMENT_JSON_KEY) && json_object.at(OFFERING_STAMINA_REQUIREMENT_JSON_KEY).is_number_integer())
-					{
-						int offering_stamina_requirement = json_object[OFFERING_STAMINA_REQUIREMENT_JSON_KEY];
-						if (offering_stamina_requirement >= 0 && offering_stamina_requirement <= 90)
-							configuration.offering_stamina_requirement = offering_stamina_requirement;
+						// Try loading the offering_stamina_requirement value.
+						if (json_object.contains(OFFERING_STAMINA_REQUIREMENT_JSON_KEY) && json_object.at(OFFERING_STAMINA_REQUIREMENT_JSON_KEY).is_number_integer())
+						{
+							int offering_stamina_requirement = json_object[OFFERING_STAMINA_REQUIREMENT_JSON_KEY];
+							if (offering_stamina_requirement >= 0 && offering_stamina_requirement <= 90)
+								configuration.offering_stamina_requirement = offering_stamina_requirement;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, OFFERING_STAMINA_REQUIREMENT_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, OFFERING_STAMINA_REQUIREMENT_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, OFFERING_STAMINA_REQUIREMENT_JSON_KEY, config_file.c_str());
 
-					// Try loading the offering_mana_requirement value.
-					if (json_object.contains(OFFERING_MANA_REQUIREMENT_JSON_KEY) && json_object.at(OFFERING_MANA_REQUIREMENT_JSON_KEY).is_number_integer())
-					{
-						int offering_mana_requirement = json_object[OFFERING_MANA_REQUIREMENT_JSON_KEY];
-						if (offering_mana_requirement >= 0 && offering_mana_requirement <= 16)
-							configuration.offering_mana_requirement = offering_mana_requirement;
+						// Try loading the offering_mana_requirement value.
+						if (json_object.contains(OFFERING_MANA_REQUIREMENT_JSON_KEY) && json_object.at(OFFERING_MANA_REQUIREMENT_JSON_KEY).is_number_integer())
+						{
+							int offering_mana_requirement = json_object[OFFERING_MANA_REQUIREMENT_JSON_KEY];
+							if (offering_mana_requirement >= 0 && offering_mana_requirement <= 16)
+								configuration.offering_mana_requirement = offering_mana_requirement;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, OFFERING_MANA_REQUIREMENT_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, OFFERING_MANA_REQUIREMENT_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, OFFERING_MANA_REQUIREMENT_JSON_KEY, config_file.c_str());
 
-					// Try loading the cursed_armor_drop_chance_modifier value.
-					if (json_object.contains(CURSED_ARMOR_DROP_CHANCE_MODIFIER_JSON_KEY) && json_object.at(CURSED_ARMOR_DROP_CHANCE_MODIFIER_JSON_KEY).is_number_float())
-					{
-						double cursed_armor_drop_chance_modifier = json_object[CURSED_ARMOR_DROP_CHANCE_MODIFIER_JSON_KEY];
-						if (cursed_armor_drop_chance_modifier >= 1.0 && cursed_armor_drop_chance_modifier <= 10.0)
-							configuration.cursed_armor_drop_chance_modifier = cursed_armor_drop_chance_modifier;
+						// Try loading the cursed_armor_drop_chance_modifier value.
+						if (json_object.contains(CURSED_ARMOR_DROP_CHANCE_MODIFIER_JSON_KEY) && json_object.at(CURSED_ARMOR_DROP_CHANCE_MODIFIER_JSON_KEY).is_number_float())
+						{
+							double cursed_armor_drop_chance_modifier = json_object[CURSED_ARMOR_DROP_CHANCE_MODIFIER_JSON_KEY];
+							if (cursed_armor_drop_chance_modifier >= 1.0 && cursed_armor_drop_chance_modifier <= 10.0)
+								configuration.cursed_armor_drop_chance_modifier = cursed_armor_drop_chance_modifier;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, CURSED_ARMOR_DROP_CHANCE_MODIFIER_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, CURSED_ARMOR_DROP_CHANCE_MODIFIER_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, CURSED_ARMOR_DROP_CHANCE_MODIFIER_JSON_KEY, config_file.c_str());
 
-					// Try loading the soul_stone_drop_chance value.
-					if (json_object.contains(SOUL_STONE_DROP_CHANCE_JSON_KEY) && json_object.at(SOUL_STONE_DROP_CHANCE_JSON_KEY).is_number_integer())
-					{
-						int soul_stone_drop_chance = json_object[SOUL_STONE_DROP_CHANCE_JSON_KEY];
-						if (soul_stone_drop_chance >= 35 && soul_stone_drop_chance <= 100)
-							configuration.soul_stone_drop_chance = soul_stone_drop_chance;
+						// Try loading the soul_stone_drop_chance value.
+						if (json_object.contains(SOUL_STONE_DROP_CHANCE_JSON_KEY) && json_object.at(SOUL_STONE_DROP_CHANCE_JSON_KEY).is_number_integer())
+						{
+							int soul_stone_drop_chance = json_object[SOUL_STONE_DROP_CHANCE_JSON_KEY];
+							if (soul_stone_drop_chance >= 35 && soul_stone_drop_chance <= 100)
+								configuration.soul_stone_drop_chance = soul_stone_drop_chance;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, SOUL_STONE_DROP_CHANCE_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, SOUL_STONE_DROP_CHANCE_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, SOUL_STONE_DROP_CHANCE_JSON_KEY, config_file.c_str());
 
-					// Try loading the lift_key_drop_chance value.
-					if (json_object.contains(LIFT_KEY_DROP_CHANCE_JSON_KEY) && json_object.at(LIFT_KEY_DROP_CHANCE_JSON_KEY).is_number_integer())
-					{
-						int lift_key_drop_chance = json_object[LIFT_KEY_DROP_CHANCE_JSON_KEY];
-						if (lift_key_drop_chance >= 2 && lift_key_drop_chance <= 100)
-							configuration.lift_key_drop_chance = lift_key_drop_chance;
+						// Try loading the lift_key_drop_chance value.
+						if (json_object.contains(LIFT_KEY_DROP_CHANCE_JSON_KEY) && json_object.at(LIFT_KEY_DROP_CHANCE_JSON_KEY).is_number_integer())
+						{
+							int lift_key_drop_chance = json_object[LIFT_KEY_DROP_CHANCE_JSON_KEY];
+							if (lift_key_drop_chance >= 2 && lift_key_drop_chance <= 100)
+								configuration.lift_key_drop_chance = lift_key_drop_chance;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, LIFT_KEY_DROP_CHANCE_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, LIFT_KEY_DROP_CHANCE_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, LIFT_KEY_DROP_CHANCE_JSON_KEY, config_file.c_str());
 
-					// Try loading the enable_boss_fight_restrictions value.
-					if (json_object.contains(ENABLE_BOSS_FIGHT_RESTRICTIONS_JSON_KEY) && json_object.at(ENABLE_BOSS_FIGHT_RESTRICTIONS_JSON_KEY).is_boolean())
-						configuration.enable_boss_fight_restrictions = json_object[ENABLE_BOSS_FIGHT_RESTRICTIONS_JSON_KEY];
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, ENABLE_BOSS_FIGHT_RESTRICTIONS_JSON_KEY, config_file.c_str());
+						// Try loading the enable_boss_fight_restrictions value.
+						if (json_object.contains(ENABLE_BOSS_FIGHT_RESTRICTIONS_JSON_KEY) && json_object.at(ENABLE_BOSS_FIGHT_RESTRICTIONS_JSON_KEY).is_boolean())
+							configuration.enable_boss_fight_restrictions = json_object[ENABLE_BOSS_FIGHT_RESTRICTIONS_JSON_KEY];
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, ENABLE_BOSS_FIGHT_RESTRICTIONS_JSON_KEY, config_file.c_str());
 
-					// Try loading confusing_trap_duration_seconds
-					if (json_object.contains(CONFUSING_TRAP_DURATION_SECONDS_JSON_KEY) && json_object.at(CONFUSING_TRAP_DURATION_SECONDS_JSON_KEY).is_number_integer())
-					{
-						int confusing_trap_duration_seconds = json_object[CONFUSING_TRAP_DURATION_SECONDS_JSON_KEY];
-						if (confusing_trap_duration_seconds >= 0 && confusing_trap_duration_seconds <= 1200)
-							configuration.confusing_trap_duration_seconds = confusing_trap_duration_seconds;
+						// Try loading confusing_trap_duration_seconds
+						if (json_object.contains(CONFUSING_TRAP_DURATION_SECONDS_JSON_KEY) && json_object.at(CONFUSING_TRAP_DURATION_SECONDS_JSON_KEY).is_number_integer())
+						{
+							int confusing_trap_duration_seconds = json_object[CONFUSING_TRAP_DURATION_SECONDS_JSON_KEY];
+							if (confusing_trap_duration_seconds >= 0 && confusing_trap_duration_seconds <= 1200)
+								configuration.confusing_trap_duration_seconds = confusing_trap_duration_seconds;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, CONFUSING_TRAP_DURATION_SECONDS_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, CONFUSING_TRAP_DURATION_SECONDS_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, CONFUSING_TRAP_DURATION_SECONDS_JSON_KEY, config_file.c_str());
 
-					// Try loading disorienting_trap_duration_seconds
-					if (json_object.contains(DISORIENTING_TRAP_DURATION_SECONDS_JSON_KEY) && json_object.at(DISORIENTING_TRAP_DURATION_SECONDS_JSON_KEY).is_number_integer())
-					{
-						int disorienting_trap_duration_seconds = json_object[DISORIENTING_TRAP_DURATION_SECONDS_JSON_KEY];
-						if (disorienting_trap_duration_seconds >= 0 && disorienting_trap_duration_seconds <= 600)
-							configuration.disorienting_trap_duration_seconds = disorienting_trap_duration_seconds;
+						// Try loading disorienting_trap_duration_seconds
+						if (json_object.contains(DISORIENTING_TRAP_DURATION_SECONDS_JSON_KEY) && json_object.at(DISORIENTING_TRAP_DURATION_SECONDS_JSON_KEY).is_number_integer())
+						{
+							int disorienting_trap_duration_seconds = json_object[DISORIENTING_TRAP_DURATION_SECONDS_JSON_KEY];
+							if (disorienting_trap_duration_seconds >= 0 && disorienting_trap_duration_seconds <= 600)
+								configuration.disorienting_trap_duration_seconds = disorienting_trap_duration_seconds;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, DISORIENTING_TRAP_DURATION_SECONDS_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, DISORIENTING_TRAP_DURATION_SECONDS_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, DISORIENTING_TRAP_DURATION_SECONDS_JSON_KEY, config_file.c_str());
 
-					// Try loading exploding_trap_current_health_damage_percent
-					if (json_object.contains(EXPLODING_TRAP_CURRENT_HEALTH_DAMAGE_PERCENT_JSON_KEY) && json_object.at(EXPLODING_TRAP_CURRENT_HEALTH_DAMAGE_PERCENT_JSON_KEY).is_number_integer())
-					{
-						int exploding_trap_current_health_damage_percent = json_object[EXPLODING_TRAP_CURRENT_HEALTH_DAMAGE_PERCENT_JSON_KEY];
-						if (exploding_trap_current_health_damage_percent >= 0 && exploding_trap_current_health_damage_percent <= 80)
-							configuration.exploding_trap_current_health_damage_percent = exploding_trap_current_health_damage_percent;
+						// Try loading exploding_trap_current_health_damage_percent
+						if (json_object.contains(EXPLODING_TRAP_CURRENT_HEALTH_DAMAGE_PERCENT_JSON_KEY) && json_object.at(EXPLODING_TRAP_CURRENT_HEALTH_DAMAGE_PERCENT_JSON_KEY).is_number_integer())
+						{
+							int exploding_trap_current_health_damage_percent = json_object[EXPLODING_TRAP_CURRENT_HEALTH_DAMAGE_PERCENT_JSON_KEY];
+							if (exploding_trap_current_health_damage_percent >= 0 && exploding_trap_current_health_damage_percent <= 80)
+								configuration.exploding_trap_current_health_damage_percent = exploding_trap_current_health_damage_percent;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, EXPLODING_TRAP_CURRENT_HEALTH_DAMAGE_PERCENT_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, EXPLODING_TRAP_CURRENT_HEALTH_DAMAGE_PERCENT_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, EXPLODING_TRAP_CURRENT_HEALTH_DAMAGE_PERCENT_JSON_KEY, config_file.c_str());
 
-					// Try loading luring_trap_monster_spawn_count
-					if (json_object.contains(LURING_TRAP_MONSTER_SPAWN_COUNT_JSON_KEY) && json_object.at(LURING_TRAP_MONSTER_SPAWN_COUNT_JSON_KEY).is_number_integer())
-					{
-						int luring_trap_monster_spawn_count = json_object[LURING_TRAP_MONSTER_SPAWN_COUNT_JSON_KEY];
-						if (luring_trap_monster_spawn_count >= 0 && luring_trap_monster_spawn_count <= 2)
-							configuration.luring_trap_monster_spawn_count = luring_trap_monster_spawn_count;
+						// Try loading luring_trap_monster_spawn_count
+						if (json_object.contains(LURING_TRAP_MONSTER_SPAWN_COUNT_JSON_KEY) && json_object.at(LURING_TRAP_MONSTER_SPAWN_COUNT_JSON_KEY).is_number_integer())
+						{
+							int luring_trap_monster_spawn_count = json_object[LURING_TRAP_MONSTER_SPAWN_COUNT_JSON_KEY];
+							if (luring_trap_monster_spawn_count >= 0 && luring_trap_monster_spawn_count <= 2)
+								configuration.luring_trap_monster_spawn_count = luring_trap_monster_spawn_count;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, LURING_TRAP_MONSTER_SPAWN_COUNT_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, LURING_TRAP_MONSTER_SPAWN_COUNT_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, LURING_TRAP_MONSTER_SPAWN_COUNT_JSON_KEY, config_file.c_str());
 
-					// Try loading inhibiting_trap_duration_seconds
-					if (json_object.contains(INHIBITING_TRAP_DURATION_SECONDS_JSON_KEY) && json_object.at(INHIBITING_TRAP_DURATION_SECONDS_JSON_KEY).is_number_integer())
-					{
-						int inhibiting_trap_duration_seconds = json_object[INHIBITING_TRAP_DURATION_SECONDS_JSON_KEY];
-						if (inhibiting_trap_duration_seconds >= 0 && inhibiting_trap_duration_seconds <= 900)
-							configuration.inhibiting_trap_duration_seconds = inhibiting_trap_duration_seconds;
+						// Try loading inhibiting_trap_duration_seconds
+						if (json_object.contains(INHIBITING_TRAP_DURATION_SECONDS_JSON_KEY) && json_object.at(INHIBITING_TRAP_DURATION_SECONDS_JSON_KEY).is_number_integer())
+						{
+							int inhibiting_trap_duration_seconds = json_object[INHIBITING_TRAP_DURATION_SECONDS_JSON_KEY];
+							if (inhibiting_trap_duration_seconds >= 0 && inhibiting_trap_duration_seconds <= 900)
+								configuration.inhibiting_trap_duration_seconds = inhibiting_trap_duration_seconds;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, INHIBITING_TRAP_DURATION_SECONDS_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, INHIBITING_TRAP_DURATION_SECONDS_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, INHIBITING_TRAP_DURATION_SECONDS_JSON_KEY, config_file.c_str());
 
-					// Try loading gaze_trap_max_health_damage_percent
-					if (json_object.contains(GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT_JSON_KEY) && json_object.at(GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT_JSON_KEY).is_number_integer())
-					{
-						int gaze_trap_max_health_damage_percent = json_object[GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT_JSON_KEY];
-						if (gaze_trap_max_health_damage_percent >= 0 && gaze_trap_max_health_damage_percent <= 99)
-							configuration.gaze_trap_max_health_damage_percent = gaze_trap_max_health_damage_percent;
+						// Try loading gaze_trap_max_health_damage_percent
+						if (json_object.contains(GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT_JSON_KEY) && json_object.at(GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT_JSON_KEY).is_number_integer())
+						{
+							int gaze_trap_max_health_damage_percent = json_object[GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT_JSON_KEY];
+							if (gaze_trap_max_health_damage_percent >= 0 && gaze_trap_max_health_damage_percent <= 99)
+								configuration.gaze_trap_max_health_damage_percent = gaze_trap_max_health_damage_percent;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT_JSON_KEY, config_file.c_str());
 
-					// Try loading meteor_trap_scaling_factor
-					if (json_object.contains(METEOR_TRAP_SCALING_FACTOR_JSON_KEY) && json_object.at(METEOR_TRAP_SCALING_FACTOR_JSON_KEY).is_number_float())
-					{
-						double meteor_trap_scaling_factor = json_object[METEOR_TRAP_SCALING_FACTOR_JSON_KEY];
-						if (meteor_trap_scaling_factor == 0 || meteor_trap_scaling_factor == 1 || meteor_trap_scaling_factor == 1.5 || meteor_trap_scaling_factor == 2 || meteor_trap_scaling_factor == 2.5 || meteor_trap_scaling_factor == 3)
-							configuration.meteor_trap_scaling_factor = meteor_trap_scaling_factor;
+						// Try loading meteor_trap_scaling_factor
+						if (json_object.contains(METEOR_TRAP_SCALING_FACTOR_JSON_KEY) && json_object.at(METEOR_TRAP_SCALING_FACTOR_JSON_KEY).is_number_float())
+						{
+							double meteor_trap_scaling_factor = json_object[METEOR_TRAP_SCALING_FACTOR_JSON_KEY];
+							if (meteor_trap_scaling_factor == 0 || meteor_trap_scaling_factor == 1 || meteor_trap_scaling_factor == 1.5 || meteor_trap_scaling_factor == 2 || meteor_trap_scaling_factor == 2.5 || meteor_trap_scaling_factor == 3)
+								configuration.meteor_trap_scaling_factor = meteor_trap_scaling_factor;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, METEOR_TRAP_SCALING_FACTOR_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, METEOR_TRAP_SCALING_FACTOR_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, METEOR_TRAP_SCALING_FACTOR_JSON_KEY, config_file.c_str());
 
-					// Try loading mistpool_equipment_store_price
-					if (json_object.contains(MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY) && json_object.at(MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY).is_number_integer())
-					{
-						int mistpool_equipment_store_price = json_object[MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY];
-						if (mistpool_equipment_store_price >= 1 && mistpool_equipment_store_price <= 500)
-							configuration.mistpool_equipment_store_price = mistpool_equipment_store_price;
+						// Try loading void_trap_duration_seconds
+						if (json_object.contains(VOID_TRAP_DURATION_SECONDS_JSON_KEY) && json_object.at(VOID_TRAP_DURATION_SECONDS_JSON_KEY).is_number_integer())
+						{
+							int void_trap_duration_seconds = json_object[VOID_TRAP_DURATION_SECONDS_JSON_KEY];
+							if (void_trap_duration_seconds >= 0 && void_trap_duration_seconds <= 1800)
+								configuration.void_trap_duration_seconds = void_trap_duration_seconds;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, VOID_TRAP_DURATION_SECONDS_JSON_KEY, config_file.c_str());
+						}
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, VOID_TRAP_DURATION_SECONDS_JSON_KEY, config_file.c_str());
+
+						// Try loading mistpool_equipment_store_price
+						if (json_object.contains(MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY) && json_object.at(MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY).is_number_integer())
+						{
+							int mistpool_equipment_store_price = json_object[MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY];
+							if (mistpool_equipment_store_price >= 1 && mistpool_equipment_store_price <= 500)
+								configuration.mistpool_equipment_store_price = mistpool_equipment_store_price;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY, config_file.c_str());
 
-					// Try loading salves_store_price
-					if (json_object.contains(SALVES_STORE_PRICE_JSON_KEY) && json_object.at(SALVES_STORE_PRICE_JSON_KEY).is_number_integer())
-					{
-						int salves_store_price = json_object[SALVES_STORE_PRICE_JSON_KEY];
-						if (salves_store_price >= 1 && salves_store_price <= 50)
-							configuration.salves_store_price = salves_store_price;
+						// Try loading salves_store_price
+						if (json_object.contains(SALVES_STORE_PRICE_JSON_KEY) && json_object.at(SALVES_STORE_PRICE_JSON_KEY).is_number_integer())
+						{
+							int salves_store_price = json_object[SALVES_STORE_PRICE_JSON_KEY];
+							if (salves_store_price >= 1 && salves_store_price <= 50)
+								configuration.salves_store_price = salves_store_price;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, SALVES_STORE_PRICE_JSON_KEY, config_file.c_str());
+						}
 						else
 							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, SALVES_STORE_PRICE_JSON_KEY, config_file.c_str());
-					}
-					else
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, SALVES_STORE_PRICE_JSON_KEY, config_file.c_str());
 
+						// Try loading the dread_beast_damage_modifier value.
+						if (json_object.contains(DREAD_BEAST_DAMAGE_MODIFIER_JSON_KEY) && json_object.at(DREAD_BEAST_DAMAGE_MODIFIER_JSON_KEY).is_number_float())
+						{
+							double dread_beast_damage_modifier = json_object[DREAD_BEAST_DAMAGE_MODIFIER_JSON_KEY];
+							if (dread_beast_damage_modifier >= 1.0 && dread_beast_damage_modifier <= 2.0)
+								configuration.dread_beast_damage_modifier = dread_beast_damage_modifier;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, DREAD_BEAST_DAMAGE_MODIFIER_JSON_KEY, config_file.c_str());
+						}
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, DREAD_BEAST_DAMAGE_MODIFIER_JSON_KEY, config_file.c_str());
+
+						// Try loading the dread_beast_health_modifier value.
+						if (json_object.contains(DREAD_BEAST_HEALTH_MODIFIER_JSON_KEY) && json_object.at(DREAD_BEAST_HEALTH_MODIFIER_JSON_KEY).is_number_float())
+						{
+							double dread_beast_health_modifier = json_object[DREAD_BEAST_HEALTH_MODIFIER_JSON_KEY];
+							if (dread_beast_health_modifier >= 1.0 && dread_beast_health_modifier <= 3.0)
+								configuration.dread_beast_health_modifier = dread_beast_health_modifier;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, DREAD_BEAST_HEALTH_MODIFIER_JSON_KEY, config_file.c_str());
+						}
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, DREAD_BEAST_HEALTH_MODIFIER_JSON_KEY, config_file.c_str());
+
+						// Try loading the gloom_damage_dealt_modifier value.
+						if (json_object.contains(GLOOM_DAMAGE_DEALT_MODIFIER_JSON_KEY) && json_object.at(GLOOM_DAMAGE_DEALT_MODIFIER_JSON_KEY).is_number_float())
+						{
+							double gloom_damage_dealt_modifier = json_object[GLOOM_DAMAGE_DEALT_MODIFIER_JSON_KEY];
+							if (gloom_damage_dealt_modifier >= 1.0 && gloom_damage_dealt_modifier <= 1.5)
+								configuration.gloom_damage_dealt_modifier = gloom_damage_dealt_modifier;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, GLOOM_DAMAGE_DEALT_MODIFIER_JSON_KEY, config_file.c_str());
+						}
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, GLOOM_DAMAGE_DEALT_MODIFIER_JSON_KEY, config_file.c_str());
+
+						// Try loading the gloom_damage_received_modifier value.
+						if (json_object.contains(GLOOM_DAMAGE_RECEIVED_MODIFIER_JSON_KEY) && json_object.at(GLOOM_DAMAGE_RECEIVED_MODIFIER_JSON_KEY).is_number_float())
+						{
+							double gloom_damage_received_modifier = json_object[GLOOM_DAMAGE_RECEIVED_MODIFIER_JSON_KEY];
+							if (gloom_damage_received_modifier >= 0.5 && gloom_damage_received_modifier <= 1.0)
+								configuration.gloom_damage_received_modifier = gloom_damage_received_modifier;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, GLOOM_DAMAGE_RECEIVED_MODIFIER_JSON_KEY, config_file.c_str());
+						}
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, GLOOM_DAMAGE_RECEIVED_MODIFIER_JSON_KEY, config_file.c_str());
+
+						// Try loading the gloom_health_modifier value.
+						if (json_object.contains(GLOOM_HEALTH_MODIFIER_JSON_KEY) && json_object.at(GLOOM_HEALTH_MODIFIER_JSON_KEY).is_number_float())
+						{
+							double gloom_health_modifier = json_object[GLOOM_HEALTH_MODIFIER_JSON_KEY];
+							if (gloom_health_modifier >= 1.0 && gloom_health_modifier <= 1.5)
+								configuration.gloom_health_modifier = gloom_health_modifier;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, GLOOM_HEALTH_MODIFIER_JSON_KEY, config_file.c_str());
+						}
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, GLOOM_HEALTH_MODIFIER_JSON_KEY, config_file.c_str());
+
+						// Try loading the experimental_max_health_bug_fix value.
+						if (json_object.contains(EXPERIMENTAL_MAX_HEALTH_BUG_FIX_JSON_KEY) && json_object.at(EXPERIMENTAL_MAX_HEALTH_BUG_FIX_JSON_KEY).is_boolean())
+							configuration.experimental_max_health_bug_fix = json_object[EXPERIMENTAL_MAX_HEALTH_BUG_FIX_JSON_KEY];
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, EXPERIMENTAL_MAX_HEALTH_BUG_FIX_JSON_KEY, config_file.c_str());
+
+						// Try loading the experimental_extra_floor_enchantments_and_offerings value.
+						if (json_object.contains(EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS_JSON_KEY) && json_object.at(EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS_JSON_KEY).is_boolean())
+							configuration.experimental_extra_floor_enchantments_and_offerings = json_object[EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS_JSON_KEY];
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS_JSON_KEY, config_file.c_str());
+
+						// Try loading the experimental_monster_base_stat_difficulty_modifier value.
+						if (json_object.contains(EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER_JSON_KEY) && json_object.at(EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER_JSON_KEY).is_number_float())
+						{
+							double experimental_monster_base_stat_difficulty_modifier = json_object[EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER_JSON_KEY];
+							if (experimental_monster_base_stat_difficulty_modifier >= 1.0 && experimental_monster_base_stat_difficulty_modifier <= 3.0)
+								configuration.experimental_monster_base_stat_difficulty_modifier = experimental_monster_base_stat_difficulty_modifier;
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER_JSON_KEY, config_file.c_str());
+						}
+						else
+							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER_JSON_KEY, config_file.c_str());
+					}
 				}
 
 				update_config_file = true;
@@ -2193,7 +2572,11 @@ void CreateOrLoadConfigFile()
 
 		if (update_config_file)
 		{
-			json config_json = CreateConfigJson(false);
+			bool use_defaults = false;
+			if (configuration.config_version == 0)
+				use_defaults = true;
+
+			json config_json = CreateConfigJson(use_defaults);
 			std::ofstream out_stream(config_file);
 			out_stream << std::setw(4) << config_json << std::endl;
 			out_stream.close();
@@ -2801,6 +3184,14 @@ void DisableAllPerks()
 		__ari_perks_active[perk] = false;
 }
 
+bool ItemHasBeenAcquired(int item_id)
+{
+	RValue __ari = *global_instance->GetRefMember("__ari");
+	RValue items_acquired = *__ari.GetRefMember("items_acquired");
+	RValue item_acquired = g_ModuleInterface->CallBuiltin("array_get", { items_acquired, item_id });
+	return item_acquired.ToBoolean();
+}
+
 void LoadTutorials()
 {
 	size_t array_length;
@@ -2955,7 +3346,46 @@ void LoadMonsterStates()
 		monster_category_to_state_id_map["rock_stack"][state->ToString()] = i;
 	}
 
+	// Statue States
+	size_t statue_states_length;
+	RValue statue_states = global_instance->GetMember("__statue_state__");
+	g_ModuleInterface->GetArraySize(statue_states, statue_states_length);
+	for (size_t i = 0; i < statue_states_length; i++)
+	{
+		RValue* state;
+		g_ModuleInterface->GetArrayEntry(statue_states, i, state);
+
+		monster_category_to_state_id_map["statue"][state->ToString()] = i;
+	}
+
+	// Tome States
+	size_t tome_states_length;
+	RValue tome_states = global_instance->GetMember("__tome_state__");
+	g_ModuleInterface->GetArraySize(tome_states, tome_states_length);
+	for (size_t i = 0; i < tome_states_length; i++)
+	{
+		RValue* state;
+		g_ModuleInterface->GetArrayEntry(tome_states, i, state);
+
+		monster_category_to_state_id_map["tome"][state->ToString()] = i;
+	}
+
 	// TODO: New monsters as added.
+}
+
+void LoadBarkData()
+{
+	size_t array_length;
+	RValue bark_data = global_instance->GetMember("__bark_id__");
+	g_ModuleInterface->GetArraySize(bark_data, array_length);
+
+	for (size_t i = 0; i < array_length; i++)
+	{
+		RValue* bark_name;
+		g_ModuleInterface->GetArrayEntry(bark_data, i, bark_name);
+
+		bark_name_to_id_map[bark_name->ToString()] = i;
+	}
 }
 
 void LoadStatusEffects()
@@ -2970,6 +3400,21 @@ void LoadStatusEffects()
 		g_ModuleInterface->GetArrayEntry(status_effects, i, status_effect);
 
 		status_effect_name_to_id_map[status_effect->ToString()] = i;
+	}
+}
+
+void LoadLocations()
+{
+	size_t array_length;
+	RValue locations = global_instance->GetMember("__location_id__");
+	g_ModuleInterface->GetArraySize(locations, array_length);
+
+	for (size_t i = 0; i < array_length; i++)
+	{
+		RValue* location;
+		g_ModuleInterface->GetArrayEntry(locations, i, location);
+
+		location_name_to_id_map[location->ToString()] = i;
 	}
 }
 
@@ -3001,6 +3446,41 @@ void LoadMonsters()
 
 		monster_name_to_id_map[monster_name->ToString()] = i;
 		monster_id_to_name_map[i] = monster_name->ToString();
+	}
+}
+
+void ModifyMonsterPrototypes()
+{
+	size_t array_length;
+	RValue monster_prototypes = global_instance->GetMember("__monster_prototypes");
+	g_ModuleInterface->GetArraySize(monster_prototypes, array_length);
+
+	for (size_t i = 0; i < array_length; i++)
+	{
+		RValue* monster_prototype;
+		g_ModuleInterface->GetArrayEntry(monster_prototypes, i, monster_prototype);
+
+		if (!StructVariableExists(*monster_prototype, "monster_id") || !StructVariableExists(*monster_prototype, "hp") || !StructVariableExists(*monster_prototype, "damage"))
+			continue;
+
+		int monster_id = monster_prototype->GetMember("monster_id").ToInt64();
+		if (monster_id == monster_name_to_id_map["barrel"])
+			continue;
+
+		double hp = monster_prototype->GetMember("hp").ToDouble();
+		hp = std::trunc(hp * configuration.experimental_monster_base_stat_difficulty_modifier);
+		*monster_prototype->GetRefMember("hp") = hp;
+
+		double damage = monster_prototype->GetMember("damage").ToDouble();
+		damage = std::trunc(damage * configuration.experimental_monster_base_stat_difficulty_modifier);
+		*monster_prototype->GetRefMember("damage") = damage;
+
+		if (StructVariableExists(*monster_prototype, "projectile_damage"))
+		{
+			double projectile_damage = monster_prototype->GetMember("projectile_damage").ToDouble();
+			projectile_damage = std::trunc(projectile_damage * configuration.experimental_monster_base_stat_difficulty_modifier);
+			*monster_prototype->GetRefMember("projectile_damage") = projectile_damage;
+		}
 	}
 }
 
@@ -3071,7 +3551,13 @@ void LoadObjectIds()
 
 void LoadItems()
 {
-	std::unordered_set<std::string> lift_key_names = { TIDE_CAVERNS_KEY_NAME, DEEP_EARTH_KEY_NAME, LAVA_CAVES_KEY_NAME, RUINS_KEY_NAME };
+	std::unordered_set<std::string> lift_key_names = { 
+		UPPER_MINES_KEY_F5_NAME, UPPER_MINES_KEY_F10_NAME, UPPER_MINES_KEY_F15_NAME,
+		TIDE_CAVERNS_KEY_F20_NAME, TIDE_CAVERNS_KEY_F25_NAME, TIDE_CAVERNS_KEY_F30_NAME,TIDE_CAVERNS_KEY_F35_NAME,
+		DEEP_EARTH_KEY_F40_NAME, DEEP_EARTH_KEY_F45_NAME, DEEP_EARTH_KEY_F50_NAME, DEEP_EARTH_KEY_F55_NAME,
+		LAVA_CAVES_KEY_F60_NAME, LAVA_CAVES_KEY_F65_NAME, LAVA_CAVES_KEY_F70_NAME, LAVA_CAVES_KEY_F75_NAME,
+		RUINS_KEY_F80_NAME, RUINS_KEY_F85_NAME, RUINS_KEY_F90_NAME, RUINS_KEY_F95_NAME, RUINS_KEY_F100_NAME
+	};
 	std::unordered_set<std::string> orb_item_names = { TIDE_CAVERNS_ORB, DEEP_EARTH_ORB, LAVA_CAVES_ORB, RUINS_ORB }; // TODO: Add other orbs
 	std::vector<std::string> custom_potions = { SUSTAINING_POTION_NAME, HEALTH_SALVE_NAME, STAMINA_SALVE_NAME, MANA_SALVE_NAME }; // TODO: Change to unordered_set
 	std::vector<std::string> cursed_armor = { CURSED_HELMET_NAME, CURSED_CHESTPIECE_NAME, CURSED_PANTS_NAME, CURSED_BOOTS_NAME, CURSED_GLOVES_NAME }; // TODO: Change to unordered_set
@@ -3092,12 +3578,22 @@ void LoadItems()
 			std::string item_name = item->GetMember("recipe_key").ToString(); // The internal item name
 			item_name_to_id_map[item_name] = item_id;
 
-			// Sigil items
+			// Sigils
 			if (item_name_to_sigil_map.contains(item_name))
 			{
 				deep_dungeon_items.insert(item_id);
 				sigil_to_item_id_map[item_name_to_sigil_map.at(item_name)] = item_id;
 				item_id_to_sigil_map[item_id] = item_name_to_sigil_map.at(item_name);
+
+				*item->GetRefMember("health_modifier") = 0;
+			}
+
+			// Greater Sigils
+			if (item_name_to_greater_sigil_map.contains(item_name))
+			{
+				deep_dungeon_items.insert(item_id);
+				greater_sigil_to_item_id_map[item_name_to_greater_sigil_map.at(item_name)] = item_id;
+				item_id_to_greater_sigil_map[item_id] = item_name_to_greater_sigil_map.at(item_name);
 
 				*item->GetRefMember("health_modifier") = 0;
 			}
@@ -3110,11 +3606,12 @@ void LoadItems()
 			if (orb_item_names.contains(item_name))
 				orb_items.insert(item_id);
 
-			// Custom potions
+			// Salve Items
 			for (std::string custom_potion : custom_potions)
 			{
 				if (item_name == custom_potion)
 				{
+					salve_items.insert(item_id);
 					deep_dungeon_items.insert(item_id);
 					salve_name_to_id_map[item_name] = item_id;
 				}
@@ -3428,6 +3925,18 @@ void ModifyMistpoolPickaxeSprites()
 	}
 }
 
+void ModifyBarkSprites()
+{
+	// TODO: Update as more custom bark sprites are implemented
+	RValue spr_ui_bark_icon_no_coin = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_bark_icon_no_coin" });
+	RValue spr_ui_bark_icon_no_coin_copy = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_bark_icon_no_coin_copy" });
+	RValue spr_ui_bark_icon_inhibiting_trap = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_bark_icon_inhibiting_trap" });
+
+	if (floor_number != 0)
+		g_ModuleInterface->CallBuiltin("sprite_assign", { spr_ui_bark_icon_no_coin, spr_ui_bark_icon_inhibiting_trap });
+	else
+		g_ModuleInterface->CallBuiltin("sprite_assign", { spr_ui_bark_icon_no_coin, spr_ui_bark_icon_no_coin_copy });
+}
 
 void ScaleMistpoolWeapon(bool in_dungeon)
 {
@@ -3438,7 +3947,8 @@ void ScaleMistpoolWeapon(bool in_dungeon)
 
 	if (in_dungeon)
 	{
-		int damage = (floor_number / 4) + 3;
+		int modified_floor_number = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? floor_number + 40 : floor_number;
+		int damage = (modified_floor_number / 4) + 3;
 		*sword_scrap_metal->GetRefMember("damage") = damage;
 	}
 	else
@@ -3455,7 +3965,8 @@ void ScaleMistpoolArmor(bool in_dungeon)
 
 		if (in_dungeon)
 		{
-			int defense = floor_number / 20;
+			int modified_floor_number = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? floor_number + 40 : floor_number;
+			int defense = modified_floor_number / 20;
 			*mistpool_armor_piece->GetRefMember("defense") = defense;
 		}
 		else
@@ -3474,30 +3985,30 @@ void ScaleMistpoolPickaxe(bool in_dungeon)
 	{
 		if (floor_number < 20)
 		{
-			*pick_axe_worn->GetRefMember("damage") = 1;
-			*pick_axe_worn->GetRefMember("quality") = 0;
+			*pick_axe_worn->GetRefMember("damage") = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? 2 : 1;
+			*pick_axe_worn->GetRefMember("quality") = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? 1 : 0;
 		}
 		else if (floor_number < 40)
 		{
-			*pick_axe_worn->GetRefMember("damage") = 2;
-			*pick_axe_worn->GetRefMember("quality") = 1;
+			*pick_axe_worn->GetRefMember("damage") = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? 3 : 2;
+			*pick_axe_worn->GetRefMember("quality") = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? 2 : 1;
 		}
 		else if (floor_number < 60)
 		{
-			*pick_axe_worn->GetRefMember("damage") = 3;
-			*pick_axe_worn->GetRefMember("quality") = 2;
+			*pick_axe_worn->GetRefMember("damage") = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? 5 : 3;
+			*pick_axe_worn->GetRefMember("quality") = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? 3 : 2;
 		}
 
 		else if (floor_number < 80)
 		{
-			*pick_axe_worn->GetRefMember("damage") = 4;
-			*pick_axe_worn->GetRefMember("quality") = 3;
+			*pick_axe_worn->GetRefMember("damage") = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? 6 : 4;
+			*pick_axe_worn->GetRefMember("quality") = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? 4 : 3;
 		}
 
 		else if (floor_number < 100)
 		{
-			*pick_axe_worn->GetRefMember("damage") = 5;
-			*pick_axe_worn->GetRefMember("quality") = 4;
+			*pick_axe_worn->GetRefMember("damage") = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? 8 : 5;
+			*pick_axe_worn->GetRefMember("quality") = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? 5 : 4;
 		}
 	}
 	else
@@ -3517,7 +4028,8 @@ void ScaleClassArmor(bool in_dungeon)
 
 		if (in_dungeon)
 		{
-			int defense = floor_number / 20;
+			int modified_floor_number = active_greater_sigils.contains(GreaterSigils::MEIKYO_SHISUI) ? floor_number + 40 : floor_number;
+			int defense = modified_floor_number / 20;
 			*class_armor_piece->GetRefMember("defense") = defense;
 		}
 		else
@@ -3527,7 +4039,13 @@ void ScaleClassArmor(bool in_dungeon)
 
 int GetRandomSoulStone()
 {
-	static thread_local std::mt19937 random_generator(std::random_device{}());
+	static thread_local pcg32 random_generator([] {
+		std::random_device rd;
+		return pcg32(
+			(static_cast<uint64_t>(rd()) << 32) | rd(),
+			(static_cast<uint64_t>(rd()) << 32) | rd()
+		);
+	}());
 	std::uniform_int_distribution<size_t> random_soul_stone_distribution(0, SOUL_STONE_NAMES.size() - 1);
 	return item_name_to_id_map[SOUL_STONE_NAMES[random_soul_stone_distribution(random_generator)]];
 }
@@ -3700,7 +4218,13 @@ int ScaleTemperanceDamage(int current_health, int max_health, int damage)
 
 ElementalSealEffects GetRandomElementalSealEffect()
 {
-	static thread_local std::mt19937 random_generator(std::random_device{}());
+	static thread_local pcg32 random_generator([] {
+		std::random_device rd;
+		return pcg32(
+			(static_cast<uint64_t>(rd()) << 32) | rd(),
+			(static_cast<uint64_t>(rd()) << 32) | rd()
+		);
+	}());
 	std::uniform_int_distribution<size_t> random_elemental_seal_effect_distribution(0, magic_enum::enum_count<ElementalSealEffects>() - 1);
 	return magic_enum::enum_value<ElementalSealEffects>(random_elemental_seal_effect_distribution(random_generator));
 }
@@ -3745,6 +4269,12 @@ void ModifySpellCosts(bool reset_cost, bool in_dungeon) {
 		int cost = reset_cost ? spell_id_to_default_cost_map[i] : spell_id_to_default_cost_map[i] / 2;
 		if (in_dungeon && i == spell_name_to_id_map["growth"])
 			cost = reset_cost ? spell_id_to_default_cost_map[i] / 2 : spell_id_to_default_cost_map[i] / 4;
+		if (active_greater_sigils.contains(GreaterSigils::CHAIN_SPELL))
+			cost = 0;
+		if (i == spell_name_to_id_map["full_restore"] && CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+			cost = 0;
+		if (i == spell_name_to_id_map["growth"] && CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+			cost = 0;
 
 		*array_element->GetRefMember("cost") = cost;
 	}
@@ -3822,7 +4352,7 @@ void SpawnMonster(CInstance* Self, CInstance* Other, int room_x, int room_y, int
 	);
 }
 
-void ModifyRockClodAttackPatterns(bool is_boss_battle, RValue monster)
+void ModifyRockClodAttackPatterns(bool is_boss_battle, bool is_outbreak, RValue monster)
 {
 	const enum class Patterns {
 		WALL, // Shoots a wall of 10 pellets repeatedly 5 times
@@ -3830,7 +4360,13 @@ void ModifyRockClodAttackPatterns(bool is_boss_battle, RValue monster)
 		SPLIT // Shoots a single pellet that then splits into many that repeatedly split
 	};
 
-	static thread_local std::mt19937 random_generator(std::random_device{}());
+	static thread_local pcg32 random_generator([] {
+		std::random_device rd;
+		return pcg32(
+			(static_cast<uint64_t>(rd()) << 32) | rd(),
+			(static_cast<uint64_t>(rd()) << 32) | rd()
+		);
+	}());
 	std::uniform_int_distribution<size_t> random_pattern_distribution(0, magic_enum::enum_count<Patterns>() - 1);
 
 	RValue custom_attack_pattern_exists = g_ModuleInterface->CallBuiltin("struct_exists", { monster, "__deep_dungeon__custom_attack_pattern" });
@@ -3851,7 +4387,9 @@ void ModifyRockClodAttackPatterns(bool is_boss_battle, RValue monster)
 			if (pattern == Patterns::WALL)
 			{
 				// Shoots a wall of 10 pellets repeatedly 5 times
-				StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+				if(!is_outbreak)
+					StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
+
 				StructVariableSet(config_clone, "launcher", false);
 				StructVariableSet(config_clone, "attack_sequence", 5.0);
 				StructVariableSet(config_clone, "attack_legion", 10.0);
@@ -3874,7 +4412,9 @@ void ModifyRockClodAttackPatterns(bool is_boss_battle, RValue monster)
 				double split_depth = 2;
 				double split_angle = 40;
 
-				StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+				if (!is_outbreak)
+					StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
+
 				StructVariableSet(config_clone, "launcher", false);
 				StructVariableSet(config_clone, "attack_sequence", attack_sequence);
 				StructVariableSet(config_clone, "attack_legion", attack_legion);
@@ -3897,7 +4437,9 @@ void ModifyRockClodAttackPatterns(bool is_boss_battle, RValue monster)
 				double split_depth = 5;
 				double split_angle = 20;
 
-				StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+				if (!is_outbreak)
+					StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
+
 				StructVariableSet(config_clone, "launcher", false);
 				StructVariableSet(config_clone, "attack_sequence", attack_sequence);
 				StructVariableSet(config_clone, "attack_legion", attack_legion);
@@ -3914,7 +4456,7 @@ void ModifyRockClodAttackPatterns(bool is_boss_battle, RValue monster)
 	}
 }
 
-void ModifyStalagmiteAttackPatterns(bool is_boss_battle, RValue monster)
+void ModifyStalagmiteAttackPatterns(bool is_boss_battle, bool is_outbreak, RValue monster)
 {
 	const enum class Modes {
 		DONUT_PB,
@@ -3922,7 +4464,13 @@ void ModifyStalagmiteAttackPatterns(bool is_boss_battle, RValue monster)
 		CHECKERBOARD
 	};
 
-	static thread_local std::mt19937 random_generator(std::random_device{}());
+	static thread_local pcg32 random_generator([] {
+		std::random_device rd;
+		return pcg32(
+			(static_cast<uint64_t>(rd()) << 32) | rd(),
+			(static_cast<uint64_t>(rd()) << 32) | rd()
+		);
+	}());
 	std::uniform_int_distribution<size_t> zero_to_one_distribution(0, 1);
 	std::uniform_int_distribution<size_t> random_mode_distribution(0, magic_enum::enum_count<Modes>() - 1);
 
@@ -3975,7 +4523,9 @@ void ModifyStalagmiteAttackPatterns(bool is_boss_battle, RValue monster)
 						g_ModuleInterface->CallBuiltin("array_set", { secondary_spikes, i, pair });
 					}
 
-					StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+					if (!is_outbreak)
+						StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
+
 					StructVariableSet(config_clone, "secondary_spikes", secondary_spikes);
 					StructVariableSet(monster, "config", config_clone);
 					StructVariableSet(monster, "__deep_dungeon__custom_attack_pattern", starting_pattern);
@@ -3991,7 +4541,9 @@ void ModifyStalagmiteAttackPatterns(bool is_boss_battle, RValue monster)
 						g_ModuleInterface->CallBuiltin("array_set", { secondary_spikes, i, pair });
 					}
 
-					StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+					if (!is_outbreak)
+						StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
+
 					StructVariableSet(config_clone, "secondary_spikes", secondary_spikes);
 					StructVariableSet(monster, "config", config_clone);
 					StructVariableSet(monster, "__deep_dungeon__custom_attack_pattern", starting_pattern);
@@ -4010,7 +4562,9 @@ void ModifyStalagmiteAttackPatterns(bool is_boss_battle, RValue monster)
 						g_ModuleInterface->CallBuiltin("array_set", { secondary_spikes, i, pair });
 					}
 
-					StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+					if (!is_outbreak)
+						StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
+
 					StructVariableSet(config_clone, "secondary_spikes", secondary_spikes);
 					StructVariableSet(monster, "config", config_clone);
 					StructVariableSet(monster, "__deep_dungeon__custom_attack_pattern", starting_pattern);
@@ -4026,7 +4580,9 @@ void ModifyStalagmiteAttackPatterns(bool is_boss_battle, RValue monster)
 						g_ModuleInterface->CallBuiltin("array_set", { secondary_spikes, i, pair });
 					}
 
-					StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+					if (!is_outbreak)
+						StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
+
 					StructVariableSet(config_clone, "secondary_spikes", secondary_spikes);
 					StructVariableSet(monster, "config", config_clone);
 					StructVariableSet(monster, "__deep_dungeon__custom_attack_pattern", starting_pattern);
@@ -4045,7 +4601,9 @@ void ModifyStalagmiteAttackPatterns(bool is_boss_battle, RValue monster)
 						g_ModuleInterface->CallBuiltin("array_set", { secondary_spikes, i, pair });
 					}
 
-					StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+					if (!is_outbreak)
+						StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
+
 					StructVariableSet(config_clone, "secondary_spikes", secondary_spikes);
 					StructVariableSet(monster, "config", config_clone);
 					StructVariableSet(monster, "__deep_dungeon__custom_attack_pattern", starting_pattern);
@@ -4061,7 +4619,9 @@ void ModifyStalagmiteAttackPatterns(bool is_boss_battle, RValue monster)
 						g_ModuleInterface->CallBuiltin("array_set", { secondary_spikes, i, pair });
 					}
 
-					StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+					if (!is_outbreak)
+						StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
+
 					StructVariableSet(config_clone, "secondary_spikes", secondary_spikes);
 					StructVariableSet(monster, "config", config_clone);
 					StructVariableSet(monster, "__deep_dungeon__custom_attack_pattern", starting_pattern);
@@ -4201,7 +4761,7 @@ void ModifyStalagmiteAttackPatterns(bool is_boss_battle, RValue monster)
 	}
 }
 
-void ModifySaplingAttackPatterns(bool is_boss_battle, RValue monster, int monster_id)
+void ModifySaplingAttackPatterns(bool is_boss_battle, RValue is_outbreak, RValue monster, int monster_id)
 {
 	RValue wait_to_change_attack_pattern_exists = g_ModuleInterface->CallBuiltin("struct_exists", { monster, "__deep_dungeon__wait_to_change_attack_pattern" });
 	if (!wait_to_change_attack_pattern_exists.ToBoolean())
@@ -4219,7 +4779,9 @@ void ModifySaplingAttackPatterns(bool is_boss_battle, RValue monster, int monste
 			if (is_boss_battle)
 				boss_monsters_configured++;
 
-			StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+			if (!is_outbreak)
+				StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
+
 			StructVariableSet(config_clone, "sticky", true);
 			StructVariableSet(config_clone, "free_fly", true);
 			StructVariableSet(config_clone, "air_speed_modifier", 0.6);
@@ -4260,7 +4822,7 @@ void ModifySaplingAttackPatterns(bool is_boss_battle, RValue monster, int monste
 	}
 }
 
-void ModifyShroomAttackPatterns(bool is_boss_battle, RValue monster)
+void ModifyShroomAttackPatterns(bool is_boss_battle, RValue is_outbreak, RValue monster)
 {
 	RValue wait_to_change_attack_pattern_exists = g_ModuleInterface->CallBuiltin("struct_exists", { monster, "__deep_dungeon__wait_to_change_attack_pattern" });
 	if (!wait_to_change_attack_pattern_exists.ToBoolean())
@@ -4278,7 +4840,9 @@ void ModifyShroomAttackPatterns(bool is_boss_battle, RValue monster)
 			if (is_boss_battle)
 				boss_monsters_configured++;
 
-			StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+			if (!is_outbreak)
+				StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
+
 			StructVariableSet(config_clone, "spew_lava", true);
 			StructVariableSet(config_clone, "lava_damage", 1);
 			StructVariableSet(config_clone, "lava_angle", 90);
@@ -4290,6 +4854,7 @@ void ModifyShroomAttackPatterns(bool is_boss_battle, RValue monster)
 			StructVariableSet(config_clone, "shadow_threshold", 0.18); // 0.2
 			StructVariableSet(config_clone, "fade_in_rate", 0.18); // 0.2
 			StructVariableSet(config_clone, "fade_out_rate", 0.18); // 0.2
+
 			StructVariableSet(config_clone, "windup_friction", 0.93); // 0.93
 			StructVariableSet(config_clone, "push_force", 500);
 			StructVariableSet(config_clone, "ari_bounce_distance", 500);
@@ -4305,8 +4870,8 @@ void ModifyShroomAttackPatterns(bool is_boss_battle, RValue monster)
 			StructVariableSet(config_clone, "tired", tired);
 
 			RValue windup = g_ModuleInterface->CallBuiltin("array_create", { 2 });
-			g_ModuleInterface->CallBuiltin("array_set", { windup, 0, 1 });
-			g_ModuleInterface->CallBuiltin("array_set", { windup, 1, 1 });
+			g_ModuleInterface->CallBuiltin("array_set", { windup, 0, 10 });
+			g_ModuleInterface->CallBuiltin("array_set", { windup, 1, 20 });
 			StructVariableSet(config_clone, "windup", windup);
 
 			RValue wiggle = g_ModuleInterface->CallBuiltin("array_create", { 2 });
@@ -4320,7 +4885,7 @@ void ModifyShroomAttackPatterns(bool is_boss_battle, RValue monster)
 	}
 }
 
-void ModifyEnchanternAttackPatterns(bool is_boss_battle, RValue monster)
+void ModifyEnchanternAttackPatterns(bool is_boss_battle, RValue is_outbreak, RValue monster)
 {
 	RValue wait_to_change_attack_pattern_exists = g_ModuleInterface->CallBuiltin("struct_exists", { monster, "__deep_dungeon__wait_to_change_attack_pattern" });
 	if (!wait_to_change_attack_pattern_exists.ToBoolean())
@@ -4338,7 +4903,9 @@ void ModifyEnchanternAttackPatterns(bool is_boss_battle, RValue monster)
 			if (is_boss_battle)
 				boss_monsters_configured++;
 
-			StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+			if (!is_outbreak)
+				StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
+
 			StructVariableSet(config_clone, "charge_speed", 3);
 			StructVariableSet(config_clone, "flee_speed", 2);
 			StructVariableSet(config_clone, "attack_radius", 384);
@@ -4365,7 +4932,7 @@ void ModifyEnchanternAttackPatterns(bool is_boss_battle, RValue monster)
 	}
 }
 
-void ModifySpiritAttackPatterns(bool is_boss_battle, RValue monster, int monster_id)
+void ModifySpiritAttackPatterns(bool is_boss_battle, RValue is_outbreak, RValue monster, int monster_id)
 {
 	RValue custom_attack_pattern_exists = g_ModuleInterface->CallBuiltin("struct_exists", { monster, "__deep_dungeon__custom_attack_pattern" });
 	if (!custom_attack_pattern_exists.ToBoolean())
@@ -4378,8 +4945,11 @@ void ModifySpiritAttackPatterns(bool is_boss_battle, RValue monster, int monster
 			if (is_boss_battle)
 				boss_monsters_configured++;
 
-			StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
-			StructVariableSet(config_clone, "projectile_damage", config_clone.GetMember("projectile_damage").ToDouble() * 2);
+			if (!is_outbreak)
+				StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
+
+			if (!is_outbreak)
+				StructVariableSet(config_clone, "projectile_damage", static_cast<int>(config_clone.GetMember("projectile_damage").ToDouble() * configuration.dread_beast_damage_modifier));
 
 			RValue idle_duration = g_ModuleInterface->CallBuiltin("array_create", { 2 });
 			g_ModuleInterface->CallBuiltin("array_set", { idle_duration, 0, 1 });
@@ -4433,7 +5003,7 @@ void ModifySpiritAttackPatterns(bool is_boss_battle, RValue monster, int monster
 	}
 }
 
-void ModifyCatAttackPatterns(bool is_boss_battle, RValue monster, int monster_id)
+void ModifyCatAttackPatterns(bool is_boss_battle, RValue is_outbreak, RValue monster, int monster_id)
 {
 	RValue custom_attack_pattern_exists = g_ModuleInterface->CallBuiltin("struct_exists", { monster, "__deep_dungeon__custom_attack_pattern" });
 	if (!custom_attack_pattern_exists.ToBoolean())
@@ -4446,7 +5016,9 @@ void ModifyCatAttackPatterns(bool is_boss_battle, RValue monster, int monster_id
 			if (is_boss_battle)
 				boss_monsters_configured++;
 
-			StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+			if (!is_outbreak)
+				StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
+
 			StructVariableSet(config_clone, "charge_range", 192);
 			StructVariableSet(config_clone, "attack_movement_speed", 8);
 
@@ -4482,7 +5054,7 @@ void ModifyCatAttackPatterns(bool is_boss_battle, RValue monster, int monster_id
 	}
 }
 
-void ModifyBatAttackPatterns(bool is_boss_battle, RValue monster)
+void ModifyBatAttackPatterns(bool is_boss_battle, RValue is_outbreak, RValue monster)
 {
 	RValue custom_attack_pattern_exists = g_ModuleInterface->CallBuiltin("struct_exists", { monster, "__deep_dungeon__custom_attack_pattern" });
 	if (!custom_attack_pattern_exists.ToBoolean())
@@ -4495,7 +5067,9 @@ void ModifyBatAttackPatterns(bool is_boss_battle, RValue monster)
 			if (is_boss_battle)
 				boss_monsters_configured++;
 
-			StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+			if (!is_outbreak)
+				StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
+
 			StructVariableSet(config_clone, "speed", 3);
 			StructVariableSet(config_clone, "flee_speed", 3); // -1
 			StructVariableSet(config_clone, "attack_radius", 144);
@@ -4527,7 +5101,7 @@ void ModifyBatAttackPatterns(bool is_boss_battle, RValue monster)
 	}
 }
 
-void ModifyTomeAttackPatterns(bool is_boss_battle, RValue monster)
+void ModifyTomeAttackPatterns(bool is_boss_battle, RValue is_outbreak, RValue monster)
 {
 	RValue custom_attack_pattern_exists = g_ModuleInterface->CallBuiltin("struct_exists", { monster, "__deep_dungeon__custom_attack_pattern" });
 	if (!custom_attack_pattern_exists.ToBoolean())
@@ -4540,7 +5114,9 @@ void ModifyTomeAttackPatterns(bool is_boss_battle, RValue monster)
 			if (is_boss_battle)
 				boss_monsters_configured++;
 
-			StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+			if (!is_outbreak)
+				StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
+
 			StructVariableSet(config_clone, "acknowledgment", 15); // 32
 			StructVariableSet(config_clone, "flying_speed", 6); // 2.4
 			StructVariableSet(config_clone, "flying_timeout", 450); // 220
@@ -4558,7 +5134,7 @@ void ModifyTomeAttackPatterns(bool is_boss_battle, RValue monster)
 	}
 }
 
-void ModifyRockStackAttackPatterns(bool is_boss_battle, RValue monster)
+void ModifyRockStackAttackPatterns(bool is_boss_battle, RValue is_outbreak, RValue monster)
 {
 	RValue custom_attack_pattern_exists = g_ModuleInterface->CallBuiltin("struct_exists", { monster, "__deep_dungeon__custom_attack_pattern" });
 	if (!custom_attack_pattern_exists.ToBoolean())
@@ -4571,7 +5147,9 @@ void ModifyRockStackAttackPatterns(bool is_boss_battle, RValue monster)
 			if (is_boss_battle)
 				boss_monsters_configured++;
 
-			StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+			if (!is_outbreak)
+				StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
+
 			StructVariableSet(config_clone, "speed", 10); // 1.5
 			StructVariableSet(config_clone, "aggro_radius", 624); // 256
 			StructVariableSet(config_clone, "air_speed", 10); // 1.25
@@ -4602,7 +5180,7 @@ void ModifyRockStackAttackPatterns(bool is_boss_battle, RValue monster)
 	}
 }
 
-void ModifyGriffinStatueAttackPatterns(bool is_boss_battle, RValue monster)
+void ModifyGriffinStatueAttackPatterns(bool is_boss_battle, RValue is_outbreak, RValue monster)
 {
 	RValue custom_attack_pattern_exists = g_ModuleInterface->CallBuiltin("struct_exists", { monster, "__deep_dungeon__custom_attack_pattern" });
 	if (!custom_attack_pattern_exists.ToBoolean())
@@ -4615,7 +5193,9 @@ void ModifyGriffinStatueAttackPatterns(bool is_boss_battle, RValue monster)
 			if (is_boss_battle)
 				boss_monsters_configured++;
 
-			StructVariableSet(config_clone, "damage", config_clone.GetMember("damage").ToDouble() * 2);
+			if (!is_outbreak)
+				StructVariableSet(config_clone, "damage", static_cast<int>(config_clone.GetMember("damage").ToDouble() * configuration.dread_beast_damage_modifier));
+
 			StructVariableSet(config_clone, "aggro_radius", 624); // 360
 			StructVariableSet(config_clone, "speed", 10); // 0.6
 			StructVariableSet(config_clone, "stomp_frames", 24); // 6
@@ -4635,31 +5215,31 @@ void ModifyGriffinStatueAttackPatterns(bool is_boss_battle, RValue monster)
 	}
 }
 
-void ModifyDreadBeastAttackPatterns(bool is_boss_battle, RValue monster)
+void ModifyDreadBeastAttackPatterns(bool is_boss_battle, bool is_outbreak, RValue monster)
 {
 	int monster_id = monster.GetMember("monster_id").ToInt64();
 	if (monster_id == monster_name_to_id_map["rockclod"] || monster_id == monster_name_to_id_map["rockclod_blue"] || monster_id == monster_name_to_id_map["rockclod_green"] || monster_id == monster_name_to_id_map["rockclod_red"]) // TODO: "rockclod_purple" if/when implemented
-		ModifyRockClodAttackPatterns(is_boss_battle, monster);
+		ModifyRockClodAttackPatterns(is_boss_battle, is_outbreak, monster);
 	if (monster_id == monster_name_to_id_map["stalagmite"] || monster_id == monster_name_to_id_map["stalagmite_green"] || monster_id == monster_name_to_id_map["stalagmite_purple"])
-		ModifyStalagmiteAttackPatterns(is_boss_battle, monster);
+		ModifyStalagmiteAttackPatterns(is_boss_battle, is_outbreak, monster);
 	if (monster_id == monster_name_to_id_map["sapling"] || monster_id == monster_name_to_id_map["sapling_cool"] || monster_id == monster_name_to_id_map["sapling_blue"] || monster_id == monster_name_to_id_map["sapling_purple"] || monster_id == monster_name_to_id_map["sapling_orange"] || monster_id == monster_name_to_id_map["sapling_pink"])
-		ModifySaplingAttackPatterns(is_boss_battle, monster, monster_id);
+		ModifySaplingAttackPatterns(is_boss_battle, is_outbreak, monster, monster_id);
 	if (monster_id == monster_name_to_id_map["mushroom"] || monster_id == monster_name_to_id_map["mushroom_green"] || monster_id == monster_name_to_id_map["mushroom_blue"] || monster_id == monster_name_to_id_map["mushroom_purple"])
-		ModifyShroomAttackPatterns(is_boss_battle, monster);
+		ModifyShroomAttackPatterns(is_boss_battle, is_outbreak, monster);
 	if (monster_id == monster_name_to_id_map["enchantern"] || monster_id == monster_name_to_id_map["enchantern_blue"])
-		ModifyEnchanternAttackPatterns(is_boss_battle, monster);
+		ModifyEnchanternAttackPatterns(is_boss_battle, is_outbreak, monster);
 	if (monster_id == monster_name_to_id_map["spirit"] || monster_id == monster_name_to_id_map["spirit_purple"])
-		ModifySpiritAttackPatterns(is_boss_battle, monster, monster_id);
+		ModifySpiritAttackPatterns(is_boss_battle, is_outbreak, monster, monster_id);
 	if (monster_id == monster_name_to_id_map["cat"] || monster_id == monster_name_to_id_map["cat_void"])
-		ModifyCatAttackPatterns(is_boss_battle, monster, monster_id);
+		ModifyCatAttackPatterns(is_boss_battle, is_outbreak, monster, monster_id);
 	if (monster_id == monster_name_to_id_map["bat"] || monster_id == monster_name_to_id_map["bat_blue"])
-		ModifyBatAttackPatterns(is_boss_battle, monster);
+		ModifyBatAttackPatterns(is_boss_battle, is_outbreak, monster);
 	if (monster_id == monster_name_to_id_map["tome"])
-		ModifyTomeAttackPatterns(is_boss_battle, monster);
+		ModifyTomeAttackPatterns(is_boss_battle, is_outbreak, monster);
 	if (monster_id == monster_name_to_id_map["rock_stack"])
-		ModifyRockStackAttackPatterns(is_boss_battle, monster);
+		ModifyRockStackAttackPatterns(is_boss_battle, is_outbreak, monster);
 	if (monster_id == monster_name_to_id_map["griffin_statue"])
-		ModifyGriffinStatueAttackPatterns(is_boss_battle, monster);
+		ModifyGriffinStatueAttackPatterns(is_boss_battle, is_outbreak, monster);
 }
 
 void UnlockRecipe(int item_id, CInstance* Self, CInstance* Other)
@@ -4669,6 +5249,78 @@ void UnlockRecipe(int item_id, CInstance* Self, CInstance* Other)
 
 	if (recipe_unlocks[item_id].m_Real == 0.0)
 		recipe_unlocks[item_id] = 1.0; // This value is ultimately what unlocks the recipe.
+}
+
+void UnlockLiftKeyRecipe(CInstance* Self, CInstance* Other)
+{
+	if (!configuration.disable_dungeon_lift)
+		return;
+
+	if (floor_number == 5)
+		UnlockRecipe(item_name_to_id_map[UPPER_MINES_KEY_F5_NAME], Self, Other);
+	else if (floor_number == 10)
+		UnlockRecipe(item_name_to_id_map[UPPER_MINES_KEY_F10_NAME], Self, Other);
+	else if (floor_number == 15)
+		UnlockRecipe(item_name_to_id_map[UPPER_MINES_KEY_F15_NAME], Self, Other);
+	else if (floor_number == 20)
+		UnlockRecipe(item_name_to_id_map[TIDE_CAVERNS_KEY_F20_NAME], Self, Other);
+	else if (floor_number == 25)
+		UnlockRecipe(item_name_to_id_map[TIDE_CAVERNS_KEY_F25_NAME], Self, Other);
+	else if (floor_number == 30)
+		UnlockRecipe(item_name_to_id_map[TIDE_CAVERNS_KEY_F30_NAME], Self, Other);
+	else if (floor_number == 35)
+		UnlockRecipe(item_name_to_id_map[TIDE_CAVERNS_KEY_F35_NAME], Self, Other);
+	else if (floor_number == 40)
+		UnlockRecipe(item_name_to_id_map[DEEP_EARTH_KEY_F40_NAME], Self, Other);
+	else if (floor_number == 45)
+		UnlockRecipe(item_name_to_id_map[DEEP_EARTH_KEY_F45_NAME], Self, Other);
+	else if (floor_number == 50)
+		UnlockRecipe(item_name_to_id_map[DEEP_EARTH_KEY_F50_NAME], Self, Other);
+	else if (floor_number == 55)
+		UnlockRecipe(item_name_to_id_map[DEEP_EARTH_KEY_F55_NAME], Self, Other);
+	else if (floor_number == 60)
+		UnlockRecipe(item_name_to_id_map[LAVA_CAVES_KEY_F60_NAME], Self, Other);
+	else if (floor_number == 65)
+		UnlockRecipe(item_name_to_id_map[LAVA_CAVES_KEY_F65_NAME], Self, Other);
+	else if (floor_number == 70)
+		UnlockRecipe(item_name_to_id_map[LAVA_CAVES_KEY_F70_NAME], Self, Other);
+	else if (floor_number == 75)
+		UnlockRecipe(item_name_to_id_map[LAVA_CAVES_KEY_F75_NAME], Self, Other);
+	else if (floor_number == 80)
+		UnlockRecipe(item_name_to_id_map[RUINS_KEY_F80_NAME], Self, Other);
+	else if (floor_number == 85)
+		UnlockRecipe(item_name_to_id_map[RUINS_KEY_F85_NAME], Self, Other);
+	else if (floor_number == 90)
+		UnlockRecipe(item_name_to_id_map[RUINS_KEY_F90_NAME], Self, Other);
+	else if (floor_number == 95)
+		UnlockRecipe(item_name_to_id_map[RUINS_KEY_F95_NAME], Self, Other);
+	else if (floor_number == 100)
+		UnlockRecipe(item_name_to_id_map[RUINS_KEY_F100_NAME], Self, Other);
+}
+
+void TeleportAriToRoom(CInstance* Self, CInstance* Other, int location_id, int x_coordinate, int y_coordinate)
+{
+	CScript* gml_script_ari_teleport_to_room = nullptr;
+	g_ModuleInterface->GetNamedRoutinePointer(
+		GML_SCRIPT_TELEPORT_ARI_TO_ROOM,
+		(PVOID*)&gml_script_ari_teleport_to_room
+	);
+
+	RValue retval;
+	RValue location = location_id;
+	RValue x = x_coordinate;
+	RValue y = y_coordinate;
+	RValue* location_ptr = &location;
+	RValue* x_ptr = &x;
+	RValue* y_ptr = &y;
+	RValue* argument_array[3] = { location_ptr, x_ptr, y_ptr };
+	gml_script_ari_teleport_to_room->m_Functions->m_ScriptFunction(
+		Self,
+		Other,
+		retval,
+		3,
+		argument_array
+	);
 }
 
 void CreateNotification(bool ignore_cooldown, std::string notification_localization_str, CInstance* Self, CInstance* Other)
@@ -4723,6 +5375,68 @@ void PlayConversation(std::string conversation_localization_str, CInstance* Self
 		4,
 		arguments
 	);
+}
+
+void CloseTextbox(CInstance* Self, CInstance* Other)
+{
+	CScript* gml_script_close_textbox = nullptr;
+	g_ModuleInterface->GetNamedRoutinePointer(
+		GML_SCRIPT_CLOSE_TEXTBOX,
+		(PVOID*)&gml_script_close_textbox
+	);
+
+	RValue result;
+	gml_script_close_textbox->m_Functions->m_ScriptFunction(
+		Self,
+		Other,
+		result,
+		0,
+		nullptr
+	);
+}
+
+void EmitBark(CInstance* Self, CInstance* Other, RValue bark_id, RValue bark_type)
+{
+	CScript* gml_script_register_status_effect = nullptr;
+	g_ModuleInterface->GetNamedRoutinePointer(
+		GML_SCRIPT_BARK_EMITTER_EMIT,
+		(PVOID*)&gml_script_register_status_effect
+	);
+
+	RValue result;
+	RValue* bark_id_ptr = &bark_id;
+	RValue* bark_type_ptr = &bark_type;
+	RValue* argument_array[2] = { bark_id_ptr, bark_type_ptr };
+
+	gml_script_register_status_effect->m_Functions->m_ScriptFunction(
+		Self,
+		Other,
+		result,
+		2,
+		argument_array
+	);
+}
+
+RValue T2Read(CInstance* Self, CInstance* Other, std::string key)
+{
+	CScript* gml_script_get_localizer = nullptr;
+	g_ModuleInterface->GetNamedRoutinePointer(
+		GML_SCRIPT_T2_READ,
+		(PVOID*)&gml_script_get_localizer
+	);
+
+	RValue result;
+	RValue input = RValue(key);
+	RValue* input_ptr = &input;
+	gml_script_get_localizer->m_Functions->m_ScriptFunction(
+		Self,
+		Other,
+		result,
+		1,
+		{ &input_ptr }
+	);
+
+	return result;
 }
 
 void SceneAudioPlayerStop(CInstance* Self, CInstance* Other)
@@ -4848,6 +5562,48 @@ void DropItem(int item_id, double x_coord, double y_coord, CInstance* Self, CIns
 	);
 }
 
+void DropLiftKey()
+{
+	if(floor_number >= 95)
+		DropItem(item_name_to_id_map[RUINS_KEY_F95_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 90)
+		DropItem(item_name_to_id_map[RUINS_KEY_F90_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 85)
+		DropItem(item_name_to_id_map[RUINS_KEY_F85_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 80)
+		DropItem(item_name_to_id_map[RUINS_KEY_F80_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 75)
+		DropItem(item_name_to_id_map[LAVA_CAVES_KEY_F75_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 70)
+		DropItem(item_name_to_id_map[LAVA_CAVES_KEY_F70_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 65)
+		DropItem(item_name_to_id_map[LAVA_CAVES_KEY_F65_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 60)
+		DropItem(item_name_to_id_map[LAVA_CAVES_KEY_F60_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 55)
+		DropItem(item_name_to_id_map[DEEP_EARTH_KEY_F55_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 50)
+		DropItem(item_name_to_id_map[DEEP_EARTH_KEY_F50_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 45)
+		DropItem(item_name_to_id_map[DEEP_EARTH_KEY_F45_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 40)
+		DropItem(item_name_to_id_map[DEEP_EARTH_KEY_F40_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 35)
+		DropItem(item_name_to_id_map[TIDE_CAVERNS_KEY_F35_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 30)
+		DropItem(item_name_to_id_map[TIDE_CAVERNS_KEY_F30_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 25)
+		DropItem(item_name_to_id_map[TIDE_CAVERNS_KEY_F25_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 20)
+		DropItem(item_name_to_id_map[TIDE_CAVERNS_KEY_F20_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 15)
+		DropItem(item_name_to_id_map[UPPER_MINES_KEY_F15_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 10)
+		DropItem(item_name_to_id_map[UPPER_MINES_KEY_F10_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+	else if (floor_number >= 5)
+		DropItem(item_name_to_id_map[UPPER_MINES_KEY_F5_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+}
+
 void EnterDungeon(double dungeon_level, CInstance* Self, CInstance* Other)
 {
 	CScript* gml_script_enter_dungeon = nullptr;
@@ -4928,8 +5684,22 @@ bool AriCurrentGmRoomIsDungeonFloor()
 
 void SetFloorNumber()
 {
-	// Update the floor number.
-	if (ari_current_gm_room == "rm_mines_upper_floor1")
+	if (boss_battle != BossBattle::NONE)
+	{
+		if (ari_current_gm_room == "rm_mines_tide_ritual_chamber")
+			floor_number = 20;
+		else if (ari_current_gm_room == "rm_mines_deep_ritual_chamber")
+			floor_number = 40;
+		else if (ari_current_gm_room == "rm_mines_lava_ritual_chamber")
+			floor_number = 60;
+		else if (ari_current_gm_room == "rm_mines_ruins_ritual_chamber")
+			floor_number = 80;
+	}
+	else if (ari_current_gm_room.contains("treasure") || ari_current_gm_room.contains("milestone"))
+		return; // Update 0.15.0 changed treasure rooms to "be considered side rooms rather than level-progressing rooms"
+	else if (ari_current_gm_room.contains("ritual"))
+		return; // Update 0.15.0 changed ritual rooms to "be considered side rooms rather than level-progressing rooms"
+	else if (ari_current_gm_room == "rm_mines_upper_floor1")
 		floor_number = 1;
 	else if (ari_current_gm_room == "rm_mines_upper_elevator5")
 		floor_number = 5;
@@ -4937,7 +5707,7 @@ void SetFloorNumber()
 		floor_number = 10;
 	else if (ari_current_gm_room == "rm_mines_upper_elevator15")
 		floor_number = 15;
-	else if (ari_current_gm_room == "rm_water_seal" || ari_current_gm_room == "rm_mines_tide_ritual_chamber")
+	else if (ari_current_gm_room == "rm_water_seal")
 		floor_number = 20;
 	else if (ari_current_gm_room == "rm_mines_tide_floor21")
 		floor_number = 21;
@@ -4947,7 +5717,7 @@ void SetFloorNumber()
 		floor_number = 30;
 	else if (ari_current_gm_room == "rm_mines_tide_elevator35")
 		floor_number = 35;
-	else if (ari_current_gm_room == "rm_earth_seal" || ari_current_gm_room == "rm_mines_deep_ritual_chamber")
+	else if (ari_current_gm_room == "rm_earth_seal")
 		floor_number = 40;
 	else if (ari_current_gm_room == "rm_mines_deep_41")
 		floor_number = 41;
@@ -4957,7 +5727,7 @@ void SetFloorNumber()
 		floor_number = 50;
 	else if (ari_current_gm_room == "rm_mines_deep_55")
 		floor_number = 55;
-	else if (ari_current_gm_room == "rm_fire_seal" || ari_current_gm_room == "rm_mines_lava_ritual_chamber")
+	else if (ari_current_gm_room == "rm_fire_seal")
 		floor_number = 60;
 	else if (ari_current_gm_room == "rm_mines_lava_61")
 		floor_number = 61;
@@ -4967,7 +5737,7 @@ void SetFloorNumber()
 		floor_number = 70;
 	else if (ari_current_gm_room == "rm_mines_lava_75")
 		floor_number = 75;
-	else if (ari_current_gm_room == "rm_ruins_seal" || ari_current_gm_room == "rm_mines_ruins_ritual_chamber")
+	else if (ari_current_gm_room == "rm_ruins_seal" || ari_current_gm_room == "rm_void_seal")
 		floor_number = 80;
 	else if (ari_current_gm_room == "rm_mines_ruins_85")
 		floor_number = 85;
@@ -4975,6 +5745,8 @@ void SetFloorNumber()
 		floor_number = 90;
 	else if (ari_current_gm_room == "rm_mines_ruins_95")
 		floor_number = 95;
+	else if (ari_current_gm_room == "rm_seridias_chamber")
+		floor_number = 100;
 	else
 		floor_number++;
 }
@@ -5006,7 +5778,7 @@ RValue GetDynamicItemSprite(int item_id)
 				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_tool_mistpool_t3_sword" });
 		}
 	}
-	if (item_id == item_name_to_id_map[MISTPOOL_PICK_AXE_NAME])
+	else if (item_id == item_name_to_id_map[MISTPOOL_PICK_AXE_NAME])
 	{
 		if (floor_number < 20)
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_tool_mistpool_t0_pickaxe" });
@@ -5017,7 +5789,7 @@ RValue GetDynamicItemSprite(int item_id)
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_tool_mistpool_t3_pickaxe" });
 	}
-	if (item_id == item_name_to_id_map[MISTPOOL_HELMET_NAME])
+	else if (item_id == item_name_to_id_map[MISTPOOL_HELMET_NAME])
 	{
 		if (floor_number < 20)
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_equipment_mistpool_helmet_tier_1" });
@@ -5028,7 +5800,7 @@ RValue GetDynamicItemSprite(int item_id)
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_equipment_mistpool_helmet_tier_4" });
 	}
-	if (item_id == item_name_to_id_map[MISTPOOL_CHESTPIECE_NAME])
+	else if (item_id == item_name_to_id_map[MISTPOOL_CHESTPIECE_NAME])
 	{
 		if (floor_number < 20)
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_equipment_mistpool_chestpiece_tier_1" });
@@ -5039,7 +5811,7 @@ RValue GetDynamicItemSprite(int item_id)
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_equipment_mistpool_chestpiece_tier_4" });
 	}
-	if (item_id == item_name_to_id_map[MISTPOOL_GLOVES_NAME])
+	else if (item_id == item_name_to_id_map[MISTPOOL_GLOVES_NAME])
 	{
 		if (floor_number < 20)
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_equipment_mistpool_gloves_tier_1" });
@@ -5050,7 +5822,7 @@ RValue GetDynamicItemSprite(int item_id)
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_equipment_mistpool_gloves_tier_4" });
 	}
-	if (item_id == item_name_to_id_map[MISTPOOL_PANTS_NAME])
+	else if (item_id == item_name_to_id_map[MISTPOOL_PANTS_NAME])
 	{
 		if (floor_number < 20)
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_equipment_mistpool_pants_tier_1" });
@@ -5061,7 +5833,7 @@ RValue GetDynamicItemSprite(int item_id)
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_equipment_mistpool_pants_tier_4" });
 	}
-	if (item_id == item_name_to_id_map[MISTPOOL_BOOTS_NAME])
+	else if (item_id == item_name_to_id_map[MISTPOOL_BOOTS_NAME])
 	{
 		if (floor_number < 20)
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_equipment_mistpool_boots_tier_1" });
@@ -5072,114 +5844,163 @@ RValue GetDynamicItemSprite(int item_id)
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_equipment_mistpool_boots_tier_4" });
 	}
-	if (item_id == sigil_to_item_id_map[Sigils::ALTERATION])
+	else if (item_id == sigil_to_item_id_map[Sigils::ALTERATION])
 	{
 		if (active_sigils.contains(Sigils::ALTERATION) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_alteration_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_alteration" });
 	}
-	if (item_id == sigil_to_item_id_map[Sigils::CONCEALMENT])
+	else if (item_id == sigil_to_item_id_map[Sigils::CONCEALMENT])
 	{
 		if (active_sigils.contains(Sigils::CONCEALMENT) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_concealment_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_concealment" });
 	}
-	if (item_id == sigil_to_item_id_map[Sigils::FORTIFICATION])
+	else if (item_id == sigil_to_item_id_map[Sigils::FORTIFICATION])
 	{
 		if (active_sigils.contains(Sigils::FORTIFICATION) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_fortification_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_fortification" });
 	}
-	if (item_id == sigil_to_item_id_map[Sigils::FORTUNE])
+	else if (item_id == sigil_to_item_id_map[Sigils::FORTUNE])
 	{
 		if (active_sigils.contains(Sigils::FORTUNE) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_fortune_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_fortune" });
 	}
-	if (item_id == sigil_to_item_id_map[Sigils::PROTECTION])
+	else if (item_id == sigil_to_item_id_map[Sigils::PROTECTION])
 	{
 		if (active_sigils.contains(Sigils::PROTECTION) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || GetInvulnerabilityHits() > 0 || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_protection_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_protection" });
 	}
-	if (item_id == sigil_to_item_id_map[Sigils::RAGE])
+	else if (item_id == sigil_to_item_id_map[Sigils::RAGE])
 	{
 		if (active_sigils.contains(Sigils::RAGE) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_rage_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_rage" });
 	}
-	if (item_id == sigil_to_item_id_map[Sigils::REDEMPTION])
+	else if (item_id == sigil_to_item_id_map[Sigils::REDEMPTION])
 	{
 		if (active_sigils.contains(Sigils::REDEMPTION) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || FairyBuffIsActive() || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_redemption_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_redemption" });
 	}
-	if (item_id == sigil_to_item_id_map[Sigils::SAFETY])
+	else if (item_id == sigil_to_item_id_map[Sigils::SAFETY])
 	{
 		if (active_sigils.contains(Sigils::SAFETY) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_safety_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_safety" });
 	}
-	if (item_id == sigil_to_item_id_map[Sigils::SERENITY])
+	else if (item_id == sigil_to_item_id_map[Sigils::SERENITY])
 	{
 		if (active_sigils.contains(Sigils::SERENITY) || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_serenity_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_serenity" });
 	}
-	if (item_id == sigil_to_item_id_map[Sigils::SILENCE])
+	else if (item_id == sigil_to_item_id_map[Sigils::SILENCE])
 	{
 		if (active_sigils.contains(Sigils::SILENCE) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_silence_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_silence" });
 	}
-	if (item_id == sigil_to_item_id_map[Sigils::STRENGTH])
+	else if (item_id == sigil_to_item_id_map[Sigils::STRENGTH])
 	{
 		if (active_sigils.contains(Sigils::STRENGTH) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_strength_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_strength" });
 	}
-	if (item_id == sigil_to_item_id_map[Sigils::TEMPTATION])
+	else if (item_id == sigil_to_item_id_map[Sigils::TEMPTATION])
 	{
-		if (active_sigils.contains(Sigils::TEMPTATION) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
+		if (active_sigils.contains(Sigils::TEMPTATION) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::CONDEMN] > 0 || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_temptation_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_temptation" });
 	}
-	if (item_id == salve_name_to_id_map[SUSTAINING_POTION_NAME])
+	else if (item_id == sigil_to_item_id_map[Sigils::SIGHT])
+	{
+		if (active_sigils.contains(Sigils::SIGHT) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_sight_disabled" });
+		else
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_sight" });
+	}
+	else if (item_id == sigil_to_item_id_map[Sigils::INTUITION])
+	{
+		if (active_sigils.contains(Sigils::INTUITION) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_intuition_disabled" });
+		else
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_sigil_of_intuition" });
+	}
+	else if (item_id == greater_sigil_to_item_id_map[GreaterSigils::BENEDICTION])
+	{
+		if (!active_greater_sigils.empty() || !AriCurrentGmRoomIsDungeonFloor())
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_greater_sigil_of_benediction_disabled" });
+		else
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_greater_sigil_of_benediction" });
+	}
+	else if (item_id == greater_sigil_to_item_id_map[GreaterSigils::ASTRAL_FLOW])
+	{
+		if (!active_greater_sigils.empty() || !AriCurrentGmRoomIsDungeonFloor())
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_greater_sigil_of_astral_flow_disabled" });
+		else
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_greater_sigil_of_astral_flow" });
+	}
+	else if (item_id == greater_sigil_to_item_id_map[GreaterSigils::CHAIN_SPELL])
+	{
+		if (!active_greater_sigils.empty() || !AriCurrentGmRoomIsDungeonFloor())
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_greater_sigil_of_chain_spell_disabled" });
+		else
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_greater_sigil_of_chain_spell" });
+	}
+	else if (item_id == greater_sigil_to_item_id_map[GreaterSigils::SPIRIT_SURGE])
+	{
+		if (!active_greater_sigils.empty() || !AriCurrentGmRoomIsDungeonFloor())
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_greater_sigil_of_spirit_surge_disabled" });
+		else
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_greater_sigil_of_spirit_surge" });
+	}
+	else if (item_id == greater_sigil_to_item_id_map[GreaterSigils::MEIKYO_SHISUI])
+	{
+		if (!active_greater_sigils.empty() || !AriCurrentGmRoomIsDungeonFloor())
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_greater_sigil_of_meikyo_shisui_disabled" });
+		else
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_greater_sigil_of_meikyo_shisui" });
+	}
+	else if (item_id == salve_name_to_id_map[SUSTAINING_POTION_NAME])
 	{
 		if (active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_potion_sustain_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_potion_sustain" });
 	}
-	if (item_id == salve_name_to_id_map[HEALTH_SALVE_NAME])
+	else if (item_id == salve_name_to_id_map[HEALTH_SALVE_NAME])
 	{
-		if ((configuration.limit_salves && salves_used.contains(item_id)) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
+		if (salves_used[HEALTH_SALVE_NAME] >= configuration.health_salve_limit || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_salve_health_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_salve_health" });
 	}
-	if (item_id == salve_name_to_id_map[STAMINA_SALVE_NAME])
+	else if (item_id == salve_name_to_id_map[STAMINA_SALVE_NAME])
 	{
-		if ((configuration.limit_salves && salves_used.contains(item_id)) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
+		if (salves_used[STAMINA_SALVE_NAME] >= configuration.stamina_salve_limit || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_salve_stamina_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_salve_stamina" });
 	}
-	if (item_id == salve_name_to_id_map[MANA_SALVE_NAME])
+	else if (item_id == salve_name_to_id_map[MANA_SALVE_NAME])
 	{
-		if ((configuration.limit_salves && salves_used.contains(item_id)) || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
+		if (salves_used[MANA_SALVE_NAME] >= configuration.mana_salve_limit || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_salve_mana_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_salve_mana" });
@@ -5193,7 +6014,7 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 	{
 		// Priestess Portrait Replacement
 		if (sprite_name.contains("spr_portrait_seridia") && !sprite_name.contains("flashback"))
-			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_portrait_seridia_flashback_priestess_closed_eyes" });
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_portrait_seridia_flashback_priestess_sad" });
 		// Heart Insert Icon Conversation Replacement
 		else if (sprite_name == "spr_ui_dialogue_namebar_heartinsert")
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_dialogue_namebar_circleinsert" });
@@ -5239,6 +6060,14 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 					return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_enpoison_spell_icon_main" });
 			}
 		}
+		// Predict (Oracle Set Bonus)
+		else if (CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+		{
+			if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] > 0 || (configuration.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
+				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_predict_spell_icon_disabled" });
+			else
+				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_predict_spell_icon_main" });
+		}
 		// Full Restore Disabled
 		else if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || (configuration.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_restore_spell_icon_disabled" });
@@ -5269,6 +6098,14 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 			else
 				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_quake_spell_icon_main" });
 		}
+		// Condemn (Oracle Set Bonus)
+		else if (CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+		{
+			if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::CONDEMN] > 0 || (configuration.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
+				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_condemn_spell_icon_disabled" });
+			else
+				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_condemn_spell_icon_main" });
+		}
 		// Growth Disabled
 		else if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || (configuration.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_growth_spell_icon_disabled" });
@@ -5279,6 +6116,13 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 		// Fire Breath Disabled
 		if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || (configuration.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_fire_spell_icon_disabled" });
+	}
+	// Sacred Light (Spell Icon)
+	else if (sprite_name == "spr_ui_journal_magic_sacred_light_spell_icon_main")
+	{
+		// Sacred Light Disabled
+		if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || (configuration.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_sacred_light_spell_icon_disabled" });
 	}
 	// Dungeon Backplate
 	else if (sprite_name == "spr_ui_dungeon_backplate")
@@ -5294,12 +6138,12 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 
 			for (FloorEnchantments floor_enchantment : active_floor_enchantments)
 			{
-				auto group_one_enchantment = std::find(GROUP_ONE_FLOOR_ENCHANTMENTS.begin(), GROUP_ONE_FLOOR_ENCHANTMENTS.end(), floor_enchantment);
-				if (group_one_enchantment != GROUP_ONE_FLOOR_ENCHANTMENTS.end())
+				auto group_one_enchantment = std::find(GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS.begin(), GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS.end(), floor_enchantment);
+				if (group_one_enchantment != GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS.end())
 					group_one_enchantment_str += magic_enum::enum_name(floor_enchantment);
 
-				auto group_two_enchantment = std::find(GROUP_TWO_FLOOR_ENCHANTMENTS.begin(), GROUP_TWO_FLOOR_ENCHANTMENTS.end(), floor_enchantment);
-				if (group_two_enchantment != GROUP_TWO_FLOOR_ENCHANTMENTS.end())
+				auto group_two_enchantment = std::find(GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS.begin(), GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS.end(), floor_enchantment);
+				if (group_two_enchantment != GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS.end())
 					group_two_enchantment_str += magic_enum::enum_name(floor_enchantment);
 
 				auto group_three_enchantment = std::find(GROUP_THREE_FLOOR_ENCHANTMENTS.begin(), GROUP_THREE_FLOOR_ENCHANTMENTS.end(), floor_enchantment);
@@ -5343,6 +6187,9 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 			else if (elemental_seal_effect == ElementalSealEffects::VENOM)
 				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_enpoison_card_icon" });
 		}
+		// Predict (Oracle Set Bonus)
+		else if (CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_predict_card_icon" });
 	}
 	// Summon Rain (Card Icon)
 	else if (sprite_name == "spr_ui_journal_magic_rain_card_icon")
@@ -5357,6 +6204,9 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 		// Quake (Mage Set Bonus)
 		if (CountEquippedClassArmor()[Classes::MAGE] >= 4)
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_quake_card_icon" });
+		// Condemn (Oracle Set Bonus)
+		else if (CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_condemn_card_icon" });
 	}
 	// Full Restore (Card Ribbon)
 	else if (sprite_name == "spr_ui_journal_magic_card_ribbon_restore")
@@ -5375,6 +6225,9 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 			else if (elemental_seal_effect == ElementalSealEffects::VENOM)
 				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_card_ribbon_enpoison" });
 		}
+		// Predict (Oracle Set Bonus)
+		else if (CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_card_ribbon_predict" });
 	}
 	// Summon Rain (Card Ribbon)
 	else if (sprite_name == "spr_ui_journal_magic_card_ribbon_rain")
@@ -5389,6 +6242,9 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 		// Quake (Mage Set Bonus)
 		if (CountEquippedClassArmor()[Classes::MAGE] >= 4)
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_card_ribbon_quake" });
+		// Condemn (Oracle Set Bonus)
+		else if (CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_card_ribbon_condemn" });
 	}
 	// Spell Card Backplate
 	else if (sprite_name == "spr_ui_journal_magic_card_backplate")
@@ -5419,7 +6275,13 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 
 std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floor, DungeonBiomes dungeon_biome)
 {
-	static thread_local std::mt19937 random_generator(std::random_device{}());
+	static thread_local pcg32 random_generator([] {
+		std::random_device rd;
+		return pcg32(
+			(static_cast<uint64_t>(rd()) << 32) | rd(),
+			(static_cast<uint64_t>(rd()) << 32) | rd()
+		);
+	}());
 	std::uniform_int_distribution<size_t> zero_to_ninety_nine_distribution(0, 99);
 
 	std::unordered_set<FloorEnchantments> random_floor_enchantments = {};
@@ -5436,140 +6298,390 @@ std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floo
 
 	if (dungeon_biome == DungeonBiomes::UPPER)
 	{
-		// 50% chance for Group 1
-		int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
-		if (group_one_chance < 50)
+		// Predict (Oracle Set Bonus)
+		if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] == 1 && CountEquippedClassArmor()[Classes::ORACLE] >= 5)
 		{
-			std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
-			random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
-		}
+			// 70% chance for Group 1
+			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_one_chance < 70)
+			{
+				std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+				random_floor_enchantments.insert(GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+			}
 
-		// 25% chance for Group 2
-		int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
-		if (group_two_chance < 25)
+			// 45% chance for Group 2
+			int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_two_chance < 45)
+			{
+				std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+				random_floor_enchantments.insert(GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+			}
+
+			// 20% chance for Group 3
+			int group_three_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_three_chance < 20)
+			{
+				int gloom_chance = zero_to_ninety_nine_distribution(random_generator);
+				if (gloom_chance < 50) // 50% chance for Gloom
+					random_floor_enchantments.insert(FloorEnchantments::GLOOM);
+				else // 50% chance for Fey
+					random_floor_enchantments.insert(FloorEnchantments::FEY);
+			}
+		}
+		// Default
+		else
 		{
-			std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
-			random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+			// 50% chance for Group 1
+			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_one_chance < 50)
+			{
+				if (!configuration.experimental_extra_floor_enchantments_and_offerings)
+				{
+					std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+				}
+				else
+				{
+					std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+				}
+			}
+
+			// 25% chance for Group 2
+			int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_two_chance < 25)
+			{
+				if (!configuration.experimental_extra_floor_enchantments_and_offerings)
+				{
+					std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+				}
+				else
+				{
+					std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+				}
+			}
 		}
 	}
 
 	if (dungeon_biome == DungeonBiomes::TIDE_CAVERNS)
 	{
-		// 65% chance for Group 1
-		int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
-		if (group_one_chance < 65)
+		// Predict (Oracle Set Bonus)
+		if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] == 1 && CountEquippedClassArmor()[Classes::ORACLE] >= 5)
 		{
-			std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
-			random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
-		}
+			// 85% chance for Group 1
+			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_one_chance < 85)
+			{
+				std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+				random_floor_enchantments.insert(GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+			}
 
-		// 40% chance for Group 2
-		int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
-		if (group_two_chance < 40)
-		{
-			std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
-			random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
-		}
+			// 60% chance for Group 2
+			int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_two_chance < 60)
+			{
+				std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+				random_floor_enchantments.insert(GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+			}
 
-		// 25% chance for Group 3
-		int group_three_chance = zero_to_ninety_nine_distribution(random_generator);
-		if (group_three_chance < 25)
+			// 35% chance for Group 3
+			int group_three_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_three_chance < 35)
+			{
+				int gloom_chance = zero_to_ninety_nine_distribution(random_generator);
+				if (gloom_chance < 60) // 60% chance for Gloom
+					random_floor_enchantments.insert(FloorEnchantments::GLOOM);
+				else // 40% chance for Fey
+					random_floor_enchantments.insert(FloorEnchantments::FEY);
+			}
+		}
+		// Default
+		else
 		{
-			int gloom_chance = zero_to_ninety_nine_distribution(random_generator);
-			if (gloom_chance < 60) // 60% chance for Gloom
-				random_floor_enchantments.insert(FloorEnchantments::GLOOM);
-			else // 40% chance for Fey
-				random_floor_enchantments.insert(FloorEnchantments::FEY);
+			// 65% chance for Group 1
+			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_one_chance < 65)
+			{
+				if (!configuration.experimental_extra_floor_enchantments_and_offerings)
+				{
+					std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+				}
+				else
+				{
+					std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+				}
+			}
+
+			// 40% chance for Group 2
+			int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_two_chance < 40)
+			{
+				if (!configuration.experimental_extra_floor_enchantments_and_offerings)
+				{
+					std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+				}
+				else
+				{
+					std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+				}
+			}
+
+			// 15% chance for Group 3
+			int group_three_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_three_chance < 15)
+			{
+				int gloom_chance = zero_to_ninety_nine_distribution(random_generator);
+				if (gloom_chance < 60) // 60% chance for Gloom
+					random_floor_enchantments.insert(FloorEnchantments::GLOOM);
+				else // 40% chance for Fey
+					random_floor_enchantments.insert(FloorEnchantments::FEY);
+			}
 		}
 	}
 
 	if (dungeon_biome == DungeonBiomes::DEEP_EARTH)
 	{
-		// 45% chance for Group 1
-		int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
-		if (group_one_chance < 45)
+		// Predict (Oracle Set Bonus)
+		if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] == 1 && CountEquippedClassArmor()[Classes::ORACLE] >= 5)
 		{
-			std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
-			random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
-		}
+			// 65% chance for Group 1
+			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_one_chance < 65)
+			{
+				std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+				random_floor_enchantments.insert(GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+			}
 
-		// 65% chance for Group 2
-		int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
-		if (group_two_chance < 65)
-		{
-			std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
-			random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
-		}
+			// 85% chance for Group 2
+			int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_two_chance < 85)
+			{
+				std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+				random_floor_enchantments.insert(GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+			}
 
-		// 30% chance for Group 3
-		int group_three_chance = zero_to_ninety_nine_distribution(random_generator);
-		if (group_three_chance < 30)
+			// 40% chance for Group 3
+			int group_three_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_three_chance < 40)
+			{
+				int gloom_chance = zero_to_ninety_nine_distribution(random_generator);
+				if (gloom_chance < 70) // 70% chance for Gloom
+					random_floor_enchantments.insert(FloorEnchantments::GLOOM);
+				else // 30% chance for Fey
+					random_floor_enchantments.insert(FloorEnchantments::FEY);
+			}
+		}
+		// Default
+		else
 		{
-			int gloom_chance = zero_to_ninety_nine_distribution(random_generator);
-			if (gloom_chance < 70) // 70% chance for Gloom
-				random_floor_enchantments.insert(FloorEnchantments::GLOOM);
-			else // 30% chance for Fey
-				random_floor_enchantments.insert(FloorEnchantments::FEY);
+			// 45% chance for Group 1
+			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_one_chance < 45)
+			{
+				if (!configuration.experimental_extra_floor_enchantments_and_offerings)
+				{
+					std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+				}
+				else
+				{
+					std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+				}
+			}
+
+			// 65% chance for Group 2
+			int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_two_chance < 65)
+			{
+				if (!configuration.experimental_extra_floor_enchantments_and_offerings)
+				{
+					std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+				}
+				else
+				{
+					std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+				}
+			}
+
+			// 20% chance for Group 3
+			int group_three_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_three_chance < 20)
+			{
+				int gloom_chance = zero_to_ninety_nine_distribution(random_generator);
+				if (gloom_chance < 70) // 70% chance for Gloom
+					random_floor_enchantments.insert(FloorEnchantments::GLOOM);
+				else // 30% chance for Fey
+					random_floor_enchantments.insert(FloorEnchantments::FEY);
+			}
 		}
 	}
 
 	if (dungeon_biome == DungeonBiomes::LAVA_CAVES)
 	{
-		// 60% chance for Group 1
-		int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
-		if (group_one_chance < 60)
+		// Predict (Oracle Set Bonus)
+		if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] == 1 && CountEquippedClassArmor()[Classes::ORACLE] >= 5)
 		{
-			std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
-			random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
-		}
+			// 80% chance for Group 1
+			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_one_chance < 80)
+			{
+				std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+				random_floor_enchantments.insert(GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+			}
 
-		// 75% chance for Group 2
-		int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
-		if (group_two_chance < 75)
-		{
-			std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
-			random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
-		}
+			// 95% chance for Group 2
+			int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_two_chance < 95)
+			{
+				std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+				random_floor_enchantments.insert(GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+			}
 
-		// 35% chance for Group 3
-		int group_three_chance = zero_to_ninety_nine_distribution(random_generator);
-		if (group_three_chance < 35)
+			// 45% chance for Group 3
+			int group_three_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_three_chance < 45)
+			{
+				int gloom_chance = zero_to_ninety_nine_distribution(random_generator);
+				if (gloom_chance < 80) // 80% chance for Gloom
+					random_floor_enchantments.insert(FloorEnchantments::GLOOM);
+				else // 20% chance for Fey
+					random_floor_enchantments.insert(FloorEnchantments::FEY);
+			}
+		}
+		// Default
+		else
 		{
-			int gloom_chance = zero_to_ninety_nine_distribution(random_generator);
-			if (gloom_chance < 80) // 80% chance for Gloom
-				random_floor_enchantments.insert(FloorEnchantments::GLOOM);
-			else // 20% chance for Fey
-				random_floor_enchantments.insert(FloorEnchantments::FEY);
+			// 60% chance for Group 1
+			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_one_chance < 60)
+			{
+				if (!configuration.experimental_extra_floor_enchantments_and_offerings)
+				{
+					std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+				}
+				else
+				{
+					std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+				}
+			}
+
+			// 75% chance for Group 2
+			int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_two_chance < 75)
+			{
+				if (!configuration.experimental_extra_floor_enchantments_and_offerings)
+				{
+					std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+				}
+				else
+				{
+					std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+				}
+			}
+
+			// 25% chance for Group 3
+			int group_three_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_three_chance < 25)
+			{
+				int gloom_chance = zero_to_ninety_nine_distribution(random_generator);
+				if (gloom_chance < 80) // 80% chance for Gloom
+					random_floor_enchantments.insert(FloorEnchantments::GLOOM);
+				else // 20% chance for Fey
+					random_floor_enchantments.insert(FloorEnchantments::FEY);
+			}
 		}
 	}
 
 	if (dungeon_biome == DungeonBiomes::RUINS)
 	{
-		// 65% chance for Group 1
-		int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
-		if (group_one_chance < 65)
+		// Predict (Oracle Set Bonus)
+		if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] == 1 && CountEquippedClassArmor()[Classes::ORACLE] >= 5)
 		{
-			std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
-			random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
-		}
+			// 85% chance for Group 1
+			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_one_chance < 85)
+			{
+				std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+				random_floor_enchantments.insert(GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+			}
 
-		// 75% chance for Group 2
-		int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
-		if (group_two_chance < 75)
-		{
-			std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
-			random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
-		}
+			// 95% chance for Group 2
+			int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_two_chance < 95)
+			{
+				std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+				random_floor_enchantments.insert(GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+			}
 
-		// 40% chance for Group 3
-		int group_three_chance = zero_to_ninety_nine_distribution(random_generator);
-		if (group_three_chance < 40)
+			// 50% chance for Group 3
+			int group_three_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_three_chance < 50)
+			{
+				int gloom_chance = zero_to_ninety_nine_distribution(random_generator);
+				if (gloom_chance < 90) // 90% chance for Gloom
+					random_floor_enchantments.insert(FloorEnchantments::GLOOM);
+				else // 10% chance for Fey
+					random_floor_enchantments.insert(FloorEnchantments::FEY);
+			}
+		}
+		// Default
+		else
 		{
-			int gloom_chance = zero_to_ninety_nine_distribution(random_generator);
-			if (gloom_chance < 90) // 90% chance for Gloom
-				random_floor_enchantments.insert(FloorEnchantments::GLOOM);
-			else // 10% chance for Fey
-				random_floor_enchantments.insert(FloorEnchantments::FEY);
+			// 65% chance for Group 1
+			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_one_chance < 65)
+			{
+				if (!configuration.experimental_extra_floor_enchantments_and_offerings)
+				{
+					std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+				}
+				else
+				{
+					std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
+				}
+			}
+
+			// 75% chance for Group 2
+			int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_two_chance < 75)
+			{
+				if (!configuration.experimental_extra_floor_enchantments_and_offerings)
+				{
+					std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+				}
+				else
+				{
+					std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS.size() - 1);
+					random_floor_enchantments.insert(GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
+				}
+			}
+
+			// 30% chance for Group 3
+			int group_three_chance = zero_to_ninety_nine_distribution(random_generator);
+			if (group_three_chance < 30)
+			{
+				int gloom_chance = zero_to_ninety_nine_distribution(random_generator);
+				if (gloom_chance < 90) // 90% chance for Gloom
+					random_floor_enchantments.insert(FloorEnchantments::GLOOM);
+				else // 10% chance for Fey
+					random_floor_enchantments.insert(FloorEnchantments::FEY);
+			}
 		}
 	}
 
@@ -5580,7 +6692,13 @@ void GenerateFloorTraps()
 {
 	if (TRAP_SPAWN_POINTS.contains(ari_current_gm_room))
 	{
-		static thread_local std::mt19937 random_generator(std::random_device{}());
+		static thread_local pcg32 random_generator([] {
+			std::random_device rd;
+			return pcg32(
+				(static_cast<uint64_t>(rd()) << 32) | rd(),
+				(static_cast<uint64_t>(rd()) << 32) | rd()
+			);
+		}());
 		std::vector<std::pair<int, int>> spawn_points = TRAP_SPAWN_POINTS.at(ari_current_gm_room);
 
 		if (spawn_points.empty())
@@ -5611,9 +6729,39 @@ void GenerateFloorTraps()
 	}
 }
 
+void GenerateTreasureSpot(CInstance* Self, CInstance* Other)
+{
+	static thread_local pcg32 random_generator([] {
+		std::random_device rd;
+		return pcg32(
+			(static_cast<uint64_t>(rd()) << 32) | rd(),
+			(static_cast<uint64_t>(rd()) << 32) | rd()
+		);
+	}());
+	std::uniform_int_distribution<size_t> zero_to_seven_distribution(0, 7);
+
+	int biome_adjusted_max_traps_with_peril = (floor_number / 20) + 4;
+	int floors_to_descend = zero_to_seven_distribution(random_generator);
+
+	if (floor_trap_positions.size() == biome_adjusted_max_traps_with_peril)
+		floors_to_descend++;
+
+	treasure_spot.floors_to_descend = floors_to_descend;
+	treasure_spot.state = TreasureSpot::WAITING_TO_SPAWN;
+
+	if (treasure_spot.floors_to_descend > 0)
+		CreateNotification(true, TREASURE_SPOT_NOT_PRESENT_NOTIFICATION_KEY, Self, Other);
+}
+
 std::vector<int> GenerateRandomMonstersIdsForCurrentFloor(int monsters_to_spawn, const int monster_id_to_exclude = -1)
 {
-	static thread_local std::mt19937 random_generator(std::random_device{}());
+	static thread_local pcg32 random_generator([] {
+		std::random_device rd;
+		return pcg32(
+			(static_cast<uint64_t>(rd()) << 32) | rd(),
+			(static_cast<uint64_t>(rd()) << 32) | rd()
+		);
+	}());
 	std::vector<int> candidate_monsters(dungeon_biome_to_candidate_monsters_map[floor_number_to_biome_name_map[floor_number]].begin(), dungeon_biome_to_candidate_monsters_map[floor_number_to_biome_name_map[floor_number]].end());
 
 	if (monster_id_to_exclude != -1)
@@ -5632,11 +6780,40 @@ std::vector<int> GenerateRandomMonstersIdsForCurrentFloor(int monsters_to_spawn,
 	return random_monsters;
 }
 
+int SelectRandomMonsterForAlteration()
+{
+	static thread_local pcg32 random_generator([] {
+		std::random_device rd;
+		return pcg32(
+			(static_cast<uint64_t>(rd()) << 32) | rd(),
+			(static_cast<uint64_t>(rd()) << 32) | rd()
+		);
+	}());
+	std::vector<int> candidate_monsters(dungeon_biome_to_candidate_monsters_map[floor_number_to_biome_name_map[floor_number]].begin(), dungeon_biome_to_candidate_monsters_map[floor_number_to_biome_name_map[floor_number]].end());
+
+	candidate_monsters.erase(std::remove(candidate_monsters.begin(), candidate_monsters.end(), monster_name_to_id_map["stalagmite"]), candidate_monsters.end());
+	candidate_monsters.erase(std::remove(candidate_monsters.begin(), candidate_monsters.end(), monster_name_to_id_map["stalagmite_green"]), candidate_monsters.end());
+	candidate_monsters.erase(std::remove(candidate_monsters.begin(), candidate_monsters.end(), monster_name_to_id_map["stalagmite_purple"]), candidate_monsters.end());
+	candidate_monsters.erase(std::remove(candidate_monsters.begin(), candidate_monsters.end(), monster_name_to_id_map["spirit"]), candidate_monsters.end());
+	candidate_monsters.erase(std::remove(candidate_monsters.begin(), candidate_monsters.end(), monster_name_to_id_map["spirit_purple"]), candidate_monsters.end());
+	candidate_monsters.erase(std::remove(candidate_monsters.begin(), candidate_monsters.end(), monster_name_to_id_map["mimic"]), candidate_monsters.end());
+	candidate_monsters.erase(std::remove(candidate_monsters.begin(), candidate_monsters.end(), monster_name_to_id_map["griffin_statue"]), candidate_monsters.end());
+
+	std::uniform_int_distribution<size_t> random_monster_distribution(0, candidate_monsters.size() - 1);
+	return candidate_monsters[random_monster_distribution(random_generator)];
+}
+
 void SpawnDreadBeast(CInstance* Self, CInstance* Other)
 {
 	if (TRAP_SPAWN_POINTS.contains(ari_current_gm_room))
 	{
-		static thread_local std::mt19937 random_generator(std::random_device{}());
+		static thread_local pcg32 random_generator([] {
+			std::random_device rd;
+			return pcg32(
+				(static_cast<uint64_t>(rd()) << 32) | rd(),
+				(static_cast<uint64_t>(rd()) << 32) | rd()
+			);
+		}());
 		std::vector<std::pair<int, int>> spawn_points = TRAP_SPAWN_POINTS.at(ari_current_gm_room);
 
 		if (spawn_points.empty())
@@ -5684,7 +6861,13 @@ void SelectDreadBeast(CInstance* Self, CInstance* Other)
 
 	if (initial_floor_monsters.size() > 0)
 	{
-		static thread_local std::mt19937 random_generator(std::random_device{}());
+		static thread_local pcg32 random_generator([] {
+			std::random_device rd;
+			return pcg32(
+				(static_cast<uint64_t>(rd()) << 32) | rd(),
+				(static_cast<uint64_t>(rd()) << 32) | rd()
+			);
+		}());
 		std::uniform_int_distribution<int> initial_floor_monster_distribution(0, initial_floor_monsters.size() - 1);
 
 		dread_beast_monster_id = initial_floor_monsters[initial_floor_monster_distribution(random_generator)];
@@ -6017,6 +7200,36 @@ void CastSpell(CInstance* Self, CInstance* Other, int spell_id)
 	);
 }
 
+void RevealFloorTraps()
+{
+	if (active_sigils.contains(Sigils::SIGHT) && revealed_floor_traps.empty())
+	{
+		for (auto floor_trap = floor_trap_positions.begin(); floor_trap != floor_trap_positions.end(); floor_trap++) {
+			RValue instance_layer_exists = g_ModuleInterface->CallBuiltin("layer_exists", { "Instances" });
+			if (instance_layer_exists)
+			{
+				RValue obj_assetobject = g_ModuleInterface->CallBuiltin("asset_get_index", { "obj_assetobject" });
+				RValue instance = g_ModuleInterface->CallBuiltin("instance_create_layer", { floor_trap->first, floor_trap->second, RValue("Instances"), obj_assetobject });
+
+				RevealedFloorTrap revealed_floor_trap = RevealedFloorTrap(floor_trap->first, floor_trap->second, true, instance);
+				revealed_floor_traps.push_back(revealed_floor_trap);
+			}
+		}
+	}
+
+	for (RevealedFloorTrap revealed_floor_trap : revealed_floor_traps)
+	{
+		if (revealed_floor_trap.is_active && !floor_trap_positions.contains({ revealed_floor_trap.x, revealed_floor_trap.y }))
+		{
+			revealed_floor_trap.is_active = false;
+
+			RValue revealed_floor_trap_instance_exists = g_ModuleInterface->CallBuiltin("instance_exists", { revealed_floor_trap.instance });
+			if (revealed_floor_trap_instance_exists.ToBoolean())
+				g_ModuleInterface->CallBuiltin("instance_destroy", { revealed_floor_trap.instance });
+		}
+	}
+}
+
 void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 {
 	// Prune traps that have fully applied.
@@ -6047,7 +7260,13 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 		double distance = GetDistance(ari_x, ari_y, floor_trap->first, floor_trap->second);
 		if (distance <= 16)
 		{
-			static thread_local std::mt19937 random_generator(std::random_device{}());
+			static thread_local pcg32 random_generator([] {
+				std::random_device rd;
+				return pcg32(
+					(static_cast<uint64_t>(rd()) << 32) | rd(),
+					(static_cast<uint64_t>(rd()) << 32) | rd()
+				);
+			}());
 			std::uniform_int_distribution<size_t> random_trap_distribution(0, magic_enum::enum_count<Traps>() - 1);
 			std::uniform_int_distribution<size_t> zero_to_ninety_nine_distribution(0, 99);
 
@@ -6069,6 +7288,7 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 				{
 					PlaySoundEffect("snd_bark_o_o", 100, 1);
 					CreateNotification(true, CONFUSING_TRAP_NOTIFICATION_KEY, Self, Other);
+					EmitBark(script_name_to_reference_map[GML_SCRIPT_BARK_EMITTER][0], script_name_to_reference_map["obj_ari"][1], bark_name_to_id_map["annoyed"], 0);
 
 					if (!active_traps_to_value_map.contains(Traps::CONFUSING))
 					{
@@ -6085,6 +7305,7 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 				{
 					PlaySoundEffect("snd_interactable_scan", 100, 1);
 					CreateNotification(true, DISORIENTING_TRAP_NOTIFICATION_KEY, Self, Other);
+					EmitBark(script_name_to_reference_map[GML_SCRIPT_BARK_EMITTER][0], script_name_to_reference_map["obj_ari"][1], bark_name_to_id_map["annoyed"], 0);
 
 					if (!active_traps_to_value_map.contains(Traps::DISORIENTING))
 					{
@@ -6099,13 +7320,15 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 				}
 				else if (trap == Traps::EXPLODING)
 				{
-					PlaySoundEffect("snd_Explosion_CaveReverb", 100, 0.30);
+					PlaySoundEffect("snd_Explosion_CaveReverb", 100, 0.35);
 					CreateNotification(true, EXPLODING_TRAP_NOTIFICATION_KEY, Self, Other);
+					EmitBark(script_name_to_reference_map[GML_SCRIPT_BARK_EMITTER][0], script_name_to_reference_map["obj_ari"][1], bark_name_to_id_map["angry"], 0);
 				}
 				else if (trap == Traps::INHIBITING)
 				{
 					PlaySoundEffect("snd_bark_surprised", 100, 1);
 					CreateNotification(true, INHIBITING_TRAP_NOTIFICATION_KEY, Self, Other);
+					EmitBark(script_name_to_reference_map[GML_SCRIPT_BARK_EMITTER][0], script_name_to_reference_map["obj_ari"][1], bark_name_to_id_map["no_coin"], 0);
 
 					if (script_name_to_reference_map.contains(GML_SCRIPT_UPDATE_TOOLBAR_MENU))
 						UpdateToolbarMenu(script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][0], script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][1]);
@@ -6127,6 +7350,7 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 
 					PlaySoundEffect("snd_ScrollRaise", 100, 1);
 					CreateNotification(true, LURING_TRAP_NOTIFICATION_KEY, Self, Other);
+					EmitBark(script_name_to_reference_map[GML_SCRIPT_BARK_EMITTER][0], script_name_to_reference_map["obj_ari"][1], bark_name_to_id_map["exclamation_mark"], 0);
 
 					// TODO: Restrict monster spawns as necessary (stalagmite_pink? TBD)
 					std::vector<int> random_monsters;
@@ -6149,13 +7373,14 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 					RValue instance_layer_exists = g_ModuleInterface->CallBuiltin("layer_exists", { "Instances" });
 					if (instance_layer_exists)
 					{
-						PlaySoundEffect("snd_VoidPortalSpawn", 100, 1);
+						PlaySoundEffect("snd_VoidPortalSpawn", 100, 0.7);
 						CreateNotification(true, METEOR_TRAP_NOTIFICATION_KEY, Self, Other);
+						EmitBark(script_name_to_reference_map[GML_SCRIPT_BARK_EMITTER][0], script_name_to_reference_map["obj_ari"][1], bark_name_to_id_map["exclamation_mark"], 0);
 
 						RValue obj_assetobject = g_ModuleInterface->CallBuiltin("asset_get_index", { "obj_assetobject" });
 						RValue instance = g_ModuleInterface->CallBuiltin("instance_create_layer", { floor_trap->first, floor_trap->second, RValue("Instances"), obj_assetobject });
 						
-						CustomAOE meteor = CustomAOE(floor_trap->first, floor_trap->second, current_time_in_seconds, 600, true, instance, CustomAOETypes::METEOR);
+						CustomAOE meteor = CustomAOE(floor_trap->first, floor_trap->second, current_time_in_seconds, 600, current_time_in_seconds, true, instance, CustomAOETypes::METEOR);
 						meteor_aoes.push_back(meteor);
 					}
 
@@ -6168,15 +7393,34 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 					{
 						PlaySoundEffect("snd_VoidMassAppear", 100, 0.7);
 						CreateNotification(true, GAZE_TRAP_NOTIFICATION_KEY, Self, Other);
+						EmitBark(script_name_to_reference_map[GML_SCRIPT_BARK_EMITTER][0], script_name_to_reference_map["obj_ari"][1], bark_name_to_id_map["exclamation_mark"], 0);
 
 						RValue obj_assetobject = g_ModuleInterface->CallBuiltin("asset_get_index", { "obj_assetobject" });
 						RValue instance = g_ModuleInterface->CallBuiltin("instance_create_layer", { floor_trap->first, floor_trap->second, RValue("Instances"), obj_assetobject });
 						
-						CustomAOE gaze = CustomAOE(floor_trap->first, floor_trap->second, current_time_in_seconds, 600, true, instance, CustomAOETypes::GAZE);
+						CustomAOE gaze = CustomAOE(floor_trap->first, floor_trap->second, current_time_in_seconds, 600, current_time_in_seconds, true, instance, CustomAOETypes::GAZE);
 						gaze_aoes.push_back(gaze);
 					}
 
 					active_traps.erase(Traps::GAZE);
+				}
+				else if (trap == Traps::_VOID)
+				{
+					RValue instance_layer_exists = g_ModuleInterface->CallBuiltin("layer_exists", { "Instances" });
+					if (instance_layer_exists)
+					{
+						PlaySoundEffect("snd_MagicVoidLightSpell", 100, 0.3);
+						CreateNotification(true, VOID_TRAP_NOTIFICATION_KEY, Self, Other);
+						EmitBark(script_name_to_reference_map[GML_SCRIPT_BARK_EMITTER][0], script_name_to_reference_map["obj_ari"][1], bark_name_to_id_map["exclamation_mark"], 0);
+
+						RValue obj_assetobject = g_ModuleInterface->CallBuiltin("asset_get_index", { "obj_assetobject" });
+						RValue instance = g_ModuleInterface->CallBuiltin("instance_create_layer", { floor_trap->first, floor_trap->second, RValue("Instances"), obj_assetobject });
+
+						CustomAOE void_aoe = CustomAOE(floor_trap->first, floor_trap->second, current_time_in_seconds, configuration.void_trap_duration_seconds, current_time_in_seconds, true, instance, CustomAOETypes::_VOID);
+						void_aoes.push_back(void_aoe);
+					}
+
+					active_traps.erase(Traps::_VOID);
 				}
 			}
 
@@ -6230,6 +7474,147 @@ void ProcessCustomAOEs()
 				g_ModuleInterface->CallBuiltin("instance_destroy", { gaze.instance });
 		}
 	}
+
+	for (CustomAOE& void_aoe : void_aoes)
+	{
+		if (void_aoe.is_active && current_time_in_seconds >= void_aoe.last_application + 15) // TODO: Make tick rate configurable
+		{
+			void_aoe.last_application = current_time_in_seconds;
+
+			double distance = GetDistance(ari_x, ari_y, void_aoe.x, void_aoe.y);
+			if (distance > 96 && distance <= 298)
+				ModifyHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], -1);
+		}
+
+		if (void_aoe.is_active && current_time_in_seconds >= void_aoe.spawned_time + void_aoe.duration)
+		{
+			void_aoe.is_active = false;
+
+			RValue void_trap_instance_exists = g_ModuleInterface->CallBuiltin("instance_exists", { void_aoe.instance });
+			if (void_trap_instance_exists.ToBoolean())
+				g_ModuleInterface->CallBuiltin("instance_destroy", { void_aoe.instance });
+		}
+	}
+}
+
+void ProcessTreasureSpot(CInstance* Self, CInstance* Other)
+{
+	if (treasure_spot.state == TreasureSpot::WAITING_TO_SPAWN && treasure_spot.floors_to_descend == 0)
+	{
+		int biome_adjusted_max_traps_with_peril = (floor_number / 20) + 4;
+		if (floor_trap_positions.size() < biome_adjusted_max_traps_with_peril)
+		{
+			// Find a position for the treasure spot on the current floor.
+			std::vector<std::pair<int, int>> spawn_points = TRAP_SPAWN_POINTS.at(ari_current_gm_room);
+
+			std::pair<int, int> treasure_spot_coordinates;
+			for (std::pair<int, int> spawn_point : spawn_points)
+			{
+				if (floor_trap_positions.contains(spawn_point))
+					continue;
+
+				treasure_spot_coordinates = spawn_point;
+				break;
+			}
+
+			RValue instance_layer_exists = g_ModuleInterface->CallBuiltin("layer_exists", { "Instances" });
+			if (instance_layer_exists)
+			{
+				PlaySoundEffect("snd_TreasureChestSpawn", 100, 0.7);
+				CreateNotification(true, TREASURE_SPOT_SPAWNED_NOTIFICATION_KEY, Self, Other);
+
+				RValue obj_assetobject = g_ModuleInterface->CallBuiltin("asset_get_index", { "obj_assetobject" });
+				RValue instance = g_ModuleInterface->CallBuiltin("instance_create_layer", { treasure_spot_coordinates.first, treasure_spot_coordinates.second, RValue("Instances"), obj_assetobject });
+
+				treasure_spot.x = treasure_spot_coordinates.first;
+				treasure_spot.y = treasure_spot_coordinates.second;
+				treasure_spot.is_active = true;
+				treasure_spot.instance = instance;
+				treasure_spot.state = TreasureSpot::SPAWNED;
+			}
+			else
+			{
+				treasure_spot.floors_to_descend++;
+				CreateNotification(true, TREASURE_SPOT_NOT_PRESENT_NOTIFICATION_KEY, Self, Other);
+			}
+		}
+		else
+		{
+			treasure_spot.floors_to_descend++;
+			CreateNotification(true, TREASURE_SPOT_NOT_PRESENT_NOTIFICATION_KEY, Self, Other);
+		}
+		
+	}
+
+	if (treasure_spot.state == TreasureSpot::SPAWNED)
+	{
+		static thread_local pcg32 random_generator([] {
+			std::random_device rd;
+			return pcg32(
+				(static_cast<uint64_t>(rd()) << 32) | rd(),
+				(static_cast<uint64_t>(rd()) << 32) | rd()
+			);
+		}());
+		std::uniform_int_distribution<size_t> random_greater_sigil_distribution(0, magic_enum::enum_count<GreaterSigils>() - 1);
+
+		double distance = GetDistance(ari_x, ari_y, treasure_spot.x, treasure_spot.y);
+		if (distance <= 8)
+		{
+			treasure_spot.state = TreasureSpot::FOUND;
+			CreateNotification(true, TREASURE_SPOT_FOUND_NOTIFICATION_KEY, Self, Other);
+
+			//GreaterSigils random_greater_sigil = magic_enum::enum_value<GreaterSigils>(random_greater_sigil_distribution(random_generator));
+			//DropItem(greater_sigil_to_item_id_map[random_greater_sigil], ari_x, ari_y, Self, Other);
+			
+			if (floor_number < 20)
+				DropItem(greater_sigil_to_item_id_map[GreaterSigils::SPIRIT_SURGE], ari_x, ari_y, Self, Other);
+			else if (floor_number < 40)
+				DropItem(greater_sigil_to_item_id_map[GreaterSigils::MEIKYO_SHISUI], ari_x, ari_y, Self, Other);
+			else if (floor_number < 60)
+				DropItem(greater_sigil_to_item_id_map[GreaterSigils::BENEDICTION], ari_x, ari_y, Self, Other);
+			else if (floor_number < 80)
+				DropItem(greater_sigil_to_item_id_map[GreaterSigils::CHAIN_SPELL], ari_x, ari_y, Self, Other);
+			else if (floor_number < 100)
+				DropItem(greater_sigil_to_item_id_map[GreaterSigils::ASTRAL_FLOW], ari_x, ari_y, Self, Other);
+			
+			if (treasure_spot.is_active)
+			{
+				treasure_spot.is_active = false;
+
+				RValue treasure_spot_instance_exists = g_ModuleInterface->CallBuiltin("instance_exists", { treasure_spot.instance });
+				if (treasure_spot_instance_exists.ToBoolean())
+					g_ModuleInterface->CallBuiltin("instance_destroy", { treasure_spot.instance });
+			}
+		}
+	}
+
+}
+
+void ProcessSpiritConcealment()
+{
+	// TODO: Update as more spirits get added
+	for (CInstance* monster : current_floor_monsters)
+	{
+		if (StructVariableExists(monster, "monster_id") && StructVariableExists(monster, "hit_points"))
+		{
+			RValue monster_id = monster->GetMember("monster_id");
+			double hit_points = monster->GetMember("hit_points").ToDouble();
+			if (IsNumeric(monster_id) && (monster_id.ToInt64() == monster_name_to_id_map["spirit_purple"]) && std::isfinite(hit_points) && hit_points > 0)
+			{
+				if (active_sigils.contains(Sigils::CONCEALMENT) && !StructVariableExists(monster, "__deep_dungeon__deactivated"))
+				{
+					StructVariableSet(monster, "__deep_dungeon__deactivated", true);
+					g_ModuleInterface->CallBuiltin("instance_deactivate_object", { monster });
+				}
+
+				else if (!active_sigils.contains(Sigils::CONCEALMENT) && StructVariableExists(monster, "__deep_dungeon__deactivated"))
+				{
+					StructVariableRemove(monster, "__deep_dungeon__deactivated");
+					g_ModuleInterface->CallBuiltin("instance_activate_object", { monster });
+				}
+			}
+		}
+	}
 }
 
 void ApplyOfferingPenalties(CInstance* Self, CInstance* Other)
@@ -6254,7 +7639,13 @@ void TrackAriResources(CInstance* Self, CInstance* Other)
 
 void GenerateTreasureChestLoot(std::string object_name, CInstance* Self, CInstance* Other)
 {
-	static thread_local std::mt19937 random_generator(std::random_device{}());
+	static thread_local pcg32 random_generator([] {
+		std::random_device rd;
+		return pcg32(
+			(static_cast<uint64_t>(rd()) << 32) | rd(),
+			(static_cast<uint64_t>(rd()) << 32) | rd()
+		);
+	}());
 	std::uniform_int_distribution<size_t> zero_to_ninety_nine_distribution(0, 99);
 	std::uniform_int_distribution<size_t> random_sigil_distribution(0, magic_enum::enum_count<Sigils>() - 1);
 
@@ -6336,6 +7727,8 @@ void ResetStaticFields(bool returned_to_title_screen)
 		unlock_recipes = true;
 		is_restoration_tracked_interval = false;
 		is_second_wind_tracked_interval = false;
+		is_fumigate_tracked_interval = false;
+		is_deep_wounds_tracked_interval = false;
 		ari_x = -1;
 		ari_y = -1;
 		ari_facing_dir = -1;
@@ -6344,6 +7737,9 @@ void ResetStaticFields(bool returned_to_title_screen)
 		current_time_in_seconds = -1;
 		time_of_last_restoration_tick = -1;
 		time_of_last_second_wind_tick = -1;
+		time_of_last_fumigate_tick = -1;
+		time_of_last_deep_wounds_tick = -1;
+		time_of_last_outbreak_tick = -1;
 		held_item_id = -1;
 		ari_current_location = "";
 		ari_current_gm_room = "";
@@ -6356,21 +7752,32 @@ void ResetStaticFields(bool returned_to_title_screen)
 	biome_reward_disabled = false;
 	dread_beast_configured = false;
 	sigil_item_used = false;
+	greater_sigil_item_used = false;
+	salve_item_used = false;
 	lift_key_used = false;
 	orb_item_used = false;
+	heart_crystal_used = false;
 	inner_fire_cast = false;
 	reckoning_applied = false;
 	fairy_buff_applied = false;
+	stoneskin_applied = false;
 	offering_chance_occurred = false;
+	obj_dragonshrine_focused = false;
 	obj_dungeon_elevator_focused = false;
 	obj_dungeon_ladder_down_focused = false;
+	frailty_hit_counter = 0;
+	grudge_counter = 0;
+	deep_wounds_damage_pool = 0;
+	stoneskin_shield_amount = 0;
+	spirit_link_combined_health_pool = 0;
 	sigil_of_silence_count = 0;
-	sigil_of_alteration_count = 0;
+	sigil_of_alteration_monster_id = 0;
 	dread_beast_monster_id = -1;
 	dread_beasts_configured = 0;
 	boss_monsters_configured = 0;
 	salves_used.clear();
 	active_sigils.clear();
+	active_greater_sigils.clear();
 	queued_offerings.clear();
 	active_offerings.clear();
 	active_floor_enchantments.clear();
@@ -6415,35 +7822,35 @@ void ObjectCallback(
 			{
 				drop_biome_reward = false;
 				DropItem(item_name_to_id_map[CURSED_CHESTPIECE_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
-				DropItem(item_name_to_id_map[TIDE_CAVERNS_KEY_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+				DropItem(item_name_to_id_map[TIDE_CAVERNS_KEY_F20_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
 			}
 			// Tide Caverns
 			else if (ari_current_gm_room == "rm_earth_seal")
 			{
 				drop_biome_reward = false;
 				DropItem(item_name_to_id_map[CURSED_HELMET_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
-				DropItem(item_name_to_id_map[DEEP_EARTH_KEY_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+				DropItem(item_name_to_id_map[DEEP_EARTH_KEY_F40_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
 			}
 			// Deep Earth
 			else if (ari_current_gm_room == "rm_fire_seal")
 			{
 				drop_biome_reward = false;
 				DropItem(item_name_to_id_map[CURSED_GLOVES_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
-				DropItem(item_name_to_id_map[LAVA_CAVES_KEY_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+				DropItem(item_name_to_id_map[LAVA_CAVES_KEY_F60_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
 			}
 			// Lava Caves
 			else if (ari_current_gm_room == "rm_ruins_seal")
 			{
 				drop_biome_reward = false;
 				DropItem(item_name_to_id_map[CURSED_PANTS_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
-				DropItem(item_name_to_id_map[RUINS_KEY_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
+				DropItem(item_name_to_id_map[RUINS_KEY_F80_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
 			}
 			// Ruins
 			else if (ari_current_gm_room == "rm_seridias_chamber")
 			{
 				drop_biome_reward = false;
 				DropItem(item_name_to_id_map[CURSED_BOOTS_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
-				// TODO: Drop some special kind of key?
+				DropItem(item_name_to_id_map[RUINS_KEY_F100_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
 			}
 		}
 
@@ -6514,7 +7921,10 @@ void ObjectCallback(
 									sigil_item_used = false;
 
 									if (held_item_id == sigil_to_item_id_map[Sigils::ALTERATION])
+									{
 										active_sigils.insert(Sigils::ALTERATION);
+										sigil_of_alteration_monster_id = SelectRandomMonsterForAlteration();
+									}
 									if (held_item_id == sigil_to_item_id_map[Sigils::CONCEALMENT])
 										active_sigils.insert(Sigils::CONCEALMENT);
 									if (held_item_id == sigil_to_item_id_map[Sigils::FORTIFICATION])
@@ -6548,13 +7958,42 @@ void ObjectCallback(
 									}
 									if (held_item_id == sigil_to_item_id_map[Sigils::SERENITY])
 									{
-										// TODO: Check for other Floor Enchantments and Offering effects to cancel as implemented
+										// Undo Fey
 										if (active_floor_enchantments.contains(FloorEnchantments::FEY))
 										{
 											std::vector<CInstance*> refs = script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE];
 
 											ModifySpellCosts(true, true);
 											CancelStatusEffect(refs[0], refs[1], status_effect_name_to_id_map["fairy"]);
+										}
+
+										// Undo Blessed (Oracle Set Bonus)
+										if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED] > 0)
+										{
+											int max_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+											int adjusted_max_health = max_health - class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED];
+
+											SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], adjusted_max_health);
+											int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+
+											VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], adjusted_max_health);
+											VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, adjusted_max_health);
+
+											class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED] = 0;
+										}
+
+										// Undo HP Penalty
+										if (hp_penalty_amount > -1)
+										{
+											int max_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+											int adjusted_max_health = max_health + hp_penalty_amount;
+											hp_penalty_amount = -1;
+
+											SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], adjusted_max_health);
+											int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+
+											VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], adjusted_max_health);
+											VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, adjusted_max_health);
 										}
 
 										active_floor_enchantments.clear();
@@ -6566,13 +8005,114 @@ void ObjectCallback(
 										active_sigils.insert(Sigils::STRENGTH);
 									if (held_item_id == sigil_to_item_id_map[Sigils::TEMPTATION])
 										active_sigils.insert(Sigils::TEMPTATION);
+									if (held_item_id == sigil_to_item_id_map[Sigils::SIGHT])
+									{
+										int unified_time = GetUnifiedTime(script_name_to_reference_map[GML_SCRIPT_GET_UNIFIED_TIME][0], script_name_to_reference_map[GML_SCRIPT_GET_UNIFIED_TIME][1]).ToInt64();
+										RegisterStatusEffect(script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1], status_effect_name_to_id_map["sacred_light"], 0, unified_time, unified_time + 18000);
+										active_sigils.insert(Sigils::SIGHT);
+									}
+									if (held_item_id == sigil_to_item_id_map[Sigils::INTUITION])
+									{
+										GenerateTreasureSpot(global_instance->GetRefMember("__ari")->ToInstance(), self);
+										active_sigils.insert(Sigils::INTUITION);
+									}
+										
+									if (script_name_to_reference_map.contains(GML_SCRIPT_UPDATE_TOOLBAR_MENU))
+										UpdateToolbarMenu(script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][0], script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][1]);
+								}
+								else if (greater_sigil_item_used)
+								{
+									greater_sigil_item_used = false;
+
+									if (held_item_id == greater_sigil_to_item_id_map[GreaterSigils::BENEDICTION])
+									{
+										// Undo Fey
+										if (active_floor_enchantments.contains(FloorEnchantments::FEY))
+										{
+											std::vector<CInstance*> refs = script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE];
+
+											ModifySpellCosts(true, true);
+											CancelStatusEffect(refs[0], refs[1], status_effect_name_to_id_map["fairy"]);
+										}
+
+										// Undo Blessed (Oracle Set Bonus)
+										if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED] > 0)
+										{
+											int max_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+											int adjusted_max_health = max_health - class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED];
+
+											SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], adjusted_max_health);
+											int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+
+											VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], adjusted_max_health);
+											VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, adjusted_max_health);
+
+											class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED] = 0;
+										}
+
+										// Undo HP Penalty
+										if (hp_penalty_amount > -1)
+										{
+											int max_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+											int adjusted_max_health = max_health + hp_penalty_amount;
+											hp_penalty_amount = -1;
+
+											SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], adjusted_max_health);
+											int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+
+											VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], adjusted_max_health);
+											VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, adjusted_max_health);
+										}
+
+										active_floor_enchantments.clear();
+										active_sigils.insert(Sigils::SERENITY);
+										active_greater_sigils.insert(GreaterSigils::BENEDICTION);
+										ModifyHealth(global_instance->GetRefMember("__ari")->ToInstance(), self, 999);
+									}
+									else if (held_item_id == greater_sigil_to_item_id_map[GreaterSigils::ASTRAL_FLOW])
+									{
+										for (CInstance* monster : current_floor_monsters)
+										{
+											if (StructVariableExists(monster, "monster_id") && StructVariableExists(monster, "hit_points"))
+											{
+												RValue monster_id = monster->GetMember("monster_id");
+												double hit_points = monster->GetMember("hit_points").ToDouble();
+												if (IsNumeric(monster_id) && std::isfinite(hit_points) && hit_points > 0)
+													*monster->GetRefMember("hit_points") = 0;
+											}
+										}
+
+										active_greater_sigils.insert(GreaterSigils::ASTRAL_FLOW);
+									}
+									else if (held_item_id == greater_sigil_to_item_id_map[GreaterSigils::CHAIN_SPELL])
+										active_greater_sigils.insert(GreaterSigils::CHAIN_SPELL);
+									else if (held_item_id == greater_sigil_to_item_id_map[GreaterSigils::SPIRIT_SURGE])
+									{
+										active_greater_sigils.insert(GreaterSigils::SPIRIT_SURGE);
+										ModifyStamina(global_instance->GetRefMember("__ari")->ToInstance(), self, 999);
+									}
+									else if (held_item_id == greater_sigil_to_item_id_map[GreaterSigils::MEIKYO_SHISUI])
+									{
+										active_greater_sigils.insert(GreaterSigils::MEIKYO_SHISUI);
+										ScaleMistpoolArmor(true);
+										ScaleMistpoolWeapon(true);
+										ScaleMistpoolPickaxe(true);
+										ScaleClassArmor(true);
+									}
 
 									if (script_name_to_reference_map.contains(GML_SCRIPT_UPDATE_TOOLBAR_MENU))
 										UpdateToolbarMenu(script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][0], script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][1]);
 								}
-								else if (held_item_id == salve_name_to_id_map[HEALTH_SALVE_NAME] || held_item_id == salve_name_to_id_map[STAMINA_SALVE_NAME] || held_item_id == salve_name_to_id_map[MANA_SALVE_NAME])
+								else if (salve_item_used)
 								{
-									salves_used.insert(held_item_id);
+									salve_item_used = false;
+
+									if (held_item_id == salve_name_to_id_map[HEALTH_SALVE_NAME])
+										salves_used[HEALTH_SALVE_NAME]++;
+									if (held_item_id == salve_name_to_id_map[STAMINA_SALVE_NAME])
+										salves_used[STAMINA_SALVE_NAME]++;
+									if (held_item_id == salve_name_to_id_map[MANA_SALVE_NAME])
+										salves_used[MANA_SALVE_NAME]++;
 
 									if (script_name_to_reference_map.contains(GML_SCRIPT_UPDATE_TOOLBAR_MENU))
 										UpdateToolbarMenu(script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][0], script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][1]);
@@ -6582,14 +8122,46 @@ void ObjectCallback(
 									lift_key_used = false;
 									biome_reward_disabled = true;
 
-									if (held_item_id == item_name_to_id_map[TIDE_CAVERNS_KEY_NAME])
+									if (held_item_id == item_name_to_id_map[UPPER_MINES_KEY_F5_NAME])
+										EnterDungeon(4, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+									else if (held_item_id == item_name_to_id_map[UPPER_MINES_KEY_F10_NAME])
+										EnterDungeon(9, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+									else if (held_item_id == item_name_to_id_map[UPPER_MINES_KEY_F15_NAME])
+										EnterDungeon(14, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+									else if (held_item_id == item_name_to_id_map[TIDE_CAVERNS_KEY_F20_NAME])
 										EnterDungeon(19, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
-									else if (held_item_id == item_name_to_id_map[DEEP_EARTH_KEY_NAME])
+									else if (held_item_id == item_name_to_id_map[TIDE_CAVERNS_KEY_F25_NAME])
+										EnterDungeon(24, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+									else if (held_item_id == item_name_to_id_map[TIDE_CAVERNS_KEY_F30_NAME])
+										EnterDungeon(29, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+									else if (held_item_id == item_name_to_id_map[TIDE_CAVERNS_KEY_F35_NAME])
+										EnterDungeon(34, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+									else if (held_item_id == item_name_to_id_map[DEEP_EARTH_KEY_F40_NAME])
 										EnterDungeon(39, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
-									else if (held_item_id == item_name_to_id_map[LAVA_CAVES_KEY_NAME])
+									else if (held_item_id == item_name_to_id_map[DEEP_EARTH_KEY_F45_NAME])
+										EnterDungeon(44, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+									else if (held_item_id == item_name_to_id_map[DEEP_EARTH_KEY_F50_NAME])
+										EnterDungeon(49, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+									else if (held_item_id == item_name_to_id_map[DEEP_EARTH_KEY_F55_NAME])
+										EnterDungeon(54, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+									else if (held_item_id == item_name_to_id_map[LAVA_CAVES_KEY_F60_NAME])
 										EnterDungeon(59, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
-									else if (held_item_id == item_name_to_id_map[RUINS_KEY_NAME])
+									else if (held_item_id == item_name_to_id_map[LAVA_CAVES_KEY_F65_NAME])
+										EnterDungeon(64, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+									else if (held_item_id == item_name_to_id_map[LAVA_CAVES_KEY_F70_NAME])
+										EnterDungeon(69, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+									else if (held_item_id == item_name_to_id_map[LAVA_CAVES_KEY_F75_NAME])
+										EnterDungeon(74, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+									else if (held_item_id == item_name_to_id_map[RUINS_KEY_F80_NAME])
 										EnterDungeon(79, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+									else if (held_item_id == item_name_to_id_map[RUINS_KEY_F85_NAME])
+										EnterDungeon(84, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+									else if (held_item_id == item_name_to_id_map[RUINS_KEY_F90_NAME])
+										EnterDungeon(89, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+									else if (held_item_id == item_name_to_id_map[RUINS_KEY_F95_NAME])
+										EnterDungeon(94, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+									else if (held_item_id == item_name_to_id_map[RUINS_KEY_F100_NAME])
+										EnterDungeon(99, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
 								}
 								else if (orb_item_used)
 								{
@@ -6618,6 +8190,12 @@ void ObjectCallback(
 										EnterDungeon(79, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
 									}
 								}
+								else if (heart_crystal_used)
+								{
+									heart_crystal_used = false;
+									if (unmodified_base_health != -1)
+										unmodified_base_health += 20;
+								}
 							}
 						}
 					}
@@ -6634,10 +8212,36 @@ void ObjectCallback(
 			is_restoration_tracked_interval = false;
 		}
 
+		// Fumigate
+		if (is_fumigate_tracked_interval)
+		{
+			int current_health = GetHealth(global_instance->GetRefMember("__ari")->ToInstance(), self).ToInt64();
+			if (current_health > 0)
+				ModifyHealth(global_instance->GetRefMember("__ari")->ToInstance(), self, -1);
+
+			is_fumigate_tracked_interval = false;
+		}
+
+		// Deep Wounds
+		if (is_deep_wounds_tracked_interval)
+		{
+			int current_health = GetHealth(global_instance->GetRefMember("__ari")->ToInstance(), self).ToInt64();
+			if (current_health > 0 && deep_wounds_damage_pool > 0)
+			{
+				int damage = std::clamp(deep_wounds_damage_pool * 10 / 100, 1, 10);
+				damage = min(damage, deep_wounds_damage_pool);
+
+				deep_wounds_damage_pool -= damage;
+				ModifyHealth(global_instance->GetRefMember("__ari")->ToInstance(), self, -1 * damage);
+			}
+
+			is_deep_wounds_tracked_interval = false;
+		}
+
 		// Drain (Dark Knight Set Bonus)
 		if (class_name_to_set_bonus_effect_value_map[Classes::DARK_KNIGHT][ManagedSetBonuses::DRAIN] > 0)
 		{
-			int max_health = GetMaxHealth(global_instance->GetRefMember("__ari")->ToInstance(), self).ToInt64(); // TODO: Make this is accounting for HP_PENALTY
+			int max_health = GetMaxHealth(global_instance->GetRefMember("__ari")->ToInstance(), self).ToInt64();
 			int recovery = max_health * GetDarkKnightDrainPotency();
 
 			ModifyHealth(global_instance->GetRefMember("__ari")->ToInstance(), self, recovery);
@@ -6715,6 +8319,28 @@ void ObjectCallback(
 			SetHealth(global_instance->GetRefMember("__ari")->ToInstance(), self, 1);
 		}
 
+		// Stoneskin
+		if (active_floor_enchantments.contains(FloorEnchantments::STONESKIN) && !stoneskin_applied)
+		{
+			stoneskin_applied = true;
+			
+			// TODO: Tune this
+			if (floor_number < 20)
+				stoneskin_shield_amount = 20;
+			else if (floor_number < 40)
+				stoneskin_shield_amount = 40;
+			else if (floor_number < 60)
+				stoneskin_shield_amount = 60;
+			else if (floor_number < 60)
+				stoneskin_shield_amount = 80;
+			else
+				stoneskin_shield_amount = 100;
+		}
+
+		// Chain Spell
+		if (active_greater_sigils.contains(GreaterSigils::CHAIN_SPELL))
+			ModifySpellCosts(false, true);
+
 		TrackAriResources(global_instance->GetRefMember("__ari")->ToInstance(), self);
 	}
 
@@ -6747,7 +8373,13 @@ void ObjectCallback(
 							RValue state_id = state.GetMember("state_id");
 							if (state_id.ToInt64() == monster_category_to_state_id_map["mimic"]["gobble"] && script_name_to_reference_map.contains(GML_SCRIPT_DROP_ITEM))
 							{
-								static thread_local std::mt19937 random_generator(std::random_device{}());
+								static thread_local pcg32 random_generator([] {
+									std::random_device rd;
+									return pcg32(
+										(static_cast<uint64_t>(rd()) << 32) | rd(),
+										(static_cast<uint64_t>(rd()) << 32) | rd()
+									);
+								}());
 								std::uniform_int_distribution<size_t> random_sigil_distribution(0, magic_enum::enum_count<Sigils>() - 1);
 
 								Sigils random_sigil = magic_enum::enum_value<Sigils>(random_sigil_distribution(random_generator));
@@ -6771,7 +8403,7 @@ void ObjectCallback(
 						}
 					}
 					else if (StructVariableExists(monster, "__deep_dungeon__boss_monster"))
-						ModifyDreadBeastAttackPatterns(true, monster);
+						ModifyDreadBeastAttackPatterns(true, false, monster);
 				}
 				else if (boss_battle == BossBattle::DEEP_EARTH_ORB)
 				{
@@ -6785,7 +8417,7 @@ void ObjectCallback(
 						}
 					}
 					else if (StructVariableExists(monster, "__deep_dungeon__boss_monster"))
-						ModifyDreadBeastAttackPatterns(true, monster);
+						ModifyDreadBeastAttackPatterns(true, false, monster);
 				}
 				else if (boss_battle == BossBattle::LAVA_CAVES_ORB)
 				{
@@ -6799,7 +8431,7 @@ void ObjectCallback(
 						}
 					}
 					else if (StructVariableExists(monster, "__deep_dungeon__boss_monster"))
-						ModifyDreadBeastAttackPatterns(true, monster);
+						ModifyDreadBeastAttackPatterns(true, false, monster);
 				}
 				else if (boss_battle == BossBattle::RUINS_ORB)
 				{
@@ -6813,7 +8445,7 @@ void ObjectCallback(
 						}
 					}
 					else if (StructVariableExists(monster, "__deep_dungeon__boss_monster"))
-						ModifyDreadBeastAttackPatterns(true, monster);
+						ModifyDreadBeastAttackPatterns(true, false, monster);
 				}
 
 				// Dread Beasts
@@ -6822,7 +8454,7 @@ void ObjectCallback(
 					double hit_points = monster.GetMember("hit_points").ToDouble();
 					if (std::isfinite(hit_points))
 					{
-						*monster.GetRefMember("hit_points") = hit_points * 3;
+						*monster.GetRefMember("hit_points") = static_cast<int>(hit_points * configuration.dread_beast_health_modifier);
 						dread_beasts_configured++;
 						if (dread_beast_monster_id != monster_name_to_id_map["rock_stack"] || dread_beasts_configured == 2)
 							dread_beast_configured = true;
@@ -6832,7 +8464,7 @@ void ObjectCallback(
 					}
 				}
 				else if (StructVariableExists(monster, "__deep_dungeon__dread_beast"))
-					ModifyDreadBeastAttackPatterns(false, monster);
+					ModifyDreadBeastAttackPatterns(false, false, monster);
 
 				// Track the monster
 				if (!StructVariableExists(monster, "__deep_dungeon__current_floor_monsters") && StructVariableExists(monster, "hit_points"))
@@ -6842,20 +8474,39 @@ void ObjectCallback(
 					StructVariableSet(monster, "__deep_dungeon__default_hit_points", monster.GetMember("hit_points").ToDouble());
 				}
 
+				// Grudge
+				if (active_floor_enchantments.contains(FloorEnchantments::GRUDGE) && !StructVariableExists(monster, "__deep_dungeon__grudge_tracked") && StructVariableExists(monster, "hit_points"))
+				{
+					double hit_points = monster.GetMember("hit_points").ToDouble();
+					if (std::isfinite(hit_points) && hit_points <= 0)
+					{
+						grudge_counter += 1;
+						StructVariableSet(monster, "__deep_dungeon__grudge_tracked", true);
+					}
+				}
+
 				// Regular loot drops
 				if (!ari_current_gm_room.contains("seal") && !StructVariableExists(monster, "__deep_dungeon__loot_drop") && StructVariableExists(monster, "hit_points"))
 				{
 					double hit_points = monster.GetMember("hit_points").ToDouble();
 					if (std::isfinite(hit_points) && hit_points <= 0 && script_name_to_reference_map.contains(GML_SCRIPT_DROP_ITEM))
 					{
-						static thread_local std::mt19937 random_generator(std::random_device{}());
+						static thread_local pcg32 random_generator([] {
+							std::random_device rd;
+							return pcg32(
+								(static_cast<uint64_t>(rd()) << 32) | rd(),
+								(static_cast<uint64_t>(rd()) << 32) | rd()
+							);
+						}());
 						std::uniform_int_distribution<size_t> zero_to_ninety_nine_distribution(0, 99);
 						bool drop_lift_key = zero_to_ninety_nine_distribution(random_generator) < configuration.lift_key_drop_chance ? true : false;
 
 						if (floor_number < 20) // Upper Mines
 						{
 							DropItem(item_name_to_id_map["beast_coin_tiny"], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
-							if (StructVariableExists(monster, "__deep_dungeon__dread_beast"))
+							if (configuration.disable_dungeon_lift && drop_lift_key)
+								DropLiftKey();
+							if (StructVariableExists(monster, "__deep_dungeon__dread_beast") && !StructVariableExists(monster, "__deep_dungeon__outbreak"))
 							{
 								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < configuration.soul_stone_drop_chance ? true : false;
 								if (drop_soul_stone)
@@ -6866,8 +8517,8 @@ void ObjectCallback(
 						{
 							DropItem(item_name_to_id_map["beast_coin_small"], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
 							if (configuration.disable_dungeon_lift && drop_lift_key)
-								DropItem(item_name_to_id_map[TIDE_CAVERNS_KEY_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
-							if (StructVariableExists(monster, "__deep_dungeon__dread_beast"))
+								DropLiftKey();
+							if (StructVariableExists(monster, "__deep_dungeon__dread_beast") && !StructVariableExists(monster, "__deep_dungeon__outbreak"))
 							{
 								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < configuration.soul_stone_drop_chance ? true : false;
 								if (drop_soul_stone)
@@ -6878,8 +8529,8 @@ void ObjectCallback(
 						{
 							DropItem(item_name_to_id_map["beast_coin_medium"], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
 							if (configuration.disable_dungeon_lift && drop_lift_key)
-								DropItem(item_name_to_id_map[DEEP_EARTH_KEY_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
-							if (StructVariableExists(monster, "__deep_dungeon__dread_beast"))
+								DropLiftKey();
+							if (StructVariableExists(monster, "__deep_dungeon__dread_beast") && !StructVariableExists(monster, "__deep_dungeon__outbreak"))
 							{
 								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < configuration.soul_stone_drop_chance ? true : false;
 								if (drop_soul_stone)
@@ -6890,8 +8541,8 @@ void ObjectCallback(
 						{
 							DropItem(item_name_to_id_map["beast_coin_large"], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
 							if (configuration.disable_dungeon_lift && drop_lift_key)
-								DropItem(item_name_to_id_map[LAVA_CAVES_KEY_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
-							if (StructVariableExists(monster, "__deep_dungeon__dread_beast"))
+								DropLiftKey();
+							if (StructVariableExists(monster, "__deep_dungeon__dread_beast") && !StructVariableExists(monster, "__deep_dungeon__outbreak"))
 							{
 								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < configuration.soul_stone_drop_chance ? true : false;
 								if (drop_soul_stone)
@@ -6902,8 +8553,8 @@ void ObjectCallback(
 						{
 							DropItem(item_name_to_id_map["beast_coin_giant"], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
 							if (configuration.disable_dungeon_lift && drop_lift_key)
-								DropItem(item_name_to_id_map[RUINS_KEY_NAME], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
-							if (StructVariableExists(monster, "__deep_dungeon__dread_beast"))
+								DropLiftKey();
+							if (StructVariableExists(monster, "__deep_dungeon__dread_beast") && !StructVariableExists(monster, "__deep_dungeon__outbreak"))
 							{
 								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < configuration.soul_stone_drop_chance ? true : false;
 								if (drop_soul_stone)
@@ -6944,7 +8595,13 @@ void ObjectCallback(
 					double hit_points = monster.GetMember("hit_points").ToDouble();
 					if (std::isfinite(hit_points) && hit_points <= 0)
 					{
-						static thread_local std::mt19937 random_generator(std::random_device{}());
+						static thread_local pcg32 random_generator([] {
+							std::random_device rd;
+							return pcg32(
+								(static_cast<uint64_t>(rd()) << 32) | rd(),
+								(static_cast<uint64_t>(rd()) << 32) | rd()
+							);
+						}());
 						std::uniform_int_distribution<size_t> zero_to_ninety_nine_distribution(0, 99);
 
 						bool aspir_proc = zero_to_ninety_nine_distribution(random_generator) < 15 ? true : false; // TODO: Tune this. Should Aspir have a 15% chance to proc?
@@ -6989,7 +8646,8 @@ void ObjectCallback(
 						double hit_points = monster.GetMember("hit_points").ToDouble();
 						if (std::isfinite(hit_points))
 						{
-							*monster.GetRefMember("hit_points") = std::trunc(hit_points * 1.5); // TODO: Tune this.
+							*monster.GetRefMember("hit_points") = std::trunc(hit_points * configuration.gloom_health_modifier);
+							StructVariableSet(monster, "__deep_dungeon__default_hit_points", std::trunc(hit_points * configuration.gloom_health_modifier));
 							StructVariableSet(monster, "__deep_dungeon__gloom_applied", true);
 						}
 					}
@@ -7008,6 +8666,59 @@ void ObjectCallback(
 					}
 				}
 
+				// Spirit Link
+				if (active_offerings.contains(Offerings::SPIRIT_LINK) && monster_id.ToInt64() != monster_name_to_id_map["mimic"])
+				{
+					if (StructVariableExists(monster, "hit_points"))
+					{
+						double hit_points = monster.GetMember("hit_points").ToDouble();
+						if (std::isfinite(hit_points))
+						{
+							if (StructVariableExists(monster, "__deep_dungeon__spirit_link_applied") && spirit_link_combined_health_pool <= 0)
+								StructVariableSet(monster, "hit_points", 0);
+							else if (!StructVariableExists(monster, "__deep_dungeon__spirit_link_applied"))
+							{
+								spirit_link_combined_health_pool += hit_points;
+								StructVariableSet(monster, "__deep_dungeon__spirit_link_applied", true);
+								StructVariableSet(monster, "__deep_dungeon__spirit_link_damage", 0);
+								
+							}
+							else if (StructVariableExists(monster, "__deep_dungeon__default_hit_points"))
+							{
+								int default_hit_points = monster.GetMember("__deep_dungeon__default_hit_points").ToInt64();
+								int spirit_link_damage = monster.GetMember("__deep_dungeon__spirit_link_damage").ToInt64();
+								if (hit_points < default_hit_points)
+								{
+									spirit_link_damage += (default_hit_points - hit_points);
+									spirit_link_combined_health_pool -= (default_hit_points - hit_points);
+
+									StructVariableSet(monster, "__deep_dungeon__spirit_link_damage", spirit_link_damage);
+									StructVariableSet(monster, "hit_points", default_hit_points);
+								}
+							}
+						}
+					}
+				}
+				else if (StructVariableExists(monster, "__deep_dungeon__spirit_link_applied"))
+				{
+					if (StructVariableExists(monster, "hit_points"))
+					{
+						double hit_points = monster.GetMember("hit_points").ToDouble();
+						if (std::isfinite(hit_points))
+						{
+							int default_hit_points = monster.GetMember("__deep_dungeon__default_hit_points").ToInt64();
+							int spirit_link_damage = monster.GetMember("__deep_dungeon__spirit_link_damage").ToInt64();
+							
+							if(default_hit_points - spirit_link_damage > 0)
+								StructVariableSet(monster, "hit_points", default_hit_points - spirit_link_damage);
+							else
+								StructVariableSet(monster, "hit_points", 0);
+						}
+
+						StructVariableRemove(monster, "__deep_dungeon__spirit_link_applied");
+					}
+				}
+
 				// Sigil of Concealment
 				if (active_sigils.contains(Sigils::CONCEALMENT))
 				{
@@ -7020,7 +8731,14 @@ void ObjectCallback(
 
 						RValue original_hit_points = monster.GetMember("__deep_dungeon__conceal_hit_points");
 						if (hit_points.ToDouble() == original_hit_points.ToDouble())
+						{
 							StructVariableSet(monster, "aggro", false);
+							if (monster_id.ToInt64() == monster_name_to_id_map["cat"] || monster_id.ToInt64() == monster_name_to_id_map["cat_void"] || monster_id.ToInt64() == monster_name_to_id_map["tome"] || monster_id.ToInt64() == monster_name_to_id_map["griffin_statue"])
+							{
+								StructVariableSet(monster, "friction_coefficient", 1);
+								StructVariableSet(monster, "slippery_coefficient", 1);
+							}
+						}
 						else
 						{
 							active_sigils.erase(Sigils::CONCEALMENT);
@@ -7036,7 +8754,19 @@ void ObjectCallback(
 					}
 				}
 				else
+				{
 					StructVariableRemove(monster, "__deep_dungeon__conceal_hit_points");
+					if (StructVariableExists(monster, "config") && StructVariableExists(monster, "hit_points"))
+					{
+						double hit_points = monster.GetMember("hit_points").ToDouble();
+						if (std::isfinite(hit_points) && hit_points > 0 && (monster_id.ToInt64() == monster_name_to_id_map["cat"] || monster_id.ToInt64() == monster_name_to_id_map["cat_void"] || monster_id.ToInt64() == monster_name_to_id_map["tome"] || monster_id.ToInt64() == monster_name_to_id_map["griffin_statue"]))
+						{
+							StructVariableSet(monster, "friction_coefficient", 0.1);
+							StructVariableSet(monster, "slippery_coefficient", 0.1);
+						}
+					}
+				}
+					
 
 				// Sigil of Rage
 				if (active_sigils.contains(Sigils::RAGE))
@@ -7160,6 +8890,40 @@ RValue& GmlScriptModifyHealthCallback(
 	if (Arguments[0]->ToInt64() < 0 && CountEquippedClassArmor()[Classes::CLERIC] == 5 && AriCurrentGmRoomIsDungeonFloor())
 		class_name_to_set_bonus_effect_value_map[Classes::CLERIC][ManagedSetBonuses::AFFLATUS_MISERY] += abs(Arguments[0]->ToInt64());
 
+	// Frailty
+	if (Arguments[0]->ToInt64() < 0 && active_floor_enchantments.contains(FloorEnchantments::FRAILTY) && !is_fumigate_tracked_interval && !is_deep_wounds_tracked_interval) // Need to check for Fumigate and Deep Wounds since Frailty is a Group 2 enchant
+		frailty_hit_counter += 1;
+
+	// Deep Wounds
+	if (Arguments[0]->ToInt64() < 0 && active_floor_enchantments.contains(FloorEnchantments::DEEP_WOUNDS) && !is_deep_wounds_tracked_interval)
+		deep_wounds_damage_pool += abs(Arguments[0]->ToInt64());
+
+	// Stoneskin
+	if (Arguments[0]->ToInt64() < 0 && active_floor_enchantments.contains(FloorEnchantments::STONESKIN) && stoneskin_shield_amount > 0)
+	{
+		int damage = abs(Arguments[0]->ToInt64());
+		if (stoneskin_shield_amount >= damage)
+		{
+			stoneskin_shield_amount -= damage;
+			damage = 0;
+			
+		}
+		else
+		{
+			damage -= stoneskin_shield_amount;
+			stoneskin_shield_amount = 0;
+		}
+		*Arguments[0] = -1 * damage;
+	}
+
+	// Phalanx
+	if (Arguments[0]->ToInt64() < 0 && active_floor_enchantments.contains(FloorEnchantments::PHALANX))
+	{
+		int damage = abs(Arguments[0]->ToInt64());
+		int modifier = damage * 20 / 100;
+		*Arguments[0] = -1 * (damage - modifier);
+	}
+
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_MODIFY_HEALTH));
 	original(
 		Self,
@@ -7203,6 +8967,10 @@ RValue& GmlScriptModifyStaminaCallback(
 			*Arguments[0] = modified_stamina_cost;
 		}
 	}
+	
+	// Spirit Surge
+	if (active_greater_sigils.contains(GreaterSigils::SPIRIT_SURGE) && Arguments[0]->ToDouble() < 0)
+		*Arguments[0] = 0;
 
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_MODIFY_STAMINA));
 	original(
@@ -7226,7 +8994,13 @@ RValue& GmlScriptSpawnMonsterCallback(
 {
 	if (!active_traps.contains(Traps::LURING))
 	{
-		static thread_local std::mt19937 random_generator(std::random_device{}());
+		static thread_local pcg32 random_generator([] {
+			std::random_device rd;
+			return pcg32(
+				(static_cast<uint64_t>(rd()) << 32) | rd(),
+				(static_cast<uint64_t>(rd()) << 32) | rd()
+			);
+		}());
 		std::uniform_int_distribution<size_t> zero_to_ninety_nine_distribution(0, 99);
 
 		// Sigil of Silence
@@ -7257,31 +9031,8 @@ RValue& GmlScriptSpawnMonsterCallback(
 		// Sigil of Alteration
 		if (active_sigils.contains(Sigils::ALTERATION))
 		{
-			int chance_to_activate = zero_to_ninety_nine_distribution(random_generator);
-
-			int activation_threshold = 100;
-			for (int i = 0; i < sigil_of_alteration_count; i++)
-			{
-				activation_threshold /= 2;
-			}
-
-			bool activate = false;
-			if (activation_threshold == 100)
-				activate = true;
-			else if (chance_to_activate < activation_threshold)
-				activate = true;
-
-			if (activate)
-			{
-				int random = zero_to_ninety_nine_distribution(random_generator);
-
-				if (random < 40) // 40% chance for flame spirit
-					*Arguments[2] = monster_name_to_id_map["spirit"];
-				else // 60% chance for mimic
-					*Arguments[2] = monster_name_to_id_map["mimic"];
-			}
-
-			sigil_of_alteration_count++;
+			if (sigil_of_alteration_monster_id != -1)
+				*Arguments[2] = sigil_of_alteration_monster_id;
 		}
 	}
 
@@ -7358,6 +9109,22 @@ RValue& GmlScriptCanCastSpellCallback(
 		else if (active_floor_enchantments.contains(FloorEnchantments::FEY) && ari_resource_to_value_map[AriResources::MANA] < (spell_id_to_default_cost_map[spell_name_to_id_map["growth"]] / 2))
 			Result = 0;
 		else if (!active_floor_enchantments.contains(FloorEnchantments::FEY) && ari_resource_to_value_map[AriResources::MANA] < (spell_id_to_default_cost_map[spell_name_to_id_map["growth"]]))
+			Result = 0;
+		else
+			Result = 1;
+	}
+	// Predict (Oracle Set Bonus)
+	else if (Arguments[0]->ToInt64() == spell_name_to_id_map["full_restore"] && CountEquippedClassArmor()[Classes::ORACLE] >= 5 && AriCurrentGmRoomIsDungeonFloor())
+	{
+		if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] > 0)
+			Result = 0;
+		else
+			Result = 1;
+	}
+	// Condemn (Oracle Set Bonus)
+	else if (Arguments[0]->ToInt64() == spell_name_to_id_map["growth"] && CountEquippedClassArmor()[Classes::ORACLE] >= 5 && AriCurrentGmRoomIsDungeonFloor())
+	{
+		if (offering_chance_occurred || class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::CONDEMN] > 0)
 			Result = 0;
 		else
 			Result = 1;
@@ -7457,6 +9224,36 @@ RValue& GmlScriptCastSpellCallback(
 		return Result;
 	}
 
+	// Predict (Oracle Set Bonus)
+	if (Arguments[0]->ToInt64() == spell_name_to_id_map["full_restore"] && CountEquippedClassArmor()[Classes::ORACLE] >= 5 && AriCurrentGmRoomIsDungeonFloor())
+	{
+		CreateNotification(false, PREDICT_SPELL_CAST_NOTIFICATION_KEY, Self, Other);
+		class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] = 1;
+		return Result;
+	}
+
+	// Condemn (Oracle Set Bonus)
+	if (Arguments[0]->ToInt64() == spell_name_to_id_map["growth"] && CountEquippedClassArmor()[Classes::ORACLE] >= 5 && AriCurrentGmRoomIsDungeonFloor())
+	{
+		static thread_local pcg32 random_generator([] {
+			std::random_device rd;
+			return pcg32(
+				(static_cast<uint64_t>(rd()) << 32) | rd(),
+				(static_cast<uint64_t>(rd()) << 32) | rd()
+			);
+		}());
+		std::uniform_int_distribution<size_t> random_offering_distribution(0, magic_enum::enum_count<Offerings>() - 1);
+
+		Offerings offering = magic_enum::enum_value<Offerings>(random_offering_distribution(random_generator));
+		queued_offerings.insert(offering);
+		offering_chance_occurred = true;
+
+		class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::CONDEMN] = 1;
+		PlayConversation("Conversations/Mods/Deep Dungeon/condemn", Self, Other);
+
+		return Result;
+	}
+
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_CAST_SPELL));
 	original(
 		Self,
@@ -7469,10 +9266,47 @@ RValue& GmlScriptCastSpellCallback(
 	// Divine Seal (Cleric Set Bonus)
 	if (Arguments[0]->ToInt64() == spell_name_to_id_map["full_restore"] && CountEquippedClassArmor()[Classes::CLERIC] >= 3 && AriCurrentGmRoomIsDungeonFloor())
 	{
-		RegisterStatusEffect(script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1], status_effect_name_to_id_map["fairy"], RValue(), 1, 2147483647.0);
+		// Undo Fey
+		if (active_floor_enchantments.contains(FloorEnchantments::FEY))
+		{
+			std::vector<CInstance*> refs = script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE];
+
+			ModifySpellCosts(true, true);
+			CancelStatusEffect(refs[0], refs[1], status_effect_name_to_id_map["fairy"]);
+		}
 
 		active_floor_enchantments.clear();
 		active_sigils.insert(Sigils::SERENITY); // Prevent Serenity on the floor so it isn't wasted.
+		RegisterStatusEffect(script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1], status_effect_name_to_id_map["fairy"], RValue(), 1, 2147483647.0);
+
+		// Undo Blessed (Oracle Set Bonus)
+		if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED] > 0)
+		{
+			int max_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+			int adjusted_max_health = max_health - class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED];
+
+			SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], adjusted_max_health);
+			int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+
+			VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], adjusted_max_health);
+			VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, adjusted_max_health);
+
+			class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED] = 0;
+		}
+
+		// Undo HP Penalty
+		if (hp_penalty_amount > -1)
+		{
+			int max_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+			int adjusted_max_health = max_health + hp_penalty_amount;
+			hp_penalty_amount = -1;
+
+			SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], adjusted_max_health);
+			int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+
+			VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], adjusted_max_health);
+			VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, adjusted_max_health);
+		}
 	}
 
 	// Flood (Mage Set Bonus)
@@ -7501,11 +9335,15 @@ RValue& GmlScriptGetMoveSpeedCallback(
 
 	// Gravity
 	if (active_floor_enchantments.contains(FloorEnchantments::GRAVITY))
-		Result = 1.25; // TODO: Trying 1.25 instead of 1.0 for balancing
+		Result = 1.25;
 
 	// Haste
 	if (active_floor_enchantments.contains(FloorEnchantments::HASTE))
 		Result = 3.0;
+
+	// Spirit Surge
+	if (active_greater_sigils.contains(GreaterSigils::SPIRIT_SURGE))
+		Result = 4.0;
 
 	return Result; // 2.0 is default run speed
 }
@@ -7518,7 +9356,53 @@ RValue& GmlScriptDamageCallback(
 	IN RValue** Arguments
 )
 {
-	static thread_local std::mt19937 random_generator(std::random_device{}());
+	static thread_local pcg32 random_generator([] {
+		std::random_device rd;
+		return pcg32(
+			(static_cast<uint64_t>(rd()) << 32) | rd(),
+			(static_cast<uint64_t>(rd()) << 32) | rd()
+		);
+	}());
+
+	// Frailty
+	if (active_floor_enchantments.contains(FloorEnchantments::FRAILTY))
+	{
+		if (!StructVariableExists(*Arguments[0], "__deep_dungeon__frailty_applied")) // Prevents attacks that "persist" from repeatedly getting Frailty applied
+		{
+			RValue target = Arguments[0]->GetMember("target");
+			if (target.ToInt64() == 1) // Ari
+			{
+				int modifier = frailty_hit_counter * 5;
+				double additional_damage = std::trunc(Arguments[0]->GetMember("damage").ToDouble() * modifier / 100);
+				*Arguments[0]->GetRefMember("damage") = Arguments[0]->GetMember("damage").ToDouble() + additional_damage;
+			}
+
+			StructVariableSet(*Arguments[0], "__deep_dungeon__frailty_applied", true);
+		}
+	}
+
+	// Grudge
+	if (active_floor_enchantments.contains(FloorEnchantments::GRUDGE))
+	{
+		if (!StructVariableExists(*Arguments[0], "__deep_dungeon__grudge_applied")) // Prevents attacks that "persist" from repeatedly getting Grudge applied
+		{
+			RValue target = Arguments[0]->GetMember("target");
+			if (target.ToInt64() == 1) // Ari
+			{
+				int modifier = grudge_counter * 10; // Ari takes 10% more damage per grudge stack
+				double additional_damage = std::trunc(Arguments[0]->GetMember("damage").ToDouble() * modifier / 100);
+				*Arguments[0]->GetRefMember("damage") = Arguments[0]->GetMember("damage").ToDouble() + additional_damage;
+			}
+			else
+			{
+				int modifier = grudge_counter * 5; // Ari deals 5% less damage per grudge stack
+				double penalty = std::trunc(Arguments[0]->GetMember("damage").ToDouble() * modifier / 100);
+				*Arguments[0]->GetRefMember("damage") = Arguments[0]->GetMember("damage").ToDouble() - penalty;
+			}
+
+			StructVariableSet(*Arguments[0], "__deep_dungeon__grudge_applied", true);
+		}
+	}
 
 	// Distortion
 	if (active_floor_enchantments.contains(FloorEnchantments::DISTORTION))
@@ -7537,6 +9421,24 @@ RValue& GmlScriptDamageCallback(
 					*Arguments[0]->GetRefMember("knockback") = false;
 				}
 				StructVariableSet(*Arguments[0], "__deep_dungeon__distortion_applied", true);
+			}
+		}
+	}
+
+	// Blink
+	if (active_floor_enchantments.contains(FloorEnchantments::BLINK))
+	{
+		RValue target = Arguments[0]->GetMember("target");
+		if (target.ToInt64() == 1) // Ari
+		{
+			if (!StructVariableExists(*Arguments[0], "__deep_dungeon__blink_applied"))
+			{
+				std::uniform_int_distribution<size_t> zero_to_four_distribution(0, 4);
+				int random = zero_to_four_distribution(random_generator);
+				if (random == 0) // 20% chance to miss
+					*Arguments[0]->GetRefMember("damage") = 0.0;
+
+				StructVariableSet(*Arguments[0], "__deep_dungeon__blink_applied", true);
 			}
 		}
 	}
@@ -7560,18 +9462,18 @@ RValue& GmlScriptDamageCallback(
 	// Gloom
 	if (active_floor_enchantments.contains(FloorEnchantments::GLOOM))
 	{
-		if (!StructVariableExists(*Arguments[0], "__deep_dungeon__gloom_applied")) // Prevents monster attacks that "persist" from repeatedly getting Gloom applied
+		if (!StructVariableExists(*Arguments[0], "__deep_dungeon__gloom_applied")) // Prevents attacks that "persist" from repeatedly getting Gloom applied
 		{
 			RValue target = Arguments[0]->GetMember("target");
 			if (target.ToInt64() == 1) // Ari
 			{
-				double damage = std::trunc(Arguments[0]->GetMember("damage").ToDouble() * 1.5); // 50% increased damage
+				double damage = std::trunc(Arguments[0]->GetMember("damage").ToDouble() * configuration.gloom_damage_dealt_modifier); // 50% increased damage
 				*Arguments[0]->GetRefMember("damage") = damage;
 			}
 			else
 			{
 				double damage = Arguments[0]->GetMember("damage").ToDouble();
-				int penalty = std::trunc(damage * 0.50); // 50% reduced damage
+				int penalty = std::trunc(damage * configuration.gloom_damage_received_modifier); // 50% reduced damage
 				*Arguments[0]->GetRefMember("damage") = damage - penalty;
 			}
 
@@ -7730,6 +9632,56 @@ RValue& GmlScriptDamageCallback(
 		Arguments
 	);
 
+	// Spikes
+	if (active_offerings.contains(Offerings::SPIKES) && Result.ToBoolean())
+	{
+		RValue target = Arguments[0]->GetMember("target");
+		if (target.ToInt64() != 1) // Everything not Ari
+		{
+			int damage = Arguments[0]->GetMember("damage").ToInt64();
+			int penalty = max(1, damage * 20 / 100);
+			ModifyHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], -1 * penalty);
+		}
+	}
+
+	// Reflect
+	if (active_offerings.contains(Offerings::REFLECT) && Result.ToBoolean())
+	{
+		RValue target = Arguments[0]->GetMember("target");
+		if (target.ToInt64() == 1) // Ari
+		{			
+			std::map<int, CInstance*> distance_to_monster_map = {};
+			for (CInstance* monster : current_floor_monsters)
+			{
+				if (StructVariableExists(monster, "hit_points"))
+				{
+					double hit_points = monster->GetMember("hit_points").ToDouble();
+					if (std::isfinite(hit_points) && hit_points > 0)
+					{
+						RValue monster_x;
+						RValue monster_y;
+						g_ModuleInterface->GetBuiltin("x", monster, NULL_INDEX, monster_x);
+						g_ModuleInterface->GetBuiltin("y", monster, NULL_INDEX, monster_y);
+
+						double distance = GetDistance(ari_x, ari_y, monster_x.ToInt64(), monster_y.ToInt64());
+						if (!distance_to_monster_map.contains(distance))
+							distance_to_monster_map[distance] = monster;
+					}
+				}
+			}
+
+			if (!distance_to_monster_map.empty())
+			{
+				int damage = Arguments[0]->GetMember("damage").ToInt64();
+				int penalty = max(1, damage * 20 / 100);
+
+				CInstance* closest_monster = distance_to_monster_map.begin()->second;
+				int hit_points = closest_monster->GetMember("hit_points").ToInt64();
+				*closest_monster->GetRefMember("hit_points") = max(0, hit_points - penalty);
+			}
+		}
+	}
+
 	if (afflatus_misery_proc && Result.ToBoolean())
 		class_name_to_set_bonus_effect_value_map[Classes::CLERIC][ManagedSetBonuses::AFFLATUS_MISERY] = 0;
 	if (drain_proc && Result.ToBoolean())
@@ -7783,7 +9735,13 @@ RValue& GmlScriptTakePressCallback(
 	// Chance for an Offering event when using a ladder on a dungeon floor.
 	if (game_is_active && !GameIsPaused() && obj_dungeon_ladder_down_focused && Arguments[0]->ToInt64() == 6 && Result.ToBoolean() && !offering_chance_occurred && (floor_number < 19 || floor_number % 10 != 9))
 	{
-		static thread_local std::mt19937 random_generator(std::random_device{}());
+		static thread_local pcg32 random_generator([] {
+			std::random_device rd;
+			return pcg32(
+				(static_cast<uint64_t>(rd()) << 32) | rd(),
+				(static_cast<uint64_t>(rd()) << 32) | rd()
+			);
+		}());
 		std::uniform_int_distribution<size_t> zero_to_ninety_nine_distribution(0, 99);
 
 		int roll = zero_to_ninety_nine_distribution(random_generator);
@@ -7811,6 +9769,11 @@ RValue& GmlScriptTakePressCallback(
 	else if (game_is_active && !GameIsPaused() && configuration.disable_dungeon_lift && (ari_current_gm_room.contains("rm_mines") || ari_current_gm_room.contains("seal")) && obj_dungeon_elevator_focused && Arguments[0]->ToInt64() == 6 && Result.ToBoolean())
 	{
 		PlayConversation(ELEVATOR_LOCKED_CONVERSATION_KEY, Self, Other);
+		Result = false;
+	}
+	else if (game_is_active && !GameIsPaused() && ari_current_gm_room == "rm_farm" && obj_dragonshrine_focused && Arguments[0]->ToInt64() == 6 && Result.ToBoolean() && T2Read(script_name_to_reference_map[GML_SCRIPT_T2_READ][0], script_name_to_reference_map[GML_SCRIPT_T2_READ][1], "caldarus_has_met").ToBoolean())
+	{
+		PlayConversation("Conversations/Mods/Deep Dungeon/teleport_to_mines_or_deep_woods", Self, Other);
 		Result = false;
 	}
 
@@ -7882,16 +9845,22 @@ RValue& GmlScriptAttemptInteractCallback(
 
 			obj_dungeon_ladder_down_focused = false;
 		}
+		else if (self_name == "obj_dragonshrine" && ari_current_gm_room == "rm_farm")
+		{
+			obj_dragonshrine_focused = true;
+		}
 		else
 		{
-			obj_dungeon_ladder_down_focused = false;
+			obj_dragonshrine_focused = false;
 			obj_dungeon_elevator_focused = false;
+			obj_dungeon_ladder_down_focused = false;
 		}
 	}
 	else
 	{
-		obj_dungeon_ladder_down_focused = false;
+		obj_dragonshrine_focused = false;
 		obj_dungeon_elevator_focused = false;
+		obj_dungeon_ladder_down_focused = false;
 	}
 
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_ATTEMPT_INTERACT));
@@ -7939,9 +9908,21 @@ RValue& GmlScriptPlayTextCallback(
 
 			if (is_offering)
 			{
+				std::vector<Offerings> possible_offerings = {};
+				if (!configuration.experimental_extra_floor_enchantments_and_offerings)
+					possible_offerings = { Offerings::DREAD, Offerings::INNER_FIRE, Offerings::LEECH, Offerings::PERIL, Offerings::RECKONING };
+				else
+					possible_offerings = { Offerings::DREAD, Offerings::INNER_FIRE, Offerings::LEECH, Offerings::PERIL, Offerings::RECKONING, Offerings::OUTBREAK, Offerings::SPIRIT_LINK, Offerings::SPIKES, Offerings::REFLECT };
+
 				// Pick a random offering effect
-				static thread_local std::mt19937 random_generator(std::random_device{}());
-				std::uniform_int_distribution<size_t> random_offering_distribution(0, magic_enum::enum_count<Offerings>() - 1);
+				static thread_local pcg32 random_generator([] {
+					std::random_device rd;
+					return pcg32(
+						(static_cast<uint64_t>(rd()) << 32) | rd(),
+						(static_cast<uint64_t>(rd()) << 32) | rd()
+					);
+				}());
+				std::uniform_int_distribution<size_t> random_offering_distribution(0, possible_offerings.size() - 1);
 				Offerings offering = magic_enum::enum_value<Offerings>(random_offering_distribution(random_generator));
 				queued_offerings.insert(offering);
 			}
@@ -7998,6 +9979,35 @@ RValue& GmlScriptPlayTextCallback(
 					if (entry.second > 0)
 						InventoryRemoveItem(item_name_to_id_map[entry.first], entry.second, script_name_to_reference_map[GML_SCRIPT_DESERIALIZE_INVENTORY][0], script_name_to_reference_map[GML_SCRIPT_DESERIALIZE_INVENTORY][1]);
 			}
+		}
+		else if (localization_key == "Conversations/Mods/Deep Dungeon/teleport_to_mines/1" || localization_key == "Conversations/Mods/Deep Dungeon/teleport_to_mines_or_deep_woods/1")
+		{
+			CloseTextbox(Self, Other);
+			TeleportAriToRoom(
+				script_name_to_reference_map["obj_ari"][0],
+				script_name_to_reference_map["obj_ari"][1],
+				location_name_to_id_map["mines_entry"],
+				216,
+				198
+			);
+			return Result;
+		}
+		else if (localization_key == "Conversations/Mods/Deep Dungeon/teleport_to_mines_or_deep_woods/2")
+		{
+			CloseTextbox(Self, Other);
+			TeleportAriToRoom(
+				script_name_to_reference_map["obj_ari"][0],
+				script_name_to_reference_map["obj_ari"][1],
+				location_name_to_id_map["caldarus_house"],
+				312,
+				328
+			);
+			return Result;
+		}
+		else if (localization_key == "Conversations/Mods/Deep Dungeon/teleport_to_mines/2" || localization_key == "Conversations/Mods/Deep Dungeon/teleport_to_mines_or_deep_woods/3")
+		{
+			CloseTextbox(Self, Other);
+			return Result;
 		}
 	}
 
@@ -8092,9 +10102,9 @@ RValue& GmlScriptUseItemCallback(
 	{
 		if (Self->m_Object == NULL && strstr(Other->m_Object->m_Name, "obj_ari"))
 		{
-			if (deep_dungeon_items.contains(held_item_id) && held_item_id != sigil_to_item_id_map[Sigils::SERENITY] && held_item_id != item_name_to_id_map[MISTPOOL_SWORD_NAME])
+			if (deep_dungeon_items.contains(held_item_id) && held_item_id != sigil_to_item_id_map[Sigils::SERENITY] && held_item_id != item_name_to_id_map[MISTPOOL_SWORD_NAME] && !item_id_to_greater_sigil_map.contains(held_item_id))
 			{
-				g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - You are unable to use that item due to the Item Penalty floor enchantment!!", MOD_NAME, VERSION);
+				g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - You are unable to use that item due to the Item Penalty floor enchantment!", MOD_NAME, VERSION);
 				CreateNotification(false, ITEM_PENALTY_NOTIFICATION_KEY, Self, Other);
 				return Result;
 			}
@@ -8114,6 +10124,14 @@ RValue& GmlScriptUseItemCallback(
 					CreateNotification(false, SIGIL_RESTRICTED_NOTIFICATION_KEY, Self, Other);
 					return Result;
 				}
+
+				// Great Sigils Restricted
+				if (item_id_to_greater_sigil_map.contains(held_item_id))
+				{
+					g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - You are unable to use lost scrolls during boss battles!", MOD_NAME, VERSION);
+					CreateNotification(false, GREATER_SIGIL_RESTRICTED_NOTIFICATION_KEY, Self, Other);
+					return Result;
+				}
 			}
 			else
 			{
@@ -8122,6 +10140,14 @@ RValue& GmlScriptUseItemCallback(
 				{
 					g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - That sigil is already active!", MOD_NAME, VERSION);
 					CreateNotification(false, SIGIL_LIMIT_NOTIFICATION_KEY, Self, Other);
+					return Result;
+				}
+
+				// Greater Sigil Already Used
+				if (item_id_to_greater_sigil_map.contains(held_item_id) && !active_greater_sigils.empty())
+				{
+					g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - A lost scroll has already been used!", MOD_NAME, VERSION);
+					CreateNotification(false, GREATER_SIGIL_LIMIT_NOTIFICATION_KEY, Self, Other);
 					return Result;
 				}
 
@@ -8140,12 +10166,20 @@ RValue& GmlScriptUseItemCallback(
 					CreateNotification(false, SIGIL_LIMIT_NOTIFICATION_KEY, Self, Other);
 					return Result;
 				}
+
+				// Condemn (Oracle Set Bonus)
+				if (held_item_id == sigil_to_item_id_map[Sigils::TEMPTATION] && class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::CONDEMN] > 0)
+				{
+					g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - That sigil is already active!", MOD_NAME, VERSION);
+					CreateNotification(false, SIGIL_LIMIT_NOTIFICATION_KEY, Self, Other);
+					return Result;
+				}
 			}
 
-			// Salve Limit
-			if (configuration.limit_salves && salves_used.contains(held_item_id))
+			// Salve Limits
+			if ((held_item_id == salve_name_to_id_map[HEALTH_SALVE_NAME] && salves_used[HEALTH_SALVE_NAME] >= configuration.health_salve_limit) || (held_item_id == salve_name_to_id_map[STAMINA_SALVE_NAME] && salves_used[STAMINA_SALVE_NAME] >= configuration.stamina_salve_limit) || (held_item_id == salve_name_to_id_map[MANA_SALVE_NAME] && salves_used[MANA_SALVE_NAME] >= configuration.mana_salve_limit))
 			{
-				g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - You have already used that type of salve on the current floor!", MOD_NAME, VERSION);
+				g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - You have already used too many of that salve on the current floor!", MOD_NAME, VERSION);
 				CreateNotification(false, SALVE_LIMIT_NOTIFICATION_KEY, Self, Other);
 				return Result;
 			}
@@ -8178,6 +10212,16 @@ RValue& GmlScriptUseItemCallback(
 	if (item_id_to_sigil_map.contains(held_item_id))
 		sigil_item_used = true;
 
+	// Greater Sigil Item
+	greater_sigil_item_used = false;
+	if (item_id_to_greater_sigil_map.contains(held_item_id))
+		greater_sigil_item_used = true;
+
+	// Salve Item
+	salve_item_used = false;
+	if (salve_items.contains(held_item_id))
+		salve_item_used = true;
+
 	// Lift Key Item
 	lift_key_used = false;
 	if (lift_key_items.contains(held_item_id))
@@ -8187,6 +10231,11 @@ RValue& GmlScriptUseItemCallback(
 	orb_item_used = false;
 	if (orb_items.contains(held_item_id))
 		orb_item_used = true;
+
+	// Heart Crystal
+	heart_crystal_used = false;
+	if (held_item_id == item_name_to_id_map["heart_crystal"])
+		heart_crystal_used = true;
 
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_USE_ITEM));
 	original(
@@ -8255,12 +10304,12 @@ RValue& GmlScriptDropItemCallback(
 				if (StructVariableExists(*array_element, "item_id"))
 				{
 					int item_id = array_element->GetMember("item_id").ToInt64();
-					if (item_id == item_name_to_id_map["ore_stone"])
+					if (item_id == item_name_to_id_map["ore_stone"] && ItemHasBeenAcquired(item_id))
 						chance_to_spawn_glowstone = true;
 				}
 			}
 		}
-		else if (Arguments[0]->m_Kind == VALUE_INT64 && Arguments[0]->ToInt64() == item_name_to_id_map["ore_stone"])
+		else if (Arguments[0]->m_Kind == VALUE_INT64 && Arguments[0]->ToInt64() == item_name_to_id_map["ore_stone"] && ItemHasBeenAcquired(Arguments[0]->ToInt64()))
 			chance_to_spawn_glowstone = true;
 
 		// TODO: Should there be some RNG for dropping glowstone?
@@ -8313,9 +10362,12 @@ RValue& GmlScriptGetMinutesCallback(
 		RValue time = global_instance->GetMember("__clock").GetMember("time");
 		current_time_in_seconds = time.ToInt64();
 
+		RevealFloorTraps();
 		ApplyFloorTraps(Self, Other);
 		ProcessCustomAOEs();
-
+		ProcessTreasureSpot(Self, Other);
+		ProcessSpiritConcealment();
+		
 		// Restoration
 		if (active_floor_enchantments.contains(FloorEnchantments::RESTORATION))
 		{
@@ -8333,6 +10385,67 @@ RValue& GmlScriptGetMinutesCallback(
 			{
 				is_second_wind_tracked_interval = true;
 				time_of_last_second_wind_tick = current_time_in_seconds;
+			}
+		}
+
+		// Fumigate
+		if (active_floor_enchantments.contains(FloorEnchantments::FUMIGATE))
+		{
+			if (!is_fumigate_tracked_interval && (current_time_in_seconds - time_of_last_fumigate_tick) >= TWO_MINUTES_AND_THIRTY_SECONDS)
+			{
+				is_fumigate_tracked_interval = true;
+				time_of_last_fumigate_tick = current_time_in_seconds;
+			}
+		}
+
+		// Deep Wounds
+		if (active_floor_enchantments.contains(FloorEnchantments::DEEP_WOUNDS))
+		{
+			if (!is_deep_wounds_tracked_interval && (current_time_in_seconds - time_of_last_deep_wounds_tick) >= TWO_MINUTES_IN_SECONDS)
+			{
+				is_deep_wounds_tracked_interval = true;
+				time_of_last_deep_wounds_tick = current_time_in_seconds;
+			}
+		}
+
+		// Outbreak
+		if (active_offerings.contains(Offerings::OUTBREAK))
+		{
+			if ((current_time_in_seconds - time_of_last_outbreak_tick) >= THIRTY_MINUTES_IN_SECONDS)
+			{
+				const std::unordered_set<int> restricted_monsters = { // TODO: Update as needed with new monsters
+					monster_name_to_id_map["barrel"],
+					monster_name_to_id_map["copperclod"],
+					monster_name_to_id_map["goldclod"],
+					monster_name_to_id_map["ironclod"],
+					monster_name_to_id_map["mimic"],
+					monster_name_to_id_map["mistrilclod"],
+					monster_name_to_id_map["rock_stack_lava"],
+					monster_name_to_id_map["sapling_orange_mini"],
+					monster_name_to_id_map["silverclod"],
+					monster_name_to_id_map["rockclod_purple"]
+				};
+
+				for (CInstance* monster : current_floor_monsters)
+				{
+					if (StructVariableExists(monster, "monster_id") && StructVariableExists(monster, "hit_points") && !StructVariableExists(monster, "__deep_dungeon__dread_beast") && !StructVariableExists(monster, "__deep_dungeon__outbreak"))
+					{
+						int monster_id = monster->GetMember("monster_id").ToInt64();
+						double hit_points = monster->GetMember("hit_points").ToDouble();
+
+						if (!restricted_monsters.contains(monster_id) && std::isfinite(hit_points) && hit_points > 0)
+						{
+							ModifyDreadBeastAttackPatterns(false, true, monster);
+							StructVariableSet(monster, "__deep_dungeon__dread_beast", true);
+							StructVariableSet(monster, "__deep_dungeon__outbreak", true);
+							g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Configured Outbreak: %s", MOD_NAME, VERSION, monster_id_to_name_map[monster_id].c_str());
+
+							break;
+						}
+					}						
+				}
+
+				time_of_last_outbreak_tick = current_time_in_seconds;
 			}
 		}
 
@@ -8381,18 +10494,30 @@ RValue& GmlScriptGetLocalizerCallback(
 		floor_enchantments_to_localized_string_map[FloorEnchantments::RESTORATION] = LocalizeString(Self, Other, RESTORATION_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY).ToString();
 		floor_enchantments_to_localized_string_map[FloorEnchantments::SECOND_WIND] = LocalizeString(Self, Other, SECOND_WIND_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY).ToString();
 		floor_enchantments_to_localized_string_map[FloorEnchantments::HASTE] = LocalizeString(Self, Other, HASTE_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY).ToString();
+		floor_enchantments_to_localized_string_map[FloorEnchantments::FUMIGATE] = LocalizeString(Self, Other, FUMIGATE_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY).ToString();
+		floor_enchantments_to_localized_string_map[FloorEnchantments::FRAILTY] = LocalizeString(Self, Other, FRAILTY_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY).ToString();
+		floor_enchantments_to_localized_string_map[FloorEnchantments::GRUDGE] = LocalizeString(Self, Other, GRUDGE_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY).ToString();
+		floor_enchantments_to_localized_string_map[FloorEnchantments::DEEP_WOUNDS] = LocalizeString(Self, Other, DEEP_WOUNDS_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY).ToString();
+		floor_enchantments_to_localized_string_map[FloorEnchantments::BLINK] = LocalizeString(Self, Other, BLINK_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY).ToString();
+		floor_enchantments_to_localized_string_map[FloorEnchantments::STONESKIN] = LocalizeString(Self, Other, STONESKIN_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY).ToString();
+		floor_enchantments_to_localized_string_map[FloorEnchantments::PHALANX] = LocalizeString(Self, Other, PHALANX_FLOOR_ENCHANTMENT_LOCALIZED_TEXT_KEY).ToString();
 
 		offerings_to_localized_string_map[Offerings::DREAD] = LocalizeString(Self, Other, DREAD_OFFERING_LOCALIZED_TEXT_KEY).ToString();
 		offerings_to_localized_string_map[Offerings::INNER_FIRE] = LocalizeString(Self, Other, INNER_FIRE_OFFERING_LOCALIZED_TEXT_KEY).ToString();
 		offerings_to_localized_string_map[Offerings::LEECH] = LocalizeString(Self, Other, LEECH_OFFERING_LOCALIZED_TEXT_KEY).ToString();
 		offerings_to_localized_string_map[Offerings::PERIL] = LocalizeString(Self, Other, PERIL_OFFERING_LOCALIZED_TEXT_KEY).ToString();
 		offerings_to_localized_string_map[Offerings::RECKONING] = LocalizeString(Self, Other, RECKONING_OFFERING_LOCALIZED_TEXT_KEY).ToString();
+		offerings_to_localized_string_map[Offerings::OUTBREAK] = LocalizeString(Self, Other, OUTBREAK_OFFERING_LOCALIZED_TEXT_KEY).ToString();
+		offerings_to_localized_string_map[Offerings::SPIRIT_LINK] = LocalizeString(Self, Other, SPIRIT_LINK_OFFERING_LOCALIZED_TEXT_KEY).ToString();
+		offerings_to_localized_string_map[Offerings::SPIKES] = LocalizeString(Self, Other, SPIKES_OFFERING_LOCALIZED_TEXT_KEY).ToString();
+		offerings_to_localized_string_map[Offerings::REFLECT] = LocalizeString(Self, Other, REFLECT_OFFERING_LOCALIZED_TEXT_KEY).ToString();
 
 		classes_to_localized_armor_description_string_map[Classes::CLERIC] = LocalizeString(Self, Other, CLERIC_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY).ToString();
 		classes_to_localized_armor_description_string_map[Classes::DARK_KNIGHT] = LocalizeString(Self, Other, DARK_KNIGHT_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY).ToString();
 		classes_to_localized_armor_description_string_map[Classes::MAGE] = LocalizeString(Self, Other, MAGE_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY).ToString();
 		classes_to_localized_armor_description_string_map[Classes::PALADIN] = LocalizeString(Self, Other, PALADIN_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY).ToString();
 		classes_to_localized_armor_description_string_map[Classes::ROGUE] = LocalizeString(Self, Other, ROGUE_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY).ToString();
+		classes_to_localized_armor_description_string_map[Classes::ORACLE] = LocalizeString(Self, Other, ORACLE_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY).ToString();
 	}
 	else if (game_is_active && AriCurrentGmRoomIsDungeonFloor())
 	{
@@ -8444,6 +10569,16 @@ RValue& GmlScriptGetLocalizerCallback(
 						*Arguments[0] = RValue("Spells/Mods/Deep Dungeon/Enpoison/type");
 				}
 			}
+			// Predict (Oracle Set Bonus)
+			else if (CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+			{
+				if (localization_key == "spells/full_restore/name")
+					*Arguments[0] = RValue("Spells/Mods/Deep Dungeon/Predict/name");
+				else if (localization_key == "spells/full_restore/description")
+					*Arguments[0] = RValue("Spells/Mods/Deep Dungeon/Predict/description");
+				else if (localization_key == "spells/full_restore/type")
+					*Arguments[0] = RValue("Spells/Mods/Deep Dungeon/Predict/type");
+			}
 		}
 		// Summon Rain
 		else if (localization_key.contains("spells/summon_rain"))
@@ -8471,6 +10606,16 @@ RValue& GmlScriptGetLocalizerCallback(
 					*Arguments[0] = RValue("Spells/Mods/Deep Dungeon/Quake/description");
 				else if (localization_key == "spells/growth/type")
 					*Arguments[0] = RValue("Spells/Mods/Deep Dungeon/Quake/type");
+			}
+			// Condemn (Oracle Set Bonus)
+			else if (CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+			{
+				if (localization_key == "spells/growth/name")
+					*Arguments[0] = RValue("Spells/Mods/Deep Dungeon/Condemn/name");
+				else if (localization_key == "spells/growth/description")
+					*Arguments[0] = RValue("Spells/Mods/Deep Dungeon/Condemn/description");
+				else if (localization_key == "spells/growth/type")
+					*Arguments[0] = RValue("Spells/Mods/Deep Dungeon/Condemn/type");
 			}
 		}
 	}
@@ -8546,19 +10691,51 @@ RValue& GmlScriptGetLocalizerCallback(
 		else if (Arguments[0]->ToString() == FLOOR_ENCHANTMENT_PLACEHOLDER_TEXT_KEY)
 		{
 			std::string custom_text = "";
-			for (auto it = active_floor_enchantments.begin(); it != active_floor_enchantments.end();)
-			{
-				custom_text += floor_enchantments_to_localized_string_map[*it];
+			bool add_newline = false;
 
-				if (++it != active_floor_enchantments.end())
-					custom_text += "\n";
+			// Group 1 Enchantments
+			for (const auto& enchantment : GROUP_ONE_PREDICT_FLOOR_ENCHANTMENTS)
+			{
+				if (active_floor_enchantments.contains(enchantment))
+				{
+					add_newline = true;
+					custom_text += floor_enchantments_to_localized_string_map[enchantment];
+					break;
+				}
+			}
+
+			// Group 2 Enchantments
+			for (const auto& enchantment : GROUP_TWO_PREDICT_FLOOR_ENCHANTMENTS)
+			{
+				if (active_floor_enchantments.contains(enchantment))
+				{
+					if (add_newline)
+						custom_text += "\n";
+					
+					add_newline = true;
+					custom_text += floor_enchantments_to_localized_string_map[enchantment];
+					break;
+				}
+			}
+
+			// Group 3 Enchantments
+			for (const auto& enchantment : GROUP_THREE_FLOOR_ENCHANTMENTS)
+			{
+				if (active_floor_enchantments.contains(enchantment))
+				{
+					if (add_newline)
+						custom_text += "\n";
+
+					custom_text += floor_enchantments_to_localized_string_map[enchantment];
+					break;
+				}
 			}
 
 			Result = RValue(custom_text);
 			return Result;
 		}
-		// Offerings
-		else if (Arguments[0]->ToString() == OFFERINGS_PLACEHOLDER_TEXT_KEY)
+		// Offerings & Condemn (Oracle Set Bonus)
+		else if (Arguments[0]->ToString() == OFFERINGS_PLACEHOLDER_TEXT_KEY || Arguments[0]->ToString() == CONDEMN_PLACEHOLDER_TEXT_KEY)
 		{
 			std::string custom_text = "";
 			for (auto it = queued_offerings.begin(); it != queued_offerings.end();)
@@ -8686,6 +10863,23 @@ RValue& GmlScriptGetLocalizerCallback(
 			Result = RValue(custom_text);
 			return Result;
 		}
+		else if (Arguments[0]->ToString() == ORACLE_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY && !crafting_menu_open)
+		{
+			int oracle_armor_pieces_equipped = CountEquippedClassArmor()[Classes::ORACLE];
+			std::string custom_text = classes_to_localized_armor_description_string_map[Classes::ORACLE];
+			custom_text += "\n\n" + LocalizeString(Self, Other, SET_PIECES_EQUIPPED_LOCALIZED_TEXT_KEY).ToString() + " [" + std::to_string(oracle_armor_pieces_equipped) + "/5]";
+			if (oracle_armor_pieces_equipped == 5)
+			{
+				custom_text += "\n- " + LocalizeString(Self, Other, ORACLE_SET_BONUS_PREDICT_LOCALIZED_TEXT_KEY).ToString();
+				custom_text += "\n- " + LocalizeString(Self, Other, ORACLE_SET_BONUS_CONDEMN_LOCALIZED_TEXT_KEY).ToString();
+				custom_text += "\n- " + LocalizeString(Self, Other, ORACLE_SET_BONUS_DIVINATION_LOCALIZED_TEXT_KEY).ToString();
+				custom_text += "\n- " + LocalizeString(Self, Other, ORACLE_SET_BONUS_BLESSED_LOCALIZED_TEXT_KEY).ToString();
+				custom_text += "\n- " + LocalizeString(Self, Other, ORACLE_SET_BONUS_PROPHECY_LOCALIZED_TEXT_KEY).ToString();
+			}
+
+			Result = RValue(custom_text);
+			return Result;
+		}
 	}
 
 	return Result;
@@ -8760,12 +10954,14 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 	IN RValue** Arguments
 )
 {
-	// TODO: Run logic to actually undo all active floor enchantments.
-	// TODO: Remove all buffs.
+	UnlockLiftKeyRecipe(Self, Other);
 	ResetCustomDrawFields();
+
 	salves_used.clear();
 	active_sigils.clear();
+	active_greater_sigils.clear();
 	active_floor_enchantments.clear();
+	spirit_link_combined_health_pool = 0;
 	active_offerings = queued_offerings;
 	queued_offerings.clear();
 	current_floor_monsters.clear();
@@ -8774,15 +10970,22 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 	active_traps.clear();
 	active_traps_to_value_map.clear();
 	floor_trap_positions.clear();
+	revealed_floor_traps.clear();
 
 	// Dread Beast & Boss controls
 	dread_beast_configured = false;
 	dread_beast_monster_id = -1;
 	dread_beasts_configured = 0;
 	boss_monsters_configured = 0;
-	if (active_offerings.empty() && ari_current_gm_room != "rm_mines_entry" && ari_current_gm_room != "rm_priestess_quarters" && !ari_current_gm_room.contains("seal") && !ari_current_gm_room.contains("ritual") && !ari_current_gm_room.contains("treasure"))
+	if (active_offerings.empty() && ari_current_gm_room != "rm_mines_entry" && ari_current_gm_room != "rm_priestess_quarters" && ari_current_gm_room != "rm_seridias_chamber" && !ari_current_gm_room.contains("seal") && !ari_current_gm_room.contains("ritual") && !ari_current_gm_room.contains("treasure") && !ari_current_gm_room.contains("milestone"))
 	{
-		static thread_local std::mt19937 random_generator(std::random_device{}());
+		static thread_local pcg32 random_generator([] {
+			std::random_device rd;
+			return pcg32(
+				(static_cast<uint64_t>(rd()) << 32) | rd(),
+				(static_cast<uint64_t>(rd()) << 32) | rd()
+			);
+		}());
 		std::uniform_int_distribution<size_t> zero_to_ninety_nine_distribution(0, 99);
 
 		int random = zero_to_ninety_nine_distribution(random_generator);
@@ -8809,25 +11012,83 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 	inner_fire_cast = false;
 	reckoning_applied = false;
 	fairy_buff_applied = false;
+	stoneskin_applied = false;
 	offering_chance_occurred = false;
+	frailty_hit_counter = 0;
+	grudge_counter = 0;
+	deep_wounds_damage_pool = 0;
+	stoneskin_shield_amount = 0;
 	sigil_of_silence_count = 0;
-	sigil_of_alteration_count = 0;
+	sigil_of_alteration_monster_id = 0;
 
 	// Track Unmodified Max HP
 	unmodified_base_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
 
 	// Toggle reward on seal rooms when dungeon lift is disabled
-	if (configuration.disable_dungeon_lift && ari_current_gm_room.contains("seal") && !biome_reward_disabled)
+	if (configuration.disable_dungeon_lift && (ari_current_gm_room.contains("seal") || ari_current_gm_room == "rm_seridias_chamber") && ari_current_gm_room != "rm_void_seal" && !biome_reward_disabled)
 		drop_biome_reward = true;
 	biome_reward_disabled = false;
 
-	// Hide (Rogue Set Bonus)
-	if (CountEquippedClassArmor()[Classes::ROGUE] > 0)
-		active_sigils.insert(Sigils::CONCEALMENT);
-
-	if (ari_current_gm_room != "rm_mines_entry" && ari_current_gm_room != "rm_priestess_quarters" && !ari_current_gm_room.contains("seal") && !ari_current_gm_room.contains("ritual") && !ari_current_gm_room.contains("treasure"))
+	if (ari_current_gm_room != "rm_mines_entry" && ari_current_gm_room != "rm_priestess_quarters" && ari_current_gm_room != "rm_seridias_chamber" && !ari_current_gm_room.contains("seal") && !ari_current_gm_room.contains("ritual") && !ari_current_gm_room.contains("treasure") && !ari_current_gm_room.contains("milestone"))
 	{
-		GenerateFloorTraps();
+		// Hide (Rogue Set Bonus)
+		if (CountEquippedClassArmor()[Classes::ROGUE] > 0)
+			active_sigils.insert(Sigils::CONCEALMENT);
+
+		// Prophecy (Oracle Set Bonus)
+		if (CountEquippedClassArmor()[Classes::ORACLE] >= 5 && class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] == 1 && class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::CONDEMN] == 1)
+		{
+			static thread_local pcg32 random_generator([] {
+				std::random_device rd;
+				return pcg32(
+					(static_cast<uint64_t>(rd()) << 32) | rd(),
+					(static_cast<uint64_t>(rd()) << 32) | rd()
+				);
+				}());
+			std::uniform_int_distribution<size_t> zero_to_ninety_nine_distribution(0, 99);
+
+			int random = zero_to_ninety_nine_distribution(random_generator);
+			if (random < 30)
+			{
+				active_sigils.insert(Sigils::FORTIFICATION);
+				CreateNotification(false, PROPHECY_FORTIFICATION_NOTIFICATION_KEY, Self, Other);
+			}
+			else if (random < 60)
+			{
+				active_sigils.insert(Sigils::STRENGTH);
+				CreateNotification(false, PROPHECY_STRENGTH_NOTIFICATION_KEY, Self, Other);
+			}
+			else if (random < 75)
+			{
+				active_sigils.insert(Sigils::PROTECTION);
+				CreateNotification(false, PROPHECY_PROTECTION_NOTIFICATION_KEY, Self, Other);
+
+				RegisterStatusEffect(script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1], status_effect_name_to_id_map["guardians_shield"], RValue(), 1, 2147483647.0);
+				SetInvulnerabilityHits(2);
+			}
+			else if (random < 90)
+			{
+				active_sigils.insert(Sigils::CONCEALMENT);
+				CreateNotification(false, PROPHECY_CONCEALMENT_NOTIFICATION_KEY, Self, Other);
+			}
+			else
+			{
+				active_sigils.insert(Sigils::SAFETY);
+				CreateNotification(false, PROPHECY_SAFETY_NOTIFICATION_KEY, Self, Other);
+			}
+		}
+
+		if (!active_sigils.contains(Sigils::SAFETY)) // This should only happen after Prophecy (Oracle Set Bonus)
+			GenerateFloorTraps();
+
+		if (treasure_spot.state == TreasureSpot::WAITING_TO_SPAWN)
+		{
+			active_sigils.insert(Sigils::INTUITION);
+			treasure_spot.floors_to_descend--;
+
+			if(treasure_spot.floors_to_descend > 0)
+				CreateNotification(true, TREASURE_SPOT_NOT_PRESENT_NOTIFICATION_KEY, Self, Other);
+		}
 
 		if (ari_current_gm_room == "rm_mines_upper_floor1")
 			active_floor_enchantments = RandomFloorEnchantments(true, DungeonBiomes::UPPER);
@@ -8853,11 +11114,43 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 			time_of_last_restoration_tick = current_time_in_seconds;
 		if (active_floor_enchantments.contains(FloorEnchantments::SECOND_WIND))
 			time_of_last_second_wind_tick = current_time_in_seconds;
+		if (active_floor_enchantments.contains(FloorEnchantments::FUMIGATE))
+			time_of_last_fumigate_tick = current_time_in_seconds;
+		if (active_floor_enchantments.contains(FloorEnchantments::DEEP_WOUNDS))
+			time_of_last_deep_wounds_tick = current_time_in_seconds;
+		if (active_offerings.contains(Offerings::OUTBREAK))
+			time_of_last_outbreak_tick = current_time_in_seconds - TWENTY_FIVE_MINUTES_IN_SECONDS;
 		if (CountEquippedClassArmor()[Classes::CLERIC] > 0)
 			class_name_to_set_bonus_effect_value_map[Classes::CLERIC][ManagedSetBonuses::AUTO_REGEN] = current_time_in_seconds;
 
 		if (script_name_to_reference_map.contains(GML_SCRIPT_UPDATE_TOOLBAR_MENU))
 			UpdateToolbarMenu(script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][0], script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][1]);
+
+		// Blessed (Oracle Set Bonus)
+		if (CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+		{
+			int bonus = 0;
+			if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] == 1)
+				bonus += 10 * active_floor_enchantments.size();
+			if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::CONDEMN] == 1)
+				bonus += 10 * active_offerings.size();
+
+			if (bonus > 0)
+			{
+				int max_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+				int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+				int adjusted_max_health = max_health + bonus;
+				int adjusted_current_health = current_health + bonus;
+
+				SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], adjusted_max_health);
+				SetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], adjusted_current_health);
+				
+				VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], adjusted_max_health);
+				VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, adjusted_max_health);
+
+				class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED] = bonus;
+			}
+		}
 
 		// HP Penalty
 		if (active_floor_enchantments.contains(FloorEnchantments::HP_PENALTY))
@@ -8865,6 +11158,7 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 			int max_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
 			int penalty = max_health / 4;
 			int adjusted_max_health = max_health - penalty;
+			hp_penalty_amount = penalty;
 
 			SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], adjusted_max_health);
 			int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
@@ -8909,6 +11203,9 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 		}
 	}
 
+	class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] = 0;
+	class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::CONDEMN] = 0;
+
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_ON_DUNGEON_ROOM_START));
 	original(
 		Self,
@@ -8931,8 +11228,10 @@ RValue& GmlScriptGoToRoomCallback(
 )
 {
 	ResetCustomDrawFields();
+	revealed_floor_traps.clear();
 	meteor_aoes.clear();
 	gaze_aoes.clear();
+	void_aoes.clear();
 
 	// Teleport Ari to the ritual chamber for boss battles.
 	if (boss_battle == BossBattle::TIDE_CAVERNS_ORB && !ari_current_gm_room.contains("ritual_chamber"))
@@ -8947,6 +11246,10 @@ RValue& GmlScriptGoToRoomCallback(
 	else if (boss_battle != BossBattle::NONE && ari_current_gm_room.contains("ritual"))
 		boss_battle = BossBattle::NONE;
 
+	// If leaving the void seal, prohibit the key from spawning in progression mode.
+	if (configuration.disable_dungeon_lift && ari_current_gm_room == "rm_void_seal")
+		biome_reward_disabled = true;
+
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_GO_TO_ROOM));
 	original(
 		Self,
@@ -8960,7 +11263,7 @@ RValue& GmlScriptGoToRoomCallback(
 	RValue room_name = g_ModuleInterface->CallBuiltin("room_get_name", { gm_room });
 	ari_current_gm_room = room_name.ToString();
 
-	if ((ari_current_gm_room.contains("rm_mines") || ari_current_gm_room.contains("seal") || ari_current_gm_room == "rm_priestess_quarters") && ari_current_gm_room != "rm_mines_entry")
+	if ((ari_current_gm_room.contains("rm_mines") || ari_current_gm_room.contains("seal") || ari_current_gm_room == "rm_priestess_quarters" || ari_current_gm_room == "rm_seridias_chamber") && ari_current_gm_room != "rm_mines_entry")
 		SetFloorNumber();
 	else
 		floor_number = 0;
@@ -8970,6 +11273,7 @@ RValue& GmlScriptGoToRoomCallback(
 
 	ModifyMistpoolWeaponSprites();
 	ModifyMistpoolPickaxeSprites();
+	ModifyBarkSprites();
 
 	if (script_name_to_reference_map.contains(GML_SCRIPT_UPDATE_TOOLBAR_MENU))
 		UpdateToolbarMenu(script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][0], script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][1]);
@@ -8988,8 +11292,10 @@ RValue& GmlScriptGoToRoomCallback(
 	class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::ENPOISON] = 0;
 	class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::QUAKE] = 0;
 	class_name_to_set_bonus_effect_value_map[Classes::ROGUE][ManagedSetBonuses::FLEE] = 0;
+	class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED] = 0;
 
 	// Reset Max HP Adjustments
+	hp_penalty_amount = -1;
 	if (unmodified_base_health != -1)
 	{
 		SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], unmodified_base_health);
@@ -9000,6 +11306,70 @@ RValue& GmlScriptGoToRoomCallback(
 		unmodified_base_health = -1;
 	}
 
+	// Max HP bug fix (experimental)
+	if (configuration.experimental_max_health_bug_fix)
+	{
+		int max_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+		if (floor_number == 100)
+		{
+			if (max_health < 200)
+			{
+				SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], 200);
+				int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+
+				VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], 200);
+				VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, 200);
+			}
+		}
+		else if (floor_number > 80)
+		{
+			if (max_health < 180)
+			{
+				SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], 180);
+				int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+
+				VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], 180);
+				VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, 180);
+			}
+		}
+		else if (floor_number > 60)
+		{
+			if (max_health < 160)
+			{
+				SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], 160);
+				int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+
+				VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], 160);
+				VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, 160);
+			}
+		}
+		else if (floor_number > 40)
+		{
+			if (max_health < 140)
+			{
+				SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], 140);
+				int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+
+				VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], 140);
+				VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, 140);
+			}
+		}
+		else if (floor_number > 20)
+		{
+			if (max_health < 120)
+			{
+				SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], 120);
+				int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+
+				VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], 120);
+				VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, 120);
+			}
+		}
+	}
+
+	if (floor_number != 0 && (treasure_spot.state == TreasureSpot::SPAWNED || treasure_spot.state == TreasureSpot::FOUND))
+		treasure_spot = TreasureSpot();
+
 	if (ari_current_location == "dungeon" && (!ari_current_gm_room.contains("rm_mines") || ari_current_gm_room == "rm_mines_entry")) // TODO: Don't use ari_current_location
 	{
 		// TODO: Run logic to actually undo all active floor enchantments.
@@ -9007,6 +11377,7 @@ RValue& GmlScriptGoToRoomCallback(
 		ResetCustomDrawFields();
 		salves_used.clear();
 		active_sigils.clear();
+		active_greater_sigils.clear();
 		active_floor_enchantments.clear();
 		active_offerings.clear(); // Different than OnDungeonRoomStart
 		queued_offerings.clear();
@@ -9028,15 +11399,27 @@ RValue& GmlScriptGoToRoomCallback(
 		inner_fire_cast = false;
 		reckoning_applied = false;
 		fairy_buff_applied = false;
+		stoneskin_applied = false;
 		offering_chance_occurred = false;
 		floor_start_time = 0;
+		frailty_hit_counter = 0;
+		grudge_counter = 0;
+		deep_wounds_damage_pool = 0;
+		stoneskin_shield_amount = 0;
+		spirit_link_combined_health_pool = 0;
 		sigil_of_silence_count = 0;
-		sigil_of_alteration_count = 0;
+		sigil_of_alteration_monster_id = 0;
 		dread_beast_monster_id = -1;
 		dread_beasts_configured = 0;
 		boss_monsters_configured = 0;
 		class_name_to_set_bonus_effect_value_map.clear();
 		initial_floor_monsters.clear();
+		treasure_spot = TreasureSpot();
+
+		// Reset Oracle set bonus effects.
+		class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] = 0;
+		class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::CONDEMN] = 0;
+
 	}
 	else
 		active_offerings.clear();
@@ -9068,13 +11451,16 @@ RValue& GmlScriptSetupMainScreenCallback(
 		LoadSpells();
 		LoadSpellIds();
 		LoadStatusEffects();
+		LoadLocations();
 		LoadInfusions();
 		LoadObjectIds();
 		LoadItems();
 		LoadMonsters();
+		ModifyMonsterPrototypes();
 		LoadDungeonBiomeCandidateMonsters();
 		LoadPlayerStates();
 		LoadMonsterStates();
+		LoadBarkData();
 		LoadTutorials();
 		LoadStalagmiteAttackData();
 		ModifyItems();
@@ -9192,10 +11578,9 @@ RValue& GmlScriptOnDrawGuiCallback(
 		auto gloom = std::find(active_floor_enchantments.begin(), active_floor_enchantments.end(), FloorEnchantments::GLOOM);
 		if (gloom != active_floor_enchantments.end())
 		{
-			// Draw semi-transparent overlay
 			g_ModuleInterface->CallBuiltin(
 				"draw_set_alpha",
-				{ 0.45 }
+				{ 0.45 } // Set to semi-transparent for overlay
 			);
 
 			g_ModuleInterface->CallBuiltin(
@@ -9207,6 +11592,11 @@ RValue& GmlScriptOnDrawGuiCallback(
 			g_ModuleInterface->CallBuiltin(
 				"draw_rectangle",
 				{ 0, 0, window_width, window_height, false }
+			);
+
+			g_ModuleInterface->CallBuiltin(
+				"draw_set_alpha",
+				{ 1.0 } // Reset transparency
 			);
 		}
 
@@ -9590,7 +11980,13 @@ RValue& GmlScriptSceneAudioPlayerPlayCallback(
 
 	if (game_is_active && configuration.randomize_dungeon_music && AriCurrentGmRoomIsDungeonFloor() && floor_number != 91)
 	{
-		static thread_local std::mt19937 random_generator(std::random_device{}());
+		static thread_local pcg32 random_generator([] {
+			std::random_device rd;
+			return pcg32(
+				(static_cast<uint64_t>(rd()) << 32) | rd(),
+				(static_cast<uint64_t>(rd()) << 32) | rd()
+			);
+		}());
 		std::uniform_int_distribution<size_t> game_music_distribution(0, MUSIC_INTERNAL_NAMES.size() - 1);
 		*Arguments[0] = RValue(MUSIC_INTERNAL_NAMES.at(game_music_distribution(random_generator)));
 	}
@@ -9690,6 +12086,28 @@ RValue& GmlScriptOnBeginStepCallback(
 	IN RValue** Arguments
 )
 {
+	// Revealed Traps
+	for (int i = 0; i < revealed_floor_traps.size(); i++)
+	{
+		if (revealed_floor_traps[i].is_active)
+		{
+			RValue spr_revealed_floor_trap = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_revealed_floor_trap" });
+			g_ModuleInterface->CallBuiltin("variable_instance_set", { revealed_floor_traps[i].instance, "sprite_index", spr_revealed_floor_trap });
+			g_ModuleInterface->CallBuiltin("variable_instance_set", { revealed_floor_traps[i].instance, "image_speed", 0.10 }); // 0.15
+			g_ModuleInterface->CallBuiltin("variable_instance_set", { revealed_floor_traps[i].instance, "depth", 350 });
+		}
+	}
+
+	// Treasure Spot
+	if (treasure_spot.is_active)
+	{
+		RValue spr_treasure_spot = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_treasure_spot" });
+		g_ModuleInterface->CallBuiltin("variable_instance_set", { treasure_spot.instance, "sprite_index", spr_treasure_spot });
+		g_ModuleInterface->CallBuiltin("variable_instance_set", { treasure_spot.instance, "image_speed", 0.3 }); // 0.6
+		g_ModuleInterface->CallBuiltin("variable_instance_set", { treasure_spot.instance, "depth", 350 });
+	}
+	
+
 	// Meteor Sprites
 	for (int i = 0; i < meteor_aoes.size(); i++)
 	{
@@ -9706,9 +12124,37 @@ RValue& GmlScriptOnBeginStepCallback(
 	{
 		if (gaze_aoes[i].is_active)
 		{
-			RValue spr_trap_gaze = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_trap_gaze" });
-			g_ModuleInterface->CallBuiltin("variable_instance_set", { gaze_aoes[i].instance, "sprite_index", spr_trap_gaze });
-			g_ModuleInterface->CallBuiltin("variable_instance_set", { gaze_aoes[i].instance, "image_speed", 0.6 });
+			// if (gaze.is_active && current_time_in_seconds >= gaze.spawned_time + gaze.duration)
+			if (current_time_in_seconds < gaze_aoes[i].spawned_time + gaze_aoes[i].duration - 120)
+			{
+				RValue spr_trap_gaze = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_trap_gaze" });
+				g_ModuleInterface->CallBuiltin("variable_instance_set", { gaze_aoes[i].instance, "sprite_index", spr_trap_gaze });
+				g_ModuleInterface->CallBuiltin("variable_instance_set", { gaze_aoes[i].instance, "image_speed", 0.6 });
+			}
+			else
+			{
+				RValue spr_trap_gaze_vanish = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_trap_gaze_vanish" });
+				g_ModuleInterface->CallBuiltin("variable_instance_set", { gaze_aoes[i].instance, "sprite_index", spr_trap_gaze_vanish });
+				g_ModuleInterface->CallBuiltin("variable_instance_set", { gaze_aoes[i].instance, "image_speed", 0.6 });
+
+				if (!StructVariableExists(gaze_aoes[i].instance, "__deep_dungeon__reset_image_index"))
+				{
+					StructVariableSet(gaze_aoes[i].instance, "__deep_dungeon__reset_image_index", true);
+					g_ModuleInterface->CallBuiltin("variable_instance_set", { gaze_aoes[i].instance, "image_index", 0 });   // Reset frame
+				}
+			}
+		}
+	}
+
+	// Void Traps
+	for (int i = 0; i < void_aoes.size(); i++)
+	{
+		if (void_aoes[i].is_active)
+		{
+			RValue spr_trap_void = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_trap_void" });
+			g_ModuleInterface->CallBuiltin("variable_instance_set", { void_aoes[i].instance, "sprite_index", spr_trap_void });
+			g_ModuleInterface->CallBuiltin("variable_instance_set", { void_aoes[i].instance, "image_speed", 0.25 }); // 0.1
+			g_ModuleInterface->CallBuiltin("variable_instance_set", { void_aoes[i].instance, "depth", -1000 });
 		}
 	}
 
@@ -9744,7 +12190,7 @@ RValue& GmlScriptRecipeGenerateInfusionsCallback(
 	if (StructVariableExists(Self, "item_id"))
 	{
 		int item_id = Self->GetMember("item_id").ToInt64();
-		if (item_id_to_sigil_map.contains(item_id))
+		if (item_id_to_sigil_map.contains(item_id) || lift_key_items.contains(item_id) || orb_items.contains(item_id))
 		{
 			RValue empty_array = g_ModuleInterface->CallBuiltin("array_create", { 0 });
 			*Result.GetRefMember("__count") = 0;
@@ -9752,6 +12198,52 @@ RValue& GmlScriptRecipeGenerateInfusionsCallback(
 			*Result.GetRefMember("__buffer") = empty_array;
 		}
 	}
+
+	return Result;
+}
+
+RValue& GmlScriptBarkEmitterCallback(
+	IN CInstance* Self,
+	IN CInstance* Other,
+	OUT RValue& Result,
+	IN int ArgumentCount,
+	IN RValue** Arguments
+)
+{
+	if (/*!custom_bark_playing && */(StructVariableExists(Other, "god_mode") || StructVariableExists(Other, "wimp_mode")))
+		script_name_to_reference_map[GML_SCRIPT_BARK_EMITTER] = { Self, Other };
+
+	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_BARK_EMITTER));
+	original(
+		Self,
+		Other,
+		Result,
+		ArgumentCount,
+		Arguments
+	);
+
+	return Result;
+}
+
+RValue& GmlScriptT2ReadCallback(
+	IN CInstance* Self,
+	IN CInstance* Other,
+	OUT RValue& Result,
+	IN int ArgumentCount,
+	IN RValue** Arguments
+)
+{
+	if (!script_name_to_reference_map.contains(GML_SCRIPT_T2_READ))
+		script_name_to_reference_map[GML_SCRIPT_T2_READ] = { Self, Other };
+
+	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_T2_READ));
+	original(
+		Self,
+		Other,
+		Result,
+		ArgumentCount,
+		Arguments
+	);
 
 	return Result;
 }
@@ -11094,6 +13586,60 @@ void CreateHookGmlScriptRecipeGenerateInfusions(AurieStatus& status)
 	}
 }
 
+void CreateHookGmlScriptBarkEmitter(AurieStatus& status)
+{
+	CScript* gml_script_bark_emitter = nullptr;
+	status = g_ModuleInterface->GetNamedRoutinePointer(
+		GML_SCRIPT_BARK_EMITTER,
+		(PVOID*)&gml_script_bark_emitter
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_BARK_EMITTER);
+	}
+
+	status = MmCreateHook(
+		g_ArSelfModule,
+		GML_SCRIPT_BARK_EMITTER,
+		gml_script_bark_emitter->m_Functions->m_ScriptFunction,
+		GmlScriptBarkEmitterCallback,
+		nullptr
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_BARK_EMITTER);
+	}
+}
+
+void CreateHookGmlScriptT2Read(AurieStatus& status)
+{
+	CScript* gml_script_t2_read = nullptr;
+	status = g_ModuleInterface->GetNamedRoutinePointer(
+		GML_SCRIPT_T2_READ,
+		(PVOID*)&gml_script_t2_read
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_T2_READ);
+	}
+
+	status = MmCreateHook(
+		g_ArSelfModule,
+		GML_SCRIPT_T2_READ,
+		gml_script_t2_read->m_Functions->m_ScriptFunction,
+		GmlScriptT2ReadCallback,
+		nullptr
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_T2_READ);
+	}
+}
+
 void CreateHookGmlScriptGetUnifiedTime(AurieStatus& status)
 {
 	CScript* gml_script_get_unified_time = nullptr;
@@ -11477,6 +14023,20 @@ EXPORTED AurieStatus ModuleInitialize(
 	}
 
 	CreateHookGmlScriptRecipeGenerateInfusions(status);
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return status;
+	}
+
+	CreateHookGmlScriptBarkEmitter(status);
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return status;
+	}
+
+	CreateHookGmlScriptT2Read(status);
 	if (!AurieSuccess(status))
 	{
 		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);

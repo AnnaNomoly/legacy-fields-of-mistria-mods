@@ -150,6 +150,9 @@
     <ClInclude Include="include\FunctionWrapper\FunctionWrapper.hpp" />
     <ClInclude Include="include\magic_enum\magic_enum.hpp" />
     <ClInclude Include="include\nlohmann\json.hpp" />
+    <ClInclude Include="include\pcg\pcg_extras.hpp" />
+    <ClInclude Include="include\pcg\pcg_random.hpp" />
+    <ClInclude Include="include\pcg\pcg_uint128.hpp" />
     <ClInclude Include="include\YYToolkit\Shared.hpp" />
     <ClInclude Include="include\YYToolkit\YYTK_Shared.hpp" />
     <ClInclude Include="include\YYToolkit\YYTK_Shared_Base.hpp" />
