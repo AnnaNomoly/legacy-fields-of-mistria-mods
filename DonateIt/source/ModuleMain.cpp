@@ -10,6 +10,7 @@ using json = nlohmann::json;
 static const char* const VERSION = "1.1.1";
 static const char* const MOD_NAME = "DonateIt";
 static const char* const GML_SCRIPT_GET_ITEM_UI_ICON = "gml_Script_get_ui_icon@anon@4244@LiveItem@LiveItem";
+static const char* const GML_SCRIPT_NODE_OBJECT_SET_SPRITE = "gml_Script_set_sprite@gml_Object_obj_node_renderer_Create_0";
 static const char* const GML_SCRIPT_SETUP_MAIN_SCREEN = "gml_Script_setup_main_screen@TitleMenu@TitleMenu";
 
 static YYTKInterface* g_ModuleInterface = nullptr;
@@ -19,6 +20,11 @@ static std::set<int> donatable_items = {};
 static std::set<std::string> donatable_item_names = {}; // TODO: Remove this after debugging. It shouldn't be needed by the mod.
 static std::map<std::string, int> item_name_to_id_map = {}; // TODO: Remove this after debugging. It shouldn't be needed by the mod.
 static std::map<int, std::string> item_id_to_name_map = {}; // TODO: Remove this after debugging. It shouldn't be needed by the mod.
+
+bool IsNumeric(RValue value)
+{
+	return value.m_Kind == VALUE_INT32 || value.m_Kind == VALUE_INT64 || value.m_Kind == VALUE_REAL;
+}
 
 bool RValueAsBool(RValue value)
 {
@@ -229,10 +235,6 @@ RValue& GmlScriptGetUiIconCallback(
 				if (type.ToInt64() == 1) // asset_sprite
 				{
 					RValue original_sprite_name = g_ModuleInterface->CallBuiltin("sprite_get_name", { Result });
-
-					if (original_sprite_name.ToString().contains("spr_insect"))
-						int temp = 5;
-
 					std::string replacement_sprite_name = original_sprite_name.ToString() + "_donatable";
 
 					RValue sprite = g_ModuleInterface->CallBuiltin("asset_get_index", { replacement_sprite_name.c_str() });
@@ -242,6 +244,59 @@ RValue& GmlScriptGetUiIconCallback(
 			}
 		}
 	}
+
+	return Result;
+}
+
+RValue& GmlScriptNodeObjectSetSpriteCallback(
+	IN CInstance* Self,
+	IN CInstance* Other,
+	OUT RValue& Result,
+	IN int ArgumentCount,
+	IN RValue** Arguments
+)
+{
+	RValue node = Self->GetMember("node");
+	RValue prototype = node.GetMember("prototype");
+	if (StructVariableExists(prototype, "category_id"))
+	{
+		auto node_ref_map = node.ToRefMap(); // debug
+		auto prototype_ref_map = prototype.ToRefMap(); // debug
+
+		int category_id = prototype.GetMember("category_id").ToInt64();
+		if (category_id == 2 || category_id == 3) // TODO: Don't hardcode, use a map and check for category_name_to_id_map["bush"] || category_name_to_id_map["crop"]
+		{
+			if (StructVariableExists(prototype, "harvest") && IsNumeric(prototype.GetMember("harvest")))
+			{
+				int item_id = prototype.GetMember("harvest").ToInt64();
+				if (donatable_items.contains(item_id) && !ItemHasBeenDonated(item_id))
+				{
+					if (ArgumentCount > 0 && Arguments[0]->m_Kind == VALUE_REF)
+					{
+						RValue asset_type = g_ModuleInterface->CallBuiltin("asset_get_type", { *Arguments[0] });
+						if (asset_type.ToInt64() == 1) // asset_sprite
+						{
+							RValue original_sprite_name = g_ModuleInterface->CallBuiltin("sprite_get_name", { *Arguments[0] });
+							std::string replacement_sprite_name = original_sprite_name.ToString() + "_donatable";
+
+							RValue sprite = g_ModuleInterface->CallBuiltin("asset_get_index", { replacement_sprite_name.c_str() });
+							if (sprite.m_Kind == VALUE_REF)
+								*Arguments[0] = sprite;
+						}
+					}
+				}
+			}
+		}
+	}
+
+	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_NODE_OBJECT_SET_SPRITE));
+	original(
+		Self,
+		Other,
+		Result,
+		ArgumentCount,
+		Arguments
+	);
 
 	return Result;
 }
@@ -325,6 +380,33 @@ void CreateHookGmlScriptGetUiIcon(AurieStatus& status)
 	}
 }
 
+void CreateHookGmlScriptNodeObjectSetSprite(AurieStatus& status)
+{
+	CScript* gml_script_node_object_set_sprite = nullptr;
+	status = g_ModuleInterface->GetNamedRoutinePointer(
+		GML_SCRIPT_NODE_OBJECT_SET_SPRITE,
+		(PVOID*)&gml_script_node_object_set_sprite
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_NODE_OBJECT_SET_SPRITE);
+	}
+
+	status = MmCreateHook(
+		g_ArSelfModule,
+		GML_SCRIPT_NODE_OBJECT_SET_SPRITE,
+		gml_script_node_object_set_sprite->m_Functions->m_ScriptFunction,
+		GmlScriptNodeObjectSetSpriteCallback,
+		nullptr
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_NODE_OBJECT_SET_SPRITE);
+	}
+}
+
 void CreateHookGmlScriptSetupMainScreen(AurieStatus& status)
 {
 	CScript* gml_script_setup_main_screen = nullptr;
@@ -380,6 +462,13 @@ EXPORTED AurieStatus ModuleInitialize(
 	}
 
 	CreateHookGmlScriptGetUiIcon(status);
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return status;
+	}
+
+	CreateHookGmlScriptNodeObjectSetSprite(status);
 	if (!AurieSuccess(status))
 	{
 		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
