@@ -328,8 +328,6 @@ void ObjectCallback(
 		int item_id = self->GetMember("fish_loot").GetMember("item").GetMember("item_id").ToInt64();
 		if (donatable_items.contains(item_id) && !ItemHasBeenDonated(item_id))
 		{
-			RValue original_image_speed = g_ModuleInterface->CallBuiltin("variable_instance_get", { self, "image_speed" });
-
 			// move_sprites
 			RValue move_sprites = self->GetMember("move_sprites");
 			RValue move_sprites_length = g_ModuleInterface->CallBuiltin("array_length", { move_sprites });
@@ -363,10 +361,10 @@ void ObjectCallback(
 						g_ModuleInterface->CallBuiltin("array_set", { idle_sprites, i, replacement_idle_sprite });
 				}
 			}
-
-			g_ModuleInterface->CallBuiltin("variable_instance_set", { self, "image_speed", original_image_speed });
 		}
 	}
+	else if (StructVariableExists(self, "__donate_it__processed_fish"))
+		g_ModuleInterface->CallBuiltin("variable_instance_set", { self, "image_speed", 0.125 });
 
 	if (configuration.highlight_bugs_in_world && strstr(self->m_Object->m_Name, "obj_bug") && !StructVariableExists(self, "__donate_it__processed_bug") && StructVariableExists(self, "item_id"))
 	{
@@ -375,8 +373,6 @@ void ObjectCallback(
 		int item_id = self->GetMember("item_id").ToInt64();
 		if (donatable_items.contains(item_id) && !ItemHasBeenDonated(item_id))
 		{
-			RValue original_image_speed = g_ModuleInterface->CallBuiltin("variable_instance_get", { self, "image_speed" });
-
 			// move_sprite
 			RValue original_move_sprite_name = g_ModuleInterface->CallBuiltin("sprite_get_name", { self->GetMember("move_sprite") });
 			std::string replacement_move_sprite_name = original_move_sprite_name.ToString() + "_donatable";
@@ -390,10 +386,10 @@ void ObjectCallback(
 			RValue replacement_idle_sprite = g_ModuleInterface->CallBuiltin("asset_get_index", { replacement_idle_sprite_name.c_str() });
 			if (replacement_idle_sprite.m_Kind == VALUE_REF)
 				StructVariableSet(self, "idle_sprite", replacement_idle_sprite);
-
-			g_ModuleInterface->CallBuiltin("variable_instance_set", { self, "image_speed", original_image_speed });
 		}
 	}
+	else if (StructVariableExists(self, "__donate_it__processed_bug"))
+		g_ModuleInterface->CallBuiltin("variable_instance_set", { self, "image_speed", 0.125 });
 }
 
 RValue& GmlScriptGetUiIconCallback(
