@@ -145,6 +145,7 @@
     <ClCompile Include="include\YYToolkit\YYTK_Shared_Types.cpp" />
     <ClCompile Include="source\ModuleMain.cpp" />
     <ClCompile Include="source\config\Config.cpp" />
+    <ClCompile Include="source\utils\Utils.cpp" />
     <ClCompile Include="source\hooks\HookCombat.cpp" />
     <ClCompile Include="source\hooks\HookDungeon.cpp" />
     <ClCompile Include="source\hooks\HookGame.cpp" />
