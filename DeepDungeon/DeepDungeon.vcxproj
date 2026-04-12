@@ -144,6 +144,17 @@
   <ItemGroup>
     <ClCompile Include="include\YYToolkit\YYTK_Shared_Types.cpp" />
     <ClCompile Include="source\ModuleMain.cpp" />
+    <ClCompile Include="source\config\Config.cpp" />
+    <ClCompile Include="source\hooks\HookCombat.cpp" />
+    <ClCompile Include="source\hooks\HookDungeon.cpp" />
+    <ClCompile Include="source\hooks\HookGame.cpp" />
+    <ClCompile Include="source\hooks\HookHealth.cpp" />
+    <ClCompile Include="source\hooks\HookInput.cpp" />
+    <ClCompile Include="source\hooks\HookItems.cpp" />
+    <ClCompile Include="source\hooks\HookUI.cpp" />
+    <ClCompile Include="source\hooks\ObjectCallback.cpp" />
+    <ClCompile Include="source\init\Init.cpp" />
+    <ClCompile Include="source\patterns\MonsterPatterns.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\Aurie\shared.hpp" />
@@ -159,6 +170,11 @@
     <ClInclude Include="include\YYToolkit\YYTK_Shared_Interface.hpp" />
     <ClInclude Include="include\YYToolkit\YYTK_Shared_Types.hpp" />
     <ClInclude Include="resource.h" />
+    <ClInclude Include="source\config\Config.h" />
+    <ClInclude Include="source\Globals.h" />
+    <ClInclude Include="source\init\Init.h" />
+    <ClInclude Include="source\patterns\MonsterPatterns.h" />
+    <ClInclude Include="source\utils\Utils.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="DeepDungeon.rc" />
