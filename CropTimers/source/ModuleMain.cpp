@@ -9,7 +9,7 @@ using namespace YYTK;
 using json = nlohmann::json;
 
 static const char* const MOD_NAME = "CropTimers";
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.0.1";
 static const char* const GML_SCRIPT_ON_DRAW_GUI = "gml_Script_on_draw_gui@Display@Display";
 static const char* const GML_SCRIPT_NODE_OBJECT_SET_SPRITE = "gml_Script_set_sprite@gml_Object_obj_node_renderer_Create_0";
 static const char* const GML_SCRIPT_SETUP_MAIN_SCREEN = "gml_Script_setup_main_screen@TitleMenu@TitleMenu";
@@ -546,18 +546,7 @@ RValue& GmlScriptOnDrawGuiCallback(
 
 					if (sprite_name_str.contains("stage") && (sprite_name_str.contains("crop") || sprite_name_str.contains("forage")))
 					{
-						std::string _timer_ = "_timer_";
-						if (sprite_name_str.contains(_timer_))
-						{
-							size_t pos = sprite_name_str.find(_timer_);
-							if (pos != std::string::npos)
-								sprite_name_str.erase(pos);
-
-							RValue replacement_sprite = g_ModuleInterface->CallBuiltin("asset_get_index", { sprite_name_str.c_str() });
-							if (replacement_sprite.m_Kind == VALUE_REF)
-								g_ModuleInterface->CallBuiltin("variable_instance_set", { inst, "sprite_index", replacement_sprite });
-						}
-						else
+						if (configuration.timers_visible)
 						{
 							RValue node = inst->GetMember("node");
 							if (StructVariableExists(node, "prototype"))
@@ -612,6 +601,20 @@ RValue& GmlScriptOnDrawGuiCallback(
 										}
 									}
 								}
+							}
+						}
+						else
+						{
+							std::string _timer_ = "_timer_";
+							if (sprite_name_str.contains(_timer_))
+							{
+								size_t pos = sprite_name_str.find(_timer_);
+								if (pos != std::string::npos)
+									sprite_name_str.erase(pos);
+
+								RValue replacement_sprite = g_ModuleInterface->CallBuiltin("asset_get_index", { sprite_name_str.c_str() });
+								if (replacement_sprite.m_Kind == VALUE_REF)
+									g_ModuleInterface->CallBuiltin("variable_instance_set", { inst, "sprite_index", replacement_sprite });
 							}
 						}
 					}
