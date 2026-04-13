@@ -11,6 +11,8 @@ using json = nlohmann::json;
 static const char* const MOD_NAME = "BetterChargedTools";
 static const char* const VERSION = "1.0.0";
 static const char* const GML_SCRIPT_USE_ITEM = "gml_Script_use_item";
+static const char* const GML_SCRIPT_PICK_NODE = "gml_Script_pick_node";
+static const char* const GML_SCRIPT_CHOP_NODE = "gml_Script_chop_node";
 static const char* const GML_SCRIPT_ARI_FSM_HOE = "gml_Script_hoe@anon@84872@AriFsm@AriFsm";
 static const char* const GML_SCRIPT_ARI_FSM_AXE = "gml_Script_axe@anon@84872@AriFsm@AriFsm";
 static const char* const GML_SCRIPT_ARI_FSM_PICK_AXE = "gml_Script_pick_axe@anon@84872@AriFsm@AriFsm";
@@ -20,13 +22,157 @@ static const char* const GML_SCRIPT_ARI_FSM_WATERING_CAN = "gml_Script_watering_
 static const char* const GML_SCRIPT_ARI_FSM_SOW = "gml_Script_sow@anon@84872@AriFsm@AriFsm";
 static const char* const GML_SCRIPT_MODIFY_STAMINA = "gml_Script_modify_stamina@Ari@Ari";
 static const char* const GML_SCRIPT_SETUP_MAIN_SCREEN = "gml_Script_setup_main_screen@TitleMenu@TitleMenu";
+static const char* const REDUCE_CHARGED_STAMINA_USAGE_JSON_KEY = "reduce_charged_stamina_usage";
+static const char* const REMOVE_CHARGED_DAMAGE_PENALTY_JSON_KEY = "remove_charged_damage_penalty";
+static const bool DEFAULT_REDUCE_CHARGED_STAMINA_USAGE = true;
+static const bool DEFAULT_REMOVE_CHARGED_DAMAGE_PENALTY = true;
+
+static struct Configuration {
+	bool reduce_charged_stamina_usage = DEFAULT_REDUCE_CHARGED_STAMINA_USAGE;
+	bool remove_charged_damage_penalty = DEFAULT_REMOVE_CHARGED_DAMAGE_PENALTY;
+};
 
 static YYTKInterface* g_ModuleInterface = nullptr;
 static CInstance* global_instance = nullptr;
+static Configuration configuration = Configuration();
 static bool load_on_start = true;
 static bool stamina_consumed = false;
 static std::map<std::string, int> script_name_to_stamina_consumed_map = {};
 static std::map<std::string, std::vector<CInstance*>> script_name_to_reference_map = {};
+
+void PrintError(std::exception_ptr eptr)
+{
+	try {
+		if (eptr) {
+			std::rethrow_exception(eptr);
+		}
+	}
+	catch (const std::exception& e) {
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Error: %s", MOD_NAME, VERSION, e.what());
+	}
+}
+
+json CreateConfigJson(bool use_defaults)
+{
+	json config_json = {
+		{ REDUCE_CHARGED_STAMINA_USAGE_JSON_KEY, use_defaults ? DEFAULT_REDUCE_CHARGED_STAMINA_USAGE : configuration.reduce_charged_stamina_usage },
+		{ REMOVE_CHARGED_DAMAGE_PENALTY_JSON_KEY, use_defaults ? DEFAULT_REMOVE_CHARGED_DAMAGE_PENALTY : configuration.remove_charged_damage_penalty }
+	};
+	return config_json;
+}
+
+void CreateOrLoadConfigFile()
+{
+	// Load config file.
+	std::exception_ptr eptr;
+	try
+	{
+		// Try to find the mod_data directory.
+		std::string current_dir = std::filesystem::current_path().string();
+		std::string mod_data_folder = current_dir + "\\mod_data";
+		if (!std::filesystem::exists(mod_data_folder))
+		{
+			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - The \"mod_data\" directory was not found. Creating directory: %s", MOD_NAME, VERSION, mod_data_folder.c_str());
+			std::filesystem::create_directory(mod_data_folder);
+		}
+
+		// Try to find the mod_data/BetterChargedTools directory.
+		std::string better_charged_tools_folder = mod_data_folder + "\\BetterChargedTools";
+		if (!std::filesystem::exists(better_charged_tools_folder))
+		{
+			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - The \"BetterChargedTools\" directory was not found. Creating directory: %s", MOD_NAME, VERSION, better_charged_tools_folder.c_str());
+			std::filesystem::create_directory(better_charged_tools_folder);
+		}
+
+		// Try to find the mod_data/BetterChargedTools/BetterChargedTools.json config file.
+		bool update_config_file = false;
+		std::string config_file = better_charged_tools_folder + "\\" + "BetterChargedTools.json";
+		std::ifstream in_stream(config_file);
+		if (in_stream.good())
+		{
+			try
+			{
+				json json_object = json::parse(in_stream);
+
+				// Check if the json_object is empty.
+				if (json_object.empty())
+				{
+					g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - No values found in mod configuration file: %s!", MOD_NAME, VERSION, config_file.c_str());
+					g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Add your desired values to the configuration file, otherwise defaults will be used.", MOD_NAME, VERSION);
+				}
+				else
+				{
+					// Try loading the reduce_charged_stamina_usage value.
+					if (json_object.contains(REDUCE_CHARGED_STAMINA_USAGE_JSON_KEY))
+					{
+						configuration.reduce_charged_stamina_usage = json_object[REDUCE_CHARGED_STAMINA_USAGE_JSON_KEY];
+						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using CUSTOM \"%s\" value: %s!", MOD_NAME, VERSION, REDUCE_CHARGED_STAMINA_USAGE_JSON_KEY, configuration.reduce_charged_stamina_usage ? "true" : "false");
+					}
+					else
+					{
+						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, REDUCE_CHARGED_STAMINA_USAGE_JSON_KEY, config_file.c_str());
+						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, REDUCE_CHARGED_STAMINA_USAGE_JSON_KEY, DEFAULT_REDUCE_CHARGED_STAMINA_USAGE ? "true" : "false");
+					}
+
+					// Try loading the remove_charged_damage_penalty value.
+					if (json_object.contains(REMOVE_CHARGED_DAMAGE_PENALTY_JSON_KEY))
+					{
+						configuration.remove_charged_damage_penalty = json_object[REMOVE_CHARGED_DAMAGE_PENALTY_JSON_KEY];
+						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using CUSTOM \"%s\" value: %s!", MOD_NAME, VERSION, REMOVE_CHARGED_DAMAGE_PENALTY_JSON_KEY, configuration.remove_charged_damage_penalty ? "true" : "false");
+					}
+					else
+					{
+						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, REMOVE_CHARGED_DAMAGE_PENALTY_JSON_KEY, config_file.c_str());
+						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, REMOVE_CHARGED_DAMAGE_PENALTY_JSON_KEY, DEFAULT_REMOVE_CHARGED_DAMAGE_PENALTY ? "true" : "false");
+					}
+				}
+
+				update_config_file = true;
+			}
+			catch (...)
+			{
+				eptr = std::current_exception();
+				PrintError(eptr);
+
+				g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to parse JSON from configuration file: %s", MOD_NAME, VERSION, config_file.c_str());
+				g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Make sure the file is valid JSON!", MOD_NAME, VERSION);
+			}
+
+			in_stream.close();
+		}
+		else
+		{
+			in_stream.close();
+
+			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - The \"BetterChargedTools.json\" file was not found. Creating file: %s", MOD_NAME, VERSION, config_file.c_str());
+
+			json default_config_json = CreateConfigJson(true);
+			std::ofstream out_stream(config_file);
+			out_stream << std::setw(4) << default_config_json << std::endl;
+			out_stream.close();
+		}
+
+		if (update_config_file)
+		{
+			json config_json = CreateConfigJson(false);
+			std::ofstream out_stream(config_file);
+			out_stream << std::setw(4) << config_json << std::endl;
+			out_stream.close();
+		}
+	}
+	catch (...)
+	{
+		eptr = std::current_exception();
+		PrintError(eptr);
+
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - An error occurred loading the mod configuration file.", MOD_NAME, VERSION);
+	}
+}
+
+bool IsNumeric(RValue value)
+{
+	return value.m_Kind == VALUE_INT32 || value.m_Kind == VALUE_INT64 || value.m_Kind == VALUE_REAL;
+}
 
 void ModifyStamina(CInstance* Self, CInstance* Other, int value)
 {
@@ -90,6 +236,52 @@ RValue& GmlScriptUseItemCallback(
 	return Result;
 }
 
+RValue& GmlScriptPickNodeCallback(
+	IN CInstance* Self,
+	IN CInstance* Other,
+	OUT RValue& Result,
+	IN int ArgumentCount,
+	IN RValue** Arguments
+)
+{
+	if (configuration.remove_charged_damage_penalty && ArgumentCount >= 5 && IsNumeric(*Arguments[4]) && Arguments[4]->ToDouble() < 0)
+		*Arguments[4] = 0.0;
+
+	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_PICK_NODE));
+	original(
+		Self,
+		Other,
+		Result,
+		ArgumentCount,
+		Arguments
+	);
+
+	return Result;
+}
+
+RValue& GmlScriptChopNodeCallback(
+	IN CInstance* Self,
+	IN CInstance* Other,
+	OUT RValue& Result,
+	IN int ArgumentCount,
+	IN RValue** Arguments
+)
+{
+	if (configuration.remove_charged_damage_penalty && ArgumentCount >= 5 && IsNumeric(*Arguments[4]) && Arguments[4]->ToDouble() < 0)
+		*Arguments[4] = 0.0;
+
+	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_CHOP_NODE));
+	original(
+		Self,
+		Other,
+		Result,
+		ArgumentCount,
+		Arguments
+	);
+
+	return Result;
+}
+
 RValue& GmlScriptAriFsmHoeCallback(
 	IN CInstance* Self,
 	IN CInstance* Other,
@@ -109,7 +301,7 @@ RValue& GmlScriptAriFsmHoeCallback(
 		Arguments
 	);
 
-	if (stamina_consumed)
+	if (configuration.reduce_charged_stamina_usage && stamina_consumed)
 	{
 		script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_HOE] += 1;
 		if (script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_HOE] % 3 == 0)
@@ -139,7 +331,7 @@ RValue& GmlScriptAriFsmAxeCallback(
 		Arguments
 	);
 
-	if (stamina_consumed)
+	if (configuration.reduce_charged_stamina_usage && stamina_consumed)
 	{
 		script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_AXE] += 1;
 		if (script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_AXE] % 3 == 0)
@@ -169,7 +361,7 @@ RValue& GmlScriptAriFsmPickAxeCallback(
 		Arguments
 	);
 
-	if (stamina_consumed)
+	if (configuration.reduce_charged_stamina_usage && stamina_consumed)
 	{
 		script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_PICK_AXE] += 1;
 		if (script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_PICK_AXE] % 3 == 0)
@@ -199,7 +391,7 @@ RValue& GmlScriptAriFsmShovelCallback(
 		Arguments
 	);
 
-	if (stamina_consumed)
+	if (configuration.reduce_charged_stamina_usage && stamina_consumed)
 	{
 		script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_SHOVEL] += 1;
 		if (script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_SHOVEL] % 3 == 0)
@@ -229,7 +421,7 @@ RValue& GmlScriptAriFsmNetCallback(
 		Arguments
 	);
 
-	if (stamina_consumed)
+	if (configuration.reduce_charged_stamina_usage && stamina_consumed)
 	{
 		script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_NET] += 1;
 		if (script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_NET] % 3 == 0)
@@ -281,7 +473,7 @@ RValue& GmlScriptAriFsmSowCallback(
 		Arguments
 	);
 
-	if (stamina_consumed)
+	if (configuration.reduce_charged_stamina_usage && stamina_consumed)
 	{
 		script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_SOW] += 1;
 		if (script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_SOW] % 3 == 0)
@@ -300,12 +492,14 @@ RValue& GmlScriptModifyStaminaCallback(
 	IN RValue** Arguments
 )
 {
-	if (Arguments[0]->ToInt64() < 0)
+	if (configuration.reduce_charged_stamina_usage && Arguments[0]->ToInt64() < 0)
 	{
-		if (script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_WATERING_CAN] % 3 == 0)
-			*Arguments[0] = 0;
 		if (script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_WATERING_CAN] > 0)
+		{
+			if (script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_WATERING_CAN] % 3 == 0)
+				*Arguments[0] = 0;
 			script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_WATERING_CAN] -= 1;
+		}
 	}
 
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_MODIFY_STAMINA));
@@ -335,6 +529,7 @@ RValue& GmlScriptSetupMainScreenCallback(
 	{
 		load_on_start = false;
 		g_ModuleInterface->GetGlobalInstance(&global_instance);
+		CreateOrLoadConfigFile();
 	}
 
 	// Reset static fields
@@ -394,6 +589,62 @@ void CreateHookGmlScriptUseItem(AurieStatus& status)
 	if (!AurieSuccess(status))
 	{
 		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_USE_ITEM);
+	}
+}
+
+void CreateHookGmlScriptPickNode(AurieStatus& status)
+{
+	CScript* gml_script_pick_node = nullptr;
+	status = g_ModuleInterface->GetNamedRoutinePointer(
+		GML_SCRIPT_PICK_NODE,
+		(PVOID*)&gml_script_pick_node
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_PICK_NODE);
+	}
+
+	status = MmCreateHook(
+		g_ArSelfModule,
+		GML_SCRIPT_PICK_NODE,
+		gml_script_pick_node->m_Functions->m_ScriptFunction,
+		GmlScriptPickNodeCallback,
+		nullptr
+	);
+
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_PICK_NODE);
+	}
+}
+
+void CreateHookGmlScriptChopNode(AurieStatus& status)
+{
+	CScript* gml_script_chop_node = nullptr;
+	status = g_ModuleInterface->GetNamedRoutinePointer(
+		GML_SCRIPT_CHOP_NODE,
+		(PVOID*)&gml_script_chop_node
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_CHOP_NODE);
+	}
+
+	status = MmCreateHook(
+		g_ArSelfModule,
+		GML_SCRIPT_CHOP_NODE,
+		gml_script_chop_node->m_Functions->m_ScriptFunction,
+		GmlScriptChopNodeCallback,
+		nullptr
+	);
+
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_CHOP_NODE);
 	}
 }
 
@@ -671,6 +922,20 @@ EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path&
 	}
 
 	CreateHookGmlScriptUseItem(status);
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return status;
+	}
+
+	CreateHookGmlScriptPickNode(status);
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return status;
+	}
+
+	CreateHookGmlScriptChopNode(status);
 	if (!AurieSuccess(status))
 	{
 		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
