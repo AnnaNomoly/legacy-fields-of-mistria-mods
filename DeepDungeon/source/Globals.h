@@ -1733,132 +1733,160 @@ static const std::vector<std::string> MUSIC_INTERNAL_NAMES = { // As of 0.15.1
 	"Music/Playlists/Winter Snow"
 };
 
+// Engine globals — YYTK/Aurie-layer objects, no namespace.
 extern YYTKInterface* g_ModuleInterface;
 extern CInstance* global_instance;
 extern RValue __YYTK;
-extern bool load_on_start;
-extern bool is_new_game;
-extern bool localize_mod_text;
-extern bool game_is_active;
-extern bool unlock_recipes;
-extern bool crafting_menu_open;
-extern bool journal_menu_open;
-extern bool drop_biome_reward;
-extern bool biome_reward_disabled;
-extern bool dread_beast_configured;
-extern bool sigil_item_used;
-extern bool greater_sigil_item_used;
-extern bool salve_item_used;
-extern bool lift_key_used;
-extern bool orb_item_used;
-extern bool heart_crystal_used;
-extern bool inner_fire_cast;
-extern bool reckoning_applied;
-extern bool fairy_buff_applied;
-extern bool stoneskin_applied;
-extern bool is_restoration_tracked_interval;
-extern bool is_second_wind_tracked_interval;
-extern bool is_fumigate_tracked_interval;
-extern bool is_deep_wounds_tracked_interval;
-extern bool offering_chance_occurred;
-extern bool obj_dragonshrine_focused;
-extern bool obj_dungeon_elevator_focused;
-extern bool obj_dungeon_ladder_down_focused;
-extern double ari_x;
-extern double ari_y;
-extern double ari_facing_dir;
-extern int floor_number;
-extern int unmodified_base_health;
-extern int hp_penalty_amount;
-extern int floor_start_time;
-extern int current_time_in_seconds;
-extern int time_of_last_restoration_tick;
-extern int time_of_last_second_wind_tick;
-extern int time_of_last_fumigate_tick;
-extern int time_of_last_deep_wounds_tick;
-extern int time_of_last_outbreak_tick;
-extern int held_item_id;
-extern int frailty_hit_counter;
-extern int grudge_counter;
-extern int deep_wounds_damage_pool;
-extern int stoneskin_shield_amount;
-extern int spirit_link_combined_health_pool;
-extern int sigil_of_silence_count;
-extern int sigil_of_alteration_monster_id;
-extern int dread_beast_monster_id;
-extern int dread_beasts_configured;
-extern int boss_monsters_configured;
-extern BossBattle boss_battle;
-extern TreasureSpot treasure_spot;
-extern std::string ari_current_location;
-extern std::string ari_current_gm_room;
-extern std::unordered_set<int> orb_items;
-extern std::unordered_set<int> salve_items;
-extern std::unordered_set<int> lift_key_items;
-extern std::unordered_set<int> restricted_items;
-extern std::unordered_set<int> deep_dungeon_items;
-extern std::map<Sigils, int> sigil_to_item_id_map;
-extern std::map<int, Sigils> item_id_to_sigil_map;
-extern std::map<GreaterSigils, int> greater_sigil_to_item_id_map;
-extern std::map<int, GreaterSigils> item_id_to_greater_sigil_map;
-extern std::map<std::string, int> perk_name_to_id_map;
-extern std::map<std::string, int> spell_name_to_id_map;
-extern std::map<int, int> spell_id_to_default_cost_map;
-extern std::map<std::string, int> salve_name_to_id_map; // TODO: Remove and use item_name_to_id_map instead.
-extern std::map<int, std::string> object_id_to_name_map;
-extern std::map<std::string, int> player_state_to_id_map;
-extern std::map<std::string, std::map<std::string, int>> monster_category_to_state_id_map;
-extern std::map<std::string, int> monster_name_to_id_map;
-extern std::map<int, std::string> monster_id_to_name_map;
-extern std::map<std::string, int> tutorial_name_to_id_map;
-extern std::map<std::string, int> infusion_name_to_id_map;
-extern std::map<std::string, int> status_effect_name_to_id_map;
-extern std::map<std::string, int> location_name_to_id_map;
-extern std::map<std::string, int> item_name_to_id_map;
-extern std::map<std::string, int> bark_name_to_id_map;
-extern std::unordered_set<std::pair<int, int>, pair_hash> floor_trap_positions;
-extern std::map<std::string, int> salves_used; // TODO
-extern std::map<Traps, std::pair<int, int>> active_traps; // Holds the active traps and the position they most recently triggered at.
-extern std::vector<CustomAOE> meteor_aoes;
-extern std::vector<CustomAOE> gaze_aoes;
-extern std::vector<CustomAOE> void_aoes;
-extern std::vector<RevealedFloorTrap> revealed_floor_traps;
-extern std::unordered_set<Sigils> active_sigils;
-extern std::unordered_set<GreaterSigils> active_greater_sigils;
-extern std::unordered_set<Offerings> queued_offerings;
-extern std::unordered_set<Offerings> active_offerings;
-extern std::unordered_set<FloorEnchantments> active_floor_enchantments;
-extern std::map<Traps, int> active_traps_to_value_map; // Used to track value's for active traps.
-extern std::map<Offerings, std::string> offerings_to_localized_string_map;
-extern std::map<Classes, std::string> classes_to_localized_armor_description_string_map;
-extern std::map<FloorEnchantments, std::string> floor_enchantments_to_localized_string_map;
-extern std::map<Classes, std::map<std::string, std::string>> class_armor_to_localized_string_map;
-extern std::map<AriResources, int> ari_resource_to_value_map; // Used to track Ari's current resource levels.
-extern std::map<AriResources, bool> ari_resource_to_penalty_map; // Used to track penalties from offerings to apply.
-extern std::map<std::string, std::vector<CInstance*>> script_name_to_reference_map; // Vector<CInstance*> holds references to Self and Other for each script.
-extern std::map<std::string, std::unordered_set<int>> dungeon_biome_to_candidate_monsters_map; // Holds the candidate monster spawns for each dungeon biome.
-extern std::map<int, std::string> floor_number_to_biome_name_map; // Maps floor numbers to the dungeon biome name.
-extern std::vector<int> initial_floor_monsters; // Holds the IDs of monsters spawned on the current floor.
-extern std::vector<CInstance*> current_floor_monsters; // Holds CInstance refs to all monsters on the current floor.
-extern std::map<std::string, uint64_t> notification_name_to_last_display_time_map; // Tracks when a notification was last displayed.
-extern std::map<int, RValue> item_id_to_prototype_map; // Used to serialize LiveItem instances for a given item prototype.
-extern std::map<Classes, std::map<ManagedSetBonuses, int>> class_name_to_set_bonus_effect_value_map; // Used to track values for specific class set bonus effects. Example: Cleric->afflatus_misery->70.
 
-// Attack pattern data for Stalagmites
-extern std::vector<std::vector<double>> donut_aoe_points;
-extern std::vector<std::vector<double>> pb_aoe_points;
-extern std::vector<std::vector<double>> cross_aoe_points;
-extern std::vector<std::vector<double>> x_aoe_points;
-extern std::vector<std::vector<double>> checkerboard_room_wide_a_points;
-extern std::vector<std::vector<double>> checkerboard_room_wide_b_points;
+namespace State {
 
-// GUI
-extern double window_width;
-extern double window_height;
-extern bool show_dashes;
-extern bool show_danger_banner;
-extern bool fade_initialized;
-extern uint64_t fade_start_time;
+	// Player character state: position, resources, per-run item-use flags, resource tracking.
+	namespace Player {
+		extern bool load_on_start;
+		extern bool is_new_game;
+		extern bool localize_mod_text;
+		extern bool game_is_active;
+		extern bool unlock_recipes;
+		extern bool sigil_item_used;
+		extern bool greater_sigil_item_used;
+		extern bool salve_item_used;
+		extern bool lift_key_used;
+		extern bool orb_item_used;
+		extern bool heart_crystal_used;
+		extern bool inner_fire_cast;
+		extern bool reckoning_applied;
+		extern bool fairy_buff_applied;
+		extern bool stoneskin_applied;
+		extern bool is_restoration_tracked_interval;
+		extern bool is_second_wind_tracked_interval;
+		extern bool is_fumigate_tracked_interval;
+		extern bool is_deep_wounds_tracked_interval;
+		extern double ari_x;
+		extern double ari_y;
+		extern double ari_facing_dir;
+		extern int held_item_id;
+		extern int unmodified_base_health;
+		extern int hp_penalty_amount;
+		extern std::string ari_current_location;
+		extern std::string ari_current_gm_room;
+		extern std::map<AriResources, int> ari_resource_to_value_map;
+		extern std::map<AriResources, bool> ari_resource_to_penalty_map;
+	}
+
+	// Floor-scoped state: enchantments, sigils, offerings, traps, monsters, boss battles.
+	namespace Floor {
+		extern int floor_number;
+		extern int floor_start_time;
+		extern int current_time_in_seconds;
+		extern int time_of_last_restoration_tick;
+		extern int time_of_last_second_wind_tick;
+		extern int time_of_last_fumigate_tick;
+		extern int time_of_last_deep_wounds_tick;
+		extern int time_of_last_outbreak_tick;
+		extern bool drop_biome_reward;
+		extern bool biome_reward_disabled;
+		extern bool dread_beast_configured;
+		extern bool offering_chance_occurred;
+		extern int dread_beast_monster_id;
+		extern int dread_beasts_configured;
+		extern int boss_monsters_configured;
+		extern BossBattle boss_battle;
+		extern TreasureSpot treasure_spot;
+		extern std::unordered_set<Sigils> active_sigils;
+		extern std::unordered_set<GreaterSigils> active_greater_sigils;
+		extern std::unordered_set<Offerings> queued_offerings;
+		extern std::unordered_set<Offerings> active_offerings;
+		extern std::unordered_set<FloorEnchantments> active_floor_enchantments;
+		extern std::unordered_set<std::pair<int, int>, pair_hash> floor_trap_positions;
+		extern std::map<Traps, std::pair<int, int>> active_traps;
+		extern std::map<Traps, int> active_traps_to_value_map;
+		extern std::vector<CustomAOE> meteor_aoes;
+		extern std::vector<CustomAOE> gaze_aoes;
+		extern std::vector<CustomAOE> void_aoes;
+		extern std::vector<RevealedFloorTrap> revealed_floor_traps;
+		extern std::vector<int> initial_floor_monsters;
+		extern std::vector<CInstance*> current_floor_monsters;
+		extern std::map<std::string, int> salves_used; // TODO
+	}
+
+	// Combat mechanics: counters, set bonus tracking, stalagmite AOE attack patterns.
+	namespace Combat {
+		extern int frailty_hit_counter;
+		extern int grudge_counter;
+		extern int deep_wounds_damage_pool;
+		extern int stoneskin_shield_amount;
+		extern int spirit_link_combined_health_pool;
+		extern int sigil_of_silence_count;
+		extern int sigil_of_alteration_monster_id;
+		extern std::map<Classes, std::map<ManagedSetBonuses, int>> class_name_to_set_bonus_effect_value_map;
+		extern std::vector<std::vector<double>> donut_aoe_points;
+		extern std::vector<std::vector<double>> pb_aoe_points;
+		extern std::vector<std::vector<double>> cross_aoe_points;
+		extern std::vector<std::vector<double>> x_aoe_points;
+		extern std::vector<std::vector<double>> checkerboard_room_wide_a_points;
+		extern std::vector<std::vector<double>> checkerboard_room_wide_b_points;
+	}
+
+	// UI and menu state: window dimensions, draw flags, menu open/focus state.
+	namespace UI {
+		extern double window_width;
+		extern double window_height;
+		extern bool show_dashes;
+		extern bool show_danger_banner;
+		extern bool fade_initialized;
+		extern uint64_t fade_start_time;
+		extern bool crafting_menu_open;
+		extern bool journal_menu_open;
+		extern bool obj_dragonshrine_focused;
+		extern bool obj_dungeon_elevator_focused;
+		extern bool obj_dungeon_ladder_down_focused;
+	}
+
+	// Lookup maps: all bidirectional ID<->name mappings, item/sigil sets, localization maps.
+	namespace Maps {
+		extern std::unordered_set<int> orb_items;
+		extern std::unordered_set<int> salve_items;
+		extern std::unordered_set<int> lift_key_items;
+		extern std::unordered_set<int> restricted_items;
+		extern std::unordered_set<int> deep_dungeon_items;
+		extern std::map<Sigils, int> sigil_to_item_id_map;
+		extern std::map<int, Sigils> item_id_to_sigil_map;
+		extern std::map<GreaterSigils, int> greater_sigil_to_item_id_map;
+		extern std::map<int, GreaterSigils> item_id_to_greater_sigil_map;
+		extern std::map<std::string, int> perk_name_to_id_map;
+		extern std::map<std::string, int> spell_name_to_id_map;
+		extern std::map<int, int> spell_id_to_default_cost_map;
+		extern std::map<std::string, int> salve_name_to_id_map; // TODO: Remove and use item_name_to_id_map instead.
+		extern std::map<int, std::string> object_id_to_name_map;
+		extern std::map<std::string, int> player_state_to_id_map;
+		extern std::map<std::string, std::map<std::string, int>> monster_category_to_state_id_map;
+		extern std::map<std::string, int> monster_name_to_id_map;
+		extern std::map<int, std::string> monster_id_to_name_map;
+		extern std::map<std::string, int> tutorial_name_to_id_map;
+		extern std::map<std::string, int> infusion_name_to_id_map;
+		extern std::map<std::string, int> status_effect_name_to_id_map;
+		extern std::map<std::string, int> location_name_to_id_map;
+		extern std::map<std::string, int> item_name_to_id_map;
+		extern std::map<std::string, int> bark_name_to_id_map;
+		extern std::map<Offerings, std::string> offerings_to_localized_string_map;
+		extern std::map<Classes, std::string> classes_to_localized_armor_description_string_map;
+		extern std::map<FloorEnchantments, std::string> floor_enchantments_to_localized_string_map;
+		extern std::map<Classes, std::map<std::string, std::string>> class_armor_to_localized_string_map;
+		extern std::map<std::string, uint64_t> notification_name_to_last_display_time_map;
+		extern std::map<int, RValue> item_id_to_prototype_map;
+		extern std::map<std::string, std::unordered_set<int>> dungeon_biome_to_candidate_monsters_map;
+		extern std::map<int, std::string> floor_number_to_biome_name_map;
+		extern std::map<std::string, std::vector<CInstance*>> script_name_to_reference_map;
+	}
+
+} // namespace State
+
+// Bring all State members into the global namespace so existing call sites compile unchanged.
+using namespace State::Player;
+using namespace State::Floor;
+using namespace State::Combat;
+using namespace State::UI;
+using namespace State::Maps;
 
 
 
