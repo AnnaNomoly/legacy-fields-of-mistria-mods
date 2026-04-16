@@ -1,5 +1,30 @@
 #include "Utils.h"
 
+static const std::map<std::string, Sigils> item_name_to_sigil_map = {
+	{ SIGIL_OF_ALTERATION_NAME, Sigils::ALTERATION },
+	{ SIGIL_OF_CONCEALMENT_NAME, Sigils::CONCEALMENT },
+	{ SIGIL_OF_FORTIFICATION_NAME, Sigils::FORTIFICATION },
+	{ SIGIL_OF_FORTUNE_NAME, Sigils::FORTUNE },
+	{ SIGIL_OF_PROTECTION_NAME, Sigils::PROTECTION },
+	{ SIGIL_OF_RAGE_NAME, Sigils::RAGE },
+	{ SIGIL_OF_REDEMPTION_NAME, Sigils::REDEMPTION },
+	{ SIGIL_OF_SAFETY_NAME, Sigils::SAFETY },
+	{ SIGIL_OF_SERENITY_NAME, Sigils::SERENITY },
+	{ SIGIL_OF_SILENCE_NAME, Sigils::SILENCE },
+	{ SIGIL_OF_STRENGTH_NAME, Sigils::STRENGTH },
+	{ SIGIL_OF_TEMPTATION_NAME, Sigils::TEMPTATION },
+	{ SIGIL_OF_SIGHT_NAME, Sigils::SIGHT },
+	{ SIGIL_OF_INTUITION_NAME, Sigils::INTUITION }
+};
+
+static const std::map<std::string, GreaterSigils> item_name_to_greater_sigil_map = {
+	{ GREATER_SIGIL_OF_BENEDICTION_NAME, GreaterSigils::BENEDICTION },
+	{ GREATER_SIGIL_OF_ASTRAL_FLOW_NAME, GreaterSigils::ASTRAL_FLOW },
+	{ GREATER_SIGIL_OF_CHAIN_SPELL_NAME, GreaterSigils::CHAIN_SPELL },
+	{ GREATER_SIGIL_OF_SPIRIT_SURGE_NAME, GreaterSigils::SPIRIT_SURGE },
+	{ GREATER_SIGIL_OF_MEIKYO_SHISUI_NAME, GreaterSigils::MEIKYO_SHISUI }
+};
+
 void LoadPerks()
 {
 	size_t array_length;
