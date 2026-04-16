@@ -145,7 +145,15 @@
     <ClCompile Include="include\YYToolkit\YYTK_Shared_Types.cpp" />
     <ClCompile Include="source\ModuleMain.cpp" />
     <ClCompile Include="source\config\Config.cpp" />
-    <ClCompile Include="source\utils\Utils.cpp" />
+    <ClCompile Include="source\utils\Combat.cpp" />
+    <ClCompile Include="source\utils\Draw.cpp" />
+    <ClCompile Include="source\utils\Enchantments.cpp" />
+    <ClCompile Include="source\utils\Item.cpp" />
+    <ClCompile Include="source\utils\Loading.cpp" />
+    <ClCompile Include="source\utils\Math.cpp" />
+    <ClCompile Include="source\utils\Monster.cpp" />
+    <ClCompile Include="source\utils\Player.cpp" />
+    <ClCompile Include="source\utils\YYTKBridge.cpp" />
     <ClCompile Include="source\hooks\combat\CanCastSpell.cpp" />
     <ClCompile Include="source\hooks\combat\CastSpell.cpp" />
     <ClCompile Include="source\hooks\combat\Damage.cpp" />
