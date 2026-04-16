@@ -1,4 +1,4 @@
-#include "../utils/Utils.h"
+#include "../../utils/Utils.h"
 
 RValue& GmlScriptUseItemCallback(
 	IN CInstance* Self, // Changes depending on the invocation context. For world interactables like a fountain, Self->m_Object->m_Name == "obj_world_fountain". For Ari using an item, Self->m_Object == NULL.
@@ -62,7 +62,7 @@ RValue& GmlScriptUseItemCallback(
 	{
 		if (Self->m_Object == NULL && strstr(Other->m_Object->m_Name, "obj_ari"))
 		{
-			if (configuration.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE)
+			if (Config::config.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE)
 			{
 				// Sigil Items Restricted
 				if (item_id_to_sigil_map.contains(held_item_id))
@@ -124,7 +124,7 @@ RValue& GmlScriptUseItemCallback(
 			}
 
 			// Salve Limits
-			if ((held_item_id == salve_name_to_id_map[HEALTH_SALVE_NAME] && salves_used[HEALTH_SALVE_NAME] >= configuration.health_salve_limit) || (held_item_id == salve_name_to_id_map[STAMINA_SALVE_NAME] && salves_used[STAMINA_SALVE_NAME] >= configuration.stamina_salve_limit) || (held_item_id == salve_name_to_id_map[MANA_SALVE_NAME] && salves_used[MANA_SALVE_NAME] >= configuration.mana_salve_limit))
+			if ((held_item_id == salve_name_to_id_map[HEALTH_SALVE_NAME] && salves_used[HEALTH_SALVE_NAME] >= Config::config.health_salve_limit) || (held_item_id == salve_name_to_id_map[STAMINA_SALVE_NAME] && salves_used[STAMINA_SALVE_NAME] >= Config::config.stamina_salve_limit) || (held_item_id == salve_name_to_id_map[MANA_SALVE_NAME] && salves_used[MANA_SALVE_NAME] >= Config::config.mana_salve_limit))
 			{
 				g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - You have already used too many of that salve on the current floor!", MOD_NAME, VERSION);
 				CreateNotification(false, SALVE_LIMIT_NOTIFICATION_KEY, Self, Other);
@@ -192,224 +192,6 @@ RValue& GmlScriptUseItemCallback(
 		ArgumentCount,
 		Arguments
 	);
-
-	return Result;
-}
-
-RValue& GmlScriptHeldItemCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_HELD_ITEM));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	if (Result.m_Kind != VALUE_UNDEFINED)
-	{
-		int item_id = Result.GetMember("item_id").ToInt64();
-		if (held_item_id != item_id)
-			held_item_id = item_id;
-	}
-
-	return Result;
-}
-
-RValue& GmlScriptDropItemCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	if (!script_name_to_reference_map.contains(GML_SCRIPT_DROP_ITEM))
-		script_name_to_reference_map[GML_SCRIPT_DROP_ITEM] = { Self, Other };
-
-	if (ari_current_gm_room.contains("rm_mines"))
-	{
-		bool chance_to_spawn_glowstone = false;
-
-		if (Arguments[0]->m_Kind == VALUE_ARRAY)
-		{
-			size_t array_length;
-			g_ModuleInterface->GetArraySize(*Arguments[0], array_length);
-
-			for (size_t i = 0; i < array_length; i++)
-			{
-				RValue* array_element;
-				g_ModuleInterface->GetArrayEntry(*Arguments[0], i, array_element);
-
-				if (StructVariableExists(*array_element, "item_id"))
-				{
-					int item_id = array_element->GetMember("item_id").ToInt64();
-					if (item_id == item_name_to_id_map["ore_stone"] && ItemHasBeenAcquired(item_id))
-						chance_to_spawn_glowstone = true;
-				}
-			}
-		}
-		else if (Arguments[0]->m_Kind == VALUE_INT64 && Arguments[0]->ToInt64() == item_name_to_id_map["ore_stone"] && ItemHasBeenAcquired(Arguments[0]->ToInt64()))
-			chance_to_spawn_glowstone = true;
-
-		// TODO: Should there be some RNG for dropping glowstone?
-		if (chance_to_spawn_glowstone)
-		{
-			if (floor_number < 20) // Upper Mines
-				DropItem(item_name_to_id_map["glow_stone_tiny"], ari_x, ari_y, Self, Other);
-			else if (floor_number < 40) // Tide Caverns
-				DropItem(item_name_to_id_map["glow_stone_small"], ari_x, ari_y, Self, Other);
-			else if (floor_number < 60) // Deep Earth
-				DropItem(item_name_to_id_map["glow_stone_medium"], ari_x, ari_y, Self, Other);
-			else if (floor_number < 80) // Lava Caves
-				DropItem(item_name_to_id_map["glow_stone_large"], ari_x, ari_y, Self, Other);
-			else if (floor_number < 100) // Ruins
-				DropItem(item_name_to_id_map["glow_stone_giant"], ari_x, ari_y, Self, Other);
-		}
-	}
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_DROP_ITEM));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
-}
-
-RValue& GmlScriptDeserializeLiveItemCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	if (!script_name_to_reference_map.contains(GML_SCRIPT_DESERIALIZE_LIVE_ITEM))
-		script_name_to_reference_map[GML_SCRIPT_DESERIALIZE_LIVE_ITEM] = { Self, Other };
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_DESERIALIZE_LIVE_ITEM));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
-}
-
-RValue& GmlScriptDeserializeInventoryCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	if (!script_name_to_reference_map.contains(GML_SCRIPT_DESERIALIZE_INVENTORY))
-		script_name_to_reference_map[GML_SCRIPT_DESERIALIZE_INVENTORY] = { Self, Other };
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_DESERIALIZE_INVENTORY));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
-}
-
-RValue& GmlScriptGetTreasureFromDistributionCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	if (Self != nullptr && StructVariableExists(Self, "object_id"))
-	{
-		int object_id = Self->GetMember("object_id").ToInt64();
-		if (object_id_to_name_map.contains(object_id))
-		{
-			std::string object_name = object_id_to_name_map[object_id];
-			if (DUNGEON_TREASURE_CHEST_NAMES.contains(object_name) && script_name_to_reference_map.contains(GML_SCRIPT_DROP_ITEM))
-				GenerateTreasureChestLoot(object_name, Self, Other);
-		}
-	}
-	else if (Other != nullptr && StructVariableExists(Other, "object_id"))
-	{
-		int object_id = Other->GetMember("object_id").ToInt64();
-		if (object_id_to_name_map.contains(object_id))
-		{
-			std::string object_name = object_id_to_name_map[object_id];
-			if (DUNGEON_TREASURE_CHEST_NAMES.contains(object_name) && script_name_to_reference_map.contains(GML_SCRIPT_DROP_ITEM))
-				GenerateTreasureChestLoot(object_name, Self, Other);
-		}
-	}
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_GET_TREASURE_FROM_DISTRIBUTION));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
-}
-
-RValue& GmlScriptGetUiIconCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_GET_ITEM_UI_ICON));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	if (Self != nullptr && !crafting_menu_open)
-	{
-		RValue self = Self->ToRValue();
-		if (StructVariableExists(self, "item_id"))
-		{
-			int item_id = self.GetMember("item_id").ToInt64();
-
-			bool modify_icon = false;
-			if (deep_dungeon_items.contains(item_id))
-				modify_icon = true;
-			else if (item_id == item_name_to_id_map[MISTPOOL_HELMET_NAME] || item_id == item_name_to_id_map[MISTPOOL_CHESTPIECE_NAME] || item_id == item_name_to_id_map[MISTPOOL_GLOVES_NAME] || item_id == item_name_to_id_map[MISTPOOL_PANTS_NAME] || item_id == item_name_to_id_map[MISTPOOL_BOOTS_NAME])
-				modify_icon = true;
-			else if (item_id == item_name_to_id_map[MISTPOOL_PICK_AXE_NAME])
-				modify_icon = true;
-
-			if (modify_icon)
-				Result = GetDynamicItemSprite(item_id);
-		}
-	}
 
 	return Result;
 }

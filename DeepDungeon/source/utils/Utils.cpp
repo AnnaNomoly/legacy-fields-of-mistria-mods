@@ -195,7 +195,7 @@ int CalculateMeteorDamage(double distance)
 	const double lethalRadius = 32.0;
 	const double maxDistance = 256.0;
 
-	if (configuration.meteor_trap_scaling_factor == 0)
+	if (Config::config.meteor_trap_scaling_factor == 0)
 		return 0;
 
 	if (distance <= lethalRadius)
@@ -205,7 +205,7 @@ int CalculateMeteorDamage(double distance)
 		return 1;
 
 	double t = (distance - lethalRadius) / (maxDistance - lethalRadius);
-	double damage = 100.0f * std::pow(1.0f - t, configuration.meteor_trap_scaling_factor);
+	double damage = 100.0f * std::pow(1.0f - t, Config::config.meteor_trap_scaling_factor);
 
 	return max(1, static_cast<int>(damage));
 }
@@ -805,17 +805,17 @@ void ModifyMonsterPrototypes()
 			continue;
 
 		double hp = monster_prototype->GetMember("hp").ToDouble();
-		hp = std::trunc(hp * configuration.experimental_monster_base_stat_difficulty_modifier);
+		hp = std::trunc(hp * Config::config.experimental_monster_base_stat_difficulty_modifier);
 		*monster_prototype->GetRefMember("hp") = hp;
 
 		double damage = monster_prototype->GetMember("damage").ToDouble();
-		damage = std::trunc(damage * configuration.experimental_monster_base_stat_difficulty_modifier);
+		damage = std::trunc(damage * Config::config.experimental_monster_base_stat_difficulty_modifier);
 		*monster_prototype->GetRefMember("damage") = damage;
 
 		if (StructVariableExists(*monster_prototype, "projectile_damage"))
 		{
 			double projectile_damage = monster_prototype->GetMember("projectile_damage").ToDouble();
-			projectile_damage = std::trunc(projectile_damage * configuration.experimental_monster_base_stat_difficulty_modifier);
+			projectile_damage = std::trunc(projectile_damage * Config::config.experimental_monster_base_stat_difficulty_modifier);
 			*monster_prototype->GetRefMember("projectile_damage") = projectile_damage;
 		}
 	}
@@ -955,7 +955,7 @@ void LoadItems()
 			}
 
 			// All consumable items (except Deep Dungeon items)
-			if (configuration.restrict_items && !deep_dungeon_items.contains(item_id))
+			if (Config::config.restrict_items && !deep_dungeon_items.contains(item_id))
 			{
 				if (name_key.ToString().contains("cooked_dishes"))
 					restricted_items.insert(item_id);
@@ -980,27 +980,27 @@ void LoadItems()
 					RValue* array_element;
 					g_ModuleInterface->GetArrayEntry(buffer, i, array_element);
 
-					if (configuration.restrict_armor && array_element->ToString() == "armor")
+					if (Config::config.restrict_armor && array_element->ToString() == "armor")
 						*item->GetRefMember("defense") = 0;
 
 					if (array_element->ToString() == "weapon")
 					{
 						if (item_name == MISTPOOL_SWORD_NAME)
 							deep_dungeon_items.insert(item_id);
-						else if (configuration.restrict_weapons)
+						else if (Config::config.restrict_weapons)
 						{
 							*item->GetRefMember("damage") = 0;
 							restricted_items.insert(item_id);
 						}
 					}
 
-					if (configuration.restrict_tools && array_element->ToString() == "pick_axe")
+					if (Config::config.restrict_tools && array_element->ToString() == "pick_axe")
 					{
 						if (item_name != MISTPOOL_PICK_AXE_NAME)
 							restricted_items.insert(item_id);
 					}
 
-					if (configuration.restrict_items && array_element->ToString() == "bomb")
+					if (Config::config.restrict_items && array_element->ToString() == "bomb")
 					{
 						*item->GetRefMember("damage") = 0;
 						*item->GetRefMember("bomb")->GetRefMember("damage") = 0;
@@ -1010,7 +1010,7 @@ void LoadItems()
 			}
 
 			// All snake oils
-			if (configuration.restrict_items && item_name.contains("snake_oil"))
+			if (Config::config.restrict_items && item_name.contains("snake_oil"))
 			{
 				/*
 				   - [string] __infusion__[1] = 'fire_sword'
@@ -1060,16 +1060,16 @@ void SetItemShopPrice(int item_id, int store_price)
 
 void ModifyItems()
 {
-	SetItemHealthModifier(item_name_to_id_map[HEALTH_SALVE_NAME], configuration.health_salve_potency);
-	SetItemStaminaModifier(item_name_to_id_map[STAMINA_SALVE_NAME], configuration.stamina_salve_potency);
-	SetItemManaModifier(item_name_to_id_map[MANA_SALVE_NAME], configuration.mana_salve_potency);
+	SetItemHealthModifier(item_name_to_id_map[HEALTH_SALVE_NAME], Config::config.health_salve_potency);
+	SetItemStaminaModifier(item_name_to_id_map[STAMINA_SALVE_NAME], Config::config.stamina_salve_potency);
+	SetItemManaModifier(item_name_to_id_map[MANA_SALVE_NAME], Config::config.mana_salve_potency);
 
-	SetItemShopPrice(item_name_to_id_map[MISTPOOL_PICK_AXE_NAME], configuration.mistpool_equipment_store_price);
-	SetItemShopPrice(item_name_to_id_map[MISTPOOL_SWORD_NAME], configuration.mistpool_equipment_store_price);
+	SetItemShopPrice(item_name_to_id_map[MISTPOOL_PICK_AXE_NAME], Config::config.mistpool_equipment_store_price);
+	SetItemShopPrice(item_name_to_id_map[MISTPOOL_SWORD_NAME], Config::config.mistpool_equipment_store_price);
 	for (std::string armor_name : MISTPOOL_ARMOR_NAMES)
-		SetItemShopPrice(item_name_to_id_map[armor_name], configuration.mistpool_equipment_store_price);
+		SetItemShopPrice(item_name_to_id_map[armor_name], Config::config.mistpool_equipment_store_price);
 	for (const auto& pair : salve_name_to_id_map)
-		SetItemShopPrice(pair.second, configuration.salves_store_price);
+		SetItemShopPrice(pair.second, Config::config.salves_store_price);
 }
 
 void MarkDungeonTutorialUnseen()
@@ -1700,7 +1700,7 @@ void UnlockRecipe(int item_id, CInstance* Self, CInstance* Other)
 
 void UnlockLiftKeyRecipe(CInstance* Self, CInstance* Other)
 {
-	if (!configuration.disable_dungeon_lift)
+	if (!Config::config.disable_dungeon_lift)
 		return;
 
 	if (floor_number == 5)
@@ -2433,21 +2433,21 @@ RValue GetDynamicItemSprite(int item_id)
 	}
 	else if (item_id == salve_name_to_id_map[HEALTH_SALVE_NAME])
 	{
-		if (salves_used[HEALTH_SALVE_NAME] >= configuration.health_salve_limit || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
+		if (salves_used[HEALTH_SALVE_NAME] >= Config::config.health_salve_limit || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_salve_health_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_salve_health" });
 	}
 	else if (item_id == salve_name_to_id_map[STAMINA_SALVE_NAME])
 	{
-		if (salves_used[STAMINA_SALVE_NAME] >= configuration.stamina_salve_limit || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
+		if (salves_used[STAMINA_SALVE_NAME] >= Config::config.stamina_salve_limit || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_salve_stamina_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_salve_stamina" });
 	}
 	else if (item_id == salve_name_to_id_map[MANA_SALVE_NAME])
 	{
-		if (salves_used[MANA_SALVE_NAME] >= configuration.mana_salve_limit || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
+		if (salves_used[MANA_SALVE_NAME] >= Config::config.mana_salve_limit || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_salve_mana_disabled" });
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_salve_mana" });
@@ -2476,7 +2476,7 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 		// Dark Seal (Dark Knight Set Bonus)
 		if (CountEquippedClassArmor()[Classes::DARK_KNIGHT] >= 3)
 		{
-			if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || class_name_to_set_bonus_effect_value_map[Classes::DARK_KNIGHT][ManagedSetBonuses::DARK_SEAL] > 0 || (configuration.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
+			if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || class_name_to_set_bonus_effect_value_map[Classes::DARK_KNIGHT][ManagedSetBonuses::DARK_SEAL] > 0 || (Config::config.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
 				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_siphon_life_spell_icon_disabled" });
 			else
 				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_siphon_life_spell_icon_main" });
@@ -2487,21 +2487,21 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 			ElementalSealEffects elemental_seal_effect = *magic_enum::enum_cast<ElementalSealEffects>(class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::ELEMENTAL_SEAL]);
 			if (elemental_seal_effect == ElementalSealEffects::FIRE)
 			{
-				if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::ENFIRE] > 0 || (configuration.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
+				if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::ENFIRE] > 0 || (Config::config.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
 					return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_enfire_spell_icon_disabled" });
 				else
 					return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_enfire_spell_icon_main" });
 			}
 			else if (elemental_seal_effect == ElementalSealEffects::ICE)
 			{
-				if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::ENBLIZZARD] > 0 || (configuration.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
+				if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::ENBLIZZARD] > 0 || (Config::config.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
 					return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_enblizzard_spell_icon_disabled" });
 				else
 					return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_enblizzard_spell_icon_main" });
 			}
 			else if (elemental_seal_effect == ElementalSealEffects::VENOM)
 			{
-				if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::ENPOISON] > 0 || (configuration.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
+				if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::ENPOISON] > 0 || (Config::config.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
 					return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_enpoison_spell_icon_disabled" });
 				else
 					return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_enpoison_spell_icon_main" });
@@ -2510,13 +2510,13 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 		// Predict (Oracle Set Bonus)
 		else if (CountEquippedClassArmor()[Classes::ORACLE] >= 5)
 		{
-			if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] > 0 || (configuration.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
+			if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] > 0 || (Config::config.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
 				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_predict_spell_icon_disabled" });
 			else
 				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_predict_spell_icon_main" });
 		}
 		// Full Restore Disabled
-		else if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || (configuration.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
+		else if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || (Config::config.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_restore_spell_icon_disabled" });
 	}
 	// Summon Rain (Spell Icon)
@@ -2525,13 +2525,13 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 		// Flood (Mage Set Bonus)
 		if (CountEquippedClassArmor()[Classes::MAGE] >= 2)
 		{
-			if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::FLOOD] >= 0 || (configuration.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
+			if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::FLOOD] >= 0 || (Config::config.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
 				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_flood_spell_icon_disabled" });
 			else
 				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_flood_spell_icon_main" });
 		}
 		// Summon Rain Disabled
-		else if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || (configuration.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
+		else if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || (Config::config.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_rain_spell_icon_disabled" });
 	}
 	// Growth (Spell Icon)
@@ -2540,7 +2540,7 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 		// Quake (Mage Set Bonus)
 		if (CountEquippedClassArmor()[Classes::MAGE] >= 4)
 		{
-			if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::QUAKE] > 0 || (configuration.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
+			if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::QUAKE] > 0 || (Config::config.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
 				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_quake_spell_icon_disabled" });
 			else
 				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_quake_spell_icon_main" });
@@ -2548,27 +2548,27 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 		// Condemn (Oracle Set Bonus)
 		else if (CountEquippedClassArmor()[Classes::ORACLE] >= 5)
 		{
-			if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::CONDEMN] > 0 || (configuration.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
+			if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::CONDEMN] > 0 || (Config::config.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
 				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_condemn_spell_icon_disabled" });
 			else
 				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_condemn_spell_icon_main" });
 		}
 		// Growth Disabled
-		else if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || (configuration.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
+		else if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || (Config::config.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_growth_spell_icon_disabled" });
 	}
 	// Fire Breath (Spell Icon)
 	else if (sprite_name == "spr_ui_journal_magic_fire_spell_icon_main")
 	{
 		// Fire Breath Disabled
-		if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || (configuration.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
+		if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || (Config::config.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_fire_spell_icon_disabled" });
 	}
 	// Sacred Light (Spell Icon)
 	else if (sprite_name == "spr_ui_journal_magic_sacred_light_spell_icon_main")
 	{
 		// Sacred Light Disabled
-		if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || (configuration.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
+		if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || (Config::config.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_sacred_light_spell_icon_disabled" });
 	}
 	// Dungeon Backplate
@@ -2782,7 +2782,7 @@ std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floo
 			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
 			if (group_one_chance < 50)
 			{
-				if (!configuration.experimental_extra_floor_enchantments_and_offerings)
+				if (!Config::config.experimental_extra_floor_enchantments_and_offerings)
 				{
 					std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
 					random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
@@ -2798,7 +2798,7 @@ std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floo
 			int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
 			if (group_two_chance < 25)
 			{
-				if (!configuration.experimental_extra_floor_enchantments_and_offerings)
+				if (!Config::config.experimental_extra_floor_enchantments_and_offerings)
 				{
 					std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
 					random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
@@ -2851,7 +2851,7 @@ std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floo
 			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
 			if (group_one_chance < 65)
 			{
-				if (!configuration.experimental_extra_floor_enchantments_and_offerings)
+				if (!Config::config.experimental_extra_floor_enchantments_and_offerings)
 				{
 					std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
 					random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
@@ -2867,7 +2867,7 @@ std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floo
 			int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
 			if (group_two_chance < 40)
 			{
-				if (!configuration.experimental_extra_floor_enchantments_and_offerings)
+				if (!Config::config.experimental_extra_floor_enchantments_and_offerings)
 				{
 					std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
 					random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
@@ -2931,7 +2931,7 @@ std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floo
 			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
 			if (group_one_chance < 45)
 			{
-				if (!configuration.experimental_extra_floor_enchantments_and_offerings)
+				if (!Config::config.experimental_extra_floor_enchantments_and_offerings)
 				{
 					std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
 					random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
@@ -2947,7 +2947,7 @@ std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floo
 			int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
 			if (group_two_chance < 65)
 			{
-				if (!configuration.experimental_extra_floor_enchantments_and_offerings)
+				if (!Config::config.experimental_extra_floor_enchantments_and_offerings)
 				{
 					std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
 					random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
@@ -3011,7 +3011,7 @@ std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floo
 			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
 			if (group_one_chance < 60)
 			{
-				if (!configuration.experimental_extra_floor_enchantments_and_offerings)
+				if (!Config::config.experimental_extra_floor_enchantments_and_offerings)
 				{
 					std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
 					random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
@@ -3027,7 +3027,7 @@ std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floo
 			int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
 			if (group_two_chance < 75)
 			{
-				if (!configuration.experimental_extra_floor_enchantments_and_offerings)
+				if (!Config::config.experimental_extra_floor_enchantments_and_offerings)
 				{
 					std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
 					random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
@@ -3091,7 +3091,7 @@ std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floo
 			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
 			if (group_one_chance < 65)
 			{
-				if (!configuration.experimental_extra_floor_enchantments_and_offerings)
+				if (!Config::config.experimental_extra_floor_enchantments_and_offerings)
 				{
 					std::uniform_int_distribution<size_t> group_one_distribution(0, GROUP_ONE_FLOOR_ENCHANTMENTS.size() - 1);
 					random_floor_enchantments.insert(GROUP_ONE_FLOOR_ENCHANTMENTS[group_one_distribution(random_generator)]);
@@ -3107,7 +3107,7 @@ std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floo
 			int group_two_chance = zero_to_ninety_nine_distribution(random_generator);
 			if (group_two_chance < 75)
 			{
-				if (!configuration.experimental_extra_floor_enchantments_and_offerings)
+				if (!Config::config.experimental_extra_floor_enchantments_and_offerings)
 				{
 					std::uniform_int_distribution<size_t> group_two_distribution(0, GROUP_TWO_FLOOR_ENCHANTMENTS.size() - 1);
 					random_floor_enchantments.insert(GROUP_TWO_FLOOR_ENCHANTMENTS[group_two_distribution(random_generator)]);
@@ -3739,13 +3739,13 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 
 					if (!active_traps_to_value_map.contains(Traps::CONFUSING))
 					{
-						active_traps_to_value_map[Traps::CONFUSING] = current_time_in_seconds + configuration.confusing_trap_duration_seconds;
+						active_traps_to_value_map[Traps::CONFUSING] = current_time_in_seconds + Config::config.confusing_trap_duration_seconds;
 						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Confusing Trap effect started at: %d", MOD_NAME, VERSION, current_time_in_seconds);
 					}
 					else
 					{
-						active_traps_to_value_map[Traps::CONFUSING] += configuration.confusing_trap_duration_seconds;
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Confusing Trap effect extended by: %d", MOD_NAME, VERSION, configuration.confusing_trap_duration_seconds);
+						active_traps_to_value_map[Traps::CONFUSING] += Config::config.confusing_trap_duration_seconds;
+						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Confusing Trap effect extended by: %d", MOD_NAME, VERSION, Config::config.confusing_trap_duration_seconds);
 					}
 				}
 				else if (trap == Traps::DISORIENTING)
@@ -3756,13 +3756,13 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 
 					if (!active_traps_to_value_map.contains(Traps::DISORIENTING))
 					{
-						active_traps_to_value_map[Traps::DISORIENTING] = current_time_in_seconds + configuration.disorienting_trap_duration_seconds;
+						active_traps_to_value_map[Traps::DISORIENTING] = current_time_in_seconds + Config::config.disorienting_trap_duration_seconds;
 						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Disorienting Trap effect started at: %d", MOD_NAME, VERSION, current_time_in_seconds);
 					}
 					else
 					{
-						active_traps_to_value_map[Traps::DISORIENTING] += configuration.disorienting_trap_duration_seconds;
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Disorienting Trap effect extended by: %d", MOD_NAME, VERSION, configuration.disorienting_trap_duration_seconds);
+						active_traps_to_value_map[Traps::DISORIENTING] += Config::config.disorienting_trap_duration_seconds;
+						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Disorienting Trap effect extended by: %d", MOD_NAME, VERSION, Config::config.disorienting_trap_duration_seconds);
 					}
 				}
 				else if (trap == Traps::EXPLODING)
@@ -3782,13 +3782,13 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 
 					if (!active_traps_to_value_map.contains(Traps::INHIBITING))
 					{
-						active_traps_to_value_map[Traps::INHIBITING] = current_time_in_seconds + configuration.inhibiting_trap_duration_seconds;
+						active_traps_to_value_map[Traps::INHIBITING] = current_time_in_seconds + Config::config.inhibiting_trap_duration_seconds;
 						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Inhibiting Trap effect started at: %d", MOD_NAME, VERSION, current_time_in_seconds);
 					}
 					else
 					{
-						active_traps_to_value_map[Traps::INHIBITING] += configuration.inhibiting_trap_duration_seconds;
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Inhibiting Trap effect extended by: %d", MOD_NAME, VERSION, configuration.inhibiting_trap_duration_seconds);
+						active_traps_to_value_map[Traps::INHIBITING] += Config::config.inhibiting_trap_duration_seconds;
+						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Inhibiting Trap effect extended by: %d", MOD_NAME, VERSION, Config::config.inhibiting_trap_duration_seconds);
 					}
 				}
 				else if (trap == Traps::LURING)
@@ -3802,13 +3802,13 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 					// TODO: Restrict monster spawns as necessary (stalagmite_pink? TBD)
 					std::vector<int> random_monsters;
 					if (std::find(initial_floor_monsters.begin(), initial_floor_monsters.end(), monster_name_to_id_map["stalagmite"]) != initial_floor_monsters.end())
-						random_monsters = GenerateRandomMonstersIdsForCurrentFloor(configuration.luring_trap_monster_spawn_count, monster_name_to_id_map["stalagmite"]);
+						random_monsters = GenerateRandomMonstersIdsForCurrentFloor(Config::config.luring_trap_monster_spawn_count, monster_name_to_id_map["stalagmite"]);
 					else if (std::find(initial_floor_monsters.begin(), initial_floor_monsters.end(), monster_name_to_id_map["stalagmite_green"]) != initial_floor_monsters.end())
-						random_monsters = GenerateRandomMonstersIdsForCurrentFloor(configuration.luring_trap_monster_spawn_count, monster_name_to_id_map["stalagmite_green"]);
+						random_monsters = GenerateRandomMonstersIdsForCurrentFloor(Config::config.luring_trap_monster_spawn_count, monster_name_to_id_map["stalagmite_green"]);
 					else if (std::find(initial_floor_monsters.begin(), initial_floor_monsters.end(), monster_name_to_id_map["stalagmite_purple"]) != initial_floor_monsters.end())
-						random_monsters = GenerateRandomMonstersIdsForCurrentFloor(configuration.luring_trap_monster_spawn_count, monster_name_to_id_map["stalagmite_purple"]);
+						random_monsters = GenerateRandomMonstersIdsForCurrentFloor(Config::config.luring_trap_monster_spawn_count, monster_name_to_id_map["stalagmite_purple"]);
 					else
-						random_monsters = GenerateRandomMonstersIdsForCurrentFloor(configuration.luring_trap_monster_spawn_count);
+						random_monsters = GenerateRandomMonstersIdsForCurrentFloor(Config::config.luring_trap_monster_spawn_count);
 
 					for (int i = 0; i < random_monsters.size(); i++)
 						SpawnMonster(Self, Other, floor_trap->first + random_position_offset_distribution(random_generator), floor_trap->second + random_position_offset_distribution(random_generator), random_monsters[i]);
@@ -3863,7 +3863,7 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 						RValue obj_assetobject = g_ModuleInterface->CallBuiltin("asset_get_index", { "obj_assetobject" });
 						RValue instance = g_ModuleInterface->CallBuiltin("instance_create_layer", { floor_trap->first, floor_trap->second, RValue("Instances"), obj_assetobject });
 
-						CustomAOE void_aoe = CustomAOE(floor_trap->first, floor_trap->second, current_time_in_seconds, configuration.void_trap_duration_seconds, current_time_in_seconds, true, instance, CustomAOETypes::_VOID);
+						CustomAOE void_aoe = CustomAOE(floor_trap->first, floor_trap->second, current_time_in_seconds, Config::config.void_trap_duration_seconds, current_time_in_seconds, true, instance, CustomAOETypes::_VOID);
 						void_aoes.push_back(void_aoe);
 					}
 
@@ -3910,7 +3910,7 @@ void ProcessCustomAOEs()
 			bool facing_trap = FacingTrap(ari_x, ari_y, gaze.x, gaze.y);
 			if (facing_trap)
 			{
-				double modifier = configuration.gaze_trap_max_health_damage_percent / 100.0;
+				double modifier = Config::config.gaze_trap_max_health_damage_percent / 100.0;
 				double adjusted_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToDouble() * modifier;
 				ModifyHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], -1 * adjusted_health);
 				PlaySoundEffect("snd_AriLowHealthWarning", 1, 1);
@@ -4067,11 +4067,11 @@ void ProcessSpiritConcealment()
 void ApplyOfferingPenalties(CInstance* Self, CInstance* Other)
 {
 	if (ari_resource_to_penalty_map[AriResources::HEALTH])
-		ModifyHealth(Self, Other, configuration.offering_health_requirement * -1);
+		ModifyHealth(Self, Other, Config::config.offering_health_requirement * -1);
 	if (ari_resource_to_penalty_map[AriResources::STAMINA])
-		ModifyStamina(Self, Other, configuration.offering_stamina_requirement * -1);
+		ModifyStamina(Self, Other, Config::config.offering_stamina_requirement * -1);
 	if (ari_resource_to_penalty_map[AriResources::MANA])
-		ModifyMana(Self, Other, configuration.offering_mana_requirement * -1);
+		ModifyMana(Self, Other, Config::config.offering_mana_requirement * -1);
 
 	ari_resource_to_penalty_map.clear();
 }
@@ -4129,13 +4129,13 @@ void GenerateTreasureChestLoot(std::string object_name, CInstance* Self, CInstan
 	// Cursed Armor
 	int cursed_armor_roll_success_threshold = 0;
 	if (object_name == TREASURE_CHEST_WOOD_NAME)
-		cursed_armor_roll_success_threshold = 1 * configuration.cursed_armor_drop_chance_modifier;
+		cursed_armor_roll_success_threshold = 1 * Config::config.cursed_armor_drop_chance_modifier;
 	else if (object_name == TREASURE_CHEST_COPPER_NAME)
-		cursed_armor_roll_success_threshold = 2 * configuration.cursed_armor_drop_chance_modifier;
+		cursed_armor_roll_success_threshold = 2 * Config::config.cursed_armor_drop_chance_modifier;
 	else if (object_name == TREASURE_CHEST_SILVER_NAME)
-		cursed_armor_roll_success_threshold = 3 * configuration.cursed_armor_drop_chance_modifier;
+		cursed_armor_roll_success_threshold = 3 * Config::config.cursed_armor_drop_chance_modifier;
 	else if (object_name == TREASURE_CHEST_GOLD_NAME)
-		cursed_armor_roll_success_threshold = 4 * configuration.cursed_armor_drop_chance_modifier;
+		cursed_armor_roll_success_threshold = 4 * Config::config.cursed_armor_drop_chance_modifier;
 
 	int roll_for_drop = zero_to_ninety_nine_distribution(random_generator);
 	if (roll_for_drop < cursed_armor_roll_success_threshold)

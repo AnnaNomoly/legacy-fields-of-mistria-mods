@@ -128,5 +128,5 @@ bool fade_initialized = false;
 uint64_t fade_start_time = 0;
 
 
-Configuration configuration = Configuration();
+Config::Configuration Config::config = Config::Configuration();
 

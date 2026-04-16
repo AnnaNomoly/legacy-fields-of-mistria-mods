@@ -1,5 +1,5 @@
-#include "../utils/Utils.h"
-#include "../patterns/MonsterPatterns.h"
+#include "../../utils/Utils.h"
+#include "../../patterns/MonsterPatterns.h"
 
 // The complete ObjectCallback function, verbatim from source
 // Function signature: void ObjectCallback(IN FWCodeEvent& CodeEvent)
@@ -30,7 +30,7 @@ void ObjectCallback(
 		ari_y = y.ToDouble();
 
 		// Progression Mode Biome Cleared Rewards
-		if (configuration.disable_dungeon_lift && drop_biome_reward && ari_x != 0 && ari_y != 0 && script_name_to_reference_map.contains(GML_SCRIPT_DROP_ITEM))
+		if (Config::config.disable_dungeon_lift && drop_biome_reward && ari_x != 0 && ari_y != 0 && script_name_to_reference_map.contains(GML_SCRIPT_DROP_ITEM))
 		{
 			// Upper Mines
 			if (ari_current_gm_room == "rm_water_seal")
@@ -74,7 +74,7 @@ void ObjectCallback(
 		{
 			// Apply damage to Ari
 			int current_health = GetHealth(global_instance->GetRefMember("__ari")->ToInstance(), self).ToInt64();
-			int penalty = current_health * configuration.exploding_trap_current_health_damage_percent / 100;
+			int penalty = current_health * Config::config.exploding_trap_current_health_damage_percent / 100;
 			SetHealth(global_instance->GetRefMember("__ari")->ToInstance(), self, current_health - penalty);
 
 			// Apply damage to monsters
@@ -93,7 +93,7 @@ void ObjectCallback(
 						double hit_points = monster->GetMember("hit_points").ToDouble();
 						if (std::isfinite(hit_points))
 						{
-							int monster_hp_penalty = std::trunc(hit_points * configuration.exploding_trap_current_health_damage_percent / 100);
+							int monster_hp_penalty = std::trunc(hit_points * Config::config.exploding_trap_current_health_damage_percent / 100);
 							*monster->GetRefMember("hit_points") = max(0, hit_points - monster_hp_penalty);
 
 							if (StructVariableExists(monster, "monster_id"))
@@ -669,7 +669,7 @@ void ObjectCallback(
 					double hit_points = monster.GetMember("hit_points").ToDouble();
 					if (std::isfinite(hit_points))
 					{
-						*monster.GetRefMember("hit_points") = static_cast<int>(hit_points * configuration.dread_beast_health_modifier);
+						*monster.GetRefMember("hit_points") = static_cast<int>(hit_points * Config::config.dread_beast_health_modifier);
 						dread_beasts_configured++;
 						if (dread_beast_monster_id != monster_name_to_id_map["rock_stack"] || dread_beasts_configured == 2)
 							dread_beast_configured = true;
@@ -714,16 +714,16 @@ void ObjectCallback(
 							);
 						}());
 						std::uniform_int_distribution<size_t> zero_to_ninety_nine_distribution(0, 99);
-						bool drop_lift_key = zero_to_ninety_nine_distribution(random_generator) < configuration.lift_key_drop_chance ? true : false;
+						bool drop_lift_key = zero_to_ninety_nine_distribution(random_generator) < Config::config.lift_key_drop_chance ? true : false;
 
 						if (floor_number < 20) // Upper Mines
 						{
 							DropItem(item_name_to_id_map["beast_coin_tiny"], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
-							if (configuration.disable_dungeon_lift && drop_lift_key)
+							if (Config::config.disable_dungeon_lift && drop_lift_key)
 								DropLiftKey();
 							if (StructVariableExists(monster, "__deep_dungeon__dread_beast") && !StructVariableExists(monster, "__deep_dungeon__outbreak"))
 							{
-								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < configuration.soul_stone_drop_chance ? true : false;
+								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < Config::config.soul_stone_drop_chance ? true : false;
 								if (drop_soul_stone)
 									DropItem(GetRandomSoulStone(), ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
 							}
@@ -731,11 +731,11 @@ void ObjectCallback(
 						else if (floor_number < 40) // Tide Caverns
 						{
 							DropItem(item_name_to_id_map["beast_coin_small"], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
-							if (configuration.disable_dungeon_lift && drop_lift_key)
+							if (Config::config.disable_dungeon_lift && drop_lift_key)
 								DropLiftKey();
 							if (StructVariableExists(monster, "__deep_dungeon__dread_beast") && !StructVariableExists(monster, "__deep_dungeon__outbreak"))
 							{
-								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < configuration.soul_stone_drop_chance ? true : false;
+								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < Config::config.soul_stone_drop_chance ? true : false;
 								if (drop_soul_stone)
 									DropItem(GetRandomSoulStone(), ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
 							}
@@ -743,11 +743,11 @@ void ObjectCallback(
 						else if (floor_number < 60) // Deep Earth
 						{
 							DropItem(item_name_to_id_map["beast_coin_medium"], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
-							if (configuration.disable_dungeon_lift && drop_lift_key)
+							if (Config::config.disable_dungeon_lift && drop_lift_key)
 								DropLiftKey();
 							if (StructVariableExists(monster, "__deep_dungeon__dread_beast") && !StructVariableExists(monster, "__deep_dungeon__outbreak"))
 							{
-								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < configuration.soul_stone_drop_chance ? true : false;
+								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < Config::config.soul_stone_drop_chance ? true : false;
 								if (drop_soul_stone)
 									DropItem(GetRandomSoulStone(), ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
 							}
@@ -755,11 +755,11 @@ void ObjectCallback(
 						else if (floor_number < 80) // Lava Caves
 						{
 							DropItem(item_name_to_id_map["beast_coin_large"], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
-							if (configuration.disable_dungeon_lift && drop_lift_key)
+							if (Config::config.disable_dungeon_lift && drop_lift_key)
 								DropLiftKey();
 							if (StructVariableExists(monster, "__deep_dungeon__dread_beast") && !StructVariableExists(monster, "__deep_dungeon__outbreak"))
 							{
-								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < configuration.soul_stone_drop_chance ? true : false;
+								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < Config::config.soul_stone_drop_chance ? true : false;
 								if (drop_soul_stone)
 									DropItem(GetRandomSoulStone(), ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
 							}
@@ -767,11 +767,11 @@ void ObjectCallback(
 						else if (floor_number < 100) // Ruins
 						{
 							DropItem(item_name_to_id_map["beast_coin_giant"], ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
-							if (configuration.disable_dungeon_lift && drop_lift_key)
+							if (Config::config.disable_dungeon_lift && drop_lift_key)
 								DropLiftKey();
 							if (StructVariableExists(monster, "__deep_dungeon__dread_beast") && !StructVariableExists(monster, "__deep_dungeon__outbreak"))
 							{
-								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < configuration.soul_stone_drop_chance ? true : false;
+								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < Config::config.soul_stone_drop_chance ? true : false;
 								if (drop_soul_stone)
 									DropItem(GetRandomSoulStone(), ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
 							}
@@ -861,8 +861,8 @@ void ObjectCallback(
 						double hit_points = monster.GetMember("hit_points").ToDouble();
 						if (std::isfinite(hit_points))
 						{
-							*monster.GetRefMember("hit_points") = std::trunc(hit_points * configuration.gloom_health_modifier);
-							StructVariableSet(monster, "__deep_dungeon__default_hit_points", std::trunc(hit_points * configuration.gloom_health_modifier));
+							*monster.GetRefMember("hit_points") = std::trunc(hit_points * Config::config.gloom_health_modifier);
+							StructVariableSet(monster, "__deep_dungeon__default_hit_points", std::trunc(hit_points * Config::config.gloom_health_modifier));
 							StructVariableSet(monster, "__deep_dungeon__gloom_applied", true);
 						}
 					}

@@ -13,6 +13,7 @@
 #include <pcg/pcg_random.hpp>
 #include <magic_enum/magic_enum.hpp>
 #include <YYToolkit/YYTK_Shared.hpp> // YYTK v4
+#include "config/Config.h"
 using namespace Aurie;
 using namespace YYTK;
 using json = nlohmann::json;
@@ -103,48 +104,6 @@ static const char* const GML_SCRIPT_RECIPE_GENERATE_INFUSIONS = "gml_Script_gene
 static const char* const GML_SCRIPT_BARK_EMITTER = "gml_Script_BarkEmitter";
 static const char* const GML_SCRIPT_BARK_EMITTER_EMIT = "gml_Script_emit@BarkEmitter@BarkEmitter";
 static const char* const GML_SCRIPT_T2_READ = "gml_Script_read@T2r@T2r";
-static const char* const CONFIG_VERSION_JSON_KEY = "__config_version"; // The config version
-static const char* const DISABLE_DUNGEON_LIFT_JSON_KEY = "disable_dungeon_lift"; // Controls the dungeon lift
-static const char* const RESTRICT_PERKS_JSON_KEY = "restrict_perks"; // Determines if perks are restricted in the dungeon
-static const char* const RESTRICT_ITEMS_JSON_KEY = "restrict_items"; // Determines if items are restricted in the dungeon
-static const char* const RESTRICT_ARMOR_JSON_KEY = "restrict_armor"; // Determines if armor is restricted in the dungeon
-static const char* const RESTRICT_TOOLS_JSON_KEY = "restrict_tools"; // Determines if tools are restricted in the dungeon
-static const char* const RESTRICT_WEAPONS_JSON_KEY = "restrict_weapons"; // Determines if weapons are restricted in the dungeon
-static const char* const HEALTH_SALVE_LIMIT_JSON_KEY = "health_salve_limit"; // Controls how many health salves may be used per floor
-static const char* const STAMINA_SALVE_LIMIT_JSON_KEY = "stamina_salve_limit"; // Controls how many stamina salves may be used per floor
-static const char* const MANA_SALVE_LIMIT_JSON_KEY = "mana_salve_limit"; // Controls how many mana salves may be used per floor
-static const char* const HEALTH_SALVE_POTENCY_JSON_KEY = "health_salve_potency"; // Controls how much the health salve restores
-static const char* const STAMINA_SALVE_POTENCY_JSON_KEY = "stamina_salve_potency"; // Controls how much the stamina salve restores
-static const char* const MANA_SALVE_POTENCY_JSON_KEY = "mana_salve_potency"; // Controls how much the mana salve restores
-static const char* const SUSTAINING_POTION_DURATION_MODIFIER_JSON_KEY = "sustaining_potion_duration_modifier"; // Controls the duration of the sustaining potion
-static const char* const RANDOMIZE_DUNGEON_MUSIC_JSON_KEY = "randomize_dungeon_music"; // Controls music randomizer
-static const char* const RANDOM_DREAD_BEAST_SPAWN_CHANCE_JSON_KEY = "random_dread_beast_spawn_chance"; // Controls the random (not Offering) dread beast spawn chance
-static const char* const OFFERING_EVENT_CHANCE_JSON_KEY = "offering_event_chance"; // Controls the chance for offering events
-static const char* const OFFERING_HEALTH_REQUIREMENT_JSON_KEY = "offering_health_requirement"; // Controls the HP needed for an offering
-static const char* const OFFERING_STAMINA_REQUIREMENT_JSON_KEY = "offering_stamina_requirement"; // Controls the STA needed for an offering
-static const char* const OFFERING_MANA_REQUIREMENT_JSON_KEY = "offering_mana_requirement"; // Controls the MP needed for an offering
-static const char* const CURSED_ARMOR_DROP_CHANCE_MODIFIER_JSON_KEY = "cursed_armor_drop_chance_modifier"; // Controls cursed armor drop rate
-static const char* const SOUL_STONE_DROP_CHANCE_JSON_KEY = "soul_stone_drop_chance"; // Controls soul stone drop rate
-static const char* const LIFT_KEY_DROP_CHANCE_JSON_KEY = "lift_key_drop_chance"; // Controls lift key drop rates
-static const char* const ENABLE_BOSS_FIGHT_RESTRICTIONS_JSON_KEY = "enable_boss_fight_restrictions"; // Controls if sigils and spells are restricted during boss fights
-static const char* const CONFUSING_TRAP_DURATION_SECONDS_JSON_KEY = "confusing_trap_duration_seconds"; // Controls the duration in seconds for confusing traps
-static const char* const DISORIENTING_TRAP_DURATION_SECONDS_JSON_KEY = "disorienting_trap_duration_seconds"; // Controls the duration in seconds for disorienting traps
-static const char* const EXPLODING_TRAP_CURRENT_HEALTH_DAMAGE_PERCENT_JSON_KEY = "exploding_trap_current_health_damage_percent"; // Controls the health percentage damage for exploding traps
-static const char* const INHIBITING_TRAP_DURATION_SECONDS_JSON_KEY = "inhibiting_trap_duration_seconds"; // Controls the duration in seconds for inhibiting traps
-static const char* const LURING_TRAP_MONSTER_SPAWN_COUNT_JSON_KEY = "luring_trap_monster_spawn_count"; // Controls the number of monsters spawned for luring traps
-static const char* const GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT_JSON_KEY = "gaze_trap_max_health_damage_percent"; // Controls the number of monsters spawned for luring traps
-static const char* const METEOR_TRAP_SCALING_FACTOR_JSON_KEY = "meteor_trap_scaling_factor"; // Controls the scaling factor of the meteor trap
-static const char* const VOID_TRAP_DURATION_SECONDS_JSON_KEY = "void_trap_duration_seconds"; // Controls the duration in seconds for void traps
-static const char* const MISTPOOL_EQUIPMENT_STORE_PRICE_JSON_KEY = "mistpool_equipment_store_price"; // Controls the price of mistpool equipment in stores
-static const char* const SALVES_STORE_PRICE_JSON_KEY = "salves_store_price"; // Controls the price of salves in stores
-static const char* const DREAD_BEAST_DAMAGE_MODIFIER_JSON_KEY = "dread_beast_damage_modifier"; // Controls the damage of dread beasts
-static const char* const DREAD_BEAST_HEALTH_MODIFIER_JSON_KEY = "dread_beast_health_modifier"; // Controls the health of dread beasts
-static const char* const GLOOM_DAMAGE_DEALT_MODIFIER_JSON_KEY = "gloom_monster_damage_dealt_modifier"; // Controls the damage multiplier granted by Gloom
-static const char* const GLOOM_DAMAGE_RECEIVED_MODIFIER_JSON_KEY = "gloom_monster_damage_received_modifier"; // Controls the damage mitigation granted by Gloom
-static const char* const GLOOM_HEALTH_MODIFIER_JSON_KEY = "gloom_monster_health_modifier"; // Controls the health bonus granted by Gloom
-static const char* const EXPERIMENTAL_MAX_HEALTH_BUG_FIX_JSON_KEY = "experimental_max_health_bug_fix"; // Controls the experimental fix for restoring proper max health
-static const char* const EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS_JSON_KEY = "experimental_extra_floor_enchantments_and_offerings"; // Controls the experimental option to always enable the Oracle exclusive floor enchantments and offerings
-static const char* const EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER_JSON_KEY = "experimental_monster_base_stat_difficulty_modifier"; // Controls the experimental option to scale base monster health and damage
 
 static const std::string SIGIL_OF_ALTERATION_NAME = "sigil_of_alteration";
 static const std::string SIGIL_OF_CONCEALMENT_NAME = "sigil_of_concealment";
@@ -372,49 +331,6 @@ static const int TWENTY_FIVE_MINUTES_IN_SECONDS = 1600;
 static const int THIRTY_MINUTES_IN_SECONDS = 1800;
 static const int TRAP_ACTIVATION_DISTANCE = 16;
 
-// Configuration defaults
-static const int CONFIG_VERSION = 1;
-static const bool DEFAULT_DISABLE_DUNGEON_LIFT = true;
-static const bool DEFAULT_RESTRICT_PERKS = true;
-static const bool DEFAULT_RESTRICT_ITEMS = true;
-static const bool DEFAULT_RESTRICT_ARMOR = true;
-static const bool DEFAULT_RESTRICT_TOOLS = true;
-static const bool DEFAULT_RESTRICT_WEAPONS = true;
-static const int DEFAULT_HEALTH_SALVE_LIMIT = 3;
-static const int DEFAULT_STAMINA_SALVE_LIMIT = 3;
-static const int DEFAULT_MANA_SALVE_LIMIT = 1;
-static const int DEFAULT_HEALTH_SALVE_POTENCY = 35;
-static const int DEFAULT_STAMINA_SALVE_POTENCY = 35;
-static const int DEFAULT_MANA_SALVE_POTENCY = 1;
-static const double DEFAULT_SUSTAINING_POTION_DURATION_MODIFIER = 0.5;
-static const bool DEFAULT_RANDOMIZE_DUNGEON_MUSIC = true;
-static const int DEFAULT_RANDOM_DREAD_BEAST_SPAWN_CHANCE = 5;
-static const int DEFAULT_OFFERING_EVENT_CHANCE = 15;
-static const int DEFAULT_OFFERING_HEALTH_REQUIREMENT = 25; // TODO: Tune this.
-static const int DEFAULT_OFFERING_STAMINA_REQUIREMENT = 20; // TODO: Tune this.
-static const int DEFAULT_OFFERING_MANA_REQUIREMENT = 1;
-static const double DEFAULT_CURSED_ARMOR_DROP_CHANCE_MODIFIER = 1.0;
-static const int DEFAULT_SOUL_STONE_DROP_CHANCE = 35;
-static const int DEFAULT_LIFT_KEY_DROP_CHANCE = 2;
-static const bool DEFAULT_ENABLE_BOSS_FIGHT_RESTRICTIONS = true;
-static const int DEFAULT_CONFUSING_TRAP_DURATION_SECONDS = 1200;
-static const int DEFAULT_DISORIENTING_TRAP_DURATION_SECONDS = 600;
-static const int DEFAULT_EXPLODING_TRAP_CURRENT_HEALTH_DAMAGE_PERCENT = 50;
-static const int DEFAULT_LURING_TRAP_MONSTER_SPAWN_COUNT = 2;
-static const int DEFAULT_INHIBITING_TRAP_DURATION_SECONDS = 900;
-static const int DEFAULT_GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT = 40;
-static const double DEFAULT_METEOR_TRAP_SCALING_FACTOR = 2.5;
-static const int DEFAULT_VOID_TRAP_DURATION_SECONDS = 1200;
-static const int DEFAULT_MISTPOOL_EQUIPMENT_STORE_PRICE = 500;
-static const int DEFAULT_SALVES_STORE_PRICE = 50;
-static const double DEFAULT_DREAD_BEAST_DAMAGE_MODIFIER = 2;
-static const double DEFAULT_DREAD_BEAST_HEALTH_MODIFIER = 3;
-static const double DEFAULT_GLOOM_DAMAGE_DEALT_MODIFIER = 1.5;
-static const double DEFAULT_GLOOM_DAMAGE_RECEIVED_MODIFIER = 0.5;
-static const double DEFAULT_GLOOM_HEALTH_MODIFIER = 1.5;
-static const bool DEFAULT_EXPERIMENTAL_MAX_HEALTH_BUG_FIX = false;
-static const bool DEFAULT_EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS = false;
-static const double DEFAULT_EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER = 1.0;
 
 static enum class BossBattle {
 	NONE,
@@ -1945,52 +1861,6 @@ extern bool fade_initialized;
 extern uint64_t fade_start_time;
 
 
-struct Configuration {
-	int config_version = CONFIG_VERSION;
-	bool disable_dungeon_lift = DEFAULT_DISABLE_DUNGEON_LIFT;
-	bool restrict_perks = DEFAULT_RESTRICT_PERKS;
-	bool restrict_items = DEFAULT_RESTRICT_ITEMS;
-	bool restrict_armor = DEFAULT_RESTRICT_ARMOR;
-	bool restrict_tools = DEFAULT_RESTRICT_TOOLS;
-	bool restrict_weapons = DEFAULT_RESTRICT_WEAPONS;
-	int health_salve_limit = DEFAULT_HEALTH_SALVE_LIMIT;
-	int stamina_salve_limit = DEFAULT_STAMINA_SALVE_LIMIT;
-	int mana_salve_limit = DEFAULT_MANA_SALVE_LIMIT;
-	int health_salve_potency = DEFAULT_HEALTH_SALVE_POTENCY;
-	int stamina_salve_potency = DEFAULT_STAMINA_SALVE_POTENCY;
-	int mana_salve_potency = DEFAULT_MANA_SALVE_POTENCY;
-	double sustaining_potion_duration_modifier = DEFAULT_SUSTAINING_POTION_DURATION_MODIFIER;
-	bool randomize_dungeon_music = DEFAULT_RANDOMIZE_DUNGEON_MUSIC;
-	int random_dread_beast_spawn_chance = DEFAULT_RANDOM_DREAD_BEAST_SPAWN_CHANCE;
-	int offering_event_chance = DEFAULT_OFFERING_EVENT_CHANCE;
-	int offering_health_requirement = DEFAULT_OFFERING_HEALTH_REQUIREMENT;
-	int offering_stamina_requirement = DEFAULT_OFFERING_STAMINA_REQUIREMENT;
-	int offering_mana_requirement = DEFAULT_OFFERING_MANA_REQUIREMENT;
-	double cursed_armor_drop_chance_modifier = DEFAULT_CURSED_ARMOR_DROP_CHANCE_MODIFIER;
-	int soul_stone_drop_chance = DEFAULT_SOUL_STONE_DROP_CHANCE;
-	int lift_key_drop_chance = DEFAULT_LIFT_KEY_DROP_CHANCE;
-	bool enable_boss_fight_restrictions = DEFAULT_ENABLE_BOSS_FIGHT_RESTRICTIONS;
-	int confusing_trap_duration_seconds = DEFAULT_CONFUSING_TRAP_DURATION_SECONDS;
-	int disorienting_trap_duration_seconds = DEFAULT_DISORIENTING_TRAP_DURATION_SECONDS;
-	int exploding_trap_current_health_damage_percent = DEFAULT_EXPLODING_TRAP_CURRENT_HEALTH_DAMAGE_PERCENT;
-	int inhibiting_trap_duration_seconds = DEFAULT_INHIBITING_TRAP_DURATION_SECONDS;
-	int luring_trap_monster_spawn_count = DEFAULT_LURING_TRAP_MONSTER_SPAWN_COUNT;
-	int gaze_trap_max_health_damage_percent = DEFAULT_GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT;
-	double meteor_trap_scaling_factor = DEFAULT_METEOR_TRAP_SCALING_FACTOR;
-	int void_trap_duration_seconds = DEFAULT_VOID_TRAP_DURATION_SECONDS;
-	int mistpool_equipment_store_price = DEFAULT_MISTPOOL_EQUIPMENT_STORE_PRICE;
-	int salves_store_price = DEFAULT_SALVES_STORE_PRICE;
-	double dread_beast_damage_modifier = DEFAULT_DREAD_BEAST_DAMAGE_MODIFIER;
-	double dread_beast_health_modifier = DEFAULT_DREAD_BEAST_HEALTH_MODIFIER;
-	double gloom_damage_dealt_modifier = DEFAULT_GLOOM_DAMAGE_DEALT_MODIFIER;
-	double gloom_damage_received_modifier = DEFAULT_GLOOM_DAMAGE_RECEIVED_MODIFIER;
-	double gloom_health_modifier = DEFAULT_GLOOM_HEALTH_MODIFIER;
-	bool experimental_max_health_bug_fix = DEFAULT_EXPERIMENTAL_MAX_HEALTH_BUG_FIX;
-	bool experimental_extra_floor_enchantments_and_offerings = DEFAULT_EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS;
-	double experimental_monster_base_stat_difficulty_modifier = DEFAULT_EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER;
-};
-
-extern Configuration configuration;
 
 // ============================================================
 // Utility / game-interaction function forward declarations
