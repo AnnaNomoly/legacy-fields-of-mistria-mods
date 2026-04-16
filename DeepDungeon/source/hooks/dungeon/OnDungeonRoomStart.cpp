@@ -1,5 +1,4 @@
 #include "../../utils/Utils.h"
-#include "../../patterns/MonsterPatterns.h"
 
 RValue& GmlScriptOnDungeonRoomStartCallback(
 	IN CInstance* Self,
