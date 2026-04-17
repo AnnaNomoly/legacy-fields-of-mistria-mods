@@ -137,13 +137,7 @@ RValue& GmlScriptPlayTextCallback(
 	}
 
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_PLAY_TEXT));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
+	original(Self, Other, Result, ArgumentCount, Arguments);
 
 	return Result;
 }

@@ -9,13 +9,7 @@ RValue& GmlScriptHudShouldShowCallback(
 )
 {
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_HUD_SHOULD_SHOW));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
+	original(Self, Other, Result, ArgumentCount, Arguments);
 
 	if (active_traps.contains(Traps::DISORIENTING))
 		Result = false;

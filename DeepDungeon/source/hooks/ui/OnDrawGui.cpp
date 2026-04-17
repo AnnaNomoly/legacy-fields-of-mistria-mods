@@ -9,19 +9,12 @@ RValue& GmlScriptOnDrawGuiCallback(
 )
 {
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_ON_DRAW_GUI));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
+	original(Self, Other, Result, ArgumentCount, Arguments);
 
 	if (game_is_active && !GameIsPaused())
 	{
 		// Gloom
-		auto gloom = std::find(active_floor_enchantments.begin(), active_floor_enchantments.end(), FloorEnchantments::GLOOM);
-		if (gloom != active_floor_enchantments.end())
+		if (active_floor_enchantments.contains(FloorEnchantments::GLOOM))
 		{
 			g_ModuleInterface->CallBuiltin(
 				"draw_set_alpha",
