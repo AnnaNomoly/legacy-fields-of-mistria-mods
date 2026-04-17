@@ -4,6 +4,261 @@
 // The complete ObjectCallback function, verbatim from source
 // Function signature: void ObjectCallback(IN FWCodeEvent& CodeEvent)
 
+static void ClearFloorEnchantments()
+{
+	// Undo Fey
+	if (active_floor_enchantments.contains(FloorEnchantments::FEY))
+	{
+		std::vector<CInstance*> refs = script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE];
+		ModifySpellCosts(true, true);
+		CancelStatusEffect(refs[0], refs[1], status_effect_name_to_id_map["fairy"]);
+	}
+
+	// Undo Blessed (Oracle Set Bonus)
+	if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED] > 0)
+	{
+		int max_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+		int adjusted_max_health = max_health - class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED];
+		SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], adjusted_max_health);
+		int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+		VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], adjusted_max_health);
+		VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, adjusted_max_health);
+		class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED] = 0;
+	}
+
+	// Undo HP Penalty
+	if (hp_penalty_amount > -1)
+	{
+		int max_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+		int adjusted_max_health = max_health + hp_penalty_amount;
+		hp_penalty_amount = -1;
+		SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], adjusted_max_health);
+		int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+		VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], adjusted_max_health);
+		VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, adjusted_max_health);
+	}
+
+	active_floor_enchantments.clear();
+	active_sigils.insert(Sigils::SERENITY);
+}
+
+static void AriProcessUsedItems(CInstance* ari_instance, CInstance* self)
+{
+	RValue ari = self->ToRValue();
+	if (!StructVariableExists(ari, "fsm")) return;
+
+	RValue fsm = ari.GetMember("fsm");
+	if (!StructVariableExists(fsm, "state")) return;
+
+	RValue state = fsm.GetMember("state");
+	if (!StructVariableExists(state, "state_id")) return;
+	if (state.GetMember("state_id").ToInt64() != player_state_to_id_map["hold_to_use"]) return;
+
+	if (!StructVariableExists(state, "did_action")) return;
+	if (!state.GetMember("did_action").ToBoolean()) return;
+
+	if (sigil_item_used) // Necessary since did_action==true will get called a few times when the item is used.
+	{
+		sigil_item_used = false;
+
+		if (held_item_id == sigil_to_item_id_map[Sigils::ALTERATION])
+		{
+			active_sigils.insert(Sigils::ALTERATION);
+			sigil_of_alteration_monster_id = SelectRandomMonsterForAlteration();
+		}
+		else if (held_item_id == sigil_to_item_id_map[Sigils::CONCEALMENT])
+			active_sigils.insert(Sigils::CONCEALMENT);
+		else if (held_item_id == sigil_to_item_id_map[Sigils::FORTIFICATION])
+			active_sigils.insert(Sigils::FORTIFICATION);
+		else if (held_item_id == sigil_to_item_id_map[Sigils::FORTUNE])
+		{
+			active_sigils.insert(Sigils::FORTUNE);
+			SpawnLadder(ari_instance, self, ari_x, ari_y);
+		}
+		else if (held_item_id == sigil_to_item_id_map[Sigils::PROTECTION])
+		{
+			std::vector<CInstance*> refs = script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE];
+
+			active_sigils.insert(Sigils::PROTECTION);
+			RegisterStatusEffect(refs[0], refs[1], status_effect_name_to_id_map["guardians_shield"], RValue(), 1, 2147483647.0);
+			SetInvulnerabilityHits(2);
+		}
+		else if (held_item_id == sigil_to_item_id_map[Sigils::RAGE])
+			active_sigils.insert(Sigils::RAGE);
+		else if (held_item_id == sigil_to_item_id_map[Sigils::REDEMPTION])
+		{
+			std::vector<CInstance*> refs = script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE];
+
+			active_sigils.insert(Sigils::REDEMPTION);
+			RegisterStatusEffect(refs[0], refs[1], status_effect_name_to_id_map["fairy"], RValue(), 1, 2147483647.0);
+		}
+		else if (held_item_id == sigil_to_item_id_map[Sigils::SAFETY])
+		{
+			floor_trap_positions.clear();
+			active_sigils.insert(Sigils::SAFETY);
+		}
+		else if (held_item_id == sigil_to_item_id_map[Sigils::SERENITY])
+			ClearFloorEnchantments();
+		else if (held_item_id == sigil_to_item_id_map[Sigils::SILENCE])
+			active_sigils.insert(Sigils::SILENCE);
+		else if (held_item_id == sigil_to_item_id_map[Sigils::STRENGTH])
+			active_sigils.insert(Sigils::STRENGTH);
+		else if (held_item_id == sigil_to_item_id_map[Sigils::TEMPTATION])
+			active_sigils.insert(Sigils::TEMPTATION);
+		else if (held_item_id == sigil_to_item_id_map[Sigils::SIGHT])
+		{
+			int unified_time = GetUnifiedTime(script_name_to_reference_map[GML_SCRIPT_GET_UNIFIED_TIME][0], script_name_to_reference_map[GML_SCRIPT_GET_UNIFIED_TIME][1]).ToInt64();
+			RegisterStatusEffect(script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1], status_effect_name_to_id_map["sacred_light"], 0, unified_time, unified_time + 18000);
+			active_sigils.insert(Sigils::SIGHT);
+		}
+		else if (held_item_id == sigil_to_item_id_map[Sigils::INTUITION])
+		{
+			GenerateTreasureSpot(ari_instance, self);
+			active_sigils.insert(Sigils::INTUITION);
+		}
+
+		if (script_name_to_reference_map.contains(GML_SCRIPT_UPDATE_TOOLBAR_MENU))
+			UpdateToolbarMenu(script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][0], script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][1]);
+	}
+	else if (greater_sigil_item_used)
+	{
+		greater_sigil_item_used = false;
+
+		if (held_item_id == greater_sigil_to_item_id_map[GreaterSigils::BENEDICTION])
+		{
+			ClearFloorEnchantments();
+			active_greater_sigils.insert(GreaterSigils::BENEDICTION);
+			ModifyHealth(ari_instance, self, 999);
+		}
+		else if (held_item_id == greater_sigil_to_item_id_map[GreaterSigils::ASTRAL_FLOW])
+		{
+			for (CInstance* monster : current_floor_monsters)
+			{
+				if (StructVariableExists(monster, "monster_id") && StructVariableExists(monster, "hit_points"))
+				{
+					RValue monster_id = monster->GetMember("monster_id");
+					double hit_points = monster->GetMember("hit_points").ToDouble();
+					if (IsNumeric(monster_id) && std::isfinite(hit_points) && hit_points > 0)
+						*monster->GetRefMember("hit_points") = 0;
+				}
+			}
+
+			active_greater_sigils.insert(GreaterSigils::ASTRAL_FLOW);
+		}
+		else if (held_item_id == greater_sigil_to_item_id_map[GreaterSigils::CHAIN_SPELL])
+			active_greater_sigils.insert(GreaterSigils::CHAIN_SPELL);
+		else if (held_item_id == greater_sigil_to_item_id_map[GreaterSigils::SPIRIT_SURGE])
+		{
+			active_greater_sigils.insert(GreaterSigils::SPIRIT_SURGE);
+			ModifyStamina(ari_instance, self, 999);
+		}
+		else if (held_item_id == greater_sigil_to_item_id_map[GreaterSigils::MEIKYO_SHISUI])
+		{
+			active_greater_sigils.insert(GreaterSigils::MEIKYO_SHISUI);
+			ScaleMistpoolArmor(true);
+			ScaleMistpoolWeapon(true);
+			ScaleMistpoolPickaxe(true);
+			ScaleClassArmor(true);
+		}
+
+		if (script_name_to_reference_map.contains(GML_SCRIPT_UPDATE_TOOLBAR_MENU))
+			UpdateToolbarMenu(script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][0], script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][1]);
+	}
+	else if (salve_item_used)
+	{
+		salve_item_used = false;
+
+		if (held_item_id == salve_name_to_id_map[HEALTH_SALVE_NAME])
+			salves_used[HEALTH_SALVE_NAME]++;
+		else if (held_item_id == salve_name_to_id_map[STAMINA_SALVE_NAME])
+			salves_used[STAMINA_SALVE_NAME]++;
+		else if (held_item_id == salve_name_to_id_map[MANA_SALVE_NAME])
+			salves_used[MANA_SALVE_NAME]++;
+
+		if (script_name_to_reference_map.contains(GML_SCRIPT_UPDATE_TOOLBAR_MENU))
+			UpdateToolbarMenu(script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][0], script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][1]);
+	}
+	else if (lift_key_used)
+	{
+		lift_key_used = false;
+		biome_reward_disabled = true;
+
+		if (held_item_id == item_name_to_id_map[UPPER_MINES_KEY_F5_NAME])
+			EnterDungeon(4, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+		else if (held_item_id == item_name_to_id_map[UPPER_MINES_KEY_F10_NAME])
+			EnterDungeon(9, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+		else if (held_item_id == item_name_to_id_map[UPPER_MINES_KEY_F15_NAME])
+			EnterDungeon(14, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+		else if (held_item_id == item_name_to_id_map[TIDE_CAVERNS_KEY_F20_NAME])
+			EnterDungeon(19, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+		else if (held_item_id == item_name_to_id_map[TIDE_CAVERNS_KEY_F25_NAME])
+			EnterDungeon(24, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+		else if (held_item_id == item_name_to_id_map[TIDE_CAVERNS_KEY_F30_NAME])
+			EnterDungeon(29, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+		else if (held_item_id == item_name_to_id_map[TIDE_CAVERNS_KEY_F35_NAME])
+			EnterDungeon(34, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+		else if (held_item_id == item_name_to_id_map[DEEP_EARTH_KEY_F40_NAME])
+			EnterDungeon(39, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+		else if (held_item_id == item_name_to_id_map[DEEP_EARTH_KEY_F45_NAME])
+			EnterDungeon(44, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+		else if (held_item_id == item_name_to_id_map[DEEP_EARTH_KEY_F50_NAME])
+			EnterDungeon(49, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+		else if (held_item_id == item_name_to_id_map[DEEP_EARTH_KEY_F55_NAME])
+			EnterDungeon(54, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+		else if (held_item_id == item_name_to_id_map[LAVA_CAVES_KEY_F60_NAME])
+			EnterDungeon(59, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+		else if (held_item_id == item_name_to_id_map[LAVA_CAVES_KEY_F65_NAME])
+			EnterDungeon(64, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+		else if (held_item_id == item_name_to_id_map[LAVA_CAVES_KEY_F70_NAME])
+			EnterDungeon(69, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+		else if (held_item_id == item_name_to_id_map[LAVA_CAVES_KEY_F75_NAME])
+			EnterDungeon(74, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+		else if (held_item_id == item_name_to_id_map[RUINS_KEY_F80_NAME])
+			EnterDungeon(79, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+		else if (held_item_id == item_name_to_id_map[RUINS_KEY_F85_NAME])
+			EnterDungeon(84, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+		else if (held_item_id == item_name_to_id_map[RUINS_KEY_F90_NAME])
+			EnterDungeon(89, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+		else if (held_item_id == item_name_to_id_map[RUINS_KEY_F95_NAME])
+			EnterDungeon(94, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+		else if (held_item_id == item_name_to_id_map[RUINS_KEY_F100_NAME])
+			EnterDungeon(99, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+	}
+	else if (orb_item_used)
+	{
+		orb_item_used = false;
+		biome_reward_disabled = true;
+
+		// TODO: Other orbs
+		if (held_item_id == item_name_to_id_map[TIDE_CAVERNS_ORB])
+		{
+			boss_battle = BossBattle::TIDE_CAVERNS_ORB;
+			EnterDungeon(19, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+		}
+		else if (held_item_id == item_name_to_id_map[DEEP_EARTH_ORB])
+		{
+			boss_battle = BossBattle::DEEP_EARTH_ORB;
+			EnterDungeon(39, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+		}
+		else if (held_item_id == item_name_to_id_map[LAVA_CAVES_ORB])
+		{
+			boss_battle = BossBattle::LAVA_CAVES_ORB;
+			EnterDungeon(59, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+		}
+		else if (held_item_id == item_name_to_id_map[RUINS_ORB])
+		{
+			boss_battle = BossBattle::RUINS_ORB;
+			EnterDungeon(79, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+		}
+	}
+	else if (heart_crystal_used)
+	{
+		heart_crystal_used = false;
+		if (unmodified_base_health != -1)
+			unmodified_base_health += 20;
+	}
+}
+
 void ObjectCallback(
 	IN FWCodeEvent& CodeEvent
 )
@@ -109,265 +364,11 @@ void ObjectCallback(
 			active_traps.erase(Traps::EXPLODING);
 		}
 
+		// Apply offering penalties.
 		ApplyOfferingPenalties(ari_instance, self);
 
-		// Shared logic for Serenity/Benediction: undoes Fey, Oracle Blessed, and HP penalty.
-		auto ClearFloorEnchantments = [&]() {
-			if (active_floor_enchantments.contains(FloorEnchantments::FEY))
-			{
-				std::vector<CInstance*> refs = script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE];
-				ModifySpellCosts(true, true);
-				CancelStatusEffect(refs[0], refs[1], status_effect_name_to_id_map["fairy"]);
-			}
-			if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED] > 0)
-			{
-				int max_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
-				int adjusted_max_health = max_health - class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED];
-				SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], adjusted_max_health);
-				int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
-				VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], adjusted_max_health);
-				VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, adjusted_max_health);
-				class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED] = 0;
-			}
-			if (hp_penalty_amount > -1)
-			{
-				int max_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
-				int adjusted_max_health = max_health + hp_penalty_amount;
-				hp_penalty_amount = -1;
-				SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], adjusted_max_health);
-				int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
-				VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], adjusted_max_health);
-				VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, adjusted_max_health);
-			}
-			active_floor_enchantments.clear();
-			active_sigils.insert(Sigils::SERENITY);
-		};
-
 		// Process used items.
-		RValue ari = self->ToRValue();
-		if (StructVariableExists(ari, "fsm"))
-		{
-			RValue fsm = ari.GetMember("fsm");
-
-			if (StructVariableExists(fsm, "state"))
-			{
-				RValue state = fsm.GetMember("state");
-				if (StructVariableExists(state, "state_id"))
-				{
-					RValue state_id = state.GetMember("state_id");
-					if (state_id.ToInt64() == player_state_to_id_map["hold_to_use"])
-					{
-						if (StructVariableExists(state, "did_action"))
-						{
-							RValue did_action = state.GetMember("did_action");
-							if (did_action.ToBoolean())
-							{
-								if (sigil_item_used) // Necessary since did_action==true will get called a few times when the item is used.
-								{
-									sigil_item_used = false;
-
-									if (held_item_id == sigil_to_item_id_map[Sigils::ALTERATION])
-									{
-										active_sigils.insert(Sigils::ALTERATION);
-										sigil_of_alteration_monster_id = SelectRandomMonsterForAlteration();
-									}
-									else if (held_item_id == sigil_to_item_id_map[Sigils::CONCEALMENT])
-										active_sigils.insert(Sigils::CONCEALMENT);
-									else if (held_item_id == sigil_to_item_id_map[Sigils::FORTIFICATION])
-										active_sigils.insert(Sigils::FORTIFICATION);
-									else if (held_item_id == sigil_to_item_id_map[Sigils::FORTUNE])
-									{
-										active_sigils.insert(Sigils::FORTUNE);
-										SpawnLadder(ari_instance, self, ari_x, ari_y);
-									}
-									else if (held_item_id == sigil_to_item_id_map[Sigils::PROTECTION])
-									{
-										std::vector<CInstance*> refs = script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE];
-
-										active_sigils.insert(Sigils::PROTECTION);
-										RegisterStatusEffect(refs[0], refs[1], status_effect_name_to_id_map["guardians_shield"], RValue(), 1, 2147483647.0);
-										SetInvulnerabilityHits(2);
-									}
-									else if (held_item_id == sigil_to_item_id_map[Sigils::RAGE])
-										active_sigils.insert(Sigils::RAGE);
-									else if (held_item_id == sigil_to_item_id_map[Sigils::REDEMPTION])
-									{
-										std::vector<CInstance*> refs = script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE];
-
-										active_sigils.insert(Sigils::REDEMPTION);
-										RegisterStatusEffect(refs[0], refs[1], status_effect_name_to_id_map["fairy"], RValue(), 1, 2147483647.0);
-									}
-									else if (held_item_id == sigil_to_item_id_map[Sigils::SAFETY])
-									{
-										floor_trap_positions.clear();
-										active_sigils.insert(Sigils::SAFETY);
-									}
-									else if (held_item_id == sigil_to_item_id_map[Sigils::SERENITY])
-										ClearFloorEnchantments();
-									else if (held_item_id == sigil_to_item_id_map[Sigils::SILENCE])
-										active_sigils.insert(Sigils::SILENCE);
-									else if (held_item_id == sigil_to_item_id_map[Sigils::STRENGTH])
-										active_sigils.insert(Sigils::STRENGTH);
-									else if (held_item_id == sigil_to_item_id_map[Sigils::TEMPTATION])
-										active_sigils.insert(Sigils::TEMPTATION);
-									else if (held_item_id == sigil_to_item_id_map[Sigils::SIGHT])
-									{
-										int unified_time = GetUnifiedTime(script_name_to_reference_map[GML_SCRIPT_GET_UNIFIED_TIME][0], script_name_to_reference_map[GML_SCRIPT_GET_UNIFIED_TIME][1]).ToInt64();
-										RegisterStatusEffect(script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1], status_effect_name_to_id_map["sacred_light"], 0, unified_time, unified_time + 18000);
-										active_sigils.insert(Sigils::SIGHT);
-									}
-									else if (held_item_id == sigil_to_item_id_map[Sigils::INTUITION])
-									{
-										GenerateTreasureSpot(ari_instance, self);
-										active_sigils.insert(Sigils::INTUITION);
-									}
-
-									if (script_name_to_reference_map.contains(GML_SCRIPT_UPDATE_TOOLBAR_MENU))
-										UpdateToolbarMenu(script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][0], script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][1]);
-								}
-								else if (greater_sigil_item_used)
-								{
-									greater_sigil_item_used = false;
-
-									if (held_item_id == greater_sigil_to_item_id_map[GreaterSigils::BENEDICTION])
-									{
-										ClearFloorEnchantments();
-										active_greater_sigils.insert(GreaterSigils::BENEDICTION);
-										ModifyHealth(ari_instance, self, 999);
-									}
-									else if (held_item_id == greater_sigil_to_item_id_map[GreaterSigils::ASTRAL_FLOW])
-									{
-										for (CInstance* monster : current_floor_monsters)
-										{
-											if (StructVariableExists(monster, "monster_id") && StructVariableExists(monster, "hit_points"))
-											{
-												RValue monster_id = monster->GetMember("monster_id");
-												double hit_points = monster->GetMember("hit_points").ToDouble();
-												if (IsNumeric(monster_id) && std::isfinite(hit_points) && hit_points > 0)
-													*monster->GetRefMember("hit_points") = 0;
-											}
-										}
-
-										active_greater_sigils.insert(GreaterSigils::ASTRAL_FLOW);
-									}
-									else if (held_item_id == greater_sigil_to_item_id_map[GreaterSigils::CHAIN_SPELL])
-										active_greater_sigils.insert(GreaterSigils::CHAIN_SPELL);
-									else if (held_item_id == greater_sigil_to_item_id_map[GreaterSigils::SPIRIT_SURGE])
-									{
-										active_greater_sigils.insert(GreaterSigils::SPIRIT_SURGE);
-										ModifyStamina(ari_instance, self, 999);
-									}
-									else if (held_item_id == greater_sigil_to_item_id_map[GreaterSigils::MEIKYO_SHISUI])
-									{
-										active_greater_sigils.insert(GreaterSigils::MEIKYO_SHISUI);
-										ScaleMistpoolArmor(true);
-										ScaleMistpoolWeapon(true);
-										ScaleMistpoolPickaxe(true);
-										ScaleClassArmor(true);
-									}
-
-									if (script_name_to_reference_map.contains(GML_SCRIPT_UPDATE_TOOLBAR_MENU))
-										UpdateToolbarMenu(script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][0], script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][1]);
-								}
-								else if (salve_item_used)
-								{
-									salve_item_used = false;
-
-									if (held_item_id == salve_name_to_id_map[HEALTH_SALVE_NAME])
-										salves_used[HEALTH_SALVE_NAME]++;
-									else if (held_item_id == salve_name_to_id_map[STAMINA_SALVE_NAME])
-										salves_used[STAMINA_SALVE_NAME]++;
-									else if (held_item_id == salve_name_to_id_map[MANA_SALVE_NAME])
-										salves_used[MANA_SALVE_NAME]++;
-
-									if (script_name_to_reference_map.contains(GML_SCRIPT_UPDATE_TOOLBAR_MENU))
-										UpdateToolbarMenu(script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][0], script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][1]);
-								}
-								else if (lift_key_used)
-								{
-									lift_key_used = false;
-									biome_reward_disabled = true;
-
-									if (held_item_id == item_name_to_id_map[UPPER_MINES_KEY_F5_NAME])
-										EnterDungeon(4, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
-									else if (held_item_id == item_name_to_id_map[UPPER_MINES_KEY_F10_NAME])
-										EnterDungeon(9, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
-									else if (held_item_id == item_name_to_id_map[UPPER_MINES_KEY_F15_NAME])
-										EnterDungeon(14, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
-									else if (held_item_id == item_name_to_id_map[TIDE_CAVERNS_KEY_F20_NAME])
-										EnterDungeon(19, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
-									else if (held_item_id == item_name_to_id_map[TIDE_CAVERNS_KEY_F25_NAME])
-										EnterDungeon(24, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
-									else if (held_item_id == item_name_to_id_map[TIDE_CAVERNS_KEY_F30_NAME])
-										EnterDungeon(29, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
-									else if (held_item_id == item_name_to_id_map[TIDE_CAVERNS_KEY_F35_NAME])
-										EnterDungeon(34, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
-									else if (held_item_id == item_name_to_id_map[DEEP_EARTH_KEY_F40_NAME])
-										EnterDungeon(39, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
-									else if (held_item_id == item_name_to_id_map[DEEP_EARTH_KEY_F45_NAME])
-										EnterDungeon(44, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
-									else if (held_item_id == item_name_to_id_map[DEEP_EARTH_KEY_F50_NAME])
-										EnterDungeon(49, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
-									else if (held_item_id == item_name_to_id_map[DEEP_EARTH_KEY_F55_NAME])
-										EnterDungeon(54, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
-									else if (held_item_id == item_name_to_id_map[LAVA_CAVES_KEY_F60_NAME])
-										EnterDungeon(59, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
-									else if (held_item_id == item_name_to_id_map[LAVA_CAVES_KEY_F65_NAME])
-										EnterDungeon(64, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
-									else if (held_item_id == item_name_to_id_map[LAVA_CAVES_KEY_F70_NAME])
-										EnterDungeon(69, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
-									else if (held_item_id == item_name_to_id_map[LAVA_CAVES_KEY_F75_NAME])
-										EnterDungeon(74, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
-									else if (held_item_id == item_name_to_id_map[RUINS_KEY_F80_NAME])
-										EnterDungeon(79, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
-									else if (held_item_id == item_name_to_id_map[RUINS_KEY_F85_NAME])
-										EnterDungeon(84, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
-									else if (held_item_id == item_name_to_id_map[RUINS_KEY_F90_NAME])
-										EnterDungeon(89, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
-									else if (held_item_id == item_name_to_id_map[RUINS_KEY_F95_NAME])
-										EnterDungeon(94, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
-									else if (held_item_id == item_name_to_id_map[RUINS_KEY_F100_NAME])
-										EnterDungeon(99, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
-								}
-								else if (orb_item_used)
-								{
-									orb_item_used = false;
-									biome_reward_disabled = true;
-
-									// TODO: Other orbs
-									if (held_item_id == item_name_to_id_map[TIDE_CAVERNS_ORB])
-									{
-										boss_battle = BossBattle::TIDE_CAVERNS_ORB;
-										EnterDungeon(19, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
-									}
-									else if (held_item_id == item_name_to_id_map[DEEP_EARTH_ORB])
-									{
-										boss_battle = BossBattle::DEEP_EARTH_ORB;
-										EnterDungeon(39, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
-									}
-									else if (held_item_id == item_name_to_id_map[LAVA_CAVES_ORB])
-									{
-										boss_battle = BossBattle::LAVA_CAVES_ORB;
-										EnterDungeon(59, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
-									}
-									else if (held_item_id == item_name_to_id_map[RUINS_ORB])
-									{
-										boss_battle = BossBattle::RUINS_ORB;
-										EnterDungeon(79, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
-									}
-								}
-								else if (heart_crystal_used)
-								{
-									heart_crystal_used = false;
-									if (unmodified_base_health != -1)
-										unmodified_base_health += 20;
-								}
-							}
-						}
-					}
-				}
-			}
-		}
+		AriProcessUsedItems(ari_instance, self);
 
 		// Restoration
 		if (is_restoration_tracked_interval)
