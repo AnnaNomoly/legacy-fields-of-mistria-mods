@@ -31,7 +31,7 @@ RValue& GmlScriptCanCastSpellCallback(
 
 	if (spell_id == spell_name_to_id_map["full_restore"])
 	{
-		// Dark Seal (Dark Knight, 3+ pieces) — takes priority over Mage/Oracle full_restore replacements.
+		// Dark Seal (Dark Knight, 3+ pieces)
 		if (armor_counts[Classes::DARK_KNIGHT] >= 3)
 		{
 			bool on_cooldown = class_name_to_set_bonus_effect_value_map[Classes::DARK_KNIGHT][ManagedSetBonuses::DARK_SEAL] > 0;

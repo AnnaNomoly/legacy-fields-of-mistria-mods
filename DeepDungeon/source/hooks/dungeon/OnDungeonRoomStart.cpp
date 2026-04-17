@@ -86,7 +86,7 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 	if (ari_current_gm_room != "rm_mines_entry" && ari_current_gm_room != "rm_priestess_quarters" && ari_current_gm_room != "rm_seridias_chamber" && !ari_current_gm_room.contains("seal") && !ari_current_gm_room.contains("ritual") && !ari_current_gm_room.contains("treasure") && !ari_current_gm_room.contains("milestone"))
 	{
 		// Hide (Rogue Set Bonus)
-		if (CountEquippedClassArmor()[Classes::ROGUE] > 0)
+		if (CountEquippedClassArmor()[Classes::ROGUE] >= 2)
 			active_sigils.insert(Sigils::CONCEALMENT);
 
 		// Prophecy (Oracle Set Bonus)
