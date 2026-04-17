@@ -3,10 +3,22 @@
 
 namespace Config
 {
+	void PrintError(std::exception_ptr eptr)
+	{
+		try {
+			if (eptr) {
+				std::rethrow_exception(eptr);
+			}
+		}
+		catch (const std::exception& e) {
+			g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Error: %s", MOD_NAME, VERSION, e.what());
+		}
+	}
+
 	json CreateJson(bool use_defaults)
 	{
 		json config_json = {
-			{ VERSION_JSON_KEY, use_defaults ? FILE_VERSION : config.config_version },
+			{ VERSION_JSON_KEY, use_defaults ? CONFIG_VERSION : config.config_version },
 			{ DISABLE_DUNGEON_LIFT_JSON_KEY, use_defaults ? DEFAULT_DISABLE_DUNGEON_LIFT : config.disable_dungeon_lift },
 			{ RESTRICT_PERKS_JSON_KEY, use_defaults ? DEFAULT_RESTRICT_PERKS : config.restrict_perks },
 			{ RESTRICT_ITEMS_JSON_KEY, use_defaults ? DEFAULT_RESTRICT_ITEMS : config.restrict_items },
@@ -99,7 +111,7 @@ namespace Config
 						if (json_object.contains(VERSION_JSON_KEY) && json_object.at(VERSION_JSON_KEY).is_number_integer())
 						{
 							int config_version = json_object[VERSION_JSON_KEY];
-							if (config_version <= 0 || config_version > FILE_VERSION)
+							if (config_version <= 0 || config_version > CONFIG_VERSION)
 							{
 								missing_version = true;
 								config.config_version = 0;

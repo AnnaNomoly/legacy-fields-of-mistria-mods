@@ -58,7 +58,9 @@ namespace Config
 	// ============================================================
 	// Version & defaults
 	// ============================================================
-	static const int FILE_VERSION = 1;
+	static const char* const MOD_NAME = "DeepDungeon";
+	static const char* const VERSION = "1.1.0";
+	static const int CONFIG_VERSION = 1;
 
 	static const bool DEFAULT_DISABLE_DUNGEON_LIFT = true;
 	static const bool DEFAULT_RESTRICT_PERKS = true;
@@ -107,7 +109,7 @@ namespace Config
 	// ============================================================
 	struct Configuration
 	{
-		int config_version = FILE_VERSION;
+		int config_version = CONFIG_VERSION;
 		bool disable_dungeon_lift = DEFAULT_DISABLE_DUNGEON_LIFT;
 		bool restrict_perks = DEFAULT_RESTRICT_PERKS;
 		bool restrict_items = DEFAULT_RESTRICT_ITEMS;
@@ -156,6 +158,7 @@ namespace Config
 	// ============================================================
 	extern Configuration config;
 
+	void PrintError(std::exception_ptr eptr);
 	json CreateJson(bool use_defaults);
 	void Load();
 
