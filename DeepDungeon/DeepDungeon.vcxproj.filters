@@ -1,299 +1,350 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <Filter Include="Zdrojové soubory">
-      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
-      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    <Filter Include="source">
+      <UniqueIdentifier>{a1b2c3d4-0001-0001-0001-000000000001}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Hlavičkové soubory">
-      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
-      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    <Filter Include="source\config">
+      <UniqueIdentifier>{a1b2c3d4-0001-0001-0001-000000000002}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Soubory zdrojů">
-      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
-      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    <Filter Include="source\constants">
+      <UniqueIdentifier>{a1b2c3d4-0001-0001-0001-000000000003}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\data">
+      <UniqueIdentifier>{a1b2c3d4-0001-0001-0001-000000000004}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\hooks">
+      <UniqueIdentifier>{a1b2c3d4-0001-0001-0001-000000000005}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\hooks\combat">
+      <UniqueIdentifier>{a1b2c3d4-0001-0001-0001-000000000006}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\hooks\dungeon">
+      <UniqueIdentifier>{a1b2c3d4-0001-0001-0001-000000000007}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\hooks\game">
+      <UniqueIdentifier>{a1b2c3d4-0001-0001-0001-000000000008}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\hooks\health">
+      <UniqueIdentifier>{a1b2c3d4-0001-0001-0001-000000000009}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\hooks\input">
+      <UniqueIdentifier>{a1b2c3d4-0001-0001-0001-000000000010}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\hooks\items">
+      <UniqueIdentifier>{a1b2c3d4-0001-0001-0001-000000000011}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\hooks\objects">
+      <UniqueIdentifier>{a1b2c3d4-0001-0001-0001-000000000012}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\hooks\ui">
+      <UniqueIdentifier>{a1b2c3d4-0001-0001-0001-000000000013}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\init">
+      <UniqueIdentifier>{a1b2c3d4-0001-0001-0001-000000000014}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\patterns">
+      <UniqueIdentifier>{a1b2c3d4-0001-0001-0001-000000000015}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\utils">
+      <UniqueIdentifier>{a1b2c3d4-0001-0001-0001-000000000016}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include">
+      <UniqueIdentifier>{a1b2c3d4-0001-0001-0001-000000000017}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="include\YYToolkit\YYTK_Shared_Types.cpp">
-      <Filter>Zdrojové soubory</Filter>
+    <ClCompile Include="source\pch.cpp">
+      <Filter>source</Filter>
     </ClCompile>
     <ClCompile Include="source\Globals.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source</Filter>
     </ClCompile>
     <ClCompile Include="source\config\Config.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\config</Filter>
     </ClCompile>
-    <ClCompile Include="source\utils\Combat.cpp">
-      <Filter>Zdrojové soubory</Filter>
-    </ClCompile>
-    <ClCompile Include="source\utils\Draw.cpp">
-      <Filter>Zdrojové soubory</Filter>
-    </ClCompile>
-    <ClCompile Include="source\utils\Enchantments.cpp">
-      <Filter>Zdrojové soubory</Filter>
-    </ClCompile>
-    <ClCompile Include="source\utils\Item.cpp">
-      <Filter>Zdrojové soubory</Filter>
-    </ClCompile>
-    <ClCompile Include="source\utils\Loading.cpp">
-      <Filter>Zdrojové soubory</Filter>
-    </ClCompile>
-    <ClCompile Include="source\utils\Math.cpp">
-      <Filter>Zdrojové soubory</Filter>
-    </ClCompile>
-    <ClCompile Include="source\utils\Monster.cpp">
-      <Filter>Zdrojové soubory</Filter>
-    </ClCompile>
-    <ClCompile Include="source\utils\Player.cpp">
-      <Filter>Zdrojové soubory</Filter>
-    </ClCompile>
-    <ClCompile Include="source\utils\YYTKBridge.cpp">
-      <Filter>Zdrojové soubory</Filter>
+    <ClCompile Include="source\data\TrapSpawnPoints.cpp">
+      <Filter>source\data</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\combat\CanCastSpell.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\combat</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\combat\CastSpell.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\combat</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\combat\Damage.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\combat</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\combat\GetMoveSpeed.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\combat</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\combat\SpawnMonster.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\combat</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\dungeon\GetLocalizer.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\dungeon</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\dungeon\GetMinutes.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\dungeon</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\dungeon\GetUnifiedTime.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\dungeon</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\dungeon\GetWeather.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\dungeon</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\dungeon\GoToRoom.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\dungeon</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\dungeon\OnDungeonRoomStart.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\dungeon</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\dungeon\PlayConversation.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\dungeon</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\dungeon\SpawnLadder.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\dungeon</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\dungeon\TryLocationIdToString.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\dungeon</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\game\AriFaceDir.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\game</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\game\BarkEmitter.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\game</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\game\CreateItemPrototypes.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\game</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\game\FindNpcBlipNoise.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\game</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\game\GetEquipmentBonusFrom.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\game</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\game\OnBeginStep.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\game</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\game\RecipeGenerateInfusions.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\game</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\game\SaveGame.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\game</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\game\SceneAudioPlayerPlay.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\game</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\game\SetupMainScreen.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\game</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\game\T2Read.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\game</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\health\CancelStatusEffect.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\health</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\health\ModifyHealth.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\health</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\health\ModifyStamina.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\health</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\health\RegisterStatusEffect.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\health</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\health\StatusEffectManagerUpdate.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\health</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\health\VitalsMenuSetMaxHealth.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\health</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\input\AttemptInteract.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\input</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\input\CheckValue.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\input</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\input\TakePress.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\input</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\items\DeserializeInventory.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\items</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\items\DeserializeLiveItem.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\items</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\items\DropItem.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\items</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\items\GetTreasureFromDistribution.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\items</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\items\GetUiIcon.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\items</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\items\HeldItem.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\items</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\items\UseItem.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\items</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\objects\ObjectCallback.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\objects</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\ui\CraftingMenuClose.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\ui</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\ui\CraftingMenuInitialize.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\ui</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\ui\DisplayResize.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\ui</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\ui\HudShouldShow.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\ui</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\ui\JournalMenuClose.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\ui</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\ui\JournalMenuInitialize.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\ui</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\ui\OnDrawGui.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\ui</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\ui\PlayText.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\ui</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\ui\UpdateToolbarMenu.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\ui</Filter>
     </ClCompile>
     <ClCompile Include="source\hooks\ui\VertigoDrawWithColor.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\hooks\ui</Filter>
     </ClCompile>
     <ClCompile Include="source\init\Init.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\init</Filter>
     </ClCompile>
     <ClCompile Include="source\patterns\MonsterPatterns.cpp">
-      <Filter>Zdrojové soubory</Filter>
+      <Filter>source\patterns</Filter>
+    </ClCompile>
+    <ClCompile Include="source\utils\Combat.cpp">
+      <Filter>source\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="source\utils\Draw.cpp">
+      <Filter>source\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="source\utils\Enchantments.cpp">
+      <Filter>source\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="source\utils\Item.cpp">
+      <Filter>source\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="source\utils\Loading.cpp">
+      <Filter>source\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="source\utils\Math.cpp">
+      <Filter>source\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="source\utils\Monster.cpp">
+      <Filter>source\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="source\utils\Player.cpp">
+      <Filter>source\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="source\utils\YYTKBridge.cpp">
+      <Filter>source\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="include\YYToolkit\YYTK_Shared_Types.cpp">
+      <Filter>include</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="include\Aurie\shared.hpp">
-      <Filter>Hlavičkové soubory</Filter>
-    </ClInclude>
-    <ClInclude Include="include\FunctionWrapper\FunctionWrapper.hpp">
-      <Filter>Hlavičkové soubory</Filter>
-    </ClInclude>
-    <ClInclude Include="include\YYToolkit\Shared.hpp">
-      <Filter>Hlavičkové soubory</Filter>
-    </ClInclude>
-    <ClInclude Include="include\nlohmann\json.hpp">
-      <Filter>Hlavičkové soubory</Filter>
-    </ClInclude>
-    <ClInclude Include="include\YYToolkit\YYTK_Shared.hpp">
-      <Filter>Hlavičkové soubory</Filter>
-    </ClInclude>
-    <ClInclude Include="include\YYToolkit\YYTK_Shared_Base.hpp">
-      <Filter>Hlavičkové soubory</Filter>
-    </ClInclude>
-    <ClInclude Include="include\YYToolkit\YYTK_Shared_Interface.hpp">
-      <Filter>Hlavičkové soubory</Filter>
-    </ClInclude>
-    <ClInclude Include="include\YYToolkit\YYTK_Shared_Types.hpp">
-      <Filter>Hlavičkové soubory</Filter>
-    </ClInclude>
-    <ClInclude Include="include\magic_enum\magic_enum.hpp">
-      <Filter>Hlavičkové soubory</Filter>
-    </ClInclude>
-    <ClInclude Include="resource.h">
-      <Filter>Hlavičkové soubory</Filter>
-    </ClInclude>
-    <ClInclude Include="include\pcg\pcg_random.hpp">
-      <Filter>Hlavičkové soubory</Filter>
-    </ClInclude>
-    <ClInclude Include="include\pcg\pcg_extras.hpp">
-      <Filter>Hlavičkové soubory</Filter>
-    </ClInclude>
-    <ClInclude Include="include\pcg\pcg_uint128.hpp">
-      <Filter>Hlavičkové soubory</Filter>
-    </ClInclude>
-    <ClInclude Include="source\config\Config.h">
-      <Filter>Hlavičkové soubory</Filter>
+    <ClInclude Include="source\pch.h">
+      <Filter>source</Filter>
     </ClInclude>
     <ClInclude Include="source\Globals.h">
-      <Filter>Hlavičkové soubory</Filter>
+      <Filter>source</Filter>
     </ClInclude>
-    <ClInclude Include="source\init\Init.h">
-      <Filter>Hlavičkové soubory</Filter>
+    <ClInclude Include="source\config\Config.h">
+      <Filter>source\config</Filter>
     </ClInclude>
-    <ClInclude Include="source\patterns\MonsterPatterns.h">
-      <Filter>Hlavičkové soubory</Filter>
-    </ClInclude>
-    <ClInclude Include="source\utils\Utils.h">
-      <Filter>Hlavičkové soubory</Filter>
+    <ClInclude Include="source\constants\ModInfo.h">
+      <Filter>source\constants</Filter>
     </ClInclude>
     <ClInclude Include="source\constants\ArmorSets.h">
-      <Filter>Hlavičkové soubory</Filter>
+      <Filter>source\constants</Filter>
     </ClInclude>
     <ClInclude Include="source\constants\EnchantmentGroups.h">
-      <Filter>Hlavičkové soubory</Filter>
+      <Filter>source\constants</Filter>
     </ClInclude>
     <ClInclude Include="source\constants\GmlScripts.h">
-      <Filter>Hlavičkové soubory</Filter>
+      <Filter>source\constants</Filter>
     </ClInclude>
     <ClInclude Include="source\constants\ItemNames.h">
-      <Filter>Hlavičkové soubory</Filter>
+      <Filter>source\constants</Filter>
     </ClInclude>
     <ClInclude Include="source\constants\Keys.h">
-      <Filter>Hlavičkové soubory</Filter>
+      <Filter>source\constants</Filter>
     </ClInclude>
     <ClInclude Include="source\constants\Timing.h">
-      <Filter>Hlavičkové soubory</Filter>
+      <Filter>source\constants</Filter>
     </ClInclude>
     <ClInclude Include="source\data\TrapSpawnPoints.h">
-      <Filter>Hlavičkové soubory</Filter>
+      <Filter>source\data</Filter>
+    </ClInclude>
+    <ClInclude Include="source\init\Init.h">
+      <Filter>source\init</Filter>
+    </ClInclude>
+    <ClInclude Include="source\patterns\MonsterPatterns.h">
+      <Filter>source\patterns</Filter>
+    </ClInclude>
+    <ClInclude Include="source\utils\Utils.h">
+      <Filter>source\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Aurie\shared.hpp">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\FunctionWrapper\FunctionWrapper.hpp">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\magic_enum\magic_enum.hpp">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\nlohmann\json.hpp">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\pcg\pcg_extras.hpp">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\pcg\pcg_random.hpp">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\pcg\pcg_uint128.hpp">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\YYToolkit\Shared.hpp">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\YYToolkit\YYTK_Shared.hpp">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\YYToolkit\YYTK_Shared_Base.hpp">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\YYToolkit\YYTK_Shared_Interface.hpp">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\YYToolkit\YYTK_Shared_Types.hpp">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="resource.h">
+      <Filter>include</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="DeepDungeon.rc">
-      <Filter>Soubory zdrojů</Filter>
+      <Filter>include</Filter>
     </ResourceCompile>
   </ItemGroup>
 </Project>
