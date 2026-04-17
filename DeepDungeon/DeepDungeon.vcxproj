@@ -248,6 +248,7 @@
     <ClInclude Include="source\config\Config.h" />
     <ClInclude Include="source\constants\ArmorSets.h" />
     <ClInclude Include="source\constants\EnchantmentGroups.h" />
+    <ClInclude Include="source\constants\ModInfo.h" />
     <ClInclude Include="source\constants\GmlScripts.h" />
     <ClInclude Include="source\constants\ItemNames.h" />
     <ClInclude Include="source\constants\Keys.h" />

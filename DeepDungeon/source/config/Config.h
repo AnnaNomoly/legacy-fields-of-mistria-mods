@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../constants/ModInfo.h"
+
 // <fstream>, <iomanip>, <filesystem>, <nlohmann/json.hpp> provided by pch.h.
 
 namespace Config
@@ -55,8 +57,6 @@ namespace Config
 	// ============================================================
 	// Version & defaults
 	// ============================================================
-	static const char* const MOD_NAME = "DeepDungeon";
-	static const char* const VERSION = "1.1.0";
 	static const int CONFIG_VERSION = 1;
 
 	static const bool DEFAULT_DISABLE_DUNGEON_LIFT = true;

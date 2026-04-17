@@ -1,7 +1,6 @@
 #pragma once
 
-static const char* const MOD_NAME = "DeepDungeon";
-static const char* const VERSION = "1.0.0-BETA-3";
+#include "ModInfo.h"
 
 static const char* const GML_SCRIPT_GET_LOCALIZER = "gml_Script_get@Localizer@Localizer";
 static const char* const GML_SCRIPT_SPAWN_LADDER = "gml_Script_spawn_ladder@DungeonRunner@DungeonRunner";
