@@ -1,18 +1,7 @@
 #pragma once
 
-#include <random>
-#include <complex>
-#include <fstream>
-#include <iomanip>
-#include <iostream>
-#include <filesystem>
-#include <map>
-#include <vector>
-#include <unordered_set>
-#include <nlohmann/json.hpp>
-#include <pcg/pcg_random.hpp>
-#include <magic_enum/magic_enum.hpp>
-#include <YYToolkit/YYTK_Shared.hpp> // YYTK v4
+// All heavy standard library and third-party headers are in pch.h (precompiled header).
+// pch.h is injected first into every TU via ForcedIncludeFiles in the project settings.
 #include "config/Config.h"
 using namespace Aurie;
 using namespace YYTK;
@@ -39,7 +28,7 @@ struct pair_hash {
 // floor enchantment groups, trap spawn points, and function declarations are in
 // Utils.h (via constants/ and data/ headers). Include Utils.h in .cpp files, not Globals.h directly.
 
-static enum class BossBattle {
+enum class BossBattle {
 	NONE,
 	TIDE_CAVERNS_ORB,
 	DEEP_EARTH_ORB,
@@ -47,7 +36,7 @@ static enum class BossBattle {
 	RUINS_ORB
 };
 
-static enum class Classes {
+enum class Classes {
 	CLERIC,
 	MAGE,
 	PALADIN,
@@ -56,7 +45,7 @@ static enum class Classes {
 	ORACLE
 };
 
-static enum class ManagedSetBonuses { // Set bonuses that have actively managed values.
+enum class ManagedSetBonuses { // Set bonuses that have actively managed values.
 	AUTO_REGEN, // Cleric
 	AFFLATUS_MISERY, // Cleric
 	DARK_SEAL, // Dark Knight
@@ -76,20 +65,20 @@ static enum class ManagedSetBonuses { // Set bonuses that have actively managed 
 	BLESSED // Oracle
 };
 
-static enum class ElementalSealEffects {
+enum class ElementalSealEffects {
 	FIRE = 1,
 	ICE = 2,
 	VENOM = 3
 };
 
-static enum class AriResources {
+enum class AriResources {
 	HEALTH,
 	MAX_HEALTH,
 	STAMINA,
 	MANA
 };
 
-static enum class DungeonBiomes {
+enum class DungeonBiomes {
 	UPPER,
 	TIDE_CAVERNS,
 	DEEP_EARTH,
@@ -97,7 +86,7 @@ static enum class DungeonBiomes {
 	RUINS
 };
 
-static enum class FloorEnchantments {
+enum class FloorEnchantments {
 	// Negative effects
 	HP_PENALTY, // Group 1
 	EXHAUSTION, // Group 1
@@ -124,7 +113,7 @@ static enum class FloorEnchantments {
 	PHALANX // Group 1
 };
 
-static enum class Offerings {
+enum class Offerings {
 	DREAD,
 	INNER_FIRE,
 	LEECH,
@@ -138,7 +127,7 @@ static enum class Offerings {
 	REFLECT
 };
 
-static enum class Sigils {
+enum class Sigils {
 	RAGE,
 	STRENGTH,
 	FORTIFICATION,
@@ -155,7 +144,7 @@ static enum class Sigils {
 	INTUITION
 };
 
-static enum class GreaterSigils {
+enum class GreaterSigils {
 	BENEDICTION,
 	ASTRAL_FLOW,
 	CHAIN_SPELL,
@@ -163,7 +152,7 @@ static enum class GreaterSigils {
 	MEIKYO_SHISUI
 };
 
-static enum class Traps {
+enum class Traps {
 	CONFUSING,
 	DISORIENTING,
 	EXPLODING,
@@ -174,13 +163,13 @@ static enum class Traps {
 	_VOID
 };
 
-static enum class CustomAOETypes {
+enum class CustomAOETypes {
 	METEOR,
 	GAZE,
 	_VOID
 };
 
-static struct CustomAOE {
+struct CustomAOE {
 	int x;
 	int y;
 	int spawned_time;
@@ -191,14 +180,14 @@ static struct CustomAOE {
 	CustomAOETypes type;
 };
 
-static struct RevealedFloorTrap {
+struct RevealedFloorTrap {
 	int x;
 	int y;
 	bool is_active;
 	RValue instance;
 };
 
-static struct TreasureSpot {
+struct TreasureSpot {
 	enum TreasureSpotState { INACTIVE, WAITING_TO_SPAWN, SPAWNED, FOUND };
 
 	int x;
