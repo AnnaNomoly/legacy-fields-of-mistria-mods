@@ -10,13 +10,7 @@ RValue& GmlScriptGetMinutesCallback(
 )
 {
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_GET_MINUTES));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
+	original(Self, Other, Result, ArgumentCount, Arguments);
 
 	if (game_is_active)
 	{
@@ -30,43 +24,39 @@ RValue& GmlScriptGetMinutesCallback(
 		ProcessSpiritConcealment();
 
 		// Restoration
-		if (active_floor_enchantments.contains(FloorEnchantments::RESTORATION))
+		if (active_floor_enchantments.contains(FloorEnchantments::RESTORATION)
+			&& !is_restoration_tracked_interval
+			&& (current_time_in_seconds - time_of_last_restoration_tick) >= TWO_MINUTES_IN_SECONDS)
 		{
-			if (!is_restoration_tracked_interval && (current_time_in_seconds - time_of_last_restoration_tick) >= TWO_MINUTES_IN_SECONDS)
-			{
-				is_restoration_tracked_interval = true;
-				time_of_last_restoration_tick = current_time_in_seconds;
-			}
+			is_restoration_tracked_interval = true;
+			time_of_last_restoration_tick = current_time_in_seconds;
 		}
 
 		// Second Wind
-		if (active_floor_enchantments.contains(FloorEnchantments::SECOND_WIND))
+		if (active_floor_enchantments.contains(FloorEnchantments::SECOND_WIND)
+			&& !is_second_wind_tracked_interval
+			&& (current_time_in_seconds - time_of_last_second_wind_tick) >= TWO_MINUTES_IN_SECONDS)
 		{
-			if (!is_second_wind_tracked_interval && (current_time_in_seconds - time_of_last_second_wind_tick) >= TWO_MINUTES_IN_SECONDS)
-			{
-				is_second_wind_tracked_interval = true;
-				time_of_last_second_wind_tick = current_time_in_seconds;
-			}
+			is_second_wind_tracked_interval = true;
+			time_of_last_second_wind_tick = current_time_in_seconds;
 		}
 
 		// Fumigate
-		if (active_floor_enchantments.contains(FloorEnchantments::FUMIGATE))
+		if (active_floor_enchantments.contains(FloorEnchantments::FUMIGATE)
+			&& !is_fumigate_tracked_interval
+			&& (current_time_in_seconds - time_of_last_fumigate_tick) >= TWO_MINUTES_AND_THIRTY_SECONDS)
 		{
-			if (!is_fumigate_tracked_interval && (current_time_in_seconds - time_of_last_fumigate_tick) >= TWO_MINUTES_AND_THIRTY_SECONDS)
-			{
-				is_fumigate_tracked_interval = true;
-				time_of_last_fumigate_tick = current_time_in_seconds;
-			}
+			is_fumigate_tracked_interval = true;
+			time_of_last_fumigate_tick = current_time_in_seconds;
 		}
 
 		// Deep Wounds
-		if (active_floor_enchantments.contains(FloorEnchantments::DEEP_WOUNDS))
+		if (active_floor_enchantments.contains(FloorEnchantments::DEEP_WOUNDS)
+			&& !is_deep_wounds_tracked_interval
+			&& (current_time_in_seconds - time_of_last_deep_wounds_tick) >= TWO_MINUTES_IN_SECONDS)
 		{
-			if (!is_deep_wounds_tracked_interval && (current_time_in_seconds - time_of_last_deep_wounds_tick) >= TWO_MINUTES_IN_SECONDS)
-			{
-				is_deep_wounds_tracked_interval = true;
-				time_of_last_deep_wounds_tick = current_time_in_seconds;
-			}
+			is_deep_wounds_tracked_interval = true;
+			time_of_last_deep_wounds_tick = current_time_in_seconds;
 		}
 
 		// Outbreak

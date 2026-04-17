@@ -51,13 +51,14 @@ RValue& GmlScriptGetLocalizerCallback(
 	}
 	else if (game_is_active && AriCurrentGmRoomIsDungeonFloor())
 	{
-		std::string localization_key = Arguments[0]->ToString();
+		const std::string localization_key = Arguments[0]->ToString();
+		auto armor_counts = CountEquippedClassArmor();
 
 		// Full Restore
 		if (localization_key.contains("spells/full_restore"))
 		{
 			// Dark Seal (Dark Knight Set Bonus)
-			if (CountEquippedClassArmor()[Classes::DARK_KNIGHT] >= 3)
+			if (armor_counts[Classes::DARK_KNIGHT] >= 3)
 			{
 				if (localization_key == "spells/full_restore/name")
 					*Arguments[0] = RValue("Spells/Mods/Deep Dungeon/Siphon Life/name");
@@ -67,7 +68,7 @@ RValue& GmlScriptGetLocalizerCallback(
 					*Arguments[0] = RValue("Spells/Mods/Deep Dungeon/Siphon Life/type");
 			}
 			// Elemental Seal (Mage Set Bonus)
-			else if (CountEquippedClassArmor()[Classes::MAGE] >= 3 && class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::ELEMENTAL_SEAL] > 0)
+			else if (armor_counts[Classes::MAGE] >= 3 && class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::ELEMENTAL_SEAL] > 0)
 			{
 				ElementalSealEffects elemental_seal_effect = *magic_enum::enum_cast<ElementalSealEffects>(class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::ELEMENTAL_SEAL]);
 
@@ -100,7 +101,7 @@ RValue& GmlScriptGetLocalizerCallback(
 				}
 			}
 			// Predict (Oracle Set Bonus)
-			else if (CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+			else if (armor_counts[Classes::ORACLE] >= 5)
 			{
 				if (localization_key == "spells/full_restore/name")
 					*Arguments[0] = RValue("Spells/Mods/Deep Dungeon/Predict/name");
@@ -114,7 +115,7 @@ RValue& GmlScriptGetLocalizerCallback(
 		else if (localization_key.contains("spells/summon_rain"))
 		{
 			// Flood (Mage Set Bonus)
-			if (CountEquippedClassArmor()[Classes::MAGE] >= 2)
+			if (armor_counts[Classes::MAGE] >= 2)
 			{
 				if (localization_key == "spells/summon_rain/name")
 					*Arguments[0] = RValue("Spells/Mods/Deep Dungeon/Flood/name");
@@ -128,7 +129,7 @@ RValue& GmlScriptGetLocalizerCallback(
 		else if (localization_key.contains("spells/growth"))
 		{
 			// Quake (Mage Set Bonus)
-			if (CountEquippedClassArmor()[Classes::MAGE] >= 4)
+			if (armor_counts[Classes::MAGE] >= 4)
 			{
 				if (localization_key == "spells/growth/name")
 					*Arguments[0] = RValue("Spells/Mods/Deep Dungeon/Quake/name");
@@ -138,7 +139,7 @@ RValue& GmlScriptGetLocalizerCallback(
 					*Arguments[0] = RValue("Spells/Mods/Deep Dungeon/Quake/type");
 			}
 			// Condemn (Oracle Set Bonus)
-			else if (CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+			else if (armor_counts[Classes::ORACLE] >= 5)
 			{
 				if (localization_key == "spells/growth/name")
 					*Arguments[0] = RValue("Spells/Mods/Deep Dungeon/Condemn/name");
@@ -151,17 +152,13 @@ RValue& GmlScriptGetLocalizerCallback(
 	}
 
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_GET_LOCALIZER));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
+	original(Self, Other, Result, ArgumentCount, Arguments);
 
 	if (game_is_active)
 	{
-		if (AriCurrentGmRoomIsDungeonFloor() && Arguments[0]->ToString() == "npcs/seridia/name")
+		const std::string localization_key = Arguments[0]->ToString();
+
+		if (AriCurrentGmRoomIsDungeonFloor() && localization_key == "npcs/seridia/name")
 		{
 			Result = RValue("Priestess");
 			return Result;
@@ -169,7 +166,7 @@ RValue& GmlScriptGetLocalizerCallback(
 
 		// Orbs
 		// TODO: Other orbs when added
-		if (crafting_menu_open && (Arguments[0]->ToString() == TIDE_CAVERNS_ORB_DESCRIPTION_LOCALIZED_TEXT_KEY || Arguments[0]->ToString() == DEEP_EARTH_ORB_DESCRIPTION_LOCALIZED_TEXT_KEY || Arguments[0]->ToString() == LAVA_CAVES_ORB_DESCRIPTION_LOCALIZED_TEXT_KEY || Arguments[0]->ToString() == RUINS_ORB_DESCRIPTION_LOCALIZED_TEXT_KEY))
+		if (crafting_menu_open && (localization_key == TIDE_CAVERNS_ORB_DESCRIPTION_LOCALIZED_TEXT_KEY || localization_key == DEEP_EARTH_ORB_DESCRIPTION_LOCALIZED_TEXT_KEY || localization_key == LAVA_CAVES_ORB_DESCRIPTION_LOCALIZED_TEXT_KEY || localization_key == RUINS_ORB_DESCRIPTION_LOCALIZED_TEXT_KEY))
 		{
 			std::string result_str = Result.ToString();
 
@@ -182,7 +179,7 @@ RValue& GmlScriptGetLocalizerCallback(
 			return Result;
 		}
 		// Health Salve
-		else if (Arguments[0]->ToString() == HEALTH_SALVE_DESCRIPTION_LOCALIZED_TEXT_KEY)
+		else if (localization_key == HEALTH_SALVE_DESCRIPTION_LOCALIZED_TEXT_KEY)
 		{
 			std::string result_str = Result.ToString();
 			std::string value_str = std::to_string(Config::config.health_salve_potency);
@@ -194,7 +191,7 @@ RValue& GmlScriptGetLocalizerCallback(
 			return Result;
 		}
 		// Stamina Salve
-		else if (Arguments[0]->ToString() == STAMINA_SALVE_DESCRIPTION_LOCALIZED_TEXT_KEY)
+		else if (localization_key == STAMINA_SALVE_DESCRIPTION_LOCALIZED_TEXT_KEY)
 		{
 			std::string result_str = Result.ToString();
 			std::string value_str = std::to_string(Config::config.stamina_salve_potency);
@@ -206,7 +203,7 @@ RValue& GmlScriptGetLocalizerCallback(
 			return Result;
 		}
 		// Mana Salve
-		else if (Arguments[0]->ToString() == MANA_SALVE_DESCRIPTION_LOCALIZED_TEXT_KEY)
+		else if (localization_key == MANA_SALVE_DESCRIPTION_LOCALIZED_TEXT_KEY)
 		{
 			std::string result_str = Result.ToString();
 			std::string value_str = std::to_string(Config::config.mana_salve_potency);
@@ -218,7 +215,7 @@ RValue& GmlScriptGetLocalizerCallback(
 			return Result;
 		}
 		// Floor Enchantments
-		else if (Arguments[0]->ToString() == FLOOR_ENCHANTMENT_PLACEHOLDER_TEXT_KEY)
+		else if (localization_key == FLOOR_ENCHANTMENT_PLACEHOLDER_TEXT_KEY)
 		{
 			std::string custom_text = "";
 			bool add_newline = false;
@@ -265,7 +262,7 @@ RValue& GmlScriptGetLocalizerCallback(
 			return Result;
 		}
 		// Offerings & Condemn (Oracle Set Bonus)
-		else if (Arguments[0]->ToString() == OFFERINGS_PLACEHOLDER_TEXT_KEY || Arguments[0]->ToString() == CONDEMN_PLACEHOLDER_TEXT_KEY)
+		else if (localization_key == OFFERINGS_PLACEHOLDER_TEXT_KEY || localization_key == CONDEMN_PLACEHOLDER_TEXT_KEY)
 		{
 			std::string custom_text = "";
 			for (auto it = queued_offerings.begin(); it != queued_offerings.end();)
@@ -280,7 +277,7 @@ RValue& GmlScriptGetLocalizerCallback(
 			return Result;
 		}
 		// Cleric Armor
-		else if (Arguments[0]->ToString() == CLERIC_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY && !crafting_menu_open)
+		else if (localization_key == CLERIC_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY && !crafting_menu_open)
 		{
 			int cleric_armor_pieces_equipped = CountEquippedClassArmor()[Classes::CLERIC];
 
@@ -304,7 +301,7 @@ RValue& GmlScriptGetLocalizerCallback(
 			return Result;
 		}
 		// Dark Knight Armor
-		else if (Arguments[0]->ToString() == DARK_KNIGHT_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY && !crafting_menu_open)
+		else if (localization_key == DARK_KNIGHT_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY && !crafting_menu_open)
 		{
 			int dark_knight_armor_pieces_equipped = CountEquippedClassArmor()[Classes::DARK_KNIGHT];
 
@@ -328,7 +325,7 @@ RValue& GmlScriptGetLocalizerCallback(
 			return Result;
 		}
 		// Mage Armor
-		else if (Arguments[0]->ToString() == MAGE_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY && !crafting_menu_open)
+		else if (localization_key == MAGE_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY && !crafting_menu_open)
 		{
 			int mage_armor_pieces_equipped = CountEquippedClassArmor()[Classes::MAGE];
 
@@ -349,7 +346,7 @@ RValue& GmlScriptGetLocalizerCallback(
 			return Result;
 		}
 		// Paladin Armor
-		else if (Arguments[0]->ToString() == PALADIN_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY && !crafting_menu_open)
+		else if (localization_key == PALADIN_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY && !crafting_menu_open)
 		{
 			int paladin_armor_pieces_equipped = CountEquippedClassArmor()[Classes::PALADIN];
 
@@ -373,7 +370,7 @@ RValue& GmlScriptGetLocalizerCallback(
 			return Result;
 		}
 		// Rogue Armor
-		else if (Arguments[0]->ToString() == ROGUE_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY && !crafting_menu_open)
+		else if (localization_key == ROGUE_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY && !crafting_menu_open)
 		{
 			int rogue_armor_pieces_equipped = CountEquippedClassArmor()[Classes::ROGUE];
 
@@ -393,7 +390,8 @@ RValue& GmlScriptGetLocalizerCallback(
 			Result = RValue(custom_text);
 			return Result;
 		}
-		else if (Arguments[0]->ToString() == ORACLE_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY && !crafting_menu_open)
+		// Oracle Armor
+		else if (localization_key == ORACLE_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY && !crafting_menu_open)
 		{
 			int oracle_armor_pieces_equipped = CountEquippedClassArmor()[Classes::ORACLE];
 			std::string custom_text = classes_to_localized_armor_description_string_map[Classes::ORACLE];

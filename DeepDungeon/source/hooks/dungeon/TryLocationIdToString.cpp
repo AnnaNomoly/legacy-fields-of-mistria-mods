@@ -9,13 +9,7 @@ RValue& GmlScriptTryLocationIdToStringCallback(
 )
 {
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_TRY_LOCATION_ID_TO_STRING));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
+	original(Self, Other, Result, ArgumentCount, Arguments);
 
 	if (game_is_active && Result.m_Kind == VALUE_STRING)
 		ari_current_location = Result.ToString();

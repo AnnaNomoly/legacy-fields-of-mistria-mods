@@ -32,13 +32,7 @@ RValue& GmlScriptGoToRoomCallback(
 		biome_reward_disabled = true;
 
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_GO_TO_ROOM));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
+	original(Self, Other, Result, ArgumentCount, Arguments);
 
 	RValue gm_room = Result.GetMember("gm_room");
 	RValue room_name = g_ModuleInterface->CallBuiltin("room_get_name", { gm_room });
