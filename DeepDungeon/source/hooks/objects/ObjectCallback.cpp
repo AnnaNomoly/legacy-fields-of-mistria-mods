@@ -354,7 +354,7 @@ void ObjectCallback(
 							{
 								RValue monster_id = monster->GetMember("monster_id");
 								if (IsNumeric(monster_id))
-									g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - The Exploding Trap damaged the monster: %s", MOD_NAME, VERSION, monster_id_to_name_map[monster_id.ToInt64()].c_str());
+									g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - The Exploding Trap damaged the monster: %s", MOD_NAME, MOD_VERSION, monster_id_to_name_map[monster_id.ToInt64()].c_str());
 							}
 						}
 					}
@@ -588,7 +588,7 @@ void ObjectCallback(
 							dread_beast_configured = true;
 
 						StructVariableSet(monster, "__deep_dungeon__dread_beast", true);
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Configured Dread Beast: %s", MOD_NAME, VERSION, monster_id_to_name_map[monster_id.ToInt64()].c_str());
+						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Configured Dread Beast: %s", MOD_NAME, MOD_VERSION, monster_id_to_name_map[monster_id.ToInt64()].c_str());
 					}
 				}
 				else if (StructVariableExists(monster, "__deep_dungeon__dread_beast"))

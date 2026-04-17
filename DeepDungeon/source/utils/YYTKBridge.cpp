@@ -8,7 +8,7 @@ void PrintError(std::exception_ptr eptr)
 		}
 	}
 	catch (const std::exception& e) {
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Error: %s", MOD_NAME, VERSION, e.what());
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Error: %s", MOD_NAME, MOD_VERSION, e.what());
 	}
 }
 
@@ -93,7 +93,7 @@ void CreateModInfoInGlobalYYTKVariable()
 	if (!StructVariableExists(__YYTK, MOD_NAME))
 	{
 		RValue deep_dungeon;
-		RValue version = VERSION;
+		RValue version = MOD_VERSION;
 		RValue floor = floor_number;
 		g_ModuleInterface->GetRunnerInterface().StructCreate(&deep_dungeon);
 		g_ModuleInterface->GetRunnerInterface().StructAddRValue(&deep_dungeon, "version", &version);

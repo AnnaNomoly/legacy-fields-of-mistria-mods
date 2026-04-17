@@ -526,19 +526,19 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 	// Prune traps that have fully applied.
 	if (active_traps.contains(Traps::CONFUSING) && active_traps_to_value_map[Traps::CONFUSING] < current_time_in_seconds)
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Confusing Trap effect ended at: %d", MOD_NAME, VERSION, current_time_in_seconds);
+		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Confusing Trap effect ended at: %d", MOD_NAME, MOD_VERSION, current_time_in_seconds);
 		active_traps.erase(Traps::CONFUSING);
 		active_traps_to_value_map.erase(Traps::CONFUSING);
 	}
 	if (active_traps.contains(Traps::DISORIENTING) && active_traps_to_value_map[Traps::DISORIENTING] < current_time_in_seconds)
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Disorienting Trap effect ended at: %d", MOD_NAME, VERSION, current_time_in_seconds);
+		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Disorienting Trap effect ended at: %d", MOD_NAME, MOD_VERSION, current_time_in_seconds);
 		active_traps.erase(Traps::DISORIENTING);
 		active_traps_to_value_map.erase(Traps::DISORIENTING);
 	}
 	if (active_traps.contains(Traps::INHIBITING) && active_traps_to_value_map[Traps::INHIBITING] < current_time_in_seconds)
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Inhibiting Trap effect ended at: %d", MOD_NAME, VERSION, current_time_in_seconds);
+		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Inhibiting Trap effect ended at: %d", MOD_NAME, MOD_VERSION, current_time_in_seconds);
 		active_traps.erase(Traps::INHIBITING);
 		active_traps_to_value_map.erase(Traps::INHIBITING);
 
@@ -572,7 +572,7 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 			}
 			else
 			{
-				g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Trap Triggered: %s", MOD_NAME, VERSION, magic_enum::enum_name(trap).data());
+				g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Trap Triggered: %s", MOD_NAME, MOD_VERSION, magic_enum::enum_name(trap).data());
 				active_traps.insert({ trap, { floor_trap->first, floor_trap->second } });
 
 				if (trap == Traps::CONFUSING)
@@ -584,12 +584,12 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 					if (!active_traps_to_value_map.contains(Traps::CONFUSING))
 					{
 						active_traps_to_value_map[Traps::CONFUSING] = current_time_in_seconds + Config::config.confusing_trap_duration_seconds;
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Confusing Trap effect started at: %d", MOD_NAME, VERSION, current_time_in_seconds);
+						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Confusing Trap effect started at: %d", MOD_NAME, MOD_VERSION, current_time_in_seconds);
 					}
 					else
 					{
 						active_traps_to_value_map[Traps::CONFUSING] += Config::config.confusing_trap_duration_seconds;
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Confusing Trap effect extended by: %d", MOD_NAME, VERSION, Config::config.confusing_trap_duration_seconds);
+						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Confusing Trap effect extended by: %d", MOD_NAME, MOD_VERSION, Config::config.confusing_trap_duration_seconds);
 					}
 				}
 				else if (trap == Traps::DISORIENTING)
@@ -601,12 +601,12 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 					if (!active_traps_to_value_map.contains(Traps::DISORIENTING))
 					{
 						active_traps_to_value_map[Traps::DISORIENTING] = current_time_in_seconds + Config::config.disorienting_trap_duration_seconds;
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Disorienting Trap effect started at: %d", MOD_NAME, VERSION, current_time_in_seconds);
+						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Disorienting Trap effect started at: %d", MOD_NAME, MOD_VERSION, current_time_in_seconds);
 					}
 					else
 					{
 						active_traps_to_value_map[Traps::DISORIENTING] += Config::config.disorienting_trap_duration_seconds;
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Disorienting Trap effect extended by: %d", MOD_NAME, VERSION, Config::config.disorienting_trap_duration_seconds);
+						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Disorienting Trap effect extended by: %d", MOD_NAME, MOD_VERSION, Config::config.disorienting_trap_duration_seconds);
 					}
 				}
 				else if (trap == Traps::EXPLODING)
@@ -627,12 +627,12 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 					if (!active_traps_to_value_map.contains(Traps::INHIBITING))
 					{
 						active_traps_to_value_map[Traps::INHIBITING] = current_time_in_seconds + Config::config.inhibiting_trap_duration_seconds;
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Inhibiting Trap effect started at: %d", MOD_NAME, VERSION, current_time_in_seconds);
+						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Inhibiting Trap effect started at: %d", MOD_NAME, MOD_VERSION, current_time_in_seconds);
 					}
 					else
 					{
 						active_traps_to_value_map[Traps::INHIBITING] += Config::config.inhibiting_trap_duration_seconds;
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Inhibiting Trap effect extended by: %d", MOD_NAME, VERSION, Config::config.inhibiting_trap_duration_seconds);
+						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Inhibiting Trap effect extended by: %d", MOD_NAME, MOD_VERSION, Config::config.inhibiting_trap_duration_seconds);
 					}
 				}
 				else if (trap == Traps::LURING)

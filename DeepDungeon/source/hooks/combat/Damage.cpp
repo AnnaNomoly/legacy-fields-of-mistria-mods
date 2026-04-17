@@ -174,7 +174,7 @@ RValue& GmlScriptDamageCallback(
 
 					afflatus_misery_proc = true;
 					StructVariableSet(*Arguments[0], "__deep_dungeon__afflatus_misery_applied", true);
-					g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - The Cleric Set Bonus effect \"Afflatus Misery\" triggered, increasing your damage by: %d!", MOD_NAME, VERSION, class_name_to_set_bonus_effect_value_map[Classes::CLERIC][ManagedSetBonuses::AFFLATUS_MISERY]);
+					g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - The Cleric Set Bonus effect \"Afflatus Misery\" triggered, increasing your damage by: %d!", MOD_NAME, MOD_VERSION, class_name_to_set_bonus_effect_value_map[Classes::CLERIC][ManagedSetBonuses::AFFLATUS_MISERY]);
 				}
 			}
 		}
@@ -202,7 +202,7 @@ RValue& GmlScriptDamageCallback(
 
 					soul_eater_proc = true;
 					StructVariableSet(*Arguments[0], "__deep_dungeon__soul_eater_applied", true);
-					g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - The Dark Knight Set Bonus effect \"Soul Eater\" triggered, increasing your damage by: %d!", MOD_NAME, VERSION, soul_eater_amount);
+					g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - The Dark Knight Set Bonus effect \"Soul Eater\" triggered, increasing your damage by: %d!", MOD_NAME, MOD_VERSION, soul_eater_amount);
 				}
 			}
 		}

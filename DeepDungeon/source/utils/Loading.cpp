@@ -362,7 +362,7 @@ void LoadDungeonBiomeCandidateMonsters()
 			if (monster_name_to_id_map.contains(enemy_name))
 				dungeon_biome_to_candidate_monsters_map[biome_name].insert(monster_name_to_id_map[enemy_name]);
 			else
-				g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to look up enemy name: %s", MOD_NAME, VERSION, enemy_name.c_str());
+				g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to look up enemy name: %s", MOD_NAME, MOD_VERSION, enemy_name.c_str());
 		}
 
 		if (i < biomes_length - 1)

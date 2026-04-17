@@ -62,12 +62,12 @@ static AurieStatus RegisterHook(const char* scriptName, PVOID callback)
     AurieStatus status = g_ModuleInterface->GetNamedRoutinePointer(scriptName, (PVOID*)&script);
     if (!AurieSuccess(status))
     {
-        g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, scriptName);
+        g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, MOD_VERSION, scriptName);
         return status;
     }
     status = MmCreateHook(g_ArSelfModule, scriptName, script->m_Functions->m_ScriptFunction, callback, nullptr);
     if (!AurieSuccess(status))
-        g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, scriptName);
+        g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, MOD_VERSION, scriptName);
     return status;
 }
 
@@ -139,13 +139,13 @@ EXPORTED AurieStatus ModuleInitialize(
     if (!AurieSuccess(status))
         return AURIE_MODULE_DEPENDENCY_NOT_RESOLVED;
 
-    g_ModuleInterface->Print(CM_LIGHTAQUA, "[%s %s] - Plugin starting...", MOD_NAME, VERSION);
+    g_ModuleInterface->Print(CM_LIGHTAQUA, "[%s %s] - Plugin starting...", MOD_NAME, MOD_VERSION);
 
     // Register object callback
     status = g_ModuleInterface->CreateCallback(g_ArSelfModule, EVENT_OBJECT_CALL, ObjectCallback, 0);
     if (!AurieSuccess(status))
     {
-        g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+        g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, MOD_VERSION);
         return status;
     }
 
@@ -155,11 +155,11 @@ EXPORTED AurieStatus ModuleInitialize(
         status = RegisterHook(entry.name, entry.callback);
         if (!AurieSuccess(status))
         {
-            g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+            g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, MOD_VERSION);
             return status;
         }
     }
 
-    g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Plugin started!", MOD_NAME, VERSION);
+    g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Plugin started!", MOD_NAME, MOD_VERSION);
     return AURIE_SUCCESS;
 }

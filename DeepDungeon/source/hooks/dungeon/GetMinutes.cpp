@@ -89,7 +89,7 @@ RValue& GmlScriptGetMinutesCallback(
 							ModifyDreadBeastAttackPatterns(false, true, monster);
 							StructVariableSet(monster, "__deep_dungeon__dread_beast", true);
 							StructVariableSet(monster, "__deep_dungeon__outbreak", true);
-							g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Configured Outbreak: %s", MOD_NAME, VERSION, monster_id_to_name_map[monster_id].c_str());
+							g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Configured Outbreak: %s", MOD_NAME, MOD_VERSION, monster_id_to_name_map[monster_id].c_str());
 
 							break;
 						}
