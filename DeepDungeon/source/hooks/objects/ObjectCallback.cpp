@@ -10,16 +10,15 @@ void ObjectCallback(
 {
 	auto& [self, other, code, argc, argv] = CodeEvent.Arguments();
 
-	if (!self)
-		return;
-
-	if (!self->m_Object)
+	if (!self || !self->m_Object)
 		return;
 
 	if (strstr(self->m_Object->m_Name, "obj_ari"))
 	{
+		CInstance* ari_instance = global_instance->GetRefMember("__ari")->ToInstance();
+
 		if (!script_name_to_reference_map.contains("obj_ari"))
-			script_name_to_reference_map["obj_ari"] = { global_instance->GetRefMember("__ari")->ToInstance(), self };
+			script_name_to_reference_map["obj_ari"] = { ari_instance, self };
 
 		RValue x;
 		g_ModuleInterface->GetBuiltin("x", self, NULL_INDEX, x);
@@ -73,9 +72,9 @@ void ObjectCallback(
 		if (active_traps.contains(Traps::EXPLODING))
 		{
 			// Apply damage to Ari
-			int current_health = GetHealth(global_instance->GetRefMember("__ari")->ToInstance(), self).ToInt64();
+			int current_health = GetHealth(ari_instance, self).ToInt64();
 			int penalty = current_health * Config::config.exploding_trap_current_health_damage_percent / 100;
-			SetHealth(global_instance->GetRefMember("__ari")->ToInstance(), self, current_health - penalty);
+			SetHealth(ari_instance, self, current_health - penalty);
 
 			// Apply damage to monsters
 			for (CInstance* monster : current_floor_monsters)
@@ -110,7 +109,39 @@ void ObjectCallback(
 			active_traps.erase(Traps::EXPLODING);
 		}
 
-		ApplyOfferingPenalties(global_instance->GetRefMember("__ari")->ToInstance(), self);
+		ApplyOfferingPenalties(ari_instance, self);
+
+		// Shared logic for Serenity/Benediction: undoes Fey, Oracle Blessed, and HP penalty.
+		auto ClearFloorEnchantments = [&]() {
+			if (active_floor_enchantments.contains(FloorEnchantments::FEY))
+			{
+				std::vector<CInstance*> refs = script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE];
+				ModifySpellCosts(true, true);
+				CancelStatusEffect(refs[0], refs[1], status_effect_name_to_id_map["fairy"]);
+			}
+			if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED] > 0)
+			{
+				int max_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+				int adjusted_max_health = max_health - class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED];
+				SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], adjusted_max_health);
+				int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+				VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], adjusted_max_health);
+				VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, adjusted_max_health);
+				class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED] = 0;
+			}
+			if (hp_penalty_amount > -1)
+			{
+				int max_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+				int adjusted_max_health = max_health + hp_penalty_amount;
+				hp_penalty_amount = -1;
+				SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], adjusted_max_health);
+				int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
+				VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], adjusted_max_health);
+				VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, adjusted_max_health);
+			}
+			active_floor_enchantments.clear();
+			active_sigils.insert(Sigils::SERENITY);
+		};
 
 		// Process used items.
 		RValue ari = self->ToRValue();
@@ -140,16 +171,16 @@ void ObjectCallback(
 										active_sigils.insert(Sigils::ALTERATION);
 										sigil_of_alteration_monster_id = SelectRandomMonsterForAlteration();
 									}
-									if (held_item_id == sigil_to_item_id_map[Sigils::CONCEALMENT])
+									else if (held_item_id == sigil_to_item_id_map[Sigils::CONCEALMENT])
 										active_sigils.insert(Sigils::CONCEALMENT);
-									if (held_item_id == sigil_to_item_id_map[Sigils::FORTIFICATION])
+									else if (held_item_id == sigil_to_item_id_map[Sigils::FORTIFICATION])
 										active_sigils.insert(Sigils::FORTIFICATION);
-									if (held_item_id == sigil_to_item_id_map[Sigils::FORTUNE])
+									else if (held_item_id == sigil_to_item_id_map[Sigils::FORTUNE])
 									{
 										active_sigils.insert(Sigils::FORTUNE);
-										SpawnLadder(global_instance->GetRefMember("__ari")->ToInstance(), self, ari_x, ari_y);
+										SpawnLadder(ari_instance, self, ari_x, ari_y);
 									}
-									if (held_item_id == sigil_to_item_id_map[Sigils::PROTECTION])
+									else if (held_item_id == sigil_to_item_id_map[Sigils::PROTECTION])
 									{
 										std::vector<CInstance*> refs = script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE];
 
@@ -157,78 +188,37 @@ void ObjectCallback(
 										RegisterStatusEffect(refs[0], refs[1], status_effect_name_to_id_map["guardians_shield"], RValue(), 1, 2147483647.0);
 										SetInvulnerabilityHits(2);
 									}
-									if (held_item_id == sigil_to_item_id_map[Sigils::RAGE])
+									else if (held_item_id == sigil_to_item_id_map[Sigils::RAGE])
 										active_sigils.insert(Sigils::RAGE);
-									if (held_item_id == sigil_to_item_id_map[Sigils::REDEMPTION])
+									else if (held_item_id == sigil_to_item_id_map[Sigils::REDEMPTION])
 									{
 										std::vector<CInstance*> refs = script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE];
 
 										active_sigils.insert(Sigils::REDEMPTION);
 										RegisterStatusEffect(refs[0], refs[1], status_effect_name_to_id_map["fairy"], RValue(), 1, 2147483647.0);
 									}
-									if (held_item_id == sigil_to_item_id_map[Sigils::SAFETY])
+									else if (held_item_id == sigil_to_item_id_map[Sigils::SAFETY])
 									{
 										floor_trap_positions.clear();
 										active_sigils.insert(Sigils::SAFETY);
 									}
-									if (held_item_id == sigil_to_item_id_map[Sigils::SERENITY])
-									{
-										// Undo Fey
-										if (active_floor_enchantments.contains(FloorEnchantments::FEY))
-										{
-											std::vector<CInstance*> refs = script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE];
-
-											ModifySpellCosts(true, true);
-											CancelStatusEffect(refs[0], refs[1], status_effect_name_to_id_map["fairy"]);
-										}
-
-										// Undo Blessed (Oracle Set Bonus)
-										if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED] > 0)
-										{
-											int max_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
-											int adjusted_max_health = max_health - class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED];
-
-											SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], adjusted_max_health);
-											int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
-
-											VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], adjusted_max_health);
-											VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, adjusted_max_health);
-
-											class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED] = 0;
-										}
-
-										// Undo HP Penalty
-										if (hp_penalty_amount > -1)
-										{
-											int max_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
-											int adjusted_max_health = max_health + hp_penalty_amount;
-											hp_penalty_amount = -1;
-
-											SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], adjusted_max_health);
-											int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
-
-											VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], adjusted_max_health);
-											VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, adjusted_max_health);
-										}
-
-										active_floor_enchantments.clear();
-										active_sigils.insert(Sigils::SERENITY);
-									}
-									if (held_item_id == sigil_to_item_id_map[Sigils::SILENCE])
+									else if (held_item_id == sigil_to_item_id_map[Sigils::SERENITY])
+										ClearFloorEnchantments();
+									else if (held_item_id == sigil_to_item_id_map[Sigils::SILENCE])
 										active_sigils.insert(Sigils::SILENCE);
-									if (held_item_id == sigil_to_item_id_map[Sigils::STRENGTH])
+									else if (held_item_id == sigil_to_item_id_map[Sigils::STRENGTH])
 										active_sigils.insert(Sigils::STRENGTH);
-									if (held_item_id == sigil_to_item_id_map[Sigils::TEMPTATION])
+									else if (held_item_id == sigil_to_item_id_map[Sigils::TEMPTATION])
 										active_sigils.insert(Sigils::TEMPTATION);
-									if (held_item_id == sigil_to_item_id_map[Sigils::SIGHT])
+									else if (held_item_id == sigil_to_item_id_map[Sigils::SIGHT])
 									{
 										int unified_time = GetUnifiedTime(script_name_to_reference_map[GML_SCRIPT_GET_UNIFIED_TIME][0], script_name_to_reference_map[GML_SCRIPT_GET_UNIFIED_TIME][1]).ToInt64();
 										RegisterStatusEffect(script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1], status_effect_name_to_id_map["sacred_light"], 0, unified_time, unified_time + 18000);
 										active_sigils.insert(Sigils::SIGHT);
 									}
-									if (held_item_id == sigil_to_item_id_map[Sigils::INTUITION])
+									else if (held_item_id == sigil_to_item_id_map[Sigils::INTUITION])
 									{
-										GenerateTreasureSpot(global_instance->GetRefMember("__ari")->ToInstance(), self);
+										GenerateTreasureSpot(ari_instance, self);
 										active_sigils.insert(Sigils::INTUITION);
 									}
 
@@ -241,48 +231,9 @@ void ObjectCallback(
 
 									if (held_item_id == greater_sigil_to_item_id_map[GreaterSigils::BENEDICTION])
 									{
-										// Undo Fey
-										if (active_floor_enchantments.contains(FloorEnchantments::FEY))
-										{
-											std::vector<CInstance*> refs = script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE];
-
-											ModifySpellCosts(true, true);
-											CancelStatusEffect(refs[0], refs[1], status_effect_name_to_id_map["fairy"]);
-										}
-
-										// Undo Blessed (Oracle Set Bonus)
-										if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED] > 0)
-										{
-											int max_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
-											int adjusted_max_health = max_health - class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED];
-
-											SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], adjusted_max_health);
-											int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
-
-											VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], adjusted_max_health);
-											VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, adjusted_max_health);
-
-											class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::BLESSED] = 0;
-										}
-
-										// Undo HP Penalty
-										if (hp_penalty_amount > -1)
-										{
-											int max_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
-											int adjusted_max_health = max_health + hp_penalty_amount;
-											hp_penalty_amount = -1;
-
-											SetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], adjusted_max_health);
-											int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
-
-											VitalsMenuSetMaxHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], adjusted_max_health);
-											VitalsMenuSetHealth(script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][0], script_name_to_reference_map[GML_SCRIPT_VITALS_MENU_SET_MAX_HEALTH][1], current_health, adjusted_max_health);
-										}
-
-										active_floor_enchantments.clear();
-										active_sigils.insert(Sigils::SERENITY);
+										ClearFloorEnchantments();
 										active_greater_sigils.insert(GreaterSigils::BENEDICTION);
-										ModifyHealth(global_instance->GetRefMember("__ari")->ToInstance(), self, 999);
+										ModifyHealth(ari_instance, self, 999);
 									}
 									else if (held_item_id == greater_sigil_to_item_id_map[GreaterSigils::ASTRAL_FLOW])
 									{
@@ -304,7 +255,7 @@ void ObjectCallback(
 									else if (held_item_id == greater_sigil_to_item_id_map[GreaterSigils::SPIRIT_SURGE])
 									{
 										active_greater_sigils.insert(GreaterSigils::SPIRIT_SURGE);
-										ModifyStamina(global_instance->GetRefMember("__ari")->ToInstance(), self, 999);
+										ModifyStamina(ari_instance, self, 999);
 									}
 									else if (held_item_id == greater_sigil_to_item_id_map[GreaterSigils::MEIKYO_SHISUI])
 									{
@@ -324,9 +275,9 @@ void ObjectCallback(
 
 									if (held_item_id == salve_name_to_id_map[HEALTH_SALVE_NAME])
 										salves_used[HEALTH_SALVE_NAME]++;
-									if (held_item_id == salve_name_to_id_map[STAMINA_SALVE_NAME])
+									else if (held_item_id == salve_name_to_id_map[STAMINA_SALVE_NAME])
 										salves_used[STAMINA_SALVE_NAME]++;
-									if (held_item_id == salve_name_to_id_map[MANA_SALVE_NAME])
+									else if (held_item_id == salve_name_to_id_map[MANA_SALVE_NAME])
 										salves_used[MANA_SALVE_NAME]++;
 
 									if (script_name_to_reference_map.contains(GML_SCRIPT_UPDATE_TOOLBAR_MENU))
@@ -421,18 +372,18 @@ void ObjectCallback(
 		// Restoration
 		if (is_restoration_tracked_interval)
 		{
-			int current_health = GetHealth(global_instance->GetRefMember("__ari")->ToInstance(), self).ToInt64();
+			int current_health = GetHealth(ari_instance, self).ToInt64();
 			if (current_health > 0)
-				ModifyHealth(global_instance->GetRefMember("__ari")->ToInstance(), self, 1);
+				ModifyHealth(ari_instance, self, 1);
 			is_restoration_tracked_interval = false;
 		}
 
 		// Fumigate
 		if (is_fumigate_tracked_interval)
 		{
-			int current_health = GetHealth(global_instance->GetRefMember("__ari")->ToInstance(), self).ToInt64();
+			int current_health = GetHealth(ari_instance, self).ToInt64();
 			if (current_health > 0)
-				ModifyHealth(global_instance->GetRefMember("__ari")->ToInstance(), self, -1);
+				ModifyHealth(ari_instance, self, -1);
 
 			is_fumigate_tracked_interval = false;
 		}
@@ -440,14 +391,14 @@ void ObjectCallback(
 		// Deep Wounds
 		if (is_deep_wounds_tracked_interval)
 		{
-			int current_health = GetHealth(global_instance->GetRefMember("__ari")->ToInstance(), self).ToInt64();
+			int current_health = GetHealth(ari_instance, self).ToInt64();
 			if (current_health > 0 && deep_wounds_damage_pool > 0)
 			{
 				int damage = std::clamp(deep_wounds_damage_pool * 10 / 100, 1, 10);
 				damage = min(damage, deep_wounds_damage_pool);
 
 				deep_wounds_damage_pool -= damage;
-				ModifyHealth(global_instance->GetRefMember("__ari")->ToInstance(), self, -1 * damage);
+				ModifyHealth(ari_instance, self, -1 * damage);
 			}
 
 			is_deep_wounds_tracked_interval = false;
@@ -456,31 +407,31 @@ void ObjectCallback(
 		// Drain (Dark Knight Set Bonus)
 		if (class_name_to_set_bonus_effect_value_map[Classes::DARK_KNIGHT][ManagedSetBonuses::DRAIN] > 0)
 		{
-			int max_health = GetMaxHealth(global_instance->GetRefMember("__ari")->ToInstance(), self).ToInt64();
+			int max_health = GetMaxHealth(ari_instance, self).ToInt64();
 			int recovery = max_health * GetDarkKnightDrainPotency();
 
-			ModifyHealth(global_instance->GetRefMember("__ari")->ToInstance(), self, recovery);
+			ModifyHealth(ari_instance, self, recovery);
 			class_name_to_set_bonus_effect_value_map[Classes::DARK_KNIGHT][ManagedSetBonuses::DRAIN] = 0;
 		}
 
 		// Soul Eater (Dark Knight Set Bonus)
 		if (class_name_to_set_bonus_effect_value_map[Classes::DARK_KNIGHT][ManagedSetBonuses::SOUL_EATER] > 0)
 		{
-			ModifyHealth(global_instance->GetRefMember("__ari")->ToInstance(), self, -1 * class_name_to_set_bonus_effect_value_map[Classes::DARK_KNIGHT][ManagedSetBonuses::SOUL_EATER]);
+			ModifyHealth(ari_instance, self, -1 * class_name_to_set_bonus_effect_value_map[Classes::DARK_KNIGHT][ManagedSetBonuses::SOUL_EATER]);
 			class_name_to_set_bonus_effect_value_map[Classes::DARK_KNIGHT][ManagedSetBonuses::SOUL_EATER] = 0;
 		}
 
 		// Aspir (Mage Set Bonus)
 		if (class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::ASPIR] > 0)
 		{
-			ModifyMana(global_instance->GetRefMember("__ari")->ToInstance(), self, 1);
+			ModifyMana(ari_instance, self, 1);
 			class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::ASPIR] = 0;
 		}
 
 		// Mana Font (Mage Set Bonus)
 		if (class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::MANA_FONT] >= 3)
 		{
-			ModifyMana(global_instance->GetRefMember("__ari")->ToInstance(), self, 4);
+			ModifyMana(ari_instance, self, 4);
 			class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::MANA_FONT] = 0;
 		}
 
@@ -498,13 +449,13 @@ void ObjectCallback(
 			}
 
 			class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::FLOOD] = 0;
-			CastSpell(global_instance->GetRefMember("__ari")->ToInstance(), self, spell_name_to_id_map["summon_rain"]);
+			CastSpell(ari_instance, self, spell_name_to_id_map["summon_rain"]);
 		}
 
 		// Second Wind
 		if (is_second_wind_tracked_interval)
 		{
-			ModifyStamina(global_instance->GetRefMember("__ari")->ToInstance(), self, 1);
+			ModifyStamina(ari_instance, self, 1);
 			is_second_wind_tracked_interval = false;
 		}
 
@@ -524,14 +475,14 @@ void ObjectCallback(
 		if (active_offerings.contains(Offerings::INNER_FIRE) && !inner_fire_cast)
 		{
 			inner_fire_cast = true;
-			CastSpell(global_instance->GetRefMember("__ari")->ToInstance(), self, spell_name_to_id_map["fire_breath"]); // TODO: Make sure this works using name_to_id_map
+			CastSpell(ari_instance, self, spell_name_to_id_map["fire_breath"]); // TODO: Make sure this works using name_to_id_map
 		}
 
 		// Reckoning
 		if (active_offerings.contains(Offerings::RECKONING) && !reckoning_applied)
 		{
 			reckoning_applied = true;
-			SetHealth(global_instance->GetRefMember("__ari")->ToInstance(), self, 1);
+			SetHealth(ari_instance, self, 1);
 		}
 
 		// Stoneskin
@@ -556,7 +507,7 @@ void ObjectCallback(
 		if (active_greater_sigils.contains(GreaterSigils::CHAIN_SPELL))
 			ModifySpellCosts(false, true);
 
-		TrackAriResources(global_instance->GetRefMember("__ari")->ToInstance(), self);
+		TrackAriResources(ari_instance, self);
 	}
 
 	if (strstr(self->m_Object->m_Name, "obj_monster"))
@@ -576,6 +527,8 @@ void ObjectCallback(
 
 			if (is_valid_monster_object)
 			{
+				auto armor_counts = CountEquippedClassArmor();
+
 				// Mimic Loot
 				if (monster_id.ToInt64() == monster_name_to_id_map["mimic"] && !StructVariableExists(monster, "__deep_dungeon__mimic_drop_sigil") && StructVariableExists(monster, "fsm"))
 				{
@@ -605,57 +558,16 @@ void ObjectCallback(
 					}
 				}
 
-				// Boss Battles
-				if (boss_battle == BossBattle::TIDE_CAVERNS_ORB)
+				// Boss Battles — TIDE_CAVERNS_ORB scales HP by 20x; all others by 3x.
+				if (boss_battle != BossBattle::NONE)
 				{
+					const double hp_multiplier = (boss_battle == BossBattle::TIDE_CAVERNS_ORB) ? 20.0 : 3.0;
 					if (!StructVariableExists(monster, "__deep_dungeon__boss_monster") && StructVariableExists(monster, "hit_points"))
 					{
 						double hit_points = monster.GetMember("hit_points").ToDouble();
 						if (std::isfinite(hit_points))
 						{
-							*monster.GetRefMember("hit_points") = hit_points * 20;
-							StructVariableSet(monster, "__deep_dungeon__boss_monster", true);
-						}
-					}
-					else if (StructVariableExists(monster, "__deep_dungeon__boss_monster"))
-						ModifyDreadBeastAttackPatterns(true, false, monster);
-				}
-				else if (boss_battle == BossBattle::DEEP_EARTH_ORB)
-				{
-					if (!StructVariableExists(monster, "__deep_dungeon__boss_monster") && StructVariableExists(monster, "hit_points"))
-					{
-						double hit_points = monster.GetMember("hit_points").ToDouble();
-						if (std::isfinite(hit_points))
-						{
-							*monster.GetRefMember("hit_points") = hit_points * 3;
-							StructVariableSet(monster, "__deep_dungeon__boss_monster", true);
-						}
-					}
-					else if (StructVariableExists(monster, "__deep_dungeon__boss_monster"))
-						ModifyDreadBeastAttackPatterns(true, false, monster);
-				}
-				else if (boss_battle == BossBattle::LAVA_CAVES_ORB)
-				{
-					if (!StructVariableExists(monster, "__deep_dungeon__boss_monster") && StructVariableExists(monster, "hit_points"))
-					{
-						double hit_points = monster.GetMember("hit_points").ToDouble();
-						if (std::isfinite(hit_points))
-						{
-							*monster.GetRefMember("hit_points") = hit_points * 3;
-							StructVariableSet(monster, "__deep_dungeon__boss_monster", true);
-						}
-					}
-					else if (StructVariableExists(monster, "__deep_dungeon__boss_monster"))
-						ModifyDreadBeastAttackPatterns(true, false, monster);
-				}
-				else if (boss_battle == BossBattle::RUINS_ORB)
-				{
-					if (!StructVariableExists(monster, "__deep_dungeon__boss_monster") && StructVariableExists(monster, "hit_points"))
-					{
-						double hit_points = monster.GetMember("hit_points").ToDouble();
-						if (std::isfinite(hit_points))
-						{
-							*monster.GetRefMember("hit_points") = hit_points * 3;
+							*monster.GetRefMember("hit_points") = hit_points * hp_multiplier;
 							StructVariableSet(monster, "__deep_dungeon__boss_monster", true);
 						}
 					}
@@ -695,7 +607,7 @@ void ObjectCallback(
 					double hit_points = monster.GetMember("hit_points").ToDouble();
 					if (std::isfinite(hit_points) && hit_points <= 0)
 					{
-						grudge_counter += 1;
+						++grudge_counter;
 						StructVariableSet(monster, "__deep_dungeon__grudge_tracked", true);
 					}
 				}
@@ -714,7 +626,7 @@ void ObjectCallback(
 							);
 						}());
 						std::uniform_int_distribution<size_t> zero_to_ninety_nine_distribution(0, 99);
-						bool drop_lift_key = zero_to_ninety_nine_distribution(random_generator) < Config::config.lift_key_drop_chance ? true : false;
+						bool drop_lift_key = zero_to_ninety_nine_distribution(random_generator) < Config::config.lift_key_drop_chance;
 
 						if (floor_number < 20) // Upper Mines
 						{
@@ -723,7 +635,7 @@ void ObjectCallback(
 								DropLiftKey();
 							if (StructVariableExists(monster, "__deep_dungeon__dread_beast") && !StructVariableExists(monster, "__deep_dungeon__outbreak"))
 							{
-								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < Config::config.soul_stone_drop_chance ? true : false;
+								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < Config::config.soul_stone_drop_chance;
 								if (drop_soul_stone)
 									DropItem(GetRandomSoulStone(), ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
 							}
@@ -735,7 +647,7 @@ void ObjectCallback(
 								DropLiftKey();
 							if (StructVariableExists(monster, "__deep_dungeon__dread_beast") && !StructVariableExists(monster, "__deep_dungeon__outbreak"))
 							{
-								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < Config::config.soul_stone_drop_chance ? true : false;
+								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < Config::config.soul_stone_drop_chance;
 								if (drop_soul_stone)
 									DropItem(GetRandomSoulStone(), ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
 							}
@@ -747,7 +659,7 @@ void ObjectCallback(
 								DropLiftKey();
 							if (StructVariableExists(monster, "__deep_dungeon__dread_beast") && !StructVariableExists(monster, "__deep_dungeon__outbreak"))
 							{
-								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < Config::config.soul_stone_drop_chance ? true : false;
+								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < Config::config.soul_stone_drop_chance;
 								if (drop_soul_stone)
 									DropItem(GetRandomSoulStone(), ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
 							}
@@ -759,7 +671,7 @@ void ObjectCallback(
 								DropLiftKey();
 							if (StructVariableExists(monster, "__deep_dungeon__dread_beast") && !StructVariableExists(monster, "__deep_dungeon__outbreak"))
 							{
-								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < Config::config.soul_stone_drop_chance ? true : false;
+								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < Config::config.soul_stone_drop_chance;
 								if (drop_soul_stone)
 									DropItem(GetRandomSoulStone(), ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
 							}
@@ -771,7 +683,7 @@ void ObjectCallback(
 								DropLiftKey();
 							if (StructVariableExists(monster, "__deep_dungeon__dread_beast") && !StructVariableExists(monster, "__deep_dungeon__outbreak"))
 							{
-								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < Config::config.soul_stone_drop_chance ? true : false;
+								bool drop_soul_stone = zero_to_ninety_nine_distribution(random_generator) < Config::config.soul_stone_drop_chance;
 								if (drop_soul_stone)
 									DropItem(GetRandomSoulStone(), ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
 							}
@@ -785,12 +697,12 @@ void ObjectCallback(
 				if (boss_battle != BossBattle::NONE && boss_monsters_configured > 0)
 				{
 					int boss_monsters_defeated = 0;
-					for (CInstance* monster : current_floor_monsters)
+					for (CInstance* m : current_floor_monsters)
 					{
-						if (StructVariableExists(monster, "hit_points"))
+						if (StructVariableExists(m, "hit_points"))
 						{
-							double hit_points = monster->GetMember("hit_points").ToDouble();
-							if (std::isfinite(hit_points) && hit_points <= 0)
+							double m_hit_points = m->GetMember("hit_points").ToDouble();
+							if (std::isfinite(m_hit_points) && m_hit_points <= 0)
 								boss_monsters_defeated++;
 						}
 					}
@@ -819,7 +731,7 @@ void ObjectCallback(
 						}());
 						std::uniform_int_distribution<size_t> zero_to_ninety_nine_distribution(0, 99);
 
-						bool aspir_proc = zero_to_ninety_nine_distribution(random_generator) < 15 ? true : false; // TODO: Tune this. Should Aspir have a 15% chance to proc?
+						bool aspir_proc = zero_to_ninety_nine_distribution(random_generator) < 15; // TODO: Tune this. Should Aspir have a 15% chance to proc?
 						if (aspir_proc)
 							class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::ASPIR]++;
 
@@ -828,7 +740,7 @@ void ObjectCallback(
 				}
 
 				// Holy Circle (Paladin Set Bonus)
-				if (CountEquippedClassArmor()[Classes::PALADIN] > 0 && !StructVariableExists(monster, "__deep_dungeon__holy_circle_proc") && StructVariableExists(monster, "hit_points") && StructVariableExists(monster, "__deep_dungeon__default_hit_points"))
+				if (armor_counts[Classes::PALADIN] > 0 && !StructVariableExists(monster, "__deep_dungeon__holy_circle_proc") && StructVariableExists(monster, "hit_points") && StructVariableExists(monster, "__deep_dungeon__default_hit_points"))
 				{
 					double hit_points = monster.GetMember("hit_points").ToDouble();
 					if (std::isfinite(hit_points) && hit_points <= 0)
@@ -854,30 +766,26 @@ void ObjectCallback(
 				}
 
 				// Gloom
-				if (active_floor_enchantments.contains(FloorEnchantments::GLOOM))
+				if (active_floor_enchantments.contains(FloorEnchantments::GLOOM)
+					&& !StructVariableExists(monster, "__deep_dungeon__gloom_applied") && StructVariableExists(monster, "hit_points"))
 				{
-					if (!StructVariableExists(monster, "__deep_dungeon__gloom_applied") && StructVariableExists(monster, "hit_points"))
+					double hit_points = monster.GetMember("hit_points").ToDouble();
+					if (std::isfinite(hit_points))
 					{
-						double hit_points = monster.GetMember("hit_points").ToDouble();
-						if (std::isfinite(hit_points))
-						{
-							*monster.GetRefMember("hit_points") = std::trunc(hit_points * Config::config.gloom_health_modifier);
-							StructVariableSet(monster, "__deep_dungeon__default_hit_points", std::trunc(hit_points * Config::config.gloom_health_modifier));
-							StructVariableSet(monster, "__deep_dungeon__gloom_applied", true);
-						}
+						*monster.GetRefMember("hit_points") = std::trunc(hit_points * Config::config.gloom_health_modifier);
+						StructVariableSet(monster, "__deep_dungeon__default_hit_points", std::trunc(hit_points * Config::config.gloom_health_modifier));
+						StructVariableSet(monster, "__deep_dungeon__gloom_applied", true);
 					}
 				}
 
 				// Reckoning
-				if (active_offerings.contains(Offerings::RECKONING))
+				if (active_offerings.contains(Offerings::RECKONING)
+					&& !StructVariableExists(monster, "__deep_dungeon__reckoning_applied") && StructVariableExists(monster, "hit_points"))
 				{
-					if (!StructVariableExists(monster, "__deep_dungeon__reckoning_applied") && StructVariableExists(monster, "hit_points"))
+					if (current_time_in_seconds < floor_start_time + 30) // All enemies seem to be created with HP var initialized before floor starts
 					{
-						if (current_time_in_seconds < floor_start_time + 30) // All enemies seem to be created with HP var initialized before floor starts
-						{
-							*monster.GetRefMember("hit_points") = 1;
-							StructVariableSet(monster, "__deep_dungeon__reckoning_applied", true);
-						}
+						*monster.GetRefMember("hit_points") = 1;
+						StructVariableSet(monster, "__deep_dungeon__reckoning_applied", true);
 					}
 				}
 
@@ -960,7 +868,7 @@ void ObjectCallback(
 							CreateNotification(false, CONCEALMENT_LOST_NOTIFICATION_KEY, nullptr, nullptr);
 
 							// Sneak Attack (Rogue Set Bonus)
-							if (CountEquippedClassArmor()[Classes::ROGUE] >= 2)
+							if (armor_counts[Classes::ROGUE] >= 2)
 								*monster.GetRefMember("hit_points") = 0;
 
 							if (script_name_to_reference_map.contains(GML_SCRIPT_UPDATE_TOOLBAR_MENU))

@@ -24,13 +24,13 @@ RValue& GmlScriptGetUiIconCallback(
 		{
 			int item_id = self.GetMember("item_id").ToInt64();
 
-			bool modify_icon = false;
-			if (deep_dungeon_items.contains(item_id))
-				modify_icon = true;
-			else if (item_id == item_name_to_id_map[MISTPOOL_HELMET_NAME] || item_id == item_name_to_id_map[MISTPOOL_CHESTPIECE_NAME] || item_id == item_name_to_id_map[MISTPOOL_GLOVES_NAME] || item_id == item_name_to_id_map[MISTPOOL_PANTS_NAME] || item_id == item_name_to_id_map[MISTPOOL_BOOTS_NAME])
-				modify_icon = true;
-			else if (item_id == item_name_to_id_map[MISTPOOL_PICK_AXE_NAME])
-				modify_icon = true;
+			bool modify_icon = deep_dungeon_items.contains(item_id)
+				|| item_id == item_name_to_id_map[MISTPOOL_HELMET_NAME]
+				|| item_id == item_name_to_id_map[MISTPOOL_CHESTPIECE_NAME]
+				|| item_id == item_name_to_id_map[MISTPOOL_GLOVES_NAME]
+				|| item_id == item_name_to_id_map[MISTPOOL_PANTS_NAME]
+				|| item_id == item_name_to_id_map[MISTPOOL_BOOTS_NAME]
+				|| item_id == item_name_to_id_map[MISTPOOL_PICK_AXE_NAME];
 
 			if (modify_icon)
 				Result = GetDynamicItemSprite(item_id);

@@ -8,59 +8,44 @@ RValue& GmlScriptUseItemCallback(
 	IN RValue** Arguments
 )
 {
+	const bool is_ari_using_item = Self->m_Object == NULL && strstr(Other->m_Object->m_Name, "obj_ari");
+
 	// Orbs
-	if (Self->m_Object == NULL && strstr(Other->m_Object->m_Name, "obj_ari") && orb_items.contains(held_item_id))
+	if (is_ari_using_item && orb_items.contains(held_item_id) && ari_current_gm_room != "rm_mines_entry")
 	{
-		if (ari_current_gm_room != "rm_mines_entry")
-		{
-			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - You are only allowed to use an orb at the mines entrance!", MOD_NAME, VERSION);
-			CreateNotification(false, ORB_RESTRICTED_NOTIFICATION_KEY, Self, Other);
-			return Result;
-		}
+		g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - You are only allowed to use an orb at the mines entrance!", MOD_NAME, VERSION);
+		CreateNotification(false, ORB_RESTRICTED_NOTIFICATION_KEY, Self, Other);
+		return Result;
 	}
 
 	// Lift Keys
-	if (Self->m_Object == NULL && strstr(Other->m_Object->m_Name, "obj_ari") && lift_key_items.contains(held_item_id))
+	if (is_ari_using_item && lift_key_items.contains(held_item_id) && ari_current_gm_room != "rm_mines_entry")
 	{
-		if (ari_current_gm_room != "rm_mines_entry")
-		{
-			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - You are only allowed to use a lift key at the mines entrance!", MOD_NAME, VERSION);
-			CreateNotification(false, LIFT_KEY_RESTRICTED_NOTIFICATION_KEY, Self, Other);
-			return Result;
-		}
+		g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - You are only allowed to use a lift key at the mines entrance!", MOD_NAME, VERSION);
+		CreateNotification(false, LIFT_KEY_RESTRICTED_NOTIFICATION_KEY, Self, Other);
+		return Result;
 	}
 
 	// Inhibiting Trap
-	if (active_traps.contains(Traps::INHIBITING))
+	if (is_ari_using_item && active_traps.contains(Traps::INHIBITING) && held_item_id == item_name_to_id_map[MISTPOOL_SWORD_NAME])
 	{
-		if (Self->m_Object == NULL && strstr(Other->m_Object->m_Name, "obj_ari"))
-		{
-			if (held_item_id == item_name_to_id_map[MISTPOOL_SWORD_NAME])
-			{
-				g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - You are unable to use the Mistpool Sword due to the Inhibiting Trap's effect!", MOD_NAME, VERSION);
-				CreateNotification(false, INHIBITED_PENALTY_NOTIFICATION_KEY, Self, Other);
-				return Result;
-			}
-		}
+		g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - You are unable to use the Mistpool Sword due to the Inhibiting Trap's effect!", MOD_NAME, VERSION);
+		CreateNotification(false, INHIBITED_PENALTY_NOTIFICATION_KEY, Self, Other);
+		return Result;
 	}
 
 	// Item Penalty
-	if (active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY))
+	if (is_ari_using_item && active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY)
+		&& deep_dungeon_items.contains(held_item_id) && held_item_id != sigil_to_item_id_map[Sigils::SERENITY] && held_item_id != item_name_to_id_map[MISTPOOL_SWORD_NAME] && !item_id_to_greater_sigil_map.contains(held_item_id))
 	{
-		if (Self->m_Object == NULL && strstr(Other->m_Object->m_Name, "obj_ari"))
-		{
-			if (deep_dungeon_items.contains(held_item_id) && held_item_id != sigil_to_item_id_map[Sigils::SERENITY] && held_item_id != item_name_to_id_map[MISTPOOL_SWORD_NAME] && !item_id_to_greater_sigil_map.contains(held_item_id))
-			{
-				g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - You are unable to use that item due to the Item Penalty floor enchantment!", MOD_NAME, VERSION);
-				CreateNotification(false, ITEM_PENALTY_NOTIFICATION_KEY, Self, Other);
-				return Result;
-			}
-		}
+		g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - You are unable to use that item due to the Item Penalty floor enchantment!", MOD_NAME, VERSION);
+		CreateNotification(false, ITEM_PENALTY_NOTIFICATION_KEY, Self, Other);
+		return Result;
 	}
 
 	if (AriCurrentGmRoomIsDungeonFloor())
 	{
-		if (Self->m_Object == NULL && strstr(Other->m_Object->m_Name, "obj_ari"))
+		if (is_ari_using_item)
 		{
 			if (Config::config.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE)
 			{
@@ -142,56 +127,24 @@ RValue& GmlScriptUseItemCallback(
 	}
 	else
 	{
-		if (Self->m_Object == NULL && strstr(Other->m_Object->m_Name, "obj_ari"))
+		// Deep Dungeon Exclusive Items
+		if (is_ari_using_item && deep_dungeon_items.contains(held_item_id))
 		{
-			// Deep Dungeon Exclusive Items
-			if (deep_dungeon_items.contains(held_item_id))
-			{
-				g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - You may only use Deep Dungeon specific items inside the dungeon!", MOD_NAME, VERSION);
-				CreateNotification(false, ITEM_RESTRICTED_NOTIFICATION_KEY, Self, Other);
-				return Result;
-			}
+			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - You may only use Deep Dungeon specific items inside the dungeon!", MOD_NAME, VERSION);
+			CreateNotification(false, ITEM_RESTRICTED_NOTIFICATION_KEY, Self, Other);
+			return Result;
 		}
 	}
 
-	// Sigil Item
-	sigil_item_used = false;
-	if (item_id_to_sigil_map.contains(held_item_id))
-		sigil_item_used = true;
-
-	// Greater Sigil Item
-	greater_sigil_item_used = false;
-	if (item_id_to_greater_sigil_map.contains(held_item_id))
-		greater_sigil_item_used = true;
-
-	// Salve Item
-	salve_item_used = false;
-	if (salve_items.contains(held_item_id))
-		salve_item_used = true;
-
-	// Lift Key Item
-	lift_key_used = false;
-	if (lift_key_items.contains(held_item_id))
-		lift_key_used = true;
-
-	// Orb Item
-	orb_item_used = false;
-	if (orb_items.contains(held_item_id))
-		orb_item_used = true;
-
-	// Heart Crystal
-	heart_crystal_used = false;
-	if (held_item_id == item_name_to_id_map["heart_crystal"])
-		heart_crystal_used = true;
+	sigil_item_used        = item_id_to_sigil_map.contains(held_item_id);
+	greater_sigil_item_used = item_id_to_greater_sigil_map.contains(held_item_id);
+	salve_item_used        = salve_items.contains(held_item_id);
+	lift_key_used          = lift_key_items.contains(held_item_id);
+	orb_item_used          = orb_items.contains(held_item_id);
+	heart_crystal_used     = held_item_id == item_name_to_id_map["heart_crystal"];
 
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_USE_ITEM));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
+	original(Self, Other, Result, ArgumentCount, Arguments);
 
 	return Result;
 }

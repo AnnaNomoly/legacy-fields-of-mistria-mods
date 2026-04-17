@@ -8,19 +8,12 @@ RValue& GmlScriptGetTreasureFromDistributionCallback(
 	IN RValue** Arguments
 )
 {
-	if (Self != nullptr && StructVariableExists(Self, "object_id"))
+	CInstance* source = (Self != nullptr && StructVariableExists(Self, "object_id")) ? Self
+	                  : (Other != nullptr && StructVariableExists(Other, "object_id")) ? Other
+	                  : nullptr;
+	if (source != nullptr)
 	{
-		int object_id = Self->GetMember("object_id").ToInt64();
-		if (object_id_to_name_map.contains(object_id))
-		{
-			std::string object_name = object_id_to_name_map[object_id];
-			if (DUNGEON_TREASURE_CHEST_NAMES.contains(object_name) && script_name_to_reference_map.contains(GML_SCRIPT_DROP_ITEM))
-				GenerateTreasureChestLoot(object_name, Self, Other);
-		}
-	}
-	else if (Other != nullptr && StructVariableExists(Other, "object_id"))
-	{
-		int object_id = Other->GetMember("object_id").ToInt64();
+		int object_id = source->GetMember("object_id").ToInt64();
 		if (object_id_to_name_map.contains(object_id))
 		{
 			std::string object_name = object_id_to_name_map[object_id];
@@ -30,13 +23,7 @@ RValue& GmlScriptGetTreasureFromDistributionCallback(
 	}
 
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_GET_TREASURE_FROM_DISTRIBUTION));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
+	original(Self, Other, Result, ArgumentCount, Arguments);
 
 	return Result;
 }

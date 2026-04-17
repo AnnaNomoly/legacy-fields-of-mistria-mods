@@ -12,13 +12,7 @@ RValue& GmlScriptDeserializeInventoryCallback(
 		script_name_to_reference_map[GML_SCRIPT_DESERIALIZE_INVENTORY] = { Self, Other };
 
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_DESERIALIZE_INVENTORY));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
+	original(Self, Other, Result, ArgumentCount, Arguments);
 
 	return Result;
 }
