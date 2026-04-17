@@ -79,6 +79,7 @@ void ScaleClassArmor(bool in_dungeon);
 int GetRandomSoulStone();
 std::map<Classes, int> CountEquippedClassArmor();
 std::map<int, int> GetClassArmorInfusions();
+bool CanAffordSpell(const std::string& spell_name);
 int GetClericAutoRegenPotency();
 double GetDarkKnightDrainPotency();
 double GetPaladinHolyCirclePotency();

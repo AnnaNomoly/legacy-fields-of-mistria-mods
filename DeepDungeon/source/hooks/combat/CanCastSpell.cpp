@@ -27,14 +27,7 @@ RValue& GmlScriptCanCastSpellCallback(
 	}
 
 	const int spell_id = Arguments[0]->ToInt64();
-	const int mana = ari_resource_to_value_map[AriResources::MANA];
-	const bool fey_active = active_floor_enchantments.contains(FloorEnchantments::FEY);
 	auto armor_counts = CountEquippedClassArmor();
-
-	auto CanAffordSpell = [&](const std::string& spell_name) -> bool {
-		int cost = spell_id_to_default_cost_map[spell_name_to_id_map[spell_name]];
-		return mana >= (fey_active ? cost / 2 : cost);
-	};
 
 	if (spell_id == spell_name_to_id_map["full_restore"])
 	{

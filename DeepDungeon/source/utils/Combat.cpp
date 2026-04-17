@@ -80,6 +80,14 @@ std::map<int, int> GetClassArmorInfusions()
 	return class_armor_infusions;
 }
 
+bool CanAffordSpell(const std::string& spell_name)
+{
+	int cost = spell_id_to_default_cost_map[spell_name_to_id_map[spell_name]];
+	int mana = ari_resource_to_value_map[AriResources::MANA];
+	bool fey_active = active_floor_enchantments.contains(FloorEnchantments::FEY);
+	return mana >= (fey_active ? cost / 2 : cost);
+}
+
 int GetClericAutoRegenPotency()
 {
 	int cleric_armor_pieces_equipped = CountEquippedClassArmor()[Classes::CLERIC];
