@@ -9,13 +9,7 @@ RValue& GmlScriptCreateItemPrototypesCallback(
 )
 {
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_CREATE_ITEM_PROTOTYPES));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
+	original(Self, Other, Result, ArgumentCount, Arguments);
 
 	size_t array_length;
 	g_ModuleInterface->GetArraySize(Result, array_length);

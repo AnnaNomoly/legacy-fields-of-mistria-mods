@@ -9,14 +9,14 @@ RValue& GmlScriptOnBeginStepCallback(
 )
 {
 	// Revealed Traps
-	for (int i = 0; i < revealed_floor_traps.size(); i++)
+	RValue spr_revealed_floor_trap = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_revealed_floor_trap" });
+	for (const RevealedFloorTrap& trap : revealed_floor_traps)
 	{
-		if (revealed_floor_traps[i].is_active)
+		if (trap.is_active)
 		{
-			RValue spr_revealed_floor_trap = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_revealed_floor_trap" });
-			g_ModuleInterface->CallBuiltin("variable_instance_set", { revealed_floor_traps[i].instance, "sprite_index", spr_revealed_floor_trap });
-			g_ModuleInterface->CallBuiltin("variable_instance_set", { revealed_floor_traps[i].instance, "image_speed", 0.10 }); // 0.15
-			g_ModuleInterface->CallBuiltin("variable_instance_set", { revealed_floor_traps[i].instance, "depth", 350 });
+			g_ModuleInterface->CallBuiltin("variable_instance_set", { trap.instance, "sprite_index", spr_revealed_floor_trap });
+			g_ModuleInterface->CallBuiltin("variable_instance_set", { trap.instance, "image_speed", 0.10 });
+			g_ModuleInterface->CallBuiltin("variable_instance_set", { trap.instance, "depth", 350 });
 		}
 	}
 
@@ -25,69 +25,61 @@ RValue& GmlScriptOnBeginStepCallback(
 	{
 		RValue spr_treasure_spot = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_treasure_spot" });
 		g_ModuleInterface->CallBuiltin("variable_instance_set", { treasure_spot.instance, "sprite_index", spr_treasure_spot });
-		g_ModuleInterface->CallBuiltin("variable_instance_set", { treasure_spot.instance, "image_speed", 0.3 }); // 0.6
+		g_ModuleInterface->CallBuiltin("variable_instance_set", { treasure_spot.instance, "image_speed", 0.3 });
 		g_ModuleInterface->CallBuiltin("variable_instance_set", { treasure_spot.instance, "depth", 350 });
 	}
 
-
-	// Meteor Sprites
-	for (int i = 0; i < meteor_aoes.size(); i++)
+	// Meteor AOEs
+	RValue spr_trap_meteor = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_trap_meteor" });
+	for (const CustomAOE& aoe : meteor_aoes)
 	{
-		if (meteor_aoes[i].is_active)
+		if (aoe.is_active)
 		{
-			RValue spr_trap_meteor = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_trap_meteor" });
-			g_ModuleInterface->CallBuiltin("variable_instance_set", { meteor_aoes[i].instance, "sprite_index", spr_trap_meteor });
-			g_ModuleInterface->CallBuiltin("variable_instance_set", { meteor_aoes[i].instance, "image_speed", 0.6 });
+			g_ModuleInterface->CallBuiltin("variable_instance_set", { aoe.instance, "sprite_index", spr_trap_meteor });
+			g_ModuleInterface->CallBuiltin("variable_instance_set", { aoe.instance, "image_speed", 0.6 });
 		}
 	}
 
-	// Gaze Traps
-	for (int i = 0; i < gaze_aoes.size(); i++)
+	// Gaze AOEs — switches to a vanish sprite when the AOE is near expiry.
+	RValue spr_trap_gaze       = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_trap_gaze" });
+	RValue spr_trap_gaze_vanish = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_trap_gaze_vanish" });
+	for (CustomAOE& aoe : gaze_aoes)
 	{
-		if (gaze_aoes[i].is_active)
-		{
-			// if (gaze.is_active && current_time_in_seconds >= gaze.spawned_time + gaze.duration)
-			if (current_time_in_seconds < gaze_aoes[i].spawned_time + gaze_aoes[i].duration - 120)
-			{
-				RValue spr_trap_gaze = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_trap_gaze" });
-				g_ModuleInterface->CallBuiltin("variable_instance_set", { gaze_aoes[i].instance, "sprite_index", spr_trap_gaze });
-				g_ModuleInterface->CallBuiltin("variable_instance_set", { gaze_aoes[i].instance, "image_speed", 0.6 });
-			}
-			else
-			{
-				RValue spr_trap_gaze_vanish = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_trap_gaze_vanish" });
-				g_ModuleInterface->CallBuiltin("variable_instance_set", { gaze_aoes[i].instance, "sprite_index", spr_trap_gaze_vanish });
-				g_ModuleInterface->CallBuiltin("variable_instance_set", { gaze_aoes[i].instance, "image_speed", 0.6 });
+		if (!aoe.is_active)
+			continue;
 
-				if (!StructVariableExists(gaze_aoes[i].instance, "__deep_dungeon__reset_image_index"))
-				{
-					StructVariableSet(gaze_aoes[i].instance, "__deep_dungeon__reset_image_index", true);
-					g_ModuleInterface->CallBuiltin("variable_instance_set", { gaze_aoes[i].instance, "image_index", 0 });   // Reset frame
-				}
+		if (current_time_in_seconds < aoe.spawned_time + aoe.duration - 120)
+		{
+			g_ModuleInterface->CallBuiltin("variable_instance_set", { aoe.instance, "sprite_index", spr_trap_gaze });
+			g_ModuleInterface->CallBuiltin("variable_instance_set", { aoe.instance, "image_speed", 0.6 });
+		}
+		else
+		{
+			g_ModuleInterface->CallBuiltin("variable_instance_set", { aoe.instance, "sprite_index", spr_trap_gaze_vanish });
+			g_ModuleInterface->CallBuiltin("variable_instance_set", { aoe.instance, "image_speed", 0.6 });
+
+			if (!StructVariableExists(aoe.instance, "__deep_dungeon__reset_image_index"))
+			{
+				StructVariableSet(aoe.instance, "__deep_dungeon__reset_image_index", true);
+				g_ModuleInterface->CallBuiltin("variable_instance_set", { aoe.instance, "image_index", 0 });
 			}
 		}
 	}
 
-	// Void Traps
-	for (int i = 0; i < void_aoes.size(); i++)
+	// Void AOEs
+	RValue spr_trap_void = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_trap_void" });
+	for (const CustomAOE& aoe : void_aoes)
 	{
-		if (void_aoes[i].is_active)
+		if (aoe.is_active)
 		{
-			RValue spr_trap_void = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_trap_void" });
-			g_ModuleInterface->CallBuiltin("variable_instance_set", { void_aoes[i].instance, "sprite_index", spr_trap_void });
-			g_ModuleInterface->CallBuiltin("variable_instance_set", { void_aoes[i].instance, "image_speed", 0.25 }); // 0.1
-			g_ModuleInterface->CallBuiltin("variable_instance_set", { void_aoes[i].instance, "depth", -1000 });
+			g_ModuleInterface->CallBuiltin("variable_instance_set", { aoe.instance, "sprite_index", spr_trap_void });
+			g_ModuleInterface->CallBuiltin("variable_instance_set", { aoe.instance, "image_speed", 0.25 });
+			g_ModuleInterface->CallBuiltin("variable_instance_set", { aoe.instance, "depth", -1000 });
 		}
 	}
 
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_ON_BEGIN_STEP));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
+	original(Self, Other, Result, ArgumentCount, Arguments);
 
 	return Result;
 }
