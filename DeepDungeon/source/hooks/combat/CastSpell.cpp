@@ -10,12 +10,12 @@ RValue& GmlScriptCastSpellCallback(
 {
 	const bool in_dungeon = AriCurrentGmRoomIsDungeonFloor();
 	const int spell_id = Arguments[0]->ToInt64();
-	auto armor_counts = in_dungeon ? CountEquippedClassArmor() : std::map<Classes, int>{};
+	auto armor_set_bonuses = in_dungeon ? GetArmorSetBonuses() : ArmorSetBonuses{};
 
 	if (in_dungeon)
 	{
 		// Mana Font (Mage, 5 pieces) — counts every spell cast except Flood recasts.
-		if (armor_counts[Classes::MAGE] == 5
+		if (armor_set_bonuses.mage.ManaFont()
 			&& (spell_id != spell_name_to_id_map["summon_rain"]
 				|| class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::FLOOD] == -1))
 		{
@@ -26,7 +26,7 @@ RValue& GmlScriptCastSpellCallback(
 		if (spell_id == spell_name_to_id_map["full_restore"])
 		{
 			// Dark Seal (Dark Knight, 3+ pieces) — Siphon Life: drain 15% of each monster's base HP.
-			if (armor_counts[Classes::DARK_KNIGHT] >= 3)
+			if (armor_set_bonuses.dark_knight.DarkSeal())
 			{
 				for (CInstance* monster : current_floor_monsters)
 				{
@@ -54,7 +54,7 @@ RValue& GmlScriptCastSpellCallback(
 				return Result;
 			}
 			// Elemental Seal (Mage, 3+ pieces) — applies weapon enchantment based on current seal element.
-			else if (armor_counts[Classes::MAGE] >= 3)
+			else if (armor_set_bonuses.mage.ElementalSeal())
 			{
 				ElementalSealEffects effect = *magic_enum::enum_cast<ElementalSealEffects>(
 					class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::ELEMENTAL_SEAL]);
@@ -77,7 +77,7 @@ RValue& GmlScriptCastSpellCallback(
 				return Result;
 			}
 			// Predict (Oracle, 5 pieces) — cost set to zero by ModifySpellCosts.
-			else if (armor_counts[Classes::ORACLE] >= 5)
+			else if (armor_set_bonuses.oracle.FullSet())
 			{
 				CreateNotification(false, PREDICT_SPELL_CAST_NOTIFICATION_KEY, Self, Other);
 				class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] = 1;
@@ -87,7 +87,7 @@ RValue& GmlScriptCastSpellCallback(
 		else if (spell_id == spell_name_to_id_map["growth"])
 		{
 			// Quake (Mage, 4+ pieces) — deals 90% of max HP to Ari and all monsters.
-			if (armor_counts[Classes::MAGE] >= 4)
+			if (armor_set_bonuses.mage.Quake())
 			{
 				int ari_max_health = ari_resource_to_value_map[AriResources::MAX_HEALTH];
 				int ari_quake_damage = std::trunc(ari_max_health * 0.9);
@@ -110,7 +110,7 @@ RValue& GmlScriptCastSpellCallback(
 				return Result;
 			}
 			// Condemn (Oracle, 5 pieces) — queues a random offering for the next floor.
-			else if (armor_counts[Classes::ORACLE] >= 5)
+			else if (armor_set_bonuses.oracle.FullSet())
 			{
 				static thread_local pcg32 random_generator([] {
 					std::random_device rd;
@@ -136,7 +136,7 @@ RValue& GmlScriptCastSpellCallback(
 	if (in_dungeon)
 	{
 		// Divine Seal (Cleric, 3+ pieces) — full_restore clears all floor enchantments.
-		if (spell_id == spell_name_to_id_map["full_restore"] && armor_counts[Classes::CLERIC] >= 3)
+		if (spell_id == spell_name_to_id_map["full_restore"] && armor_set_bonuses.cleric.DivineSeal())
 		{
 			if (active_floor_enchantments.contains(FloorEnchantments::FEY))
 			{
@@ -177,7 +177,7 @@ RValue& GmlScriptCastSpellCallback(
 		}
 
 		// Flood (Mage, 2+ pieces) — records cast time to enforce recast cooldown.
-		if (spell_id == spell_name_to_id_map["summon_rain"] && armor_counts[Classes::MAGE] >= 2
+		if (spell_id == spell_name_to_id_map["summon_rain"] && armor_set_bonuses.mage.Flood()
 			&& class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::FLOOD] <= 0)
 		{
 			class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::FLOOD] = current_time_in_seconds;

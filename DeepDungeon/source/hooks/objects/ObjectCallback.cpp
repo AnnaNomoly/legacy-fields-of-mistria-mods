@@ -528,7 +528,7 @@ void ObjectCallback(
 
 			if (is_valid_monster_object)
 			{
-				auto armor_counts = CountEquippedClassArmor();
+				auto armor_set_bonuses = GetArmorSetBonuses();
 
 				// Mimic Loot
 				if (monster_id.ToInt64() == monster_name_to_id_map["mimic"] && !StructVariableExists(monster, "__deep_dungeon__mimic_drop_sigil") && StructVariableExists(monster, "fsm"))
@@ -718,7 +718,7 @@ void ObjectCallback(
 				}
 
 				// Aspir (Mage Set Bonus)
-				if (!StructVariableExists(monster, "__deep_dungeon__aspir_proc") && StructVariableExists(monster, "hit_points"))
+				if (armor_set_bonuses.mage.Aspir() && !StructVariableExists(monster, "__deep_dungeon__aspir_proc") && StructVariableExists(monster, "hit_points"))
 				{
 					double hit_points = monster.GetMember("hit_points").ToDouble();
 					if (std::isfinite(hit_points) && hit_points <= 0)
@@ -741,7 +741,7 @@ void ObjectCallback(
 				}
 
 				// Holy Circle (Paladin Set Bonus)
-				if (armor_counts[Classes::PALADIN] > 0 && !StructVariableExists(monster, "__deep_dungeon__holy_circle_proc") && StructVariableExists(monster, "hit_points") && StructVariableExists(monster, "__deep_dungeon__default_hit_points"))
+				if (armor_set_bonuses.paladin.HolyCircle() && !StructVariableExists(monster, "__deep_dungeon__holy_circle_proc") && StructVariableExists(monster, "hit_points") && StructVariableExists(monster, "__deep_dungeon__default_hit_points"))
 				{
 					double hit_points = monster.GetMember("hit_points").ToDouble();
 					if (std::isfinite(hit_points) && hit_points <= 0)
@@ -869,7 +869,7 @@ void ObjectCallback(
 							CreateNotification(false, CONCEALMENT_LOST_NOTIFICATION_KEY, nullptr, nullptr);
 
 							// Sneak Attack (Rogue Set Bonus)
-							if (armor_counts[Classes::ROGUE] >= 2)
+							if (armor_set_bonuses.rogue.Hide())
 								*monster.GetRefMember("hit_points") = 0;
 
 							if (script_name_to_reference_map.contains(GML_SCRIPT_UPDATE_TOOLBAR_MENU))

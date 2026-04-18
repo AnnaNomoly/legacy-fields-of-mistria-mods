@@ -45,6 +45,7 @@ std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floo
 		);
 	}());
 	std::uniform_int_distribution<size_t> zero_to_ninety_nine_distribution(0, 99);
+	auto armor_set_bonuses = GetArmorSetBonuses();
 
 	std::unordered_set<FloorEnchantments> random_floor_enchantments = {};
 
@@ -61,7 +62,7 @@ std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floo
 	if (dungeon_biome == DungeonBiomes::UPPER)
 	{
 		// Predict (Oracle Set Bonus)
-		if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] == 1 && CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+		if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] == 1 && armor_set_bonuses.oracle.FullSet())
 		{
 			// 70% chance for Group 1
 			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
@@ -130,7 +131,7 @@ std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floo
 	if (dungeon_biome == DungeonBiomes::TIDE_CAVERNS)
 	{
 		// Predict (Oracle Set Bonus)
-		if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] == 1 && CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+		if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] == 1 && armor_set_bonuses.oracle.FullSet())
 		{
 			// 85% chance for Group 1
 			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
@@ -210,7 +211,7 @@ std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floo
 	if (dungeon_biome == DungeonBiomes::DEEP_EARTH)
 	{
 		// Predict (Oracle Set Bonus)
-		if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] == 1 && CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+		if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] == 1 && armor_set_bonuses.oracle.FullSet())
 		{
 			// 65% chance for Group 1
 			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
@@ -290,7 +291,7 @@ std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floo
 	if (dungeon_biome == DungeonBiomes::LAVA_CAVES)
 	{
 		// Predict (Oracle Set Bonus)
-		if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] == 1 && CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+		if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] == 1 && armor_set_bonuses.oracle.FullSet())
 		{
 			// 80% chance for Group 1
 			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
@@ -370,7 +371,7 @@ std::unordered_set<FloorEnchantments> RandomFloorEnchantments(bool is_first_floo
 	if (dungeon_biome == DungeonBiomes::RUINS)
 	{
 		// Predict (Oracle Set Bonus)
-		if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] == 1 && CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+		if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] == 1 && armor_set_bonuses.oracle.FullSet())
 		{
 			// 85% chance for Group 1
 			int group_one_chance = zero_to_ninety_nine_distribution(random_generator);
@@ -473,7 +474,7 @@ void GenerateFloorTraps()
 		int random_trap_count = traps_for_room_distribution(random_generator);
 
 		// Disarm Trap (Rogue Set Bonus)
-		if (CountEquippedClassArmor()[Classes::ROGUE] >= 4)
+		if (GetArmorSetBonuses().rogue.DisarmTrap())
 			random_trap_count -= 2;
 
 		// Peril
@@ -565,7 +566,7 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 
 			// Hallowed Ground (Paladin Set Bonus)
 			bool malfunction = zero_to_ninety_nine_distribution(random_generator) < 50 ? true : false;
-			if (CountEquippedClassArmor()[Classes::PALADIN] == 5 && malfunction)
+			if (GetArmorSetBonuses().paladin.HallowedGround() && malfunction)
 			{
 				PlaySoundEffect("snd_bark_heart603", 100, 1);
 				CreateNotification(true, MALFUNCTION_TRAP_NOTIFICATION_KEY, Self, Other);
@@ -929,7 +930,7 @@ void GenerateTreasureChestLoot(std::string object_name, CInstance* Self, CInstan
 		sigil_roll_success_thresholds = { 100, 100, 25, 10 };
 
 	// Treasure Hunter (Rogue Set Bonus)
-	if (CountEquippedClassArmor()[Classes::ROGUE] == 5)
+	if (GetArmorSetBonuses().rogue.TreasureHunter())
 		sigil_roll_success_thresholds.push_back(100);
 
 	std::unordered_set<Sigils> sigils_spawned = {};

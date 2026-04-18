@@ -101,7 +101,7 @@ RValue& GmlScriptGetMinutesCallback(
 		}
 
 		// Auto Regen (Cleric Set Bonus)
-		if (!GameIsPaused() && AriCurrentGmRoomIsDungeonFloor() && CountEquippedClassArmor()[Classes::CLERIC] > 0)
+		if (!GameIsPaused() && AriCurrentGmRoomIsDungeonFloor() && GetArmorSetBonuses().cleric.AutoRegen())
 		{
 			if (class_name_to_set_bonus_effect_value_map[Classes::CLERIC][ManagedSetBonuses::AUTO_REGEN] == 0)
 				class_name_to_set_bonus_effect_value_map[Classes::CLERIC][ManagedSetBonuses::AUTO_REGEN] = current_time_in_seconds;

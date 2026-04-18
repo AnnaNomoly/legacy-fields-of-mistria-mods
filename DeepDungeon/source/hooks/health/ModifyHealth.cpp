@@ -14,7 +14,7 @@ RValue& GmlScriptModifyHealthCallback(
 	const bool is_damage = amount < 0;
 
 	// Afflatus Misery (Cleric Set Bonus) — accumulates incoming damage into a pool.
-	if (is_damage && CountEquippedClassArmor()[Classes::CLERIC] == 5 && AriCurrentGmRoomIsDungeonFloor())
+	if (is_damage && GetArmorSetBonuses().cleric.AfflatusMisery() && AriCurrentGmRoomIsDungeonFloor())
 		class_name_to_set_bonus_effect_value_map[Classes::CLERIC][ManagedSetBonuses::AFFLATUS_MISERY] += abs(amount);
 
 	// Frailty — counts incoming hits to scale damage.
@@ -54,7 +54,7 @@ RValue& GmlScriptModifyHealthCallback(
 	original(Self, Other, Result, ArgumentCount, Arguments);
 
 	// Flee (Rogue Set Bonus) — triggers a speed buff when Ari drops to or below 30% HP.
-	if (Arguments[0]->ToInt64() < 0 && CountEquippedClassArmor()[Classes::ROGUE] >= 1 && AriCurrentGmRoomIsDungeonFloor() && class_name_to_set_bonus_effect_value_map[Classes::ROGUE][ManagedSetBonuses::FLEE] == 0)
+	if (Arguments[0]->ToInt64() < 0 && GetArmorSetBonuses().rogue.Flee() && AriCurrentGmRoomIsDungeonFloor() && class_name_to_set_bonus_effect_value_map[Classes::ROGUE][ManagedSetBonuses::FLEE] == 0)
 	{
 		int current_health = GetHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
 		int max_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();

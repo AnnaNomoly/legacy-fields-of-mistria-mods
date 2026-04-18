@@ -562,6 +562,8 @@ RValue GetDynamicItemSprite(int item_id)
 
 RValue GetDynamicUiSprite(std::string sprite_name)
 {
+	auto armor_set_bonuses = GetArmorSetBonuses();
+
 	// OnDungeonRoomStart Conversation Sprite Overrides
 	if (!journal_menu_open) // floor_start_time == current_time_in_seconds
 	{
@@ -580,7 +582,7 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 	if (sprite_name == "spr_ui_journal_magic_restore_spell_icon_main")
 	{
 		// Dark Seal (Dark Knight Set Bonus)
-		if (CountEquippedClassArmor()[Classes::DARK_KNIGHT] >= 3)
+		if (armor_set_bonuses.dark_knight.DarkSeal())
 		{
 			if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || class_name_to_set_bonus_effect_value_map[Classes::DARK_KNIGHT][ManagedSetBonuses::DARK_SEAL] > 0 || (Config::config.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
 				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_siphon_life_spell_icon_disabled" });
@@ -588,7 +590,7 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_siphon_life_spell_icon_main" });
 		}
 		// Elemental Seal (Mage Set Bonus)
-		else if (CountEquippedClassArmor()[Classes::MAGE] >= 3 && class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::ELEMENTAL_SEAL] > 0)
+		else if (armor_set_bonuses.mage.ElementalSeal() && class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::ELEMENTAL_SEAL] > 0)
 		{
 			ElementalSealEffects elemental_seal_effect = *magic_enum::enum_cast<ElementalSealEffects>(class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::ELEMENTAL_SEAL]);
 			if (elemental_seal_effect == ElementalSealEffects::FIRE)
@@ -614,7 +616,7 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 			}
 		}
 		// Predict (Oracle Set Bonus)
-		else if (CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+		else if (armor_set_bonuses.oracle.FullSet())
 		{
 			if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] > 0 || (Config::config.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
 				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_predict_spell_icon_disabled" });
@@ -629,7 +631,7 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 	else if (sprite_name == "spr_ui_journal_magic_rain_spell_icon_main")
 	{
 		// Flood (Mage Set Bonus)
-		if (CountEquippedClassArmor()[Classes::MAGE] >= 2)
+		if (armor_set_bonuses.mage.Flood())
 		{
 			if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::FLOOD] >= 0 || (Config::config.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
 				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_flood_spell_icon_disabled" });
@@ -644,7 +646,7 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 	else if (sprite_name == "spr_ui_journal_magic_growth_spell_icon_main")
 	{
 		// Quake (Mage Set Bonus)
-		if (CountEquippedClassArmor()[Classes::MAGE] >= 4)
+		if (armor_set_bonuses.mage.Quake())
 		{
 			if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::QUAKE] > 0 || (Config::config.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
 				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_quake_spell_icon_disabled" });
@@ -652,7 +654,7 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_quake_spell_icon_main" });
 		}
 		// Condemn (Oracle Set Bonus)
-		else if (CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+		else if (armor_set_bonuses.oracle.FullSet())
 		{
 			if (active_floor_enchantments.contains(FloorEnchantments::AMNESIA) || class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::CONDEMN] > 0 || (Config::config.enable_boss_fight_restrictions && boss_battle != BossBattle::NONE))
 				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_condemn_spell_icon_disabled" });
@@ -727,10 +729,10 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 	else if (sprite_name == "spr_ui_journal_magic_restore_card_icon")
 	{
 		// Dark Seal (Dark Knight Set Bonus)
-		if (CountEquippedClassArmor()[Classes::DARK_KNIGHT] >= 3)
+		if (armor_set_bonuses.dark_knight.DarkSeal())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_siphon_life_card_icon" });
 		// Elemental Seal (Mage Set Bonus)
-		else if (CountEquippedClassArmor()[Classes::MAGE] >= 3 && class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::ELEMENTAL_SEAL] > 0)
+		else if (armor_set_bonuses.mage.ElementalSeal() && class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::ELEMENTAL_SEAL] > 0)
 		{
 			ElementalSealEffects elemental_seal_effect = *magic_enum::enum_cast<ElementalSealEffects>(class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::ELEMENTAL_SEAL]);
 			if (elemental_seal_effect == ElementalSealEffects::FIRE)
@@ -741,34 +743,34 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_enpoison_card_icon" });
 		}
 		// Predict (Oracle Set Bonus)
-		else if (CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+		else if (armor_set_bonuses.oracle.FullSet())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_predict_card_icon" });
 	}
 	// Summon Rain (Card Icon)
 	else if (sprite_name == "spr_ui_journal_magic_rain_card_icon")
 	{
 		// Flood (Mage Set Bonus)
-		if (CountEquippedClassArmor()[Classes::MAGE] >= 2)
+		if (armor_set_bonuses.mage.Flood())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_flood_card_icon" });
 	}
 	// Growth (Card Icon)
 	else if (sprite_name == "spr_ui_journal_magic_growth_card_icon")
 	{
 		// Quake (Mage Set Bonus)
-		if (CountEquippedClassArmor()[Classes::MAGE] >= 4)
+		if (armor_set_bonuses.mage.Quake())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_quake_card_icon" });
 		// Condemn (Oracle Set Bonus)
-		else if (CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+		else if (armor_set_bonuses.oracle.FullSet())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_condemn_card_icon" });
 	}
 	// Full Restore (Card Ribbon)
 	else if (sprite_name == "spr_ui_journal_magic_card_ribbon_restore")
 	{
 		// Dark Seal (Dark Knight Set Bonus)
-		if (CountEquippedClassArmor()[Classes::DARK_KNIGHT] >= 3)
+		if (armor_set_bonuses.dark_knight.DarkSeal())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_card_ribbon_siphon_life" });
 		// Elemental Seal (Mage Set Bonus)
-		else if (CountEquippedClassArmor()[Classes::MAGE] >= 3 && class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::ELEMENTAL_SEAL] > 0)
+		else if (armor_set_bonuses.mage.ElementalSeal() && class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::ELEMENTAL_SEAL] > 0)
 		{
 			ElementalSealEffects elemental_seal_effect = *magic_enum::enum_cast<ElementalSealEffects>(class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::ELEMENTAL_SEAL]);
 			if (elemental_seal_effect == ElementalSealEffects::FIRE)
@@ -779,37 +781,37 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_card_ribbon_enpoison" });
 		}
 		// Predict (Oracle Set Bonus)
-		else if (CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+		else if (armor_set_bonuses.oracle.FullSet())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_card_ribbon_predict" });
 	}
 	// Summon Rain (Card Ribbon)
 	else if (sprite_name == "spr_ui_journal_magic_card_ribbon_rain")
 	{
 		// Flood (Mage Set Bonus)
-		if (CountEquippedClassArmor()[Classes::MAGE] >= 2)
+		if (armor_set_bonuses.mage.Flood())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_card_ribbon_flood" });
 	}
 	// Growth (Card Ribbon)
 	else if (sprite_name == "spr_ui_journal_magic_card_ribbon_growth")
 	{
 		// Quake (Mage Set Bonus)
-		if (CountEquippedClassArmor()[Classes::MAGE] >= 4)
+		if (armor_set_bonuses.mage.Quake())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_card_ribbon_quake" });
 		// Condemn (Oracle Set Bonus)
-		else if (CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+		else if (armor_set_bonuses.oracle.FullSet())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_magic_card_ribbon_condemn" });
 	}
 	// Spell Card Backplate
 	else if (sprite_name == "spr_ui_journal_magic_card_backplate")
 	{
 		// Dark Seal (Dark Knight Set Bonus)
-		if (CountEquippedClassArmor()[Classes::DARK_KNIGHT] >= 3)
+		if (armor_set_bonuses.dark_knight.DarkSeal())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_sipon_life_card_backplate" });
 		// Flood (Mage Set Bonus)
-		else if (CountEquippedClassArmor()[Classes::MAGE] >= 2)
+		else if (armor_set_bonuses.mage.Flood())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_flood_card_backplate" });
 		// Elemental Seal (Mage Set Bonus)
-		else if (CountEquippedClassArmor()[Classes::MAGE] >= 3 && class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::ELEMENTAL_SEAL] > 0)
+		else if (armor_set_bonuses.mage.ElementalSeal() && class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::ELEMENTAL_SEAL] > 0)
 		{
 			ElementalSealEffects elemental_seal_effect = *magic_enum::enum_cast<ElementalSealEffects>(class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::ELEMENTAL_SEAL]);
 			if (elemental_seal_effect == ElementalSealEffects::FIRE)
@@ -820,7 +822,7 @@ RValue GetDynamicUiSprite(std::string sprite_name)
 				return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_enpoison_card_backplate" });
 		}
 		// Quake (Mage Set Bonus)
-		else if (CountEquippedClassArmor()[Classes::MAGE] >= 4)
+		else if (armor_set_bonuses.mage.Quake())
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_journal_quake_card_backplate" });
 	}
 	return RValue();

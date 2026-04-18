@@ -19,6 +19,7 @@ RValue& GmlScriptDamageCallback(
 	const int64_t target_id = Arguments[0]->GetMember("target").ToInt64(); // 1 == Ari, anything else == monster
 	const bool in_dungeon = AriCurrentGmRoomIsDungeonFloor();
 	const bool fire_breath_active = global_instance->GetMember("__ari").GetMember("fire_breath_time").ToInt64() != 0;
+	const auto armor_set_bonuses = in_dungeon ? GetArmorSetBonuses() : ArmorSetBonuses{};
 
 	// Frailty — incoming damage to Ari scales up per hit counter.
 	if (active_floor_enchantments.contains(FloorEnchantments::FRAILTY))
@@ -159,7 +160,7 @@ RValue& GmlScriptDamageCallback(
 
 	// Afflatus Misery (Cleric, 5 pieces) — 10% chance to add accumulated pool to damage.
 	bool afflatus_misery_proc = false;
-	if (in_dungeon && !fire_breath_active && CountEquippedClassArmor()[Classes::CLERIC] == 5 && !active_sigils.contains(Sigils::RAGE))
+	if (in_dungeon && !fire_breath_active && armor_set_bonuses.cleric.AfflatusMisery() && !active_sigils.contains(Sigils::RAGE))
 	{
 		if (target_id != 1)
 		{
@@ -183,7 +184,7 @@ RValue& GmlScriptDamageCallback(
 	// Soul Eater (Dark Knight, 5 pieces) — 10% chance to add 25% current HP to damage when above 50% HP.
 	bool soul_eater_proc = false;
 	int soul_eater_amount = 0;
-	if (in_dungeon && !fire_breath_active && !soul_eater_proc && CountEquippedClassArmor()[Classes::DARK_KNIGHT] == 5 && !active_sigils.contains(Sigils::RAGE))
+	if (in_dungeon && !fire_breath_active && !soul_eater_proc && armor_set_bonuses.dark_knight.SoulEater() && !active_sigils.contains(Sigils::RAGE))
 	{
 		if (target_id != 1)
 		{
@@ -210,7 +211,7 @@ RValue& GmlScriptDamageCallback(
 
 	// Drain (Dark Knight, 1+ pieces) — 50% chance to mark a hit for lifesteal, skipped if Soul Eater procced.
 	bool drain_proc = false;
-	if (in_dungeon && !fire_breath_active && !soul_eater_proc && CountEquippedClassArmor()[Classes::DARK_KNIGHT] > 0)
+	if (in_dungeon && !fire_breath_active && !soul_eater_proc && armor_set_bonuses.dark_knight.Drain())
 	{
 		if (target_id != 1)
 		{
@@ -227,7 +228,7 @@ RValue& GmlScriptDamageCallback(
 	}
 
 	// Temperance (Paladin, 3+ pieces) — scales outgoing damage based on Ari's current HP.
-	if (in_dungeon && !fire_breath_active && CountEquippedClassArmor()[Classes::PALADIN] >= 3)
+	if (in_dungeon && !fire_breath_active && armor_set_bonuses.paladin.Temperance())
 	{
 		if (target_id != 1)
 		{
@@ -243,7 +244,7 @@ RValue& GmlScriptDamageCallback(
 	}
 
 	// Sigil of Rage & Sneak Attack (Rogue, 3+ pieces) — all outgoing hits become critical one-shots.
-	if (active_sigils.contains(Sigils::RAGE) || (active_sigils.contains(Sigils::CONCEALMENT) && CountEquippedClassArmor()[Classes::ROGUE] >= 3))
+	if (active_sigils.contains(Sigils::RAGE) || (active_sigils.contains(Sigils::CONCEALMENT) && armor_set_bonuses.rogue.SneakAttack()))
 	{
 		if (target_id != 1 && Arguments[0]->GetMember("damage").ToDouble() != 0)
 		{

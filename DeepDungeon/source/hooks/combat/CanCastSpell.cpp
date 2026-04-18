@@ -27,18 +27,18 @@ RValue& GmlScriptCanCastSpellCallback(
 	}
 
 	const int spell_id = Arguments[0]->ToInt64();
-	auto armor_counts = CountEquippedClassArmor();
+	auto armor_set_bonuses = GetArmorSetBonuses();
 
 	if (spell_id == spell_name_to_id_map["full_restore"])
 	{
 		// Dark Seal (Dark Knight, 3+ pieces)
-		if (armor_counts[Classes::DARK_KNIGHT] >= 3)
+		if (armor_set_bonuses.dark_knight.DarkSeal())
 		{
 			bool on_cooldown = class_name_to_set_bonus_effect_value_map[Classes::DARK_KNIGHT][ManagedSetBonuses::DARK_SEAL] > 0;
 			Result = (!on_cooldown && CanAffordSpell("full_restore")) ? 1 : 0;
 		}
 		// Elemental Seal (Mage, 3+ pieces)
-		else if (armor_counts[Classes::MAGE] >= 3)
+		else if (armor_set_bonuses.mage.ElementalSeal())
 		{
 			auto& mage = class_name_to_set_bonus_effect_value_map[Classes::MAGE];
 			bool en_active = mage[ManagedSetBonuses::ENFIRE] > 0
@@ -47,7 +47,7 @@ RValue& GmlScriptCanCastSpellCallback(
 			Result = (!en_active && CanAffordSpell("full_restore")) ? 1 : 0;
 		}
 		// Predict (Oracle, 5 pieces) — cost set to 0 by ModifySpellCosts, so no mana check needed.
-		else if (armor_counts[Classes::ORACLE] >= 5)
+		else if (armor_set_bonuses.oracle.FullSet())
 		{
 			Result = (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] == 0) ? 1 : 0;
 		}
@@ -55,19 +55,19 @@ RValue& GmlScriptCanCastSpellCallback(
 	else if (spell_id == spell_name_to_id_map["summon_rain"])
 	{
 		// Flood (Mage, 2+ pieces) — blocks recast while active.
-		if (armor_counts[Classes::MAGE] >= 2 && class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::FLOOD] >= 0)
+		if (armor_set_bonuses.mage.Flood() && class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::FLOOD] >= 0)
 			Result = 0;
 	}
 	else if (spell_id == spell_name_to_id_map["growth"])
 	{
 		// Quake (Mage, 4+ pieces)
-		if (armor_counts[Classes::MAGE] >= 4)
+		if (armor_set_bonuses.mage.Quake())
 		{
 			bool on_cooldown = class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::QUAKE] > 0;
 			Result = (!on_cooldown && CanAffordSpell("growth")) ? 1 : 0;
 		}
 		// Condemn (Oracle, 5 pieces)
-		else if (armor_counts[Classes::ORACLE] >= 5)
+		else if (armor_set_bonuses.oracle.FullSet())
 		{
 			bool used = offering_chance_occurred || class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::CONDEMN] > 0;
 			Result = used ? 0 : 1;

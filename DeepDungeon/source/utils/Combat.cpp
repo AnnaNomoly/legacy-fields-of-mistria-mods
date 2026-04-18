@@ -47,6 +47,19 @@ std::map<Classes, int> CountEquippedClassArmor()
 	return class_armor_equipped;
 }
 
+ArmorSetBonuses GetArmorSetBonuses()
+{
+	auto counts = CountEquippedClassArmor();
+	ArmorSetBonuses armor_set_bonuses = {};
+	armor_set_bonuses.cleric.equipped = counts[Classes::CLERIC];
+	armor_set_bonuses.dark_knight.equipped = counts[Classes::DARK_KNIGHT];
+	armor_set_bonuses.mage.equipped = counts[Classes::MAGE];
+	armor_set_bonuses.paladin.equipped = counts[Classes::PALADIN];
+	armor_set_bonuses.rogue.equipped = counts[Classes::ROGUE];
+	armor_set_bonuses.oracle.equipped = counts[Classes::ORACLE];
+	return armor_set_bonuses;
+}
+
 std::map<int, int> GetClassArmorInfusions()
 {
 	std::map<int, int> class_armor_infusions = {};
@@ -90,41 +103,29 @@ bool CanAffordSpell(const std::string& spell_name)
 
 int GetClericAutoRegenPotency()
 {
-	int cleric_armor_pieces_equipped = CountEquippedClassArmor()[Classes::CLERIC];
-	if (cleric_armor_pieces_equipped == 0)
-		return 0;
-	if (cleric_armor_pieces_equipped < 3)
-		return 1;
-	if (cleric_armor_pieces_equipped < 5)
-		return 2;
-	if (cleric_armor_pieces_equipped == 5)
-		return 3;
+	auto armor_set_bonuses = GetArmorSetBonuses();
+	if (armor_set_bonuses.cleric.equipped == 0) return 0;
+	if (armor_set_bonuses.cleric.equipped < 3)  return 1;
+	if (armor_set_bonuses.cleric.equipped < 5)  return 2;
+	return 3;
 }
 
 double GetDarkKnightDrainPotency()
 {
-	int dark_knight_pieces_equipped = CountEquippedClassArmor()[Classes::DARK_KNIGHT];
-	if (dark_knight_pieces_equipped == 0)
-		return 0;
-	if (dark_knight_pieces_equipped < 3)
-		return 0.03;
-	if (dark_knight_pieces_equipped < 5)
-		return 0.05;
-	if (dark_knight_pieces_equipped == 5)
-		return 0.08;
+	auto armor_set_bonuses = GetArmorSetBonuses();
+	if (armor_set_bonuses.dark_knight.equipped == 0) return 0;
+	if (armor_set_bonuses.dark_knight.equipped < 3)  return 0.03;
+	if (armor_set_bonuses.dark_knight.equipped < 5)  return 0.05;
+	return 0.08;
 }
 
 double GetPaladinHolyCirclePotency()
 {
-	int paladin_pieces_equipped = CountEquippedClassArmor()[Classes::PALADIN];
-	if (paladin_pieces_equipped == 0)
-		return 0;
-	if (paladin_pieces_equipped < 3)
-		return 0.05;
-	if (paladin_pieces_equipped < 5)
-		return 0.10;
-	if (paladin_pieces_equipped == 5)
-		return 0.15;
+	auto armor_set_bonuses = GetArmorSetBonuses();
+	if (armor_set_bonuses.paladin.equipped == 0) return 0;
+	if (armor_set_bonuses.paladin.equipped < 3)  return 0.05;
+	if (armor_set_bonuses.paladin.equipped < 5)  return 0.10;
+	return 0.15;
 }
 
 int ScaleTemperanceDamage(int current_health, int max_health, int damage)
@@ -200,6 +201,7 @@ void ModifySpellCosts(bool reset_cost, bool in_dungeon) {
 	size_t array_length = 0;
 	RValue spells = global_instance->GetMember("__spells");
 	g_ModuleInterface->GetArraySize(spells, array_length);
+	auto armor_set_bonuses = GetArmorSetBonuses();
 	for (size_t i = 0; i < array_length; i++)
 	{
 		RValue* array_element;
@@ -210,9 +212,9 @@ void ModifySpellCosts(bool reset_cost, bool in_dungeon) {
 			cost = reset_cost ? spell_id_to_default_cost_map[i] / 2 : spell_id_to_default_cost_map[i] / 4;
 		if (active_greater_sigils.contains(GreaterSigils::CHAIN_SPELL))
 			cost = 0;
-		if (i == spell_name_to_id_map["full_restore"] && CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+		if (i == spell_name_to_id_map["full_restore"] && armor_set_bonuses.oracle.FullSet())
 			cost = 0;
-		if (i == spell_name_to_id_map["growth"] && CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+		if (i == spell_name_to_id_map["growth"] && armor_set_bonuses.oracle.FullSet())
 			cost = 0;
 
 		*array_element->GetRefMember("cost") = cost;

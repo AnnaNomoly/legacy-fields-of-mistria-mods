@@ -52,13 +52,13 @@ RValue& GmlScriptGetLocalizerCallback(
 	else if (game_is_active && AriCurrentGmRoomIsDungeonFloor())
 	{
 		const std::string localization_key = Arguments[0]->ToString();
-		auto armor_counts = CountEquippedClassArmor();
+		auto armor_set_bonuses = GetArmorSetBonuses();
 
 		// Full Restore
 		if (localization_key.contains("spells/full_restore"))
 		{
 			// Dark Seal (Dark Knight Set Bonus)
-			if (armor_counts[Classes::DARK_KNIGHT] >= 3)
+			if (armor_set_bonuses.dark_knight.DarkSeal())
 			{
 				if (localization_key == "spells/full_restore/name")
 					*Arguments[0] = RValue("Spells/Mods/Deep Dungeon/Siphon Life/name");
@@ -68,7 +68,7 @@ RValue& GmlScriptGetLocalizerCallback(
 					*Arguments[0] = RValue("Spells/Mods/Deep Dungeon/Siphon Life/type");
 			}
 			// Elemental Seal (Mage Set Bonus)
-			else if (armor_counts[Classes::MAGE] >= 3 && class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::ELEMENTAL_SEAL] > 0)
+			else if (armor_set_bonuses.mage.ElementalSeal() && class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::ELEMENTAL_SEAL] > 0)
 			{
 				ElementalSealEffects elemental_seal_effect = *magic_enum::enum_cast<ElementalSealEffects>(class_name_to_set_bonus_effect_value_map[Classes::MAGE][ManagedSetBonuses::ELEMENTAL_SEAL]);
 
@@ -101,7 +101,7 @@ RValue& GmlScriptGetLocalizerCallback(
 				}
 			}
 			// Predict (Oracle Set Bonus)
-			else if (armor_counts[Classes::ORACLE] >= 5)
+			else if (armor_set_bonuses.oracle.FullSet())
 			{
 				if (localization_key == "spells/full_restore/name")
 					*Arguments[0] = RValue("Spells/Mods/Deep Dungeon/Predict/name");
@@ -115,7 +115,7 @@ RValue& GmlScriptGetLocalizerCallback(
 		else if (localization_key.contains("spells/summon_rain"))
 		{
 			// Flood (Mage Set Bonus)
-			if (armor_counts[Classes::MAGE] >= 2)
+			if (armor_set_bonuses.mage.Flood())
 			{
 				if (localization_key == "spells/summon_rain/name")
 					*Arguments[0] = RValue("Spells/Mods/Deep Dungeon/Flood/name");
@@ -129,7 +129,7 @@ RValue& GmlScriptGetLocalizerCallback(
 		else if (localization_key.contains("spells/growth"))
 		{
 			// Quake (Mage Set Bonus)
-			if (armor_counts[Classes::MAGE] >= 4)
+			if (armor_set_bonuses.mage.Quake())
 			{
 				if (localization_key == "spells/growth/name")
 					*Arguments[0] = RValue("Spells/Mods/Deep Dungeon/Quake/name");
@@ -139,7 +139,7 @@ RValue& GmlScriptGetLocalizerCallback(
 					*Arguments[0] = RValue("Spells/Mods/Deep Dungeon/Quake/type");
 			}
 			// Condemn (Oracle Set Bonus)
-			else if (armor_counts[Classes::ORACLE] >= 5)
+			else if (armor_set_bonuses.oracle.FullSet())
 			{
 				if (localization_key == "spells/growth/name")
 					*Arguments[0] = RValue("Spells/Mods/Deep Dungeon/Condemn/name");
@@ -279,7 +279,7 @@ RValue& GmlScriptGetLocalizerCallback(
 		// Cleric Armor
 		else if (localization_key == CLERIC_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY && !crafting_menu_open)
 		{
-			int cleric_armor_pieces_equipped = CountEquippedClassArmor()[Classes::CLERIC];
+			int cleric_armor_pieces_equipped = GetArmorSetBonuses().cleric.equipped;
 
 			std::string custom_text = classes_to_localized_armor_description_string_map[Classes::CLERIC];
 			custom_text += "\n\n" + LocalizeString(Self, Other, SET_PIECES_EQUIPPED_LOCALIZED_TEXT_KEY).ToString() + " [" + std::to_string(cleric_armor_pieces_equipped) + "/5]";
@@ -303,7 +303,7 @@ RValue& GmlScriptGetLocalizerCallback(
 		// Dark Knight Armor
 		else if (localization_key == DARK_KNIGHT_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY && !crafting_menu_open)
 		{
-			int dark_knight_armor_pieces_equipped = CountEquippedClassArmor()[Classes::DARK_KNIGHT];
+			int dark_knight_armor_pieces_equipped = GetArmorSetBonuses().dark_knight.equipped;
 
 			std::string custom_text = classes_to_localized_armor_description_string_map[Classes::DARK_KNIGHT];
 			custom_text += "\n\n" + LocalizeString(Self, Other, SET_PIECES_EQUIPPED_LOCALIZED_TEXT_KEY).ToString() + " [" + std::to_string(dark_knight_armor_pieces_equipped) + "/5]";
@@ -327,7 +327,7 @@ RValue& GmlScriptGetLocalizerCallback(
 		// Mage Armor
 		else if (localization_key == MAGE_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY && !crafting_menu_open)
 		{
-			int mage_armor_pieces_equipped = CountEquippedClassArmor()[Classes::MAGE];
+			int mage_armor_pieces_equipped = GetArmorSetBonuses().mage.equipped;
 
 			std::string custom_text = classes_to_localized_armor_description_string_map[Classes::MAGE];
 			custom_text += "\n\n" + LocalizeString(Self, Other, SET_PIECES_EQUIPPED_LOCALIZED_TEXT_KEY).ToString() + " [" + std::to_string(mage_armor_pieces_equipped) + "/5]";
@@ -348,7 +348,7 @@ RValue& GmlScriptGetLocalizerCallback(
 		// Paladin Armor
 		else if (localization_key == PALADIN_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY && !crafting_menu_open)
 		{
-			int paladin_armor_pieces_equipped = CountEquippedClassArmor()[Classes::PALADIN];
+			int paladin_armor_pieces_equipped = GetArmorSetBonuses().paladin.equipped;
 
 			std::string custom_text = classes_to_localized_armor_description_string_map[Classes::PALADIN];
 			custom_text += "\n\n" + LocalizeString(Self, Other, SET_PIECES_EQUIPPED_LOCALIZED_TEXT_KEY).ToString() + " [" + std::to_string(paladin_armor_pieces_equipped) + "/5]";
@@ -372,7 +372,7 @@ RValue& GmlScriptGetLocalizerCallback(
 		// Rogue Armor
 		else if (localization_key == ROGUE_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY && !crafting_menu_open)
 		{
-			int rogue_armor_pieces_equipped = CountEquippedClassArmor()[Classes::ROGUE];
+			int rogue_armor_pieces_equipped = GetArmorSetBonuses().rogue.equipped;
 
 			std::string custom_text = classes_to_localized_armor_description_string_map[Classes::ROGUE];
 			custom_text += "\n\n" + LocalizeString(Self, Other, SET_PIECES_EQUIPPED_LOCALIZED_TEXT_KEY).ToString() + " [" + std::to_string(rogue_armor_pieces_equipped) + "/5]";
@@ -393,7 +393,7 @@ RValue& GmlScriptGetLocalizerCallback(
 		// Oracle Armor
 		else if (localization_key == ORACLE_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY && !crafting_menu_open)
 		{
-			int oracle_armor_pieces_equipped = CountEquippedClassArmor()[Classes::ORACLE];
+			int oracle_armor_pieces_equipped = GetArmorSetBonuses().oracle.equipped;
 			std::string custom_text = classes_to_localized_armor_description_string_map[Classes::ORACLE];
 			custom_text += "\n\n" + LocalizeString(Self, Other, SET_PIECES_EQUIPPED_LOCALIZED_TEXT_KEY).ToString() + " [" + std::to_string(oracle_armor_pieces_equipped) + "/5]";
 			if (oracle_armor_pieces_equipped == 5)

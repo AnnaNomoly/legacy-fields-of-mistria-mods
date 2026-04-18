@@ -77,6 +77,55 @@ void ScaleMistpoolArmor(bool in_dungeon);
 void ScaleMistpoolPickaxe(bool in_dungeon);
 void ScaleClassArmor(bool in_dungeon);
 int GetRandomSoulStone();
+
+struct ArmorSetBonuses
+{
+	struct Cleric {
+		int equipped;
+		bool AutoRegen() const { return equipped >= 1; }
+		bool DivineSeal() const { return equipped >= 3; }
+		bool AfflatusMisery() const { return equipped == 5; }
+	} cleric;
+
+	struct DarkKnight {
+		int equipped;
+		bool Drain() const { return equipped >= 1; }
+		bool DarkSeal() const { return equipped >= 3; }
+		bool SoulEater() const { return equipped == 5; }
+	} dark_knight;
+
+	struct Mage {
+		int equipped;
+		bool Aspir() const { return equipped >= 1; }
+		bool Flood() const { return equipped >= 2; }
+		bool ElementalSeal() const { return equipped >= 3; }
+		bool Quake() const { return equipped >= 4; }
+		bool ManaFont() const { return equipped == 5; }
+	} mage;
+
+	struct Paladin {
+		int equipped;
+		bool HolyCircle() const { return equipped >= 1; }
+		bool Temperance() const { return equipped >= 3; }
+		bool HallowedGround() const { return equipped == 5; }
+	} paladin;
+
+	struct Rogue {
+		int equipped;
+		bool Flee()    const { return equipped >= 1; }
+		bool Hide()    const { return equipped >= 2; }
+		bool SneakAttack() const { return equipped >= 3; }
+		bool DisarmTrap()  const { return equipped >= 4; }
+		bool TreasureHunter() const { return equipped == 5; }
+	} rogue;
+
+	struct Oracle {
+		int equipped;
+		bool FullSet() const { return equipped == 5; }
+	} oracle;
+};
+
+ArmorSetBonuses GetArmorSetBonuses();
 std::map<Classes, int> CountEquippedClassArmor();
 std::map<int, int> GetClassArmorInfusions();
 bool CanAffordSpell(const std::string& spell_name);

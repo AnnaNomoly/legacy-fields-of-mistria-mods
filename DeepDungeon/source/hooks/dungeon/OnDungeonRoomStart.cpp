@@ -85,12 +85,14 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 
 	if (ari_current_gm_room != "rm_mines_entry" && ari_current_gm_room != "rm_priestess_quarters" && ari_current_gm_room != "rm_seridias_chamber" && !ari_current_gm_room.contains("seal") && !ari_current_gm_room.contains("ritual") && !ari_current_gm_room.contains("treasure") && !ari_current_gm_room.contains("milestone"))
 	{
+		auto armor_set_bonuses = GetArmorSetBonuses();
+
 		// Hide (Rogue Set Bonus)
-		if (CountEquippedClassArmor()[Classes::ROGUE] >= 2)
+		if (armor_set_bonuses.rogue.Hide())
 			active_sigils.insert(Sigils::CONCEALMENT);
 
 		// Prophecy (Oracle Set Bonus)
-		if (CountEquippedClassArmor()[Classes::ORACLE] >= 5 && class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] == 1 && class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::CONDEMN] == 1)
+		if (armor_set_bonuses.oracle.FullSet() && class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] == 1 && class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::CONDEMN] == 1)
 		{
 			static thread_local pcg32 random_generator([] {
 				std::random_device rd;
@@ -174,14 +176,14 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 			time_of_last_deep_wounds_tick = current_time_in_seconds;
 		if (active_offerings.contains(Offerings::OUTBREAK))
 			time_of_last_outbreak_tick = current_time_in_seconds - TWENTY_FIVE_MINUTES_IN_SECONDS;
-		if (CountEquippedClassArmor()[Classes::CLERIC] > 0)
+		if (armor_set_bonuses.cleric.AutoRegen())
 			class_name_to_set_bonus_effect_value_map[Classes::CLERIC][ManagedSetBonuses::AUTO_REGEN] = current_time_in_seconds;
 
 		if (script_name_to_reference_map.contains(GML_SCRIPT_UPDATE_TOOLBAR_MENU))
 			UpdateToolbarMenu(script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][0], script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][1]);
 
 		// Blessed (Oracle Set Bonus)
-		if (CountEquippedClassArmor()[Classes::ORACLE] >= 5)
+		if (armor_set_bonuses.oracle.FullSet())
 		{
 			int bonus = 0;
 			if (class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::PREDICT] == 1)
