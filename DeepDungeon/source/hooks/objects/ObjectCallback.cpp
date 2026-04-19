@@ -259,6 +259,25 @@ static void AriProcessUsedItems(CInstance* ari_instance, CInstance* self)
 	}
 }
 
+static void CheckForWhirlpool(CInstance* self)
+{
+	RValue ari = self->ToRValue();
+	if (!StructVariableExists(ari, "fsm")) return;
+
+	RValue fsm = ari.GetMember("fsm");
+	if (!StructVariableExists(fsm, "state")) return;
+
+	RValue state = fsm.GetMember("state");
+	if (!StructVariableExists(state, "state_id")) return;
+	if (state.GetMember("state_id").ToInt64() == player_state_to_id_map["whirl_pool"]) // TODO: Replace this debug block with the one-line return version after testing
+	{
+		in_whirl_pool = true;
+		return;
+	}
+
+	in_whirl_pool = false;
+}
+
 void ObjectCallback(
 	IN FWCodeEvent& CodeEvent
 )
@@ -369,6 +388,9 @@ void ObjectCallback(
 
 		// Process used items.
 		AriProcessUsedItems(ari_instance, self);
+
+		// Check for whirl pool movement.
+		CheckForWhirlpool(self);
 
 		// Restoration
 		if (is_restoration_tracked_interval)
@@ -712,7 +734,7 @@ void ObjectCallback(
 					{
 						if (script_name_to_reference_map.contains(GML_SCRIPT_DROP_ITEM))
 							DropItem(GetRandomSoulStone(), ari_x, ari_y, script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][0], script_name_to_reference_map[GML_SCRIPT_DROP_ITEM][1]);
-						boss_battle = BossBattle::NONE;
+						boss_battle = BossBattle::CLEARED;
 						ResetCustomDrawFields();
 					}
 				}

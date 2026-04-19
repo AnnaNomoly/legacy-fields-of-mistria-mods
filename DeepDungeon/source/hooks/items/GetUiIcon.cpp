@@ -25,6 +25,7 @@ RValue& GmlScriptGetUiIconCallback(
 			int item_id = self.GetMember("item_id").ToInt64();
 
 			bool modify_icon = deep_dungeon_items.contains(item_id)
+				|| default_sword_items.contains(item_id)
 				|| item_id == item_name_to_id_map[MISTPOOL_HELMET_NAME]
 				|| item_id == item_name_to_id_map[MISTPOOL_CHESTPIECE_NAME]
 				|| item_id == item_name_to_id_map[MISTPOOL_GLOVES_NAME]

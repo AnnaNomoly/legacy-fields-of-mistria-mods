@@ -547,6 +547,10 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 			UpdateToolbarMenu(script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][0], script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][1]);
 	}
 
+	// Ignore traps if Ari is in whirlpool movement.
+	if (in_whirl_pool)
+		return;
+
 	// Process traps in range.
 	for (auto floor_trap = floor_trap_positions.begin(); floor_trap != floor_trap_positions.end();) {
 		double distance = GetDistance(ari_x, ari_y, floor_trap->first, floor_trap->second);

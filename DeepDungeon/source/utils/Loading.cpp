@@ -502,6 +502,7 @@ void LoadItems()
 						{
 							*item->GetRefMember("damage") = 0;
 							restricted_items.insert(item_id);
+							default_sword_items.insert(item_id);
 						}
 					}
 

@@ -306,7 +306,91 @@ int GetRandomSoulStone()
 
 RValue GetDynamicItemSprite(int item_id)
 {
-	if (item_id == item_name_to_id_map[MISTPOOL_SWORD_NAME])
+	if (item_id == item_name_to_id_map[WORN_SWORD_NAME])
+	{
+		if (active_traps.contains(Traps::INHIBITING) || (Config::config.restrict_weapons && AriCurrentGmRoomIsDungeonFloor()))
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_tool_rusty_sword_disabled" });
+		else
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_tool_rusty_sword" });
+	}
+	else if (item_id == item_name_to_id_map[COPPER_SWORD_NAME])
+	{
+		if (active_traps.contains(Traps::INHIBITING) || (Config::config.restrict_weapons && AriCurrentGmRoomIsDungeonFloor()))
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_tool_copper_sword_disabled" });
+		else
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_tool_copper_sword" });
+	}
+	else if (item_id == item_name_to_id_map[IRON_SWORD_NAME])
+	{
+		if (active_traps.contains(Traps::INHIBITING) || (Config::config.restrict_weapons && AriCurrentGmRoomIsDungeonFloor()))
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_tool_iron_sword_disabled" });
+		else
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_tool_iron_sword" });
+	}
+	else if (item_id == item_name_to_id_map[SILVER_SWORD_NAME])
+	{
+		if (active_traps.contains(Traps::INHIBITING) || (Config::config.restrict_weapons && AriCurrentGmRoomIsDungeonFloor()))
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_tool_silver_sword_disabled" });
+		else
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_tool_silver_sword" });
+	}
+	else if (item_id == item_name_to_id_map[GOLD_SWORD_NAME])
+	{
+		if (active_traps.contains(Traps::INHIBITING) || (Config::config.restrict_weapons && AriCurrentGmRoomIsDungeonFloor()))
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_tool_gold_sword_disabled" });
+		else
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_tool_gold_sword" });
+	}
+	else if (item_id == item_name_to_id_map[MISTRIL_SWORD_NAME])
+	{
+		if (active_traps.contains(Traps::INHIBITING) || (Config::config.restrict_weapons && AriCurrentGmRoomIsDungeonFloor()))
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_tool_mistril_sword_disabled" });
+		else
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_tool_mistril_sword" });
+	}
+	else if (item_id == item_name_to_id_map[DRAGON_FORGED_SWORD_NAME])
+	{
+		if (active_traps.contains(Traps::INHIBITING) || (Config::config.restrict_weapons && AriCurrentGmRoomIsDungeonFloor()))
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_tool_dragon_forged_sword_disabled" });
+		else
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_tool_dragon_forged_sword" });
+	}
+	//else if (item_id == item_name_to_id_map[SCRAP_METAL_SWORD_NAME])
+	//{
+	//	if (active_traps.contains(Traps::INHIBITING) || (Config::config.restrict_weapons && AriCurrentGmRoomIsDungeonFloor()))
+	//		return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_tool_scrap_metal_sword_disabled" });
+	//	else
+	//		return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_tool_scrap_metal_sword" });
+	//}
+	else if (item_id == item_name_to_id_map[VERDIGRIS_SWORD_NAME])
+	{
+		if (active_traps.contains(Traps::INHIBITING) || (Config::config.restrict_weapons && AriCurrentGmRoomIsDungeonFloor()))
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_tool_verdigris_sword_disabled" });
+		else
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_tool_verdigris_sword" });
+	}
+	else if (item_id == item_name_to_id_map[CRYSTAL_SWORD_NAME])
+	{
+		if (active_traps.contains(Traps::INHIBITING) || (Config::config.restrict_weapons && AriCurrentGmRoomIsDungeonFloor()))
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_tool_crystal_sword_disabled" });
+		else
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_tool_crystal_sword" });
+	}
+	else if (item_id == item_name_to_id_map[TARNISHED_GOLD_SWORD_NAME])
+	{
+		if (active_traps.contains(Traps::INHIBITING) || (Config::config.restrict_weapons && AriCurrentGmRoomIsDungeonFloor()))
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_tool_tarnished_gold_sword_disabled" });
+		else
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_tool_tarnished_gold_sword" });
+	}
+	else if (item_id == item_name_to_id_map[CORRUPTED_MISTRIL_SWORD_NAME])
+	{
+		if (active_traps.contains(Traps::INHIBITING) || (Config::config.restrict_weapons && AriCurrentGmRoomIsDungeonFloor()))
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_tool_corrupted_mistril_sword_disabled" });
+		else
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_tool_corrupted_mistril_sword" });
+	}
+	else if (item_id == item_name_to_id_map[MISTPOOL_SWORD_NAME])
 	{
 		if (active_traps.contains(Traps::INHIBITING) || !AriCurrentGmRoomIsDungeonFloor())
 		{

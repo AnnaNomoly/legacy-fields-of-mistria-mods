@@ -54,6 +54,10 @@ RValue& GmlScriptOnDrawGuiCallback(
 		// Danger Floor Banner
 		if (show_danger_banner)
 			FadeInImage(2, 2); // 3, 2
+
+		// Vignette
+		if (active_traps.contains(Traps::DISORIENTING))
+			DrawVignette();
 	}
 
 	return Result;

@@ -30,6 +30,20 @@ static const std::string HEALTH_SALVE_NAME = "health_salve";
 static const std::string STAMINA_SALVE_NAME = "stamina_salve";
 static const std::string MANA_SALVE_NAME = "mana_salve";
 
+// Sword item names
+static const std::string WORN_SWORD_NAME = "sword_worn";
+static const std::string COPPER_SWORD_NAME = "sword_copper";
+static const std::string IRON_SWORD_NAME = "sword_iron";
+static const std::string SILVER_SWORD_NAME = "sword_silver";
+static const std::string GOLD_SWORD_NAME = "sword_gold";
+static const std::string MISTRIL_SWORD_NAME = "sword_mistril";
+static const std::string DRAGON_FORGED_SWORD_NAME = "sword_dragon_forged";
+static const std::string SCRAP_METAL_SWORD_NAME = "sword_scrap_metal";
+static const std::string VERDIGRIS_SWORD_NAME = "sword_verdigris";
+static const std::string CRYSTAL_SWORD_NAME = "sword_crystal";
+static const std::string TARNISHED_GOLD_SWORD_NAME = "sword_tarnished_gold";
+static const std::string CORRUPTED_MISTRIL_SWORD_NAME = "sword_corrupted_mistril";
+
 // Mistpool gear names
 static const std::string MISTPOOL_SWORD_NAME = "sword_scrap_metal";
 static const std::string MISTPOOL_PICK_AXE_NAME = "pick_axe_worn";

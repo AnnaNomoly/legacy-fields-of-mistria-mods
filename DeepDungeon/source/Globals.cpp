@@ -10,6 +10,7 @@ namespace State {
 	namespace Player {
 		bool load_on_start = true;
 		bool is_new_game = false;
+		bool in_whirl_pool = false;
 		bool localize_mod_text = false;
 		bool game_is_active = false;
 		bool unlock_recipes = true;
@@ -111,6 +112,7 @@ namespace State {
 		std::unordered_set<int> lift_key_items = {};
 		std::unordered_set<int> restricted_items = {};
 		std::unordered_set<int> deep_dungeon_items = {};
+		std::unordered_set<int> default_sword_items = {};
 		std::map<Sigils, int> sigil_to_item_id_map = {};
 		std::map<int, Sigils> item_id_to_sigil_map = {};
 		std::map<GreaterSigils, int> greater_sigil_to_item_id_map = {};

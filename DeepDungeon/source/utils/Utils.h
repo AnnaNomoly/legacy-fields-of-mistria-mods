@@ -41,6 +41,7 @@ std::pair<int, int> GetCenterOffset(int screen_center_x, int screen_center_y, in
 std::vector<double> GetCenter(std::vector<double> topLeft, std::vector<double> bottomRight);
 void DrawRectangle(int color, float x1, float y1, float x2, float y2, bool outline);
 void DrawImage(int x, int y, int transparency);
+void DrawVignette();
 void FadeInImage(double seconds_per_cycle, int repeat_count);
 void DrawDashedBorder(float dash_len, float dash_thk, float speed, float screen_width, float screen_height, uint64_t current_time_ms);
 void PlaySoundEffect(const char* sound_name, int priority, double gain);

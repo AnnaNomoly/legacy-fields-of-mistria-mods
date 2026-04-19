@@ -30,6 +30,7 @@ struct pair_hash {
 
 enum class BossBattle {
 	NONE,
+	CLEARED,
 	TIDE_CAVERNS_ORB,
 	DEEP_EARTH_ORB,
 	LAVA_CAVES_ORB,
@@ -210,6 +211,7 @@ namespace State {
 	namespace Player {
 		extern bool load_on_start;
 		extern bool is_new_game;
+		extern bool in_whirl_pool;
 		extern bool localize_mod_text;
 		extern bool game_is_active;
 		extern bool unlock_recipes;
@@ -315,6 +317,7 @@ namespace State {
 		extern std::unordered_set<int> lift_key_items;
 		extern std::unordered_set<int> restricted_items;
 		extern std::unordered_set<int> deep_dungeon_items;
+		extern std::unordered_set<int> default_sword_items;
 		extern std::map<Sigils, int> sigil_to_item_id_map;
 		extern std::map<int, Sigils> item_id_to_sigil_map;
 		extern std::map<GreaterSigils, int> greater_sigil_to_item_id_map;

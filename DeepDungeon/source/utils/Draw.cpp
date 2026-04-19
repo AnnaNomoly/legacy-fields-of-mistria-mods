@@ -49,6 +49,54 @@ void DrawImage(int x, int y, int transparency)
 	);
 }
 
+void DrawVignette()
+{
+	const float vignette_size = 0.35f; //0.25f; // fraction of screen width/height the gradient extends inward
+	const float vignette_alpha = 1.0; //0.85f; // opacity at the screen edges (0.0 = invisible, 1.0 = fully black)
+
+	const float w       = window_width;
+	const float h       = window_height;
+	const float depth_x = w * vignette_size;
+	const float depth_y = h * vignette_size;
+	const int   black   = 0;
+
+	g_ModuleInterface->CallBuiltin("draw_set_blend_mode", { 1 }); // bm_normal
+
+	// Top edge
+	g_ModuleInterface->CallBuiltin("draw_primitive_begin", { 5 }); // pr_trianglestrip
+	g_ModuleInterface->CallBuiltin("draw_vertex_color", { 0,           0, black, vignette_alpha });
+	g_ModuleInterface->CallBuiltin("draw_vertex_color", { w,           0, black, vignette_alpha });
+	g_ModuleInterface->CallBuiltin("draw_vertex_color", { depth_x, depth_y, black, 0.0 });
+	g_ModuleInterface->CallBuiltin("draw_vertex_color", { w - depth_x, depth_y, black, 0.0 });
+	g_ModuleInterface->CallBuiltin("draw_primitive_end", {});
+
+	// Bottom edge
+	g_ModuleInterface->CallBuiltin("draw_primitive_begin", { 5 });
+	g_ModuleInterface->CallBuiltin("draw_vertex_color", { depth_x,     h - depth_y, black, 0.0 });
+	g_ModuleInterface->CallBuiltin("draw_vertex_color", { w - depth_x, h - depth_y, black, 0.0 });
+	g_ModuleInterface->CallBuiltin("draw_vertex_color", { 0,           h,           black, vignette_alpha });
+	g_ModuleInterface->CallBuiltin("draw_vertex_color", { w,           h,           black, vignette_alpha });
+	g_ModuleInterface->CallBuiltin("draw_primitive_end", {});
+
+	// Left edge
+	g_ModuleInterface->CallBuiltin("draw_primitive_begin", { 5 });
+	g_ModuleInterface->CallBuiltin("draw_vertex_color", { 0,       0,           black, vignette_alpha });
+	g_ModuleInterface->CallBuiltin("draw_vertex_color", { depth_x, depth_y,     black, 0.0 });
+	g_ModuleInterface->CallBuiltin("draw_vertex_color", { 0,       h,           black, vignette_alpha });
+	g_ModuleInterface->CallBuiltin("draw_vertex_color", { depth_x, h - depth_y, black, 0.0 });
+	g_ModuleInterface->CallBuiltin("draw_primitive_end", {});
+
+	// Right edge
+	g_ModuleInterface->CallBuiltin("draw_primitive_begin", { 5 });
+	g_ModuleInterface->CallBuiltin("draw_vertex_color", { w - depth_x, depth_y,     black, 0.0 });
+	g_ModuleInterface->CallBuiltin("draw_vertex_color", { w,           0,           black, vignette_alpha });
+	g_ModuleInterface->CallBuiltin("draw_vertex_color", { w - depth_x, h - depth_y, black, 0.0 });
+	g_ModuleInterface->CallBuiltin("draw_vertex_color", { w,           h,           black, vignette_alpha });
+	g_ModuleInterface->CallBuiltin("draw_primitive_end", {});
+
+	g_ModuleInterface->CallBuiltin("draw_set_blend_mode", { 0 }); // restore bm_normal
+}
+
 void FadeInImage(double seconds_per_cycle, int repeat_count) {
 	// Window corners
 	std::vector<double> window_top_left = { 0.0, 0.0 };
