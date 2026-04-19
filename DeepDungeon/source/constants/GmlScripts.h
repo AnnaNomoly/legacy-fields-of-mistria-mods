@@ -71,3 +71,4 @@ static const char* const GML_SCRIPT_RECIPE_GENERATE_INFUSIONS = "gml_Script_gene
 static const char* const GML_SCRIPT_BARK_EMITTER = "gml_Script_BarkEmitter";
 static const char* const GML_SCRIPT_BARK_EMITTER_EMIT = "gml_Script_emit@BarkEmitter@BarkEmitter";
 static const char* const GML_SCRIPT_T2_READ = "gml_Script_read@T2r@T2r";
+static const char* const GML_SCRIPT_PLAY_HEAL_VFX = "gml_Script_play_heal_vfx";

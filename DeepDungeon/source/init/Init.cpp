@@ -56,6 +56,7 @@ RValue& GmlScriptRecipeGenerateInfusionsCallback(IN CInstance* Self, IN CInstanc
 RValue& GmlScriptBarkEmitterCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
 RValue& GmlScriptT2ReadCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
 RValue& GmlScriptGetUnifiedTimeCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
+RValue& GmlScriptPlayHealVfxCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
 
 // Single helper replacing all CreateHookGmlScript* functions:
 static AurieStatus RegisterHook(const char* scriptName, PVOID callback)
@@ -128,6 +129,7 @@ static const struct HookEntry { const char* name; PVOID callback; } HOOK_TABLE[]
     { GML_SCRIPT_BARK_EMITTER,                  (PVOID)GmlScriptBarkEmitterCallback                 },
     { GML_SCRIPT_T2_READ,                       (PVOID)GmlScriptT2ReadCallback                      },
     { GML_SCRIPT_GET_UNIFIED_TIME,              (PVOID)GmlScriptGetUnifiedTimeCallback              },
+    { GML_SCRIPT_PLAY_HEAL_VFX,                 (PVOID)GmlScriptPlayHealVfxCallback                 },
 };
 
 EXPORTED AurieStatus ModuleInitialize(

@@ -207,6 +207,7 @@
     <ClCompile Include="source\hooks\health\ModifyStamina.cpp" />
     <ClCompile Include="source\hooks\health\RegisterStatusEffect.cpp" />
     <ClCompile Include="source\hooks\health\StatusEffectManagerUpdate.cpp" />
+    <ClCompile Include="source\hooks\health\PlayHealVfx.cpp" />
     <ClCompile Include="source\hooks\health\VitalsMenuSetMaxHealth.cpp" />
     <ClCompile Include="source\hooks\input\AttemptInteract.cpp" />
     <ClCompile Include="source\hooks\input\CheckValue.cpp" />
