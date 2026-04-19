@@ -1,5 +1,8 @@
 #include "../../utils/Utils.h"
 
+using namespace State::UI;
+using namespace State::Maps;
+
 RValue& GmlScriptGetUiIconCallback(
 	IN CInstance* Self,
 	IN CInstance* Other,

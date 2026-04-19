@@ -1,5 +1,7 @@
 #include "../../utils/Utils.h"
 
+using namespace State::UI;
+
 RValue& GmlScriptJournalMenuInitializeCallback(
 	IN CInstance* Self,
 	IN CInstance* Other,

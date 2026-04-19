@@ -1,5 +1,10 @@
 #include "Utils.h"
 
+using namespace State::Player;
+using namespace State::Floor;
+using namespace State::Combat;
+using namespace State::Maps;
+
 int CalculateMeteorDamage(double distance)
 {
 	const double lethalRadius = 32.0;

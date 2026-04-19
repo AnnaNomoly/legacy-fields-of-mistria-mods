@@ -1,5 +1,10 @@
 #include "Utils.h"
 
+using namespace State::Player;
+using namespace State::Floor;
+using namespace State::Combat;
+using namespace State::Maps;
+
 std::vector<int> GenerateRandomMonstersIdsForCurrentFloor(int monsters_to_spawn, const int monster_id_to_exclude)
 {
 	static thread_local pcg32 random_generator([] {

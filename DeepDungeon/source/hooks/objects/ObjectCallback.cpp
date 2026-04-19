@@ -1,6 +1,11 @@
 #include "../../utils/Utils.h"
 #include "../../patterns/MonsterPatterns.h"
 
+using namespace State::Player;
+using namespace State::Floor;
+using namespace State::Combat;
+using namespace State::Maps;
+
 // The complete ObjectCallback function, verbatim from source
 // Function signature: void ObjectCallback(IN FWCodeEvent& CodeEvent)
 

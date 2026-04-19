@@ -1,5 +1,7 @@
 #include "../../utils/Utils.h"
 
+using namespace State::Player;
+
 RValue& GmlScriptTryLocationIdToStringCallback(
 	IN CInstance* Self,
 	IN CInstance* Other,

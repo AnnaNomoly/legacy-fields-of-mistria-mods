@@ -1,5 +1,10 @@
 #include "../../utils/Utils.h"
 
+using namespace State::Player;
+using namespace State::Floor;
+using namespace State::Combat;
+using namespace State::Maps;
+
 RValue& GmlScriptCastSpellCallback(
 	IN CInstance* Self,
 	IN CInstance* Other,

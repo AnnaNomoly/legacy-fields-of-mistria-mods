@@ -1,5 +1,9 @@
 #include "MonsterPatterns.h"
 
+using namespace State::Floor;
+using namespace State::Combat;
+using namespace State::Maps;
+
 std::vector<std::vector<double>> generate_circle(const std::vector<int>& Ns)
 {
 	static constexpr double PI = 3.14159265358979323846;

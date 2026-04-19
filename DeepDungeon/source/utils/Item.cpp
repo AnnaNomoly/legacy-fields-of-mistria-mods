@@ -1,5 +1,10 @@
 #include "Utils.h"
 
+using namespace State::Floor;
+using namespace State::Combat;
+using namespace State::UI;
+using namespace State::Maps;
+
 void ModifyMistpoolWeaponSprites()
 {
 	// Sprite indexes for the "Scrap Metal Sword" which is used as the Mistpool Sword.

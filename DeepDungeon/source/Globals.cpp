@@ -1,5 +1,11 @@
 #include "Globals.h"
 
+using namespace State::Player;
+using namespace State::Floor;
+using namespace State::Combat;
+using namespace State::UI;
+using namespace State::Maps;
+
 // Engine globals — no namespace.
 YYTKInterface* g_ModuleInterface = nullptr;
 CInstance* global_instance = nullptr;

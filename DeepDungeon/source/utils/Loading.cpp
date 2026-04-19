@@ -1,5 +1,7 @@
 #include "Utils.h"
 
+using namespace State::Maps;
+
 static const std::map<std::string, Sigils> item_name_to_sigil_map = {
 	{ SIGIL_OF_ALTERATION_NAME, Sigils::ALTERATION },
 	{ SIGIL_OF_CONCEALMENT_NAME, Sigils::CONCEALMENT },

@@ -1,6 +1,11 @@
 #include "../../utils/Utils.h"
 #include "../../patterns/MonsterPatterns.h"
 
+using namespace State::Player;
+using namespace State::Floor;
+using namespace State::Combat;
+using namespace State::Maps;
+
 RValue& GmlScriptGetMinutesCallback(
 	IN CInstance* Self,
 	IN CInstance* Other,

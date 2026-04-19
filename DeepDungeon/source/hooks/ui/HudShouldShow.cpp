@@ -1,5 +1,7 @@
 #include "../../utils/Utils.h"
 
+using namespace State::Floor;
+
 RValue& GmlScriptHudShouldShowCallback(
 	IN CInstance* Self,
 	IN CInstance* Other,

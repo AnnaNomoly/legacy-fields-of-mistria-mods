@@ -1,5 +1,8 @@
 #include "../../utils/Utils.h"
 
+using namespace State::Player;
+using namespace State::UI;
+
 RValue& GmlScriptVertigoDrawWithColorCallback(
 	IN CInstance* Self,
 	IN CInstance* Other,

@@ -1,5 +1,11 @@
 #include "Utils.h"
 
+using namespace State::Player;
+using namespace State::Floor;
+using namespace State::Combat;
+using namespace State::UI;
+using namespace State::Maps;
+
 bool FairyBuffIsActive()
 {
 	RValue ari = global_instance->GetMember("__ari");

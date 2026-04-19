@@ -1,5 +1,9 @@
 #include "Utils.h"
 
+using namespace State::Floor;
+using namespace State::UI;
+using namespace State::Maps;
+
 void PrintError(std::exception_ptr eptr)
 {
 	try {

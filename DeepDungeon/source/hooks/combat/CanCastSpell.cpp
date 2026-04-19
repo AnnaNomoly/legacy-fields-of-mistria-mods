@@ -1,5 +1,9 @@
 #include "../../utils/Utils.h"
 
+using namespace State::Floor;
+using namespace State::Combat;
+using namespace State::Maps;
+
 RValue& GmlScriptCanCastSpellCallback(
 	IN CInstance* Self,
 	IN CInstance* Other,

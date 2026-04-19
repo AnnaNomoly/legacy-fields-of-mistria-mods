@@ -1,5 +1,7 @@
 #include "Utils.h"
 
+using namespace State::UI;
+
 void ResetFade()
 {
 	fade_initialized = false;

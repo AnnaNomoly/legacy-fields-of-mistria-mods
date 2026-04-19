@@ -1,5 +1,9 @@
 #include "../../utils/Utils.h"
 
+using namespace State::Player;
+using namespace State::Floor;
+using namespace State::Maps;
+
 RValue& GmlScriptPlayTextCallback(
 	IN CInstance* Self,
 	IN CInstance* Other,

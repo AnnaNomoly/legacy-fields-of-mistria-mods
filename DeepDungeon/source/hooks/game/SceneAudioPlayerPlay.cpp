@@ -1,5 +1,9 @@
 #include "../../utils/Utils.h"
 
+using namespace State::Player;
+using namespace State::Floor;
+using namespace State::Maps;
+
 // TODO: Add new songs when updated
 static const std::vector<std::string> MUSIC_INTERNAL_NAMES = { // As of 0.15.1
 	"Music/Crystal Tracks/BarleyMoon",

@@ -1,5 +1,7 @@
 #include "../../utils/Utils.h"
 
+using namespace State::Player;
+
 RValue& GmlScriptAriFaceDirCallback(
 	IN CInstance* Self,
 	IN CInstance* Other,

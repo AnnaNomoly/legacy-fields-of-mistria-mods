@@ -1,5 +1,8 @@
 #include "../../utils/Utils.h"
 
+using namespace State::Floor;
+using namespace State::Maps;
+
 RValue& GmlScriptCancelStatusEffectCallback(
 	IN CInstance* Self,
 	IN CInstance* Other,

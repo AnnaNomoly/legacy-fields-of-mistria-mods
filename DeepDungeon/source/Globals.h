@@ -350,12 +350,5 @@ namespace State {
 
 } // namespace State
 
-// Bring all State members into the global namespace so existing call sites compile unchanged.
-using namespace State::Player;
-using namespace State::Floor;
-using namespace State::Combat;
-using namespace State::UI;
-using namespace State::Maps;
-
 
 
