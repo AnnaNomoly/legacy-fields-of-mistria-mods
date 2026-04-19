@@ -109,6 +109,7 @@ namespace State {
 		uint64_t fade_start_time = 0;
 		bool crafting_menu_open = false;
 		bool journal_menu_open = false;
+		bool store_menu_open = false;
 		bool obj_dragonshrine_focused = false;
 		bool obj_dungeon_elevator_focused = false;
 		bool obj_dungeon_ladder_down_focused = false;

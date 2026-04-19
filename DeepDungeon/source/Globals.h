@@ -307,6 +307,7 @@ namespace State {
 		extern uint64_t fade_start_time;
 		extern bool crafting_menu_open;
 		extern bool journal_menu_open;
+		extern bool store_menu_open;
 		extern bool obj_dragonshrine_focused;
 		extern bool obj_dungeon_elevator_focused;
 		extern bool obj_dungeon_ladder_down_focused;

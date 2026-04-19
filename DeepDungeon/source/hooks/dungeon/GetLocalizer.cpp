@@ -171,7 +171,6 @@ RValue& GmlScriptGetLocalizerCallback(
 		}
 
 		// Orbs
-		// TODO: Other orbs when added
 		if (crafting_menu_open && (localization_key == TIDE_CAVERNS_ORB_DESCRIPTION_LOCALIZED_TEXT_KEY || localization_key == DEEP_EARTH_ORB_DESCRIPTION_LOCALIZED_TEXT_KEY || localization_key == LAVA_CAVES_ORB_DESCRIPTION_LOCALIZED_TEXT_KEY || localization_key == RUINS_ORB_DESCRIPTION_LOCALIZED_TEXT_KEY))
 		{
 			std::string result_str = Result.ToString();
@@ -283,7 +282,7 @@ RValue& GmlScriptGetLocalizerCallback(
 			return Result;
 		}
 		// Cleric Armor
-		else if (localization_key == CLERIC_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY && !crafting_menu_open)
+		else if (localization_key == CLERIC_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY && !crafting_menu_open && !store_menu_open)
 		{
 			int cleric_armor_pieces_equipped = GetArmorSetBonuses().cleric.equipped;
 
@@ -307,7 +306,7 @@ RValue& GmlScriptGetLocalizerCallback(
 			return Result;
 		}
 		// Dark Knight Armor
-		else if (localization_key == DARK_KNIGHT_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY && !crafting_menu_open)
+		else if (localization_key == DARK_KNIGHT_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY && !crafting_menu_open && !store_menu_open)
 		{
 			int dark_knight_armor_pieces_equipped = GetArmorSetBonuses().dark_knight.equipped;
 
@@ -331,7 +330,7 @@ RValue& GmlScriptGetLocalizerCallback(
 			return Result;
 		}
 		// Mage Armor
-		else if (localization_key == MAGE_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY && !crafting_menu_open)
+		else if (localization_key == MAGE_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY && !crafting_menu_open && !store_menu_open)
 		{
 			int mage_armor_pieces_equipped = GetArmorSetBonuses().mage.equipped;
 
@@ -352,7 +351,7 @@ RValue& GmlScriptGetLocalizerCallback(
 			return Result;
 		}
 		// Paladin Armor
-		else if (localization_key == PALADIN_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY && !crafting_menu_open)
+		else if (localization_key == PALADIN_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY && !crafting_menu_open && !store_menu_open)
 		{
 			int paladin_armor_pieces_equipped = GetArmorSetBonuses().paladin.equipped;
 
@@ -376,7 +375,7 @@ RValue& GmlScriptGetLocalizerCallback(
 			return Result;
 		}
 		// Rogue Armor
-		else if (localization_key == ROGUE_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY && !crafting_menu_open)
+		else if (localization_key == ROGUE_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY && !crafting_menu_open && !store_menu_open)
 		{
 			int rogue_armor_pieces_equipped = GetArmorSetBonuses().rogue.equipped;
 
@@ -397,7 +396,7 @@ RValue& GmlScriptGetLocalizerCallback(
 			return Result;
 		}
 		// Oracle Armor
-		else if (localization_key == ORACLE_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY && !crafting_menu_open)
+		else if (localization_key == ORACLE_ARMOR_DESCRIPTION_LOCALIZED_TEXT_KEY && !crafting_menu_open && !store_menu_open)
 		{
 			int oracle_armor_pieces_equipped = GetArmorSetBonuses().oracle.equipped;
 			std::string custom_text = classes_to_localized_armor_description_string_map[Classes::ORACLE];

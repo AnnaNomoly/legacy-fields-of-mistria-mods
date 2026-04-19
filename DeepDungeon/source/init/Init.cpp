@@ -44,6 +44,8 @@ RValue& GmlScriptCraftingMenuInitializeCallback(IN CInstance* Self, IN CInstance
 RValue& GmlScriptCraftingMenuCloseCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
 RValue& GmlScriptJournalMenuInitializeCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
 RValue& GmlScriptJournalMenuCloseCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
+RValue& GmlScriptStoreMenuInitializeCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
+RValue& GmlScriptStoreMenuCloseCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
 RValue& GmlScriptVertigoDrawWithColorCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
 RValue& GmlScriptSceneAudioPlayerPlayCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
 RValue& GmlScriptFindNpcBlipNoiseCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
@@ -114,6 +116,8 @@ static const struct HookEntry { const char* name; PVOID callback; } HOOK_TABLE[]
     { GML_SCRIPT_CRAFTING_MENU_CLOSE,           (PVOID)GmlScriptCraftingMenuCloseCallback           },
     { GML_SCRIPT_JOURNAL_MENU_INITIALIZE,       (PVOID)GmlScriptJournalMenuInitializeCallback       },
     { GML_SCRIPT_JOURNAL_MENU_CLOSE,            (PVOID)GmlScriptJournalMenuCloseCallback            },
+    { GML_SCRIPT_STORE_MENU_INITIALIZE,         (PVOID)GmlScriptStoreMenuInitializeCallback         },
+    { GML_SCRIPT_STORE_MENU_CLOSE,              (PVOID)GmlScriptStoreMenuCloseCallback              },
     { GML_SCRIPT_VERTIGO_DRAW_WITH_COLOR,       (PVOID)GmlScriptVertigoDrawWithColorCallback        },
     { GML_SCRIPT_SCENE_AUDIO_PLAYER_PLAY,       (PVOID)GmlScriptSceneAudioPlayerPlayCallback        },
     { GML_SCRIPT_FIND_NPC_BLIP_NOISE,           (PVOID)GmlScriptFindNpcBlipNoiseCallback            },

@@ -143,7 +143,7 @@
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <AdditionalIncludeDirectories>$(ProjectDir)source;$(ProjectDir)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <Optimization>MaxSpeed</Optimization>
+      <Optimization>Disabled</Optimization>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <ForcedIncludeFiles>pch.h</ForcedIncludeFiles>
@@ -159,7 +159,8 @@
   <ItemGroup>
     <ClCompile Include="include\YYToolkit\YYTK_Shared_Types.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <ForcedIncludeFiles></ForcedIncludeFiles>
+      <ForcedIncludeFiles>
+      </ForcedIncludeFiles>
     </ClCompile>
     <ClCompile Include="source\pch.cpp">
       <PrecompiledHeader>Create</PrecompiledHeader>
@@ -224,6 +225,8 @@
     <ClCompile Include="source\hooks\ui\HudShouldShow.cpp" />
     <ClCompile Include="source\hooks\ui\JournalMenuClose.cpp" />
     <ClCompile Include="source\hooks\ui\JournalMenuInitialize.cpp" />
+    <ClCompile Include="source\hooks\ui\StoreMenuClose.cpp" />
+    <ClCompile Include="source\hooks\ui\StoreMenuInitialize.cpp" />
     <ClCompile Include="source\hooks\ui\OnDrawGui.cpp" />
     <ClCompile Include="source\hooks\ui\PlayText.cpp" />
     <ClCompile Include="source\hooks\ui\UpdateToolbarMenu.cpp" />
