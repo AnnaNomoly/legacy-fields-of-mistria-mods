@@ -220,6 +220,7 @@ namespace State {
 		extern bool salve_item_used;
 		extern bool lift_key_used;
 		extern bool orb_item_used;
+		extern bool dread_contract_used;
 		extern bool heart_crystal_used;
 		extern bool inner_fire_cast;
 		extern bool reckoning_applied;
@@ -260,6 +261,7 @@ namespace State {
 		extern int boss_monsters_configured;
 		extern BossBattle boss_battle;
 		extern TreasureSpot treasure_spot;
+		extern std::unordered_set<int> active_dread_contracts;
 		extern std::unordered_set<Sigils> active_sigils;
 		extern std::unordered_set<GreaterSigils> active_greater_sigils;
 		extern std::unordered_set<Offerings> queued_offerings;
@@ -274,7 +276,7 @@ namespace State {
 		extern std::vector<RevealedFloorTrap> revealed_floor_traps;
 		extern std::vector<int> initial_floor_monsters;
 		extern std::vector<CInstance*> current_floor_monsters;
-		extern std::map<std::string, int> salves_used; // TODO
+		extern std::map<std::string, int> salves_used;
 	}
 
 	// Combat mechanics: counters, set bonus tracking, stalagmite AOE attack patterns.
@@ -318,6 +320,7 @@ namespace State {
 		extern std::unordered_set<int> restricted_items;
 		extern std::unordered_set<int> deep_dungeon_items;
 		extern std::unordered_set<int> default_sword_items;
+		extern std::unordered_set<int> dread_contract_items;
 		extern std::map<Sigils, int> sigil_to_item_id_map;
 		extern std::map<int, Sigils> item_id_to_sigil_map;
 		extern std::map<GreaterSigils, int> greater_sigil_to_item_id_map;

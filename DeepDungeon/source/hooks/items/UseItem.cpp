@@ -69,6 +69,14 @@ RValue& GmlScriptUseItemCallback(
 					CreateNotification(false, GREATER_SIGIL_RESTRICTED_NOTIFICATION_KEY, Self, Other);
 					return Result;
 				}
+
+				// Dread Contracts Restricted
+				if (dread_contract_items.contains(held_item_id))
+				{
+					g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - You are unable to use dread contracts during boss battles!", MOD_NAME, MOD_VERSION);
+					CreateNotification(false, DREAD_CONTRACT_RESTRICTED_NOTIFICATION_KEY, Self, Other);
+					return Result;
+				}
 			}
 			else
 			{
@@ -88,6 +96,14 @@ RValue& GmlScriptUseItemCallback(
 					return Result;
 				}
 
+				// Dread Contract Already Used
+				if (dread_contract_items.contains(held_item_id) && (!active_dread_contracts.empty() || !queued_offerings.empty()))
+				{
+					g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - A dread contract has already been used!", MOD_NAME, MOD_VERSION);
+					CreateNotification(false, DREAD_CONTRACT_LIMIT_NOTIFICATION_KEY, Self, Other);
+					return Result;
+				}
+
 				// Protection Already Active
 				if (held_item_id == sigil_to_item_id_map[Sigils::PROTECTION] && GetInvulnerabilityHits() > 0)
 				{
@@ -104,8 +120,8 @@ RValue& GmlScriptUseItemCallback(
 					return Result;
 				}
 
-				// Condemn (Oracle Set Bonus)
-				if (held_item_id == sigil_to_item_id_map[Sigils::TEMPTATION] && class_name_to_set_bonus_effect_value_map[Classes::ORACLE][ManagedSetBonuses::CONDEMN] > 0)
+				// Temptation Already Active
+				if (held_item_id == sigil_to_item_id_map[Sigils::TEMPTATION] && !queued_offerings.empty())
 				{
 					g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - That sigil is already active!", MOD_NAME, MOD_VERSION);
 					CreateNotification(false, SIGIL_LIMIT_NOTIFICATION_KEY, Self, Other);
@@ -141,12 +157,13 @@ RValue& GmlScriptUseItemCallback(
 		}
 	}
 
-	sigil_item_used        = item_id_to_sigil_map.contains(held_item_id);
+	sigil_item_used = item_id_to_sigil_map.contains(held_item_id);
 	greater_sigil_item_used = item_id_to_greater_sigil_map.contains(held_item_id);
-	salve_item_used        = salve_items.contains(held_item_id);
-	lift_key_used          = lift_key_items.contains(held_item_id);
-	orb_item_used          = orb_items.contains(held_item_id);
-	heart_crystal_used     = held_item_id == item_name_to_id_map["heart_crystal"];
+	salve_item_used = salve_items.contains(held_item_id);
+	lift_key_used = lift_key_items.contains(held_item_id);
+	orb_item_used = orb_items.contains(held_item_id);
+	dread_contract_used = dread_contract_items.contains(held_item_id);
+	heart_crystal_used = held_item_id == item_name_to_id_map["heart_crystal"];
 
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_USE_ITEM));
 	original(Self, Other, Result, ArgumentCount, Arguments);

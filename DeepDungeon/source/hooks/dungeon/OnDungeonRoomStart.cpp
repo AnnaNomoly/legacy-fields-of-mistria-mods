@@ -20,6 +20,7 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 	salves_used.clear();
 	active_sigils.clear();
 	active_greater_sigils.clear();
+	active_dread_contracts.clear();
 	active_floor_enchantments.clear();
 	spirit_link_combined_health_pool = 0;
 	active_offerings = queued_offerings;

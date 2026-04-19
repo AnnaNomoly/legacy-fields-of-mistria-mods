@@ -120,6 +120,13 @@ static const std::string RUINS_KEY_F90_NAME = "ruins_key_f90";
 static const std::string RUINS_KEY_F95_NAME = "ruins_key_f95";
 static const std::string RUINS_KEY_F100_NAME = "ruins_key_f100";
 
+// Dread contract names
+static const std::string UPPER_MINES_DREAD_CONTRACT = "upper_mines_dread_contract";
+static const std::string TIDE_CAVERNS_DREAD_CONTRACT = "tide_caverns_dread_contract";
+static const std::string DEEP_EARTH_DREAD_CONTRACT = "deep_earth_dread_contract";
+static const std::string LAVA_CAVES_DREAD_CONTRACT = "lava_caves_dread_contract";
+static const std::string RUINS_DREAD_CONTRACT = "ruins_dread_contract";
+
 // Orb names
 static const std::string TIDE_CAVERNS_ORB = "tide_caverns_orb";
 static const std::string DEEP_EARTH_ORB = "deep_earth_orb";

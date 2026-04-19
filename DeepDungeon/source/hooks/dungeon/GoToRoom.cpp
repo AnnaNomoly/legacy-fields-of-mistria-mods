@@ -167,6 +167,7 @@ RValue& GmlScriptGoToRoomCallback(
 		salves_used.clear();
 		active_sigils.clear();
 		active_greater_sigils.clear();
+		active_dread_contracts.clear();
 		active_floor_enchantments.clear();
 		active_offerings.clear(); // Different than OnDungeonRoomStart
 		queued_offerings.clear();

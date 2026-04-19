@@ -341,6 +341,7 @@ void ResetStaticFields(bool returned_to_title_screen)
 	salve_item_used = false;
 	lift_key_used = false;
 	orb_item_used = false;
+	dread_contract_used = false;
 	heart_crystal_used = false;
 	inner_fire_cast = false;
 	reckoning_applied = false;
@@ -363,6 +364,7 @@ void ResetStaticFields(bool returned_to_title_screen)
 	salves_used.clear();
 	active_sigils.clear();
 	active_greater_sigils.clear();
+	active_dread_contracts.clear();
 	queued_offerings.clear();
 	active_offerings.clear();
 	active_floor_enchantments.clear();

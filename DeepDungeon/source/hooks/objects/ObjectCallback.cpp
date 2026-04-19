@@ -256,6 +256,13 @@ static void AriProcessUsedItems(CInstance* ari_instance, CInstance* self)
 			EnterDungeon(79, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
 		}
 	}
+	else if (dread_contract_used)
+	{
+		dread_contract_used = false;
+		offering_chance_occurred = true;
+		queued_offerings.insert(Offerings::DREAD);
+		active_dread_contracts.insert(held_item_id);
+	}
 	else if (heart_crystal_used)
 	{
 		heart_crystal_used = false;

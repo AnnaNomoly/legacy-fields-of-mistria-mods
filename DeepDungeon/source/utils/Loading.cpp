@@ -401,16 +401,16 @@ void LoadObjectIds()
 
 void LoadItems()
 {
-	std::unordered_set<std::string> lift_key_names = {
+	const std::unordered_set<std::string> lift_key_names = {
 		UPPER_MINES_KEY_F5_NAME, UPPER_MINES_KEY_F10_NAME, UPPER_MINES_KEY_F15_NAME,
 		TIDE_CAVERNS_KEY_F20_NAME, TIDE_CAVERNS_KEY_F25_NAME, TIDE_CAVERNS_KEY_F30_NAME,TIDE_CAVERNS_KEY_F35_NAME,
 		DEEP_EARTH_KEY_F40_NAME, DEEP_EARTH_KEY_F45_NAME, DEEP_EARTH_KEY_F50_NAME, DEEP_EARTH_KEY_F55_NAME,
 		LAVA_CAVES_KEY_F60_NAME, LAVA_CAVES_KEY_F65_NAME, LAVA_CAVES_KEY_F70_NAME, LAVA_CAVES_KEY_F75_NAME,
 		RUINS_KEY_F80_NAME, RUINS_KEY_F85_NAME, RUINS_KEY_F90_NAME, RUINS_KEY_F95_NAME, RUINS_KEY_F100_NAME
 	};
-	std::unordered_set<std::string> orb_item_names = { TIDE_CAVERNS_ORB, DEEP_EARTH_ORB, LAVA_CAVES_ORB, RUINS_ORB }; // TODO: Add other orbs
-	std::vector<std::string> custom_potions = { SUSTAINING_POTION_NAME, HEALTH_SALVE_NAME, STAMINA_SALVE_NAME, MANA_SALVE_NAME }; // TODO: Change to unordered_set
-	std::vector<std::string> cursed_armor = { CURSED_HELMET_NAME, CURSED_CHESTPIECE_NAME, CURSED_PANTS_NAME, CURSED_BOOTS_NAME, CURSED_GLOVES_NAME }; // TODO: Change to unordered_set
+	const std::unordered_set<std::string> orb_item_names = { TIDE_CAVERNS_ORB, DEEP_EARTH_ORB, LAVA_CAVES_ORB, RUINS_ORB };
+	const std::unordered_set<std::string> dread_contract_names = { UPPER_MINES_DREAD_CONTRACT, TIDE_CAVERNS_DREAD_CONTRACT, DEEP_EARTH_DREAD_CONTRACT, LAVA_CAVES_DREAD_CONTRACT, RUINS_DREAD_CONTRACT };
+	const std::unordered_set<std::string> custom_potion_names = { SUSTAINING_POTION_NAME, HEALTH_SALVE_NAME, STAMINA_SALVE_NAME, MANA_SALVE_NAME };
 
 	size_t array_length;
 	RValue item_data = global_instance->GetMember("__item_data");
@@ -456,15 +456,19 @@ void LoadItems()
 			if (orb_item_names.contains(item_name))
 				orb_items.insert(item_id);
 
-			// Salve Items
-			for (std::string custom_potion : custom_potions)
+			// Dread Contracts
+			if (dread_contract_names.contains(item_name))
 			{
-				if (item_name == custom_potion)
-				{
-					salve_items.insert(item_id);
-					deep_dungeon_items.insert(item_id);
-					salve_name_to_id_map[item_name] = item_id;
-				}
+				deep_dungeon_items.insert(item_id);
+				dread_contract_items.insert(item_id);
+			}
+
+			// Salve Items
+			if (custom_potion_names.contains(item_name))
+			{
+				deep_dungeon_items.insert(item_id);
+				salve_items.insert(item_id);
+				salve_name_to_id_map[item_name] = item_id;
 			}
 
 			// All consumable items (except Deep Dungeon items)

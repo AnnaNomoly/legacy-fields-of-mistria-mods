@@ -647,6 +647,41 @@ RValue GetDynamicItemSprite(int item_id)
 		else
 			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_salve_mana" });
 	}
+	else if (item_id == item_name_to_id_map[UPPER_MINES_DREAD_CONTRACT])
+	{
+		if (!active_dread_contracts.empty() || !queued_offerings.empty() || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_upper_mines_dread_contract_disabled" });
+		else
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_upper_mines_dread_contract" });
+			}
+	else if (item_id == item_name_to_id_map[TIDE_CAVERNS_DREAD_CONTRACT])
+	{
+		if (!active_dread_contracts.empty() || !queued_offerings.empty() || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_tide_caverns_dread_contract_disabled" });
+		else
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_tide_caverns_dread_contract" });
+			}
+	else if (item_id == item_name_to_id_map[DEEP_EARTH_DREAD_CONTRACT])
+	{
+		if (!active_dread_contracts.empty() || !queued_offerings.empty() || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_deep_earth_dread_contract_disabled" });
+		else
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_deep_earth_dread_contract" });
+			}
+	else if (item_id == item_name_to_id_map[LAVA_CAVES_DREAD_CONTRACT])
+	{
+		if (!active_dread_contracts.empty() || !queued_offerings.empty() || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_lava_caves_dread_contract_disabled" });
+		else
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_lava_caves_dread_contract" });
+			}
+	else if (item_id == item_name_to_id_map[RUINS_DREAD_CONTRACT])
+	{
+		if (!active_dread_contracts.empty() || !queued_offerings.empty() || active_floor_enchantments.contains(FloorEnchantments::ITEM_PENALTY) || !AriCurrentGmRoomIsDungeonFloor())
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_ruins_dread_contract_disabled" });
+		else
+			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_ruins_dread_contract" });
+	}
 }
 
 RValue GetDynamicUiSprite(std::string sprite_name)

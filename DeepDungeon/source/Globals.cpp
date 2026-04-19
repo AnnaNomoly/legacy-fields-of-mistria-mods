@@ -25,6 +25,7 @@ namespace State {
 		bool salve_item_used = false;
 		bool lift_key_used = false;
 		bool orb_item_used = false;
+		bool dread_contract_used = false;
 		bool heart_crystal_used = false;
 		bool inner_fire_cast = false;
 		bool reckoning_applied = false;
@@ -64,6 +65,7 @@ namespace State {
 		int boss_monsters_configured = 0;
 		BossBattle boss_battle = BossBattle::NONE;
 		TreasureSpot treasure_spot = TreasureSpot();
+		std::unordered_set<int> active_dread_contracts = {};
 		std::unordered_set<Sigils> active_sigils = {};
 		std::unordered_set<GreaterSigils> active_greater_sigils = {};
 		std::unordered_set<Offerings> queued_offerings = {};
@@ -119,6 +121,7 @@ namespace State {
 		std::unordered_set<int> restricted_items = {};
 		std::unordered_set<int> deep_dungeon_items = {};
 		std::unordered_set<int> default_sword_items = {};
+		std::unordered_set<int> dread_contract_items = {};
 		std::map<Sigils, int> sigil_to_item_id_map = {};
 		std::map<int, Sigils> item_id_to_sigil_map = {};
 		std::map<GreaterSigils, int> greater_sigil_to_item_id_map = {};
