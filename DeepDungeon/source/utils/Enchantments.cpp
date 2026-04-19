@@ -995,3 +995,121 @@ void ApplyOfferingPenalties(CInstance* Self, CInstance* Other)
 
 	ari_resource_to_penalty_map.clear();
 }
+
+void TickTimeStoppedSystems(CInstance* Self, CInstance* Other, int64_t tick_delta)
+{
+	// Accumulate game-clock ticks. Each unit = one in-game second.
+	time_stopped_tick_accumulator += tick_delta;
+	if (time_stopped_tick_accumulator < 1)
+		return;
+
+	int seconds_to_advance = static_cast<int>(time_stopped_tick_accumulator);
+	time_stopped_tick_accumulator -= seconds_to_advance;
+
+	// Floor enchantment tick timestamps — decrement so elapsed time grows relative to the frozen clock.
+	time_of_last_restoration_tick -= seconds_to_advance;
+	time_of_last_second_wind_tick -= seconds_to_advance;
+	time_of_last_fumigate_tick -= seconds_to_advance;
+	time_of_last_deep_wounds_tick -= seconds_to_advance;
+	time_of_last_outbreak_tick -= seconds_to_advance;
+
+	// Timed trap expiry timestamps — stored as absolute expiry; decrement so they reach current_time_in_seconds sooner.
+	for (auto& [trap, expiry] : active_traps_to_value_map)
+		expiry -= seconds_to_advance;
+
+	// Set bonus timestamp tracking.
+	auto& bonus_map = class_name_to_set_bonus_effect_value_map;
+	if (bonus_map[Classes::CLERIC][ManagedSetBonuses::AUTO_REGEN] > 0)
+		bonus_map[Classes::CLERIC][ManagedSetBonuses::AUTO_REGEN] -= seconds_to_advance;
+	if (bonus_map[Classes::MAGE][ManagedSetBonuses::FLOOD] > 0)
+		bonus_map[Classes::MAGE][ManagedSetBonuses::FLOOD] -= seconds_to_advance;
+
+	// Custom AOE timestamps — decrement spawned_time and last_application so durations and tick rates progress.
+	for (CustomAOE& aoe : meteor_aoes)
+	{
+		if (aoe.is_active)
+		{
+			aoe.spawned_time -= seconds_to_advance;
+			aoe.last_application -= seconds_to_advance;
+		}
+	}
+	for (CustomAOE& aoe : gaze_aoes)
+	{
+		if (aoe.is_active)
+		{
+			aoe.spawned_time -= seconds_to_advance;
+			aoe.last_application -= seconds_to_advance;
+		}
+	}
+	for (CustomAOE& aoe : void_aoes)
+	{
+		if (aoe.is_active)
+		{
+			aoe.spawned_time -= seconds_to_advance;
+			aoe.last_application -= seconds_to_advance;
+		}
+	}
+
+	// Status effect timestamps — advance start and last_update toward finish so effects progress and expire.
+	RValue effects_inner = global_instance
+		->GetMember("__ari")
+		.GetMember("status_effects")
+		.GetMember("effects")
+		.GetMember("inner");
+
+	//int unified_seconds_to_advance = 10;
+	for (const auto& [name, id] : status_effect_name_to_id_map)
+	{
+		std::string id_str = std::to_string(id);
+		if (!StructVariableExists(effects_inner, id_str.c_str()))
+			continue;
+
+		RValue effect = effects_inner.GetMember(id_str.c_str());
+		if (effect.m_Kind == VALUE_UNDEFINED)
+			continue;
+
+		int64_t finish = effect.GetMember("finish").ToInt64();
+		if (finish == 2147483647)
+			continue;
+
+		int64_t start = effect.GetMember("start").ToInt64();
+		if (!StructVariableExists(effect, "last_tick"))
+			StructVariableSet(effect, "last_tick", start);
+
+		int64_t last_tick = effect.GetMember("last_tick").ToInt64();
+		if (last_tick < start)
+			StructVariableSet(effect, "last_tick", start);
+
+		int64_t last_update = effect.GetMember("last_update").ToInt64();
+		if (last_update < start)
+			StructVariableSet(effect, "last_update", start);
+
+		last_tick += seconds_to_advance;
+		StructVariableSet(effect, "last_tick", last_tick);
+
+		if (name == "restorative" || name == "shrine_boon")
+		{
+			if (last_tick >= last_update + 600)
+			{
+				StructVariableSet(effect, "last_update", last_tick);
+				ModifyHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], 5);
+				ModifyStamina(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], 5);
+			}
+		}
+
+		if (last_tick >= finish)
+		{
+			if (name == "flame_breath")
+				SetFireBreathTime(0);
+			CancelStatusEffect(script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1], id);
+		}
+
+		//int64_t start = effect.GetMember("start").ToInt64();
+		//int64_t new_start = start + seconds_to_advance;
+		//StructVariableSet(effect, "start", static_cast<double>(new_start));
+		//StructVariableSet(effect, "last_update", static_cast<double>(min(new_start, finish)));
+
+		//if (new_start >= finish)
+		//	CancelStatusEffect(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], RValue(id));
+	}
+}

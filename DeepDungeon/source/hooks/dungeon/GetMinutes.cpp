@@ -15,12 +15,38 @@ RValue& GmlScriptGetMinutesCallback(
 )
 {
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_GET_MINUTES));
+	static bool was_time_stopped = false;
+
+	int64_t old_time_value = global_instance->GetMember("__clock").GetMember("time").ToInt64();
 	original(Self, Other, Result, ArgumentCount, Arguments);
 
 	if (game_is_active)
 	{
 		RValue time = global_instance->GetMember("__clock").GetMember("time");
 		current_time_in_seconds = time.ToInt64();
+
+		if (time_stopped)
+		{
+			// Capture how much the game tried to advance the clock this tick.
+			int64_t tick_delta = current_time_in_seconds - old_time_value;
+
+			// Revert the clock to prevent in-game time from advancing.
+			if (tick_delta != 0)
+				*global_instance->GetRefMember("__clock")->GetRefMember("time") = old_time_value;
+			current_time_in_seconds = old_time_value;
+
+			// Reset the accumulator on the first call of a new time-stop window.
+			if (!was_time_stopped)
+				time_stopped_tick_accumulator = 0;
+			was_time_stopped = true;
+
+			TickTimeStoppedSystems(Self, Other, tick_delta);
+			// Fall through — let all processing run with the decremented timestamps.
+		}
+		else
+		{
+			was_time_stopped = false;
+		}
 
 		RevealFloorTraps();
 		ApplyFloorTraps(Self, Other);

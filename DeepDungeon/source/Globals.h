@@ -252,6 +252,8 @@ namespace State {
 		extern int time_of_last_fumigate_tick;
 		extern int time_of_last_deep_wounds_tick;
 		extern int time_of_last_outbreak_tick;
+		extern bool time_stopped;
+		extern int64_t time_stopped_tick_accumulator;
 		extern bool drop_biome_reward;
 		extern bool biome_reward_disabled;
 		extern bool dread_beast_configured;

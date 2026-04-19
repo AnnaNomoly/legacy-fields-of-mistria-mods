@@ -196,3 +196,4 @@ void UnlockRecipe(int item_id, CInstance* Self, CInstance* Other);
 void UnlockLiftKeyRecipe(CInstance* Self, CInstance* Other);
 void TeleportAriToRoom(CInstance* Self, CInstance* Other, int location_id, int x_coordinate, int y_coordinate);
 void LoadStalagmiteAttackData();
+void TickTimeStoppedSystems(CInstance* Self, CInstance* Other, int64_t tick_delta);

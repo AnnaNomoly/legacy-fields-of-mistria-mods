@@ -56,6 +56,8 @@ namespace State {
 		int time_of_last_fumigate_tick = -1;
 		int time_of_last_deep_wounds_tick = -1;
 		int time_of_last_outbreak_tick = -1;
+		bool time_stopped = false;
+		int64_t time_stopped_tick_accumulator = 0;
 		bool drop_biome_reward = false;
 		bool biome_reward_disabled = false;
 		bool dread_beast_configured = false;
