@@ -40,7 +40,6 @@ RValue& GmlScriptSetupMainScreenCallback(
 		LoadTutorials();
 		LoadStalagmiteAttackData();
 		ModifyItems();
-		// TODO: Load other stuff
 	}
 	else
 		ResetStaticFields(true);

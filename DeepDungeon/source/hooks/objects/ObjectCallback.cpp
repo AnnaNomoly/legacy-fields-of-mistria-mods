@@ -379,7 +379,7 @@ void ObjectCallback(
 						if (std::isfinite(hit_points))
 						{
 							int monster_hp_penalty = std::trunc(hit_points * Config::config.exploding_trap_current_health_damage_percent / 100);
-							*monster->GetRefMember("hit_points") = max(0, hit_points - monster_hp_penalty);
+							*monster->GetRefMember("hit_points") = std::max(0.0, hit_points - monster_hp_penalty);
 
 							if (StructVariableExists(monster, "monster_id"))
 							{
@@ -430,7 +430,7 @@ void ObjectCallback(
 			if (current_health > 0 && deep_wounds_damage_pool > 0)
 			{
 				int damage = std::clamp(deep_wounds_damage_pool * 10 / 100, 1, 10);
-				damage = min(damage, deep_wounds_damage_pool);
+				damage = std::min(damage, deep_wounds_damage_pool);
 
 				deep_wounds_damage_pool -= damage;
 				ModifyHealth(ari_instance, self, -1 * damage);

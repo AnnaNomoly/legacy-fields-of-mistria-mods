@@ -22,7 +22,7 @@ int CalculateMeteorDamage(double distance)
 	double t = (distance - lethalRadius) / (maxDistance - lethalRadius);
 	double damage = 100.0f * std::pow(1.0f - t, Config::config.meteor_trap_scaling_factor);
 
-	return max(1, static_cast<int>(damage));
+	return std::max(1, static_cast<int>(damage));
 }
 
 bool FacingTrap(int ariX, int ariY, int trapX, int trapY)

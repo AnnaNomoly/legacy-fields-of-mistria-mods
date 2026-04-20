@@ -267,7 +267,7 @@ RValue& GmlScriptDamageCallback(
 		if (target_id != 1)
 		{
 			int damage = Arguments[0]->GetMember("damage").ToInt64();
-			int penalty = max(1, damage * 20 / 100);
+			int penalty = std::max(1, damage * 20 / 100);
 			ModifyHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], -1 * penalty);
 		}
 	}
@@ -300,11 +300,11 @@ RValue& GmlScriptDamageCallback(
 			if (!distance_to_monster_map.empty())
 			{
 				int damage = Arguments[0]->GetMember("damage").ToInt64();
-				int penalty = max(1, damage * 20 / 100);
+				int penalty = std::max(1, damage * 20 / 100);
 
 				CInstance* closest_monster = distance_to_monster_map.begin()->second;
 				int hit_points = closest_monster->GetMember("hit_points").ToInt64();
-				*closest_monster->GetRefMember("hit_points") = max(0, hit_points - penalty);
+				*closest_monster->GetRefMember("hit_points") = std::max(0, hit_points - penalty);
 			}
 		}
 	}

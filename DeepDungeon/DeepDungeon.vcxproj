@@ -176,6 +176,7 @@
     <ClCompile Include="source\utils\Math.cpp" />
     <ClCompile Include="source\utils\Monster.cpp" />
     <ClCompile Include="source\utils\Player.cpp" />
+    <ClCompile Include="source\utils\ChallengeMode.cpp" />
     <ClCompile Include="source\utils\YYTKBridge.cpp" />
     <ClCompile Include="source\hooks\combat\CanCastSpell.cpp" />
     <ClCompile Include="source\hooks\combat\CastSpell.cpp" />
@@ -198,6 +199,7 @@
     <ClCompile Include="source\hooks\game\GetEquipmentBonusFrom.cpp" />
     <ClCompile Include="source\hooks\game\OnBeginStep.cpp" />
     <ClCompile Include="source\hooks\game\RecipeGenerateInfusions.cpp" />
+    <ClCompile Include="source\hooks\game\LoadGame.cpp" />
     <ClCompile Include="source\hooks\game\SaveGame.cpp" />
     <ClCompile Include="source\hooks\game\SceneAudioPlayerPlay.cpp" />
     <ClCompile Include="source\hooks\game\SetupMainScreen.cpp" />

@@ -326,13 +326,33 @@ void ResetStaticFields(bool returned_to_title_screen)
 		time_of_last_deep_wounds_tick = -1;
 		time_of_last_outbreak_tick = -1;
 		held_item_id = -1;
+		unmodified_base_health = -1;
+		hp_penalty_amount = -1;
+		in_whirl_pool = false;
+		is_new_game = false;
+		is_challenge_mode = false;
+		save_prefix = "";
+		challenge_mode_progress = {};
 		ari_current_location = "";
 		ari_current_gm_room = "";
+		ari_resource_to_value_map.clear();
+		ari_resource_to_penalty_map.clear();
+		time_stopped = false;
+		time_stopped_tick_accumulator = 0;
+		boss_battle = BossBattle::NONE;
+		treasure_spot = TreasureSpot();
+		meteor_aoes.clear();
+		gaze_aoes.clear();
+		void_aoes.clear();
+		revealed_floor_traps.clear();
+		initial_floor_monsters.clear();
+		class_name_to_set_bonus_effect_value_map.clear();
 		script_name_to_reference_map.clear();
 	}
 
 	crafting_menu_open = false;
 	journal_menu_open = false;
+	store_menu_open = false;
 	drop_biome_reward = false;
 	biome_reward_disabled = false;
 	dread_beast_configured = false;
@@ -357,7 +377,7 @@ void ResetStaticFields(bool returned_to_title_screen)
 	stoneskin_shield_amount = 0;
 	spirit_link_combined_health_pool = 0;
 	sigil_of_silence_count = 0;
-	sigil_of_alteration_monster_id = 0;
+	sigil_of_alteration_monster_id = -1;
 	dread_beast_monster_id = -1;
 	dread_beasts_configured = 0;
 	boss_monsters_configured = 0;

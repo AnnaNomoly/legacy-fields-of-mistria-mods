@@ -200,6 +200,11 @@ struct TreasureSpot {
 };
 
 
+struct ChallengeModeProgress {
+	int highest_floor_reached{0};
+	cista::raw::hash_map<cista::raw::cstring, int> starting_inventory{};
+};
+
 // Engine globals — YYTK/Aurie-layer objects, no namespace.
 extern YYTKInterface* g_ModuleInterface;
 extern CInstance* global_instance;
@@ -209,8 +214,10 @@ namespace State {
 
 	// Player character state: position, resources, per-run item-use flags, resource tracking.
 	namespace Player {
+		extern ChallengeModeProgress challenge_mode_progress;
 		extern bool load_on_start;
 		extern bool is_new_game;
+		extern bool is_challenge_mode;
 		extern bool in_whirl_pool;
 		extern bool localize_mod_text;
 		extern bool game_is_active;
@@ -236,6 +243,7 @@ namespace State {
 		extern int held_item_id;
 		extern int unmodified_base_health;
 		extern int hp_penalty_amount;
+		extern std::string save_prefix;
 		extern std::string ari_current_location;
 		extern std::string ari_current_gm_room;
 		extern std::map<AriResources, int> ari_resource_to_value_map;

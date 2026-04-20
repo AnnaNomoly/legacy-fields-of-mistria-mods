@@ -14,8 +14,10 @@ RValue __YYTK;
 namespace State {
 
 	namespace Player {
+		ChallengeModeProgress challenge_mode_progress = {};
 		bool load_on_start = true;
 		bool is_new_game = false;
+		bool is_challenge_mode = false;
 		bool in_whirl_pool = false;
 		bool localize_mod_text = false;
 		bool game_is_active = false;
@@ -41,6 +43,7 @@ namespace State {
 		int held_item_id = -1;
 		int unmodified_base_health = -1;
 		int hp_penalty_amount = -1;
+		std::string save_prefix = "";
 		std::string ari_current_location = "";
 		std::string ari_current_gm_room = "";
 		std::map<AriResources, int> ari_resource_to_value_map = {};

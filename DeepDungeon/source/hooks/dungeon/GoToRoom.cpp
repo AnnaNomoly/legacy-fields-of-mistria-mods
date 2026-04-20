@@ -198,7 +198,7 @@ RValue& GmlScriptGoToRoomCallback(
 		stoneskin_shield_amount = 0;
 		spirit_link_combined_health_pool = 0;
 		sigil_of_silence_count = 0;
-		sigil_of_alteration_monster_id = 0;
+		sigil_of_alteration_monster_id = -1;
 		dread_beast_monster_id = -1;
 		dread_beasts_configured = 0;
 		boss_monsters_configured = 0;

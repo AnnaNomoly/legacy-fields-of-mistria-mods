@@ -1,5 +1,7 @@
 #pragma once
 
+#define NOMINMAX // Prevent Windows.h from defining min/max macros, which break std::numeric_limits usage in third-party headers.
+
 // Standard library — stable, expensive to parse, included here once via PCH.
 #include <random>
 #include <complex>
@@ -22,3 +24,4 @@
 #include <pcg/pcg_random.hpp>
 #include <magic_enum/magic_enum.hpp>
 #include <YYToolkit/YYTK_Shared.hpp>
+#include <cista/cista.h>

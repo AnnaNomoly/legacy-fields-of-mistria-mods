@@ -50,6 +50,7 @@ RValue& GmlScriptVertigoDrawWithColorCallback(IN CInstance* Self, IN CInstance* 
 RValue& GmlScriptSceneAudioPlayerPlayCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
 RValue& GmlScriptFindNpcBlipNoiseCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
 RValue& GmlScriptSaveGameCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
+RValue& GmlScriptLoadGameCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
 RValue& GmlScriptAriFaceDirCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
 RValue& GmlScriptOnBeginStepCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
 RValue& GmlScriptRecipeGenerateInfusionsCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
@@ -123,6 +124,7 @@ static const struct HookEntry { const char* name; PVOID callback; } HOOK_TABLE[]
     { GML_SCRIPT_SCENE_AUDIO_PLAYER_PLAY,       (PVOID)GmlScriptSceneAudioPlayerPlayCallback        },
     { GML_SCRIPT_FIND_NPC_BLIP_NOISE,           (PVOID)GmlScriptFindNpcBlipNoiseCallback            },
     { GML_SCRIPT_SAVE_GAME,                     (PVOID)GmlScriptSaveGameCallback                    },
+    { GML_SCRIPT_LOAD_GAME,                     (PVOID)GmlScriptLoadGameCallback                    },
     { GML_SCRIPT_ARI_FACE_DIR,                  (PVOID)GmlScriptAriFaceDirCallback                  },
     { GML_SCRIPT_ON_BEGIN_STEP,                 (PVOID)GmlScriptOnBeginStepCallback                 },
     { GML_SCRIPT_RECIPE_GENERATE_INFUSIONS,     (PVOID)GmlScriptRecipeGenerateInfusionsCallback     },

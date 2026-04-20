@@ -80,7 +80,7 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 	deep_wounds_damage_pool = 0;
 	stoneskin_shield_amount = 0;
 	sigil_of_silence_count = 0;
-	sigil_of_alteration_monster_id = 0;
+	sigil_of_alteration_monster_id = -1;
 
 	// Track Unmodified Max HP
 	unmodified_base_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();
