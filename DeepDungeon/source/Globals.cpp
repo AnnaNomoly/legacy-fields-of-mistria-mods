@@ -146,6 +146,7 @@ namespace State {
 		std::map<std::string, int> status_effect_name_to_id_map = {};
 		std::map<std::string, int> location_name_to_id_map = {};
 		std::map<std::string, int> item_name_to_id_map = {};
+		std::map<int, std::string> item_id_to_name_map = {};
 		std::map<std::string, int> bark_name_to_id_map = {};
 		std::map<Offerings, std::string> offerings_to_localized_string_map = {};
 		std::map<Classes, std::string> classes_to_localized_armor_description_string_map = {};

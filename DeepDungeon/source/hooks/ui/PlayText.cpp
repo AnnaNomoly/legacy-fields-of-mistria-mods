@@ -138,6 +138,51 @@ RValue& GmlScriptPlayTextCallback(
 			CloseTextbox(Self, Other);
 			return Result;
 		}
+		else if (localization_key == "Conversations/Mods/Deep Dungeon/challenge_mode/1")
+		{
+			CloseTextbox(Self, Other);
+
+			time_stopped = true;
+			is_challenge_mode = true;
+			RemoveItemsFromInventoryForChallengeMode();
+
+			if (challenge_mode_progress.highest_floor_reached == 0)
+			{
+				floor_number = 0;
+				EnterDungeon(0, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+			}
+			else if (challenge_mode_progress.highest_floor_reached == 20)
+			{
+				floor_number = 20;
+				EnterDungeon(20, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+			}
+			else if (challenge_mode_progress.highest_floor_reached == 40)
+			{
+				floor_number = 40;
+				EnterDungeon(40, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+			}
+			else if (challenge_mode_progress.highest_floor_reached == 60)
+			{
+				floor_number = 60;
+				EnterDungeon(60, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+			}
+			else if (challenge_mode_progress.highest_floor_reached == 80)
+			{
+				floor_number = 80;
+				EnterDungeon(80, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+			}
+			else
+			{
+				// CreateNotification(...)
+			}
+
+			return Result;
+		}
+		else if (localization_key == "Conversations/Mods/Deep Dungeon/challenge_mode/2")
+		{
+			CloseTextbox(Self, Other);
+			return Result;
+		}
 	}
 
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_PLAY_TEXT));

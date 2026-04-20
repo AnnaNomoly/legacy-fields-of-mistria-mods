@@ -427,6 +427,7 @@ void LoadItems()
 			int item_id = item->GetMember("item_id").ToInt64();
 			std::string item_name = item->GetMember("recipe_key").ToString(); // The internal item name
 			item_name_to_id_map[item_name] = item_id;
+			item_id_to_name_map[item_id] = item_name;
 
 			// Sigils
 			if (item_name_to_sigil_map.contains(item_name))

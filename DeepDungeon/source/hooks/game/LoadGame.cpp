@@ -26,5 +26,7 @@ RValue& GmlScriptLoadGameCallback(
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_LOAD_GAME));
 	original(Self, Other, Result, ArgumentCount, Arguments);
 
+	ReadChallengeModeFile();
+
 	return Result;
 }

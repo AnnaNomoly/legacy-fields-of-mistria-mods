@@ -25,7 +25,7 @@ RValue& GmlScriptPlayConversationCallback(
 		}
 		else if (Arguments[1]->ToString() == "Conversations/flavor_text/mines_blocked_door")
 		{
-			*Arguments[1] = "Conversations/Mods/Deep Dungeon/challenge_mode/start";
+			*Arguments[1] = "Conversations/Mods/Deep Dungeon/challenge_mode";
 		}
 	}
 

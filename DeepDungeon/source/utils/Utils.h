@@ -199,3 +199,6 @@ void LoadStalagmiteAttackData();
 void TickTimeStoppedSystems(CInstance* Self, CInstance* Other, int64_t tick_delta);
 void WriteChallengeModeFile();
 bool ReadChallengeModeFile();
+void RemoveItemsFromInventoryForChallengeMode();
+void DropItemsForChallengeMode(CInstance* Self, CInstance* Other);
+void UpdateChallengeModeProgress();
