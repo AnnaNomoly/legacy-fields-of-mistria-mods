@@ -39,7 +39,7 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 	dread_beast_monster_id = -1;
 	dread_beasts_configured = 0;
 	boss_monsters_configured = 0;
-	if (active_offerings.empty() && ari_current_gm_room != "rm_mines_entry" && ari_current_gm_room != "rm_priestess_quarters" && ari_current_gm_room != "rm_seridias_chamber" && !ari_current_gm_room.contains("seal") && !ari_current_gm_room.contains("ritual") && !ari_current_gm_room.contains("treasure") && !ari_current_gm_room.contains("milestone"))
+	if (!is_challenge_mode && active_offerings.empty() && ari_current_gm_room != "rm_mines_entry" && ari_current_gm_room != "rm_priestess_quarters" && ari_current_gm_room != "rm_seridias_chamber" && !ari_current_gm_room.contains("seal") && !ari_current_gm_room.contains("ritual") && !ari_current_gm_room.contains("treasure") && !ari_current_gm_room.contains("milestone"))
 	{
 		static thread_local pcg32 random_generator([] {
 			std::random_device rd;

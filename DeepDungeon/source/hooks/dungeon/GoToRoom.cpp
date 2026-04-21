@@ -60,6 +60,7 @@ RValue& GmlScriptGoToRoomCallback(
 			// CreateNotification(...)
 			UpdateChallengeModeProgress();
 			WriteChallengeModeFile();
+			RemoveItemsFromInventoryForChallengeMode();
 		}
 		else if (!AriCurrentGmRoomIsDungeonFloor())
 		{
@@ -69,6 +70,7 @@ RValue& GmlScriptGoToRoomCallback(
 			// CreateNotification(...)
 			challenge_mode_progress = {};
 			WriteChallengeModeFile();
+			RemoveItemsFromInventoryForChallengeMode();
 		}
 	}
 

@@ -16,6 +16,9 @@ static const std::map<Classes, std::unordered_set<std::string>> CLASS_NAME_TO_AR
 
 std::map<Classes, int> CountEquippedClassArmor()
 {
+	if (is_challenge_mode)
+		return {};
+
 	RValue ari = global_instance->GetMember("__ari");
 	RValue armor = ari.GetMember("armor");
 	RValue slots = armor.GetMember("slots");
