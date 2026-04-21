@@ -191,10 +191,20 @@ void ModifyBarkSprites()
 	RValue spr_ui_bark_icon_no_coin_copy = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_bark_icon_no_coin_copy" });
 	RValue spr_ui_bark_icon_inhibiting_trap = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_bark_icon_inhibiting_trap" });
 
+	RValue spr_ui_bark_icon_fishing = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_bark_icon_fishing" });
+	RValue spr_ui_bark_icon_fishing_copy = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_bark_icon_fishing_copy" });
+	RValue spr_ui_bark_icon_luring_trap = g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_bark_icon_luring_trap" });
+
 	if (floor_number != 0)
+	{
 		g_ModuleInterface->CallBuiltin("sprite_assign", { spr_ui_bark_icon_no_coin, spr_ui_bark_icon_inhibiting_trap });
+		g_ModuleInterface->CallBuiltin("sprite_assign", { spr_ui_bark_icon_fishing, spr_ui_bark_icon_luring_trap });
+	}
 	else
+	{
 		g_ModuleInterface->CallBuiltin("sprite_assign", { spr_ui_bark_icon_no_coin, spr_ui_bark_icon_no_coin_copy });
+		g_ModuleInterface->CallBuiltin("sprite_assign", { spr_ui_bark_icon_fishing, spr_ui_bark_icon_fishing_copy });
+	}
 }
 
 void ScaleMistpoolWeapon(bool in_dungeon)

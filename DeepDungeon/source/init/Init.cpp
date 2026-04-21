@@ -22,6 +22,7 @@ RValue& GmlScriptPlayConversationCallback(IN CInstance* Self, IN CInstance* Othe
 RValue& GmlScriptUseItemCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
 RValue& GmlScriptHeldItemCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
 RValue& GmlScriptDropItemCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
+RValue& GmlScriptGiveItemCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
 RValue& GmlScriptGetMinutesCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
 RValue& GmlScriptGetLocalizerCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
 RValue& GmlScriptGetWeatherCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
@@ -96,6 +97,7 @@ static const struct HookEntry { const char* name; PVOID callback; } HOOK_TABLE[]
     { GML_SCRIPT_USE_ITEM,                      (PVOID)GmlScriptUseItemCallback                     },
     { GML_SCRIPT_HELD_ITEM,                     (PVOID)GmlScriptHeldItemCallback                    },
     { GML_SCRIPT_DROP_ITEM,                     (PVOID)GmlScriptDropItemCallback                    },
+    { GML_SCRIPT_GIVE_ITEM,                     (PVOID)GmlScriptGiveItemCallback                    },
     { GML_SCRIPT_GET_MINUTES,                   (PVOID)GmlScriptGetMinutesCallback                  },
     { GML_SCRIPT_GET_LOCALIZER,                 (PVOID)GmlScriptGetLocalizerCallback                },
     { GML_SCRIPT_GET_WEATHER,                   (PVOID)GmlScriptGetWeatherCallback                  },

@@ -59,7 +59,10 @@ RValue& GmlScriptGoToRoomCallback(
 			Config::RestoreAfterChallengeMode();
 			RefreshPrototypes();
 
-			// CreateNotification(...)
+			if (floor_number != 100)
+				CreateNotification(false, CHALLENGE_MODE_BIOME_CLEARED_NOTIFICATION_KEY, Self, Other);
+			else
+				CreateNotification(false, CHALLENGE_MODE_COMPLETED_NOTIFICATION_KEY, Self, Other);
 			UpdateChallengeModeProgress();
 			WriteChallengeModeFile();
 			RemoveItemsFromInventoryForChallengeMode();
@@ -71,7 +74,7 @@ RValue& GmlScriptGoToRoomCallback(
 			Config::RestoreAfterChallengeMode();
 			RefreshPrototypes();
 
-			// CreateNotification(...)
+			CreateNotification(false, CHALLENGE_MODE_FAILED_NOTIFICATION_KEY, Self, Other);
 			challenge_mode_progress = {};
 			WriteChallengeModeFile();
 			RemoveItemsFromInventoryForChallengeMode();

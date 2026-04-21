@@ -589,7 +589,7 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 				{
 					PlaySoundEffect("snd_bark_o_o", 100, 1);
 					CreateNotification(true, CONFUSING_TRAP_NOTIFICATION_KEY, Self, Other);
-					EmitBark(script_name_to_reference_map[GML_SCRIPT_BARK_EMITTER][0], script_name_to_reference_map["obj_ari"][1], bark_name_to_id_map["annoyed"], 0);
+					EmitBark(script_name_to_reference_map[GML_SCRIPT_BARK_EMITTER][0], script_name_to_reference_map["obj_ari"][1], bark_name_to_id_map["question_mark"], 0);
 
 					if (!active_traps_to_value_map.contains(Traps::CONFUSING))
 					{
@@ -606,7 +606,7 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 				{
 					PlaySoundEffect("snd_interactable_scan", 100, 1);
 					CreateNotification(true, DISORIENTING_TRAP_NOTIFICATION_KEY, Self, Other);
-					EmitBark(script_name_to_reference_map[GML_SCRIPT_BARK_EMITTER][0], script_name_to_reference_map["obj_ari"][1], bark_name_to_id_map["annoyed"], 0);
+					EmitBark(script_name_to_reference_map[GML_SCRIPT_BARK_EMITTER][0], script_name_to_reference_map["obj_ari"][1], bark_name_to_id_map["mist"], 0);
 
 					if (!active_traps_to_value_map.contains(Traps::DISORIENTING))
 					{
@@ -651,7 +651,7 @@ void ApplyFloorTraps(CInstance* Self, CInstance* Other)
 
 					PlaySoundEffect("snd_ScrollRaise", 100, 1);
 					CreateNotification(true, LURING_TRAP_NOTIFICATION_KEY, Self, Other);
-					EmitBark(script_name_to_reference_map[GML_SCRIPT_BARK_EMITTER][0], script_name_to_reference_map["obj_ari"][1], bark_name_to_id_map["exclamation_mark"], 0);
+					EmitBark(script_name_to_reference_map[GML_SCRIPT_BARK_EMITTER][0], script_name_to_reference_map["obj_ari"][1], bark_name_to_id_map["fishing"], 0);
 
 					// TODO: Restrict monster spawns as necessary (stalagmite_pink? TBD)
 					std::vector<int> random_monsters;
@@ -969,7 +969,7 @@ void GenerateTreasureChestLoot(std::string object_name, CInstance* Self, CInstan
 		cursed_armor_roll_success_threshold = 4 * Config::config.cursed_armor_drop_chance_modifier;
 
 	int roll_for_drop = zero_to_ninety_nine_distribution(random_generator);
-	if (roll_for_drop < cursed_armor_roll_success_threshold)
+	if (!is_challenge_mode && roll_for_drop < cursed_armor_roll_success_threshold)
 	{
 		if (floor_number < 20) // Upper Mines
 			DropItem(item_name_to_id_map[CURSED_CHESTPIECE_NAME], ari_x, ari_y, Self, Other);

@@ -4,10 +4,57 @@ using namespace State::Player;
 using namespace State::Floor;
 using namespace State::Maps;
 
+static enum ArmorSlot
+{
+	HELMET,
+	CHESTPIECE,
+	GLOVES,
+	PANTS,
+	BOOTS
+};
+
 static fs::path GetChallengeModeFilePath()
 {
 	std::string filename = save_prefix + ".bin";
 	return fs::current_path() / "mod_data" / "DeepDungeon" / filename;
+}
+
+static bool ItemInInventory(int item_id)
+{
+	int count = InventoryCountItem(item_id, script_name_to_reference_map[GML_SCRIPT_DESERIALIZE_INVENTORY][0], script_name_to_reference_map[GML_SCRIPT_DESERIALIZE_INVENTORY][1]).ToInt64();
+	return count > 0;
+}
+
+static bool DeepDungeonArmorTypeEquipped(std::set<std::string> equipped_armor, ArmorSlot armor_slot)
+{
+	for (std::string armor : equipped_armor)
+	{
+		switch (armor_slot)
+		{
+			case HELMET:
+				if (armor == MISTPOOL_HELMET_NAME || armor == CLERIC_HELMET_NAME || armor == DARK_KNIGHT_HELMET_NAME || armor == MAGE_HELMET_NAME || armor == PALADIN_HELMET_NAME || armor == ROGUE_HELMET_NAME || armor == ORACLE_HELMET_NAME)
+					return true;
+				break;
+			case CHESTPIECE:
+				if (armor == MISTPOOL_CHESTPIECE_NAME || armor == CLERIC_CHESTPIECE_NAME || armor == DARK_KNIGHT_CHESTPIECE_NAME || armor == MAGE_CHESTPIECE_NAME || armor == PALADIN_CHESTPIECE_NAME || armor == ROGUE_CHESTPIECE_NAME || armor == ORACLE_CHESTPIECE_NAME)
+					return true;
+				break;
+			case GLOVES:
+				if (armor == MISTPOOL_GLOVES_NAME || armor == CLERIC_GLOVES_NAME || armor == DARK_KNIGHT_GLOVES_NAME || armor == MAGE_GLOVES_NAME || armor == PALADIN_GLOVES_NAME || armor == ROGUE_GLOVES_NAME || armor == ORACLE_GLOVES_NAME)
+					return true;
+				break;
+			case PANTS:
+				if (armor == MISTPOOL_PANTS_NAME || armor == CLERIC_PANTS_NAME || armor == DARK_KNIGHT_PANTS_NAME || armor == MAGE_PANTS_NAME || armor == PALADIN_PANTS_NAME || armor == ROGUE_PANTS_NAME || armor == ORACLE_PANTS_NAME)
+					return true;
+				break;
+			case BOOTS:
+				if (armor == MISTPOOL_BOOTS_NAME || armor == CLERIC_BOOTS_NAME || armor == DARK_KNIGHT_BOOTS_NAME || armor == MAGE_BOOTS_NAME || armor == PALADIN_BOOTS_NAME || armor == ROGUE_BOOTS_NAME || armor == ORACLE_BOOTS_NAME)
+					return true;
+				break;
+		}
+	}
+
+	return false;
 }
 
 void WriteChallengeModeFile()
@@ -98,22 +145,28 @@ void DropItemsForChallengeMode(CInstance* Self, CInstance* Other)
 		else
 			item_spawn_point = ruins_start_location;
 
-		DropItem(item_name_to_id_map[MISTPOOL_SWORD_NAME], item_spawn_point.first, item_spawn_point.second, Self, Other);
+		std::set<std::string> equipped_armor = GetEquippedArmor();
 
-		for (std::string mistpool_armor_name : MISTPOOL_ARMOR_NAMES)
-			DropItem(item_name_to_id_map[mistpool_armor_name], item_spawn_point.first, item_spawn_point.second, Self, Other);
+		if (!ItemInInventory(item_name_to_id_map[MISTPOOL_SWORD_NAME]))
+			DropItem(item_name_to_id_map[MISTPOOL_SWORD_NAME], item_spawn_point.first, item_spawn_point.second, Self, Other);
+		if (!ItemInInventory(item_name_to_id_map[MISTPOOL_PICK_AXE_NAME]))
+			DropItem(item_name_to_id_map[MISTPOOL_PICK_AXE_NAME], item_spawn_point.first, item_spawn_point.second, Self, Other);
+		if (!DeepDungeonArmorTypeEquipped(equipped_armor, ArmorSlot::HELMET))
+			DropItem(item_name_to_id_map[MISTPOOL_HELMET_NAME], item_spawn_point.first, item_spawn_point.second, Self, Other);
+		if (!DeepDungeonArmorTypeEquipped(equipped_armor, ArmorSlot::CHESTPIECE))
+			DropItem(item_name_to_id_map[MISTPOOL_CHESTPIECE_NAME], item_spawn_point.first, item_spawn_point.second, Self, Other);
+		if (!DeepDungeonArmorTypeEquipped(equipped_armor, ArmorSlot::GLOVES))
+			DropItem(item_name_to_id_map[MISTPOOL_GLOVES_NAME], item_spawn_point.first, item_spawn_point.second, Self, Other);
+		if (!DeepDungeonArmorTypeEquipped(equipped_armor, ArmorSlot::PANTS))
+			DropItem(item_name_to_id_map[MISTPOOL_PANTS_NAME], item_spawn_point.first, item_spawn_point.second, Self, Other);
+		if (!DeepDungeonArmorTypeEquipped(equipped_armor, ArmorSlot::BOOTS))
+			DropItem(item_name_to_id_map[MISTPOOL_BOOTS_NAME], item_spawn_point.first, item_spawn_point.second, Self, Other);
 
-		for (size_t i = 0; i < 60; i++)
-			DropItem(item_name_to_id_map[HEALTH_SALVE_NAME], item_spawn_point.first, item_spawn_point.second, Self, Other);
-
-		for (size_t i = 0; i < 60; i++)
-			DropItem(item_name_to_id_map[STAMINA_SALVE_NAME], item_spawn_point.first, item_spawn_point.second, Self, Other);
-
-		for (size_t i = 0; i < 20; i++)
-			DropItem(item_name_to_id_map[MANA_SALVE_NAME], item_spawn_point.first, item_spawn_point.second, Self, Other);
-
-		for (size_t i = 0; i < 60; i++)
-			DropItem(item_name_to_id_map[SUSTAINING_POTION_NAME], item_spawn_point.first, item_spawn_point.second, Self, Other);
+		challenge_mode_bulk_given_item_ids.clear();
+		DropItem(item_name_to_id_map[HEALTH_SALVE_NAME], item_spawn_point.first, item_spawn_point.second, Self, Other);
+		DropItem(item_name_to_id_map[STAMINA_SALVE_NAME], item_spawn_point.first, item_spawn_point.second, Self, Other);
+		DropItem(item_name_to_id_map[MANA_SALVE_NAME], item_spawn_point.first, item_spawn_point.second, Self, Other);
+		DropItem(item_name_to_id_map[SUSTAINING_POTION_NAME], item_spawn_point.first, item_spawn_point.second, Self, Other);
 
 		for (auto& [name, count] : challenge_mode_progress.starting_inventory)
 			for (int i = 0; i < count; i++)

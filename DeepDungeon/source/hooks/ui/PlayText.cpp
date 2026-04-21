@@ -164,9 +164,7 @@ RValue& GmlScriptPlayTextCallback(
 			else if (challenge_mode_progress.highest_floor_reached == 80)
 				StartChallengeMode(80);
 			else
-			{
-				// CreateNotification(...)
-			}
+				CreateNotification(false, CHALLENGE_MODE_ALREADY_COMPLETED_NOTIFICATION_KEY, Self, Other);
 
 			return Result;
 		}

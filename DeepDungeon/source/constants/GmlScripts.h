@@ -39,6 +39,7 @@ static const char* const GML_SCRIPT_ATTEMPT_INTERACT = "gml_Script_attempt_inter
 static const char* const GML_SCRIPT_USE_ITEM = "gml_Script_use_item";
 static const char* const GML_SCRIPT_HELD_ITEM = "gml_Script_held_item@Ari@Ari";
 static const char* const GML_SCRIPT_DROP_ITEM = "gml_Script_drop_item";
+static const char* const GML_SCRIPT_GIVE_ITEM = "gml_Script_give_item@Ari@Ari";
 static const char* const GML_SCRIPT_GET_MINUTES = "gml_Script_update@Clock@Clock";
 static const char* const GML_SCRIPT_PLAY_TEXT = "gml_Script_play_text@TextboxMenu@TextboxMenu";
 static const char* const GML_SCRIPT_GET_WEATHER = "gml_Script_get_weather@WeatherManager@Weather";

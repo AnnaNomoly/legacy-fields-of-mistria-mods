@@ -16,7 +16,9 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 {
 	UnlockLiftKeyRecipe(Self, Other);
 	ResetCustomDrawFields();
-	DropItemsForChallengeMode(Self, Other);
+
+	if (is_challenge_mode)
+		DropItemsForChallengeMode(Self, Other);
 
 	salves_used.clear();
 	active_sigils.clear();

@@ -128,6 +128,7 @@ struct ArmorSetBonuses
 };
 
 ArmorSetBonuses GetArmorSetBonuses();
+std::set<std::string> GetEquippedArmor();
 std::map<Classes, int> CountEquippedClassArmor();
 std::map<int, int> GetClassArmorInfusions();
 bool CanAffordSpell(const std::string& spell_name);

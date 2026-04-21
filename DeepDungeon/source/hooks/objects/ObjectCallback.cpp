@@ -315,7 +315,7 @@ void ObjectCallback(
 		ari_y = y.ToDouble();
 
 		// Progression Mode Biome Cleared Rewards
-		if (Config::config.disable_dungeon_lift && drop_biome_reward && ari_x != 0 && ari_y != 0 && script_name_to_reference_map.contains(GML_SCRIPT_DROP_ITEM))
+		if (!is_challenge_mode && Config::config.disable_dungeon_lift && drop_biome_reward && ari_x != 0 && ari_y != 0 && script_name_to_reference_map.contains(GML_SCRIPT_DROP_ITEM))
 		{
 			// Upper Mines
 			if (ari_current_gm_room == "rm_water_seal")

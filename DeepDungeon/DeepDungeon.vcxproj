@@ -219,6 +219,7 @@
     <ClCompile Include="source\hooks\items\DropItem.cpp" />
     <ClCompile Include="source\hooks\items\GetTreasureFromDistribution.cpp" />
     <ClCompile Include="source\hooks\items\GetUiIcon.cpp" />
+    <ClCompile Include="source\hooks\items\GiveItem.cpp" />
     <ClCompile Include="source\hooks\items\HeldItem.cpp" />
     <ClCompile Include="source\hooks\items\UseItem.cpp" />
     <ClCompile Include="source\hooks\objects\ObjectCallback.cpp" />
