@@ -69,6 +69,7 @@ void SetItemStaminaModifier(int item_id, double stamina_modifier);
 void SetItemManaModifier(int item_id, double mana_modifier);
 void SetItemShopPrice(int item_id, int store_price);
 void ModifyItems();
+void RefreshPrototypes();
 void MarkDungeonTutorialUnseen();
 void ModifyMistpoolWeaponSprites();
 void ModifyMistpoolPickaxeSprites();

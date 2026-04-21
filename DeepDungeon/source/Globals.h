@@ -359,6 +359,12 @@ namespace State {
 		extern std::map<Classes, std::map<std::string, std::string>> class_armor_to_localized_string_map;
 		extern std::map<std::string, uint64_t> notification_name_to_last_display_time_map;
 		extern std::map<int, RValue> item_id_to_prototype_map;
+		extern std::map<int, double> item_id_to_original_defense_map;
+		extern std::map<int, double> item_id_to_original_damage_map;
+		extern std::map<int, double> item_id_to_original_bomb_damage_map;
+		extern std::map<int, double> monster_id_to_original_hp_map;
+		extern std::map<int, double> monster_id_to_original_damage_map;
+		extern std::map<int, double> monster_id_to_original_projectile_damage_map;
 		extern std::map<std::string, std::unordered_set<int>> dungeon_biome_to_candidate_monsters_map;
 		extern std::map<int, std::string> floor_number_to_biome_name_map;
 		extern std::map<std::string, std::vector<CInstance*>> script_name_to_reference_map;

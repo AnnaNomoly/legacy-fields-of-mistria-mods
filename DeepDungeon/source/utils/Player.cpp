@@ -333,7 +333,10 @@ void ResetStaticFields(bool returned_to_title_screen)
 		is_challenge_mode = false;
 		save_prefix = "";
 		challenge_mode_progress = {};
+		bool was_challenge_mode = saved_config.has_value();
 		Config::RestoreAfterChallengeMode();
+		if (was_challenge_mode)
+			RefreshPrototypes();
 		ari_current_location = "";
 		ari_current_gm_room = "";
 		ari_resource_to_value_map.clear();
