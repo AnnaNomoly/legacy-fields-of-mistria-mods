@@ -144,6 +144,7 @@ RValue& GmlScriptPlayTextCallback(
 
 			time_stopped = true;
 			is_challenge_mode = true;
+			Config::OverrideWithDefaultsForChallengeMode();
 			RemoveItemsFromInventoryForChallengeMode();
 
 			if (challenge_mode_progress.highest_floor_reached == 0)

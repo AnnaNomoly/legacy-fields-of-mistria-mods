@@ -611,4 +611,19 @@ namespace Config
 		}
 	}
 
+	void OverrideWithDefaultsForChallengeMode()
+	{
+		State::Player::saved_config = config;
+		config = Configuration{};
+	}
+
+	void RestoreAfterChallengeMode()
+	{
+		if (State::Player::saved_config.has_value())
+		{
+			config = *State::Player::saved_config;
+			State::Player::saved_config = std::nullopt;
+		}
+	}
+
 } // namespace Config

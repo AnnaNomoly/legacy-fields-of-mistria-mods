@@ -215,6 +215,7 @@ namespace State {
 	// Player character state: position, resources, per-run item-use flags, resource tracking.
 	namespace Player {
 		extern ChallengeModeProgress challenge_mode_progress;
+		extern std::optional<Config::Configuration> saved_config;
 		extern bool load_on_start;
 		extern bool is_new_game;
 		extern bool is_challenge_mode;

@@ -15,6 +15,7 @@ namespace State {
 
 	namespace Player {
 		ChallengeModeProgress challenge_mode_progress = {};
+		std::optional<Config::Configuration> saved_config = std::nullopt;
 		bool load_on_start = true;
 		bool is_new_game = false;
 		bool is_challenge_mode = false;

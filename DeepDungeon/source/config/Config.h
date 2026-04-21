@@ -158,5 +158,7 @@ namespace Config
 	void PrintError(std::exception_ptr eptr);
 	json CreateJson(bool use_defaults);
 	void Load();
+	void OverrideWithDefaultsForChallengeMode();
+	void RestoreAfterChallengeMode();
 
 } // namespace Config

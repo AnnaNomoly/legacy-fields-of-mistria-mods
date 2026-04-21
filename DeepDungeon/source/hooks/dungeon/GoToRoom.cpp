@@ -56,6 +56,7 @@ RValue& GmlScriptGoToRoomCallback(
 		{
 			time_stopped = false;
 			is_challenge_mode = false;
+			Config::RestoreAfterChallengeMode();
 
 			// CreateNotification(...)
 			UpdateChallengeModeProgress();
@@ -66,6 +67,7 @@ RValue& GmlScriptGoToRoomCallback(
 		{
 			time_stopped = false;
 			is_challenge_mode = false;
+			Config::RestoreAfterChallengeMode();
 
 			// CreateNotification(...)
 			challenge_mode_progress = {};
