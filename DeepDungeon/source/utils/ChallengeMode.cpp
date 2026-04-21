@@ -112,7 +112,7 @@ void DropItemsForChallengeMode(CInstance* Self, CInstance* Other)
 		for (size_t i = 0; i < 20; i++)
 			DropItem(item_name_to_id_map[MANA_SALVE_NAME], item_spawn_point.first, item_spawn_point.second, Self, Other);
 
-		for (size_t i = 0; i < 20; i++)
+		for (size_t i = 0; i < 60; i++)
 			DropItem(item_name_to_id_map[SUSTAINING_POTION_NAME], item_spawn_point.first, item_spawn_point.second, Self, Other);
 
 		for (auto& [name, count] : challenge_mode_progress.starting_inventory)

@@ -149,7 +149,7 @@ RValue& GmlScriptPlayTextCallback(
 			CloseTextbox(Self, Other);
 			return Result;
 		}
-		else if (localization_key == "Conversations/Mods/Deep Dungeon/challenge_mode/1")
+		else if (localization_key == "Conversations/Mods/Deep Dungeon/challenge_mode/start")
 		{
 			CloseTextbox(Self, Other);
 
@@ -170,7 +170,7 @@ RValue& GmlScriptPlayTextCallback(
 
 			return Result;
 		}
-		else if (localization_key == "Conversations/Mods/Deep Dungeon/challenge_mode/2")
+		else if (localization_key == "Conversations/Mods/Deep Dungeon/challenge_mode/cancel")
 		{
 			CloseTextbox(Self, Other);
 			return Result;
