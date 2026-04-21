@@ -648,7 +648,7 @@ void ObjectCallback(
 				}
 
 				// Regular loot drops
-				if (!ari_current_gm_room.contains("seal") && !StructVariableExists(monster, "__deep_dungeon__loot_drop") && StructVariableExists(monster, "hit_points"))
+				if (!is_challenge_mode && !ari_current_gm_room.contains("seal") && !StructVariableExists(monster, "__deep_dungeon__loot_drop") && StructVariableExists(monster, "hit_points"))
 				{
 					double hit_points = monster.GetMember("hit_points").ToDouble();
 					if (std::isfinite(hit_points) && hit_points <= 0 && script_name_to_reference_map.contains(GML_SCRIPT_DROP_ITEM))
@@ -729,7 +729,7 @@ void ObjectCallback(
 				}
 
 				// Boss loot drops
-				if (boss_battle != BossBattle::NONE && boss_monsters_configured > 0)
+				if (boss_battle != BossBattle::NONE && boss_battle != BossBattle::CLEARED && boss_monsters_configured > 0)
 				{
 					int boss_monsters_defeated = 0;
 					for (CInstance* m : current_floor_monsters)
