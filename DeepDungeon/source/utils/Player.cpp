@@ -232,6 +232,8 @@ bool AriCurrentGmRoomIsDungeonFloor()
 {
 	if (boss_battle != BossBattle::NONE)
 		return true;
+	if (is_challenge_mode && ari_current_gm_room == "rm_priestess_quarters")
+		return true;
 	return ari_current_gm_room.contains("rm_mines") && ari_current_gm_room != "rm_mines_entry" && !ari_current_gm_room.contains("seal");
 }
 

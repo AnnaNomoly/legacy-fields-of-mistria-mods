@@ -59,7 +59,8 @@ namespace Config
 			{ GLOOM_HEALTH_MODIFIER_JSON_KEY, use_defaults ? DEFAULT_GLOOM_HEALTH_MODIFIER : config.gloom_health_modifier },
 			{ EXPERIMENTAL_MAX_HEALTH_BUG_FIX_JSON_KEY, use_defaults ? DEFAULT_EXPERIMENTAL_MAX_HEALTH_BUG_FIX : config.experimental_max_health_bug_fix },
 			{ EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS_JSON_KEY, use_defaults ? DEFAULT_EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS : config.experimental_extra_floor_enchantments_and_offerings },
-			{ EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER_JSON_KEY, use_defaults ? DEFAULT_EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER : config.experimental_monster_base_stat_difficulty_modifier }
+			{ EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER_JSON_KEY, use_defaults ? DEFAULT_EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER : config.experimental_monster_base_stat_difficulty_modifier },
+			{ EXPERIMENTAL_STOP_TIME_IN_DUNGEON_JSON_KEY, use_defaults ? DEFAULT_EXPERIMENTAL_STOP_TIME_IN_DUNGEON : config.experimental_stop_time_in_dungeon }
 		};
 		return config_json;
 	}
@@ -562,6 +563,12 @@ namespace Config
 							}
 							else
 								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, MOD_VERSION, EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER_JSON_KEY, config_file.c_str());
+
+							// Try loading the experimental_stop_time_in_dungeon value.
+							if (json_object.contains(EXPERIMENTAL_STOP_TIME_IN_DUNGEON_JSON_KEY) && json_object.at(EXPERIMENTAL_STOP_TIME_IN_DUNGEON_JSON_KEY).is_boolean())
+								config.experimental_stop_time_in_dungeon = json_object[EXPERIMENTAL_STOP_TIME_IN_DUNGEON_JSON_KEY];
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, MOD_VERSION, EXPERIMENTAL_STOP_TIME_IN_DUNGEON_JSON_KEY, config_file.c_str());
 						}
 					}
 

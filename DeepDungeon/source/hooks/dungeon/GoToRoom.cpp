@@ -5,6 +5,32 @@ using namespace State::Floor;
 using namespace State::Combat;
 using namespace State::Maps;
 
+static void StopChallengeMode(bool cleared, CInstance* Self, CInstance* Other)
+{
+	time_stopped = false;
+	is_challenge_mode = false;
+	Config::RestoreAfterChallengeMode();
+	RefreshPrototypes();
+
+	if (cleared)
+	{
+		UpdateChallengeModeProgress();
+
+		if (floor_number != 100)
+			CreateNotification(false, CHALLENGE_MODE_BIOME_CLEARED_NOTIFICATION_KEY, Self, Other);
+		else
+			CreateNotification(false, CHALLENGE_MODE_COMPLETED_NOTIFICATION_KEY, Self, Other);
+	}
+	else
+	{
+		challenge_mode_progress = {};
+		CreateNotification(false, CHALLENGE_MODE_FAILED_NOTIFICATION_KEY, Self, Other);
+	}
+
+	WriteChallengeModeFile();
+	RemoveItemsFromInventoryForChallengeMode();
+}
+
 RValue& GmlScriptGoToRoomCallback(
 	IN CInstance* Self,
 	IN CInstance* Other,
@@ -53,33 +79,13 @@ RValue& GmlScriptGoToRoomCallback(
 	if (is_challenge_mode)
 	{
 		if (ari_current_gm_room.contains("seal") && floor_number == challenge_mode_progress.highest_floor_reached + 20)
-		{
-			time_stopped = false;
-			is_challenge_mode = false;
-			Config::RestoreAfterChallengeMode();
-			RefreshPrototypes();
-
-			if (floor_number != 100)
-				CreateNotification(false, CHALLENGE_MODE_BIOME_CLEARED_NOTIFICATION_KEY, Self, Other);
-			else
-				CreateNotification(false, CHALLENGE_MODE_COMPLETED_NOTIFICATION_KEY, Self, Other);
-			UpdateChallengeModeProgress();
-			WriteChallengeModeFile();
-			RemoveItemsFromInventoryForChallengeMode();
-		}
+			StopChallengeMode(true, Self, Other);
 		else if (!AriCurrentGmRoomIsDungeonFloor())
-		{
-			time_stopped = false;
-			is_challenge_mode = false;
-			Config::RestoreAfterChallengeMode();
-			RefreshPrototypes();
-
-			CreateNotification(false, CHALLENGE_MODE_FAILED_NOTIFICATION_KEY, Self, Other);
-			challenge_mode_progress = {};
-			WriteChallengeModeFile();
-			RemoveItemsFromInventoryForChallengeMode();
-		}
+			StopChallengeMode(false, Self, Other);
 	}
+
+	// Stop time on active dungeon floors when challenge mode or the experimental config enables it.
+	time_stopped = AriCurrentGmRoomIsDungeonFloor() && (is_challenge_mode || Config::config.experimental_stop_time_in_dungeon);
 
 	// Store the floor number in the global instance for other mods.
 	*__YYTK.GetRefMember(MOD_NAME)->GetRefMember("floor") = floor_number;

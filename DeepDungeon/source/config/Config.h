@@ -53,6 +53,7 @@ namespace Config
 	static const char* const EXPERIMENTAL_MAX_HEALTH_BUG_FIX_JSON_KEY = "experimental_max_health_bug_fix";
 	static const char* const EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS_JSON_KEY = "experimental_extra_floor_enchantments_and_offerings";
 	static const char* const EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER_JSON_KEY = "experimental_monster_base_stat_difficulty_modifier";
+	static const char* const EXPERIMENTAL_STOP_TIME_IN_DUNGEON_JSON_KEY = "experimental_stop_time_in_dungeon";
 
 	// ============================================================
 	// Version & defaults
@@ -100,6 +101,7 @@ namespace Config
 	static const bool DEFAULT_EXPERIMENTAL_MAX_HEALTH_BUG_FIX = false;
 	static const bool DEFAULT_EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS = false;
 	static const double DEFAULT_EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER = 1.0;
+	static const bool DEFAULT_EXPERIMENTAL_STOP_TIME_IN_DUNGEON = false;
 
 	// ============================================================
 	// Configuration struct
@@ -148,6 +150,7 @@ namespace Config
 		bool experimental_max_health_bug_fix = DEFAULT_EXPERIMENTAL_MAX_HEALTH_BUG_FIX;
 		bool experimental_extra_floor_enchantments_and_offerings = DEFAULT_EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS;
 		double experimental_monster_base_stat_difficulty_modifier = DEFAULT_EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER;
+		bool experimental_stop_time_in_dungeon = DEFAULT_EXPERIMENTAL_STOP_TIME_IN_DUNGEON;
 	};
 
 	// ============================================================

@@ -6,7 +6,6 @@ using namespace State::Maps;
 
 static void StartChallengeMode(int starting_floor)
 {
-	time_stopped = true;
 	is_challenge_mode = true;
 	Config::OverrideWithDefaultsForChallengeMode();
 	RefreshPrototypes();
