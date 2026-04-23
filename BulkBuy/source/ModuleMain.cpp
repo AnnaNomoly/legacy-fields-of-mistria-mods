@@ -268,7 +268,7 @@ bool CheckControllerInput()
 	int gamepad_slot = GetGamepadSlotNumber();
 	if (gamepad_slot != -1)
 	{
-		RValue button_pressed = g_ModuleInterface->CallBuiltin("gamepad_button_check_pressed", { gamepad_slot, activation_button_int_value });
+		RValue button_pressed = g_ModuleInterface->CallBuiltin("gamepad_button_check", { gamepad_slot, activation_button_int_value });
 		return button_pressed.ToBoolean();
 	}
 
