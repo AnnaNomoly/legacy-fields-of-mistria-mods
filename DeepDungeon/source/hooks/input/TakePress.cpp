@@ -58,7 +58,7 @@ RValue& GmlScriptTakePressCallback(
 		PlayConversation(ELEVATOR_LOCKED_CONVERSATION_KEY, Self, Other);
 		Result = false;
 	}
-	else if (in_game && is_interact && ari_current_gm_room == "rm_farm" && obj_dragonshrine_focused && T2Read(script_name_to_reference_map[GML_SCRIPT_T2_READ][0], script_name_to_reference_map[GML_SCRIPT_T2_READ][1], "caldarus_has_met").ToBoolean())
+	else if (in_game && is_interact && ari_current_gm_room == "rm_farm" && obj_dragonshrine_focused && T2Read(script_name_to_reference_map[GML_SCRIPT_T2_READ][0], script_name_to_reference_map[GML_SCRIPT_T2_READ][1], "caldarus_is_human").ToBoolean())
 	{
 		PlayConversation("Conversations/Mods/Deep Dungeon/teleport_to_mines_or_deep_woods", Self, Other);
 		Result = false;

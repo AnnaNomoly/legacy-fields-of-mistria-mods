@@ -258,6 +258,24 @@
     <ClCompile Include="include\YYToolkit\YYTK_Shared_Types.cpp">
       <Filter>include</Filter>
     </ClCompile>
+    <ClCompile Include="source\utils\ChallengeMode.cpp">
+      <Filter>source\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="source\hooks\game\LoadGame.cpp">
+      <Filter>source\hooks\game</Filter>
+    </ClCompile>
+    <ClCompile Include="source\hooks\health\PlayHealVfx.cpp">
+      <Filter>source\hooks\health</Filter>
+    </ClCompile>
+    <ClCompile Include="source\hooks\items\GiveItem.cpp">
+      <Filter>source\hooks\items</Filter>
+    </ClCompile>
+    <ClCompile Include="source\hooks\ui\StoreMenuClose.cpp">
+      <Filter>source\hooks\ui</Filter>
+    </ClCompile>
+    <ClCompile Include="source\hooks\ui\StoreMenuInitialize.cpp">
+      <Filter>source\hooks\ui</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="source\pch.h">
