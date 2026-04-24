@@ -7,6 +7,8 @@ using namespace State::Maps;
 static void StartChallengeMode(int starting_floor)
 {
 	is_challenge_mode = true;
+	challenge_mode_progress.run_in_progress = true;
+	WriteChallengeModeFile();
 	Config::OverrideWithDefaultsForChallengeMode();
 	RefreshPrototypes();
 	RemoveItemsFromInventoryForChallengeMode();

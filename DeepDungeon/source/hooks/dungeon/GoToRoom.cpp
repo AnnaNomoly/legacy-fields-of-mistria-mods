@@ -27,6 +27,7 @@ static void StopChallengeMode(bool cleared, CInstance* Self, CInstance* Other)
 		CreateNotification(false, CHALLENGE_MODE_FAILED_NOTIFICATION_KEY, Self, Other);
 	}
 
+	challenge_mode_progress.run_in_progress = false;
 	WriteChallengeModeFile();
 	RemoveItemsFromInventoryForChallengeMode();
 }

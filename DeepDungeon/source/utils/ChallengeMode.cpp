@@ -79,6 +79,13 @@ bool ReadChallengeModeFile()
 	{
 		auto wrapped = cista::read<ChallengeModeProgress, cista::mode::NONE>(GetChallengeModeFilePath());
 		challenge_mode_progress = *wrapped;
+
+		if (challenge_mode_progress.run_in_progress)
+		{
+			challenge_mode_progress = {};
+			WriteChallengeModeFile();
+		}
+
 		return true;
 	}
 	catch (const std::exception& e)

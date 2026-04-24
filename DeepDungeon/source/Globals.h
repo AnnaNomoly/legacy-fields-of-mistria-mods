@@ -202,6 +202,7 @@ struct TreasureSpot {
 
 struct ChallengeModeProgress {
 	int highest_floor_reached{0};
+	bool run_in_progress{false};
 	cista::raw::hash_map<cista::raw::cstring, int> starting_inventory{};
 };
 
