@@ -216,6 +216,7 @@ namespace State {
 	namespace Player {
 		extern ChallengeModeProgress challenge_mode_progress;
 		extern std::unordered_set<int> challenge_mode_bulk_given_item_ids;
+		extern std::map<int, int> challenge_mode_item_drop_quantities;
 		extern std::optional<Config::Configuration> saved_config;
 		extern bool load_on_start;
 		extern bool is_new_game;

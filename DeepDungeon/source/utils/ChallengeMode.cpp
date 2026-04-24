@@ -163,20 +163,27 @@ void DropItemsForChallengeMode(CInstance* Self, CInstance* Other)
 			DropItem(item_name_to_id_map[MISTPOOL_BOOTS_NAME], item_spawn_point.first, item_spawn_point.second, Self, Other);
 
 		challenge_mode_bulk_given_item_ids.clear();
+		challenge_mode_item_drop_quantities.clear();
+		challenge_mode_item_drop_quantities[item_name_to_id_map[HEALTH_SALVE_NAME]] = 60;
+		challenge_mode_item_drop_quantities[item_name_to_id_map[STAMINA_SALVE_NAME]] = 60;
+		challenge_mode_item_drop_quantities[item_name_to_id_map[MANA_SALVE_NAME]] = 20;
+		challenge_mode_item_drop_quantities[item_name_to_id_map[SUSTAINING_POTION_NAME]] = 60;
+		for (auto& [name, count] : challenge_mode_progress.starting_inventory)
+			challenge_mode_item_drop_quantities[item_name_to_id_map[name.c_str()]] = count;
+
 		DropItem(item_name_to_id_map[HEALTH_SALVE_NAME], item_spawn_point.first, item_spawn_point.second, Self, Other);
 		DropItem(item_name_to_id_map[STAMINA_SALVE_NAME], item_spawn_point.first, item_spawn_point.second, Self, Other);
 		DropItem(item_name_to_id_map[MANA_SALVE_NAME], item_spawn_point.first, item_spawn_point.second, Self, Other);
 		DropItem(item_name_to_id_map[SUSTAINING_POTION_NAME], item_spawn_point.first, item_spawn_point.second, Self, Other);
-
 		for (auto& [name, count] : challenge_mode_progress.starting_inventory)
-			for (int i = 0; i < count; i++)
-				DropItem(item_name_to_id_map[name.c_str()], item_spawn_point.first, item_spawn_point.second, Self, Other);
+			DropItem(item_name_to_id_map[name.c_str()], item_spawn_point.first, item_spawn_point.second, Self, Other);
 	}
 }
 
 void UpdateChallengeModeProgress()
 {
 	std::map<int, int> item_id_to_inventory_count_map = {};
+	challenge_mode_progress.starting_inventory.clear();
 
 	for (auto& pair : sigil_to_item_id_map)
 	{

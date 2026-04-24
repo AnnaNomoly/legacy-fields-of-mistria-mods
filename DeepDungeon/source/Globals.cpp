@@ -16,6 +16,7 @@ namespace State {
 	namespace Player {
 		ChallengeModeProgress challenge_mode_progress = {};
 		std::unordered_set<int> challenge_mode_bulk_given_item_ids = {};
+		std::map<int, int> challenge_mode_item_drop_quantities = {};
 		std::optional<Config::Configuration> saved_config = std::nullopt;
 		bool load_on_start = true;
 		bool is_new_game = false;
