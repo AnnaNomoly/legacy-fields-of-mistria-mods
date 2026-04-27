@@ -7,9 +7,11 @@ using namespace YYTK;
 using json = nlohmann::json;
 
 static const char* const MOD_NAME = "ThePerfectGift";
-static const char* const VERSION = "1.2.1";
+static const char* const VERSION = "1.3.0";
 static const char* const UNLOCK_ALL_GIFT_PREFERENCES_KEY = "unlock_all_gift_preferences";
 static const char* const SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS_KEY = "show_gift_preferences_on_item_tooltips";
+static const char* const DISABLE_DAILY_TALK_LIMIT_KEY = "disable_daily_talk_limit";
+static const char* const DISABLE_DAILY_GIFT_LIMIT_KEY = "disable_daily_gift_limit";
 static const char* const GML_SCRIPT_TRY_ITEM_ID_TO_STRING = "gml_Script_try_item_id_to_string";
 static const char* const GML_SCRIPT_CREATE_NOTIFICATION = "gml_Script_create_notification";
 static const char* const GML_SCRIPT_GET_LOCALIZER = "gml_Script_get@Localizer@Localizer";
@@ -60,6 +62,8 @@ static const std::string WHEEDLE = "wheedle";
 //static const std::string ZOREL = "zorel";
 static const bool DEFAULT_UNLOCK_ALL_GIFT_PREFERENCES = false;
 static const bool DEFAULT_SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS = false;
+static const bool DEFAULT_DISABLE_DAILY_TALK_LIMIT = false;
+static const bool DEFAULT_DISABLE_DAILY_GIFT_LIMIT = false;
 static const std::vector<std::string> ACTIVE_NPC_LIST = { // As of 0.15.1
 	ADELINE, BALOR, CALDARUS, CELINE, DARCY, DELL, DOZY, EILAND, ELSIE, ERROL,
 	HAYDEN, HEMLOCK, HENRIETTA, HOLT, JOSEPHINE, JUNIPER, LANDEN, LOUIS, LUC, MAPLE,
@@ -375,6 +379,8 @@ static bool localize_items = true;
 static bool crafting_menu_open = false;
 static bool unlock_all_gift_preferences = DEFAULT_UNLOCK_ALL_GIFT_PREFERENCES;
 static bool show_gift_preferences_on_item_tooltips = DEFAULT_SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS;
+static bool disable_daily_talk_limit = DEFAULT_DISABLE_DAILY_TALK_LIMIT;
+static bool disable_daily_gift_limit = DEFAULT_DISABLE_DAILY_GIFT_LIMIT;
 static std::map<std::string, std::vector<std::string>> gifts_to_unlock = {};
 static std::map<std::string, INT64> item_name_to_id_map = {};
 static std::map<INT64, std::string> item_id_to_name_map = {};
@@ -456,7 +462,9 @@ json CreateConfigJson(bool use_defaults)
 {
 	json config_json = {
 		{ UNLOCK_ALL_GIFT_PREFERENCES_KEY, use_defaults ? DEFAULT_UNLOCK_ALL_GIFT_PREFERENCES : unlock_all_gift_preferences },
-		{ SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS_KEY, use_defaults ? DEFAULT_SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS : show_gift_preferences_on_item_tooltips }
+		{ SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS_KEY, use_defaults ? DEFAULT_SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS : show_gift_preferences_on_item_tooltips },
+		{ DISABLE_DAILY_TALK_LIMIT_KEY, use_defaults ? DEFAULT_DISABLE_DAILY_TALK_LIMIT : disable_daily_talk_limit },
+		{ DISABLE_DAILY_GIFT_LIMIT_KEY, use_defaults ? DEFAULT_DISABLE_DAILY_GIFT_LIMIT : disable_daily_gift_limit }
 	};
 	return config_json;
 }
@@ -465,8 +473,12 @@ void LogDefaultConfigValues()
 {
 	unlock_all_gift_preferences = DEFAULT_UNLOCK_ALL_GIFT_PREFERENCES;
 	show_gift_preferences_on_item_tooltips = DEFAULT_SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS;
+	disable_daily_talk_limit = DEFAULT_DISABLE_DAILY_TALK_LIMIT;
+	disable_daily_gift_limit = DEFAULT_DISABLE_DAILY_GIFT_LIMIT;
 	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, UNLOCK_ALL_GIFT_PREFERENCES_KEY, DEFAULT_UNLOCK_ALL_GIFT_PREFERENCES ? "true" : "false");
 	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS_KEY, DEFAULT_SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS ? "true" : "false");
+	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, DISABLE_DAILY_TALK_LIMIT_KEY, DEFAULT_DISABLE_DAILY_TALK_LIMIT ? "true" : "false");
+	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, DISABLE_DAILY_GIFT_LIMIT_KEY, DEFAULT_DISABLE_DAILY_GIFT_LIMIT ? "true" : "false");
 }
 
 void CreateOrLoadConfigFile()
@@ -534,6 +546,30 @@ void CreateOrLoadConfigFile()
 						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS_KEY, config_file.c_str());
 						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS_KEY, DEFAULT_SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS ? "true" : "false");
 					}
+
+					// Try loading the disable_daily_talk_limit value.
+					if (json_object.contains(DISABLE_DAILY_TALK_LIMIT_KEY))
+					{
+						disable_daily_talk_limit = json_object[DISABLE_DAILY_TALK_LIMIT_KEY];
+						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using CUSTOM \"%s\" value: %s!", MOD_NAME, VERSION, DISABLE_DAILY_TALK_LIMIT_KEY, disable_daily_talk_limit ? "true" : "false");
+					}
+					else
+					{
+						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, DISABLE_DAILY_TALK_LIMIT_KEY, config_file.c_str());
+						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, DISABLE_DAILY_TALK_LIMIT_KEY, DEFAULT_DISABLE_DAILY_TALK_LIMIT ? "true" : "false");
+					}
+
+					// Try loading the disable_daily_gift_limit value.
+					if (json_object.contains(DISABLE_DAILY_GIFT_LIMIT_KEY))
+					{
+						disable_daily_gift_limit = json_object[DISABLE_DAILY_GIFT_LIMIT_KEY];
+						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using CUSTOM \"%s\" value: %s!", MOD_NAME, VERSION, DISABLE_DAILY_GIFT_LIMIT_KEY, disable_daily_gift_limit ? "true" : "false");
+					}
+					else
+					{
+						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, DISABLE_DAILY_GIFT_LIMIT_KEY, config_file.c_str());
+						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, DISABLE_DAILY_GIFT_LIMIT_KEY, DEFAULT_DISABLE_DAILY_GIFT_LIMIT ? "true" : "false");
+					}
 				}
 
 				update_config_file = true;
@@ -555,10 +591,7 @@ void CreateOrLoadConfigFile()
 			in_stream.close();
 
 			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - The \"ThePerfectGift.json\" file was not found. Creating file: %s", MOD_NAME, VERSION, config_file.c_str());
-			json default_json = {
-				{UNLOCK_ALL_GIFT_PREFERENCES_KEY, DEFAULT_UNLOCK_ALL_GIFT_PREFERENCES},
-				{SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS_KEY, DEFAULT_SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS}
-			};
+			json default_json = CreateConfigJson(true);
 
 			std::ofstream out_stream(config_file);
 			out_stream << std::setw(4) << default_json << std::endl;
@@ -824,6 +857,26 @@ RValue GetLocalizedString(CInstance* Self, CInstance* Other, std::string localiz
 	return result;
 }
 
+void DisableDailyGiftLimit(CInstance* self)
+{
+	if (StructVariableExists(self, "me"))
+	{
+		RValue me = *self->GetRefMember("me");
+		if (StructVariableExists(me, "gift_flag"))
+			StructVariableSet(me, "gift_flag", true);
+	}
+}
+
+void DisableDailyTalkLimit(CInstance* self)
+{
+	if (StructVariableExists(self, "me"))
+	{
+		RValue me = *self->GetRefMember("me");
+		if (StructVariableExists(me, "talk_flag"))
+			StructVariableSet(me, "talk_flag", true);
+	}
+}
+
 void ObjectCallback(
 	IN FWCodeEvent& CodeEvent
 )
@@ -835,6 +888,12 @@ void ObjectCallback(
 
 	if (!self->m_Object)
 		return;
+
+	if (disable_daily_gift_limit)
+		DisableDailyGiftLimit(self);
+
+	if (disable_daily_talk_limit)
+		DisableDailyTalkLimit(self);
 
 	if (gifts_to_unlock.size() > 0 && !GameIsPaused())
 	{
