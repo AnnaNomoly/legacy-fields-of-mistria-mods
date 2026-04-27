@@ -8,7 +8,7 @@ using namespace YYTK;
 using json = nlohmann::json;
 
 static const char* const MOD_NAME = "BulkBuy";
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.0.1";
 static const char* const ACTIVATION_BUTTON_KEY = "activation_button";
 static const char* const BULK_QUANTITY_KEY = "bulk_quantity";
 static const char* const GML_SCRIPT_STORE_MENU_ADD_ITEM = "gml_Script_anon@6279@StoreMenu@StoreMenu";
