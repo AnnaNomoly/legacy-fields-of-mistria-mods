@@ -10,18 +10,19 @@ using namespace YYTK;
 using json = nlohmann::json;
 
 static const char* const MOD_NAME = "EnemyHealthBars";
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";
 static const char* const GML_SCRIPT_DRAW_MONSTER = "gml_Script_draw@gml_Object_par_monster_Create_0";
 static const char* const GML_SCRIPT_SETUP_MAIN_SCREEN = "gml_Script_setup_main_screen@TitleMenu@TitleMenu";
 static const char* const SMALLER_HEALTH_BAR_JSON_KEY = "smaller_health_bar";
 static const char* const RED_HEALTH_BAR_JSON_KEY = "red_health_bar";
+static const char* const MONSTER_HEALTH_BAR_VERTICAL_OFFSETS_JSON_KEY = "monster_health_bar_vertical_offsets";
 static const bool DEFAULT_SMALLER_HEALTH_BAR = false;
 static const bool DEFAULT_RED_HEALTH_BAR = false;
 static const int HEALTH_BAR_HEIGHT = 9;
 static const int HEALTH_BAR_WIDTH = 40;
 static const int SMALL_HEALTH_BAR_HEIGHT = 9;
 static const int SMALL_HEALTH_BAR_WIDTH = 30;
-static const std::map<std::string, int> MONSTER_NAME_TO_SPRITE_SIZE_MAP = { // Uses the monster's "idle south" sprite, divided by 2 or 3
+static const std::map<std::string, int> DEFAULT_MONSTER_HEALTH_BAR_VERTICAL_OFFSETS = { // Uses the monster's "idle south" sprite, divided by 2 or 3
 	{ "bat", 40 * 0.65 }, // spr_monster_essence_bat_main_idle_south
 	{ "bat_blue", 40 * 0.65 }, // spr_monster_essence_bat_blue_main_idle_south
 	{ "cat", 48 * 0.50 }, // spr_monster_lava_cat_main_idle_south
@@ -64,6 +65,7 @@ static const std::map<std::string, int> MONSTER_NAME_TO_SPRITE_SIZE_MAP = { // U
 struct Configuration {
 	bool smaller_health_bar = DEFAULT_SMALLER_HEALTH_BAR;
 	bool red_health_bar = DEFAULT_RED_HEALTH_BAR;
+	std::map<std::string, int> monster_health_bar_vertical_offsets = DEFAULT_MONSTER_HEALTH_BAR_VERTICAL_OFFSETS;
 };
 
 static YYTKInterface* g_ModuleInterface = nullptr;
@@ -89,7 +91,8 @@ json CreateConfigJson(bool use_defaults)
 {
 	json config_json = {
 		{ SMALLER_HEALTH_BAR_JSON_KEY, use_defaults ? DEFAULT_SMALLER_HEALTH_BAR : configuration.smaller_health_bar },
-		{ RED_HEALTH_BAR_JSON_KEY, use_defaults ? DEFAULT_RED_HEALTH_BAR : configuration.red_health_bar }
+		{ RED_HEALTH_BAR_JSON_KEY, use_defaults ? DEFAULT_RED_HEALTH_BAR : configuration.red_health_bar },
+		{ MONSTER_HEALTH_BAR_VERTICAL_OFFSETS_JSON_KEY, use_defaults ? DEFAULT_MONSTER_HEALTH_BAR_VERTICAL_OFFSETS : configuration.monster_health_bar_vertical_offsets }
 	};
 	return config_json;
 }
@@ -150,6 +153,17 @@ void CreateOrLoadConfigFile()
 					{
 						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, RED_HEALTH_BAR_JSON_KEY, config_file.c_str());
 						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, RED_HEALTH_BAR_JSON_KEY, DEFAULT_RED_HEALTH_BAR ? "true" : "false");
+					}
+
+					if (json_object.contains(MONSTER_HEALTH_BAR_VERTICAL_OFFSETS_JSON_KEY))
+					{
+						configuration.monster_health_bar_vertical_offsets = json_object[MONSTER_HEALTH_BAR_VERTICAL_OFFSETS_JSON_KEY].get<std::map<std::string, int>>();
+						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using CUSTOM \"%s\" value with %d entries!", MOD_NAME, VERSION, MONSTER_HEALTH_BAR_VERTICAL_OFFSETS_JSON_KEY, (int)configuration.monster_health_bar_vertical_offsets.size());
+					}
+					else
+					{
+						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, MONSTER_HEALTH_BAR_VERTICAL_OFFSETS_JSON_KEY, config_file.c_str());
+						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value with %d entries!", MOD_NAME, VERSION, MONSTER_HEALTH_BAR_VERTICAL_OFFSETS_JSON_KEY, (int)DEFAULT_MONSTER_HEALTH_BAR_VERTICAL_OFFSETS.size());
 					}
 				}
 
@@ -273,7 +287,7 @@ void ObjectCallback(
 			return;
 
 		RValue monster_id = monster.GetMember("monster_id");
-		if (!IsNumeric(monster_id) || !monster_id_to_name_map.contains(monster_id.ToInt64()) || !MONSTER_NAME_TO_SPRITE_SIZE_MAP.contains(monster_id_to_name_map[monster_id.ToInt64()]))
+		if (!IsNumeric(monster_id) || !monster_id_to_name_map.contains(monster_id.ToInt64()) || !configuration.monster_health_bar_vertical_offsets.contains(monster_id_to_name_map[monster_id.ToInt64()]))
 			return;
 
 		RValue hit_points = monster.GetMember("hit_points");
@@ -305,7 +319,7 @@ RValue& GmlScriptDrawMonsterCallback(
 		return Result;
 	
 	RValue monster_id = Self->GetMember("monster_id");
-	if (!IsNumeric(monster_id) || !MONSTER_NAME_TO_SPRITE_SIZE_MAP.contains(monster_id_to_name_map[monster_id.ToInt64()]))
+	if (!IsNumeric(monster_id) || !monster_id_to_name_map.contains(monster_id.ToInt64()) || !configuration.monster_health_bar_vertical_offsets.contains(monster_id_to_name_map[monster_id.ToInt64()]))
 		return Result;
 
 	RValue health = Self->GetMember("hit_points");
@@ -319,7 +333,7 @@ RValue& GmlScriptDrawMonsterCallback(
 	g_ModuleInterface->GetBuiltin("x", Self, NULL_INDEX, x);
 	g_ModuleInterface->GetBuiltin("y", Self, NULL_INDEX, y);
 
-	int sprite_height = MONSTER_NAME_TO_SPRITE_SIZE_MAP.at(monster_id_to_name_map[monster_id.ToInt64()]);
+	int sprite_height = configuration.monster_health_bar_vertical_offsets.at(monster_id_to_name_map[monster_id.ToInt64()]);
 	int bar_x = x.ToInt64();
 	int bar_y = y.ToInt64() - sprite_height;
 	int health_bar_width = configuration.smaller_health_bar ? SMALL_HEALTH_BAR_WIDTH : HEALTH_BAR_WIDTH;
@@ -348,25 +362,20 @@ RValue& GmlScriptDrawMonsterCallback(
 	int health_bar_color = configuration.red_health_bar ? 255 : 65280;
 	DrawRectangle(health_bar_color, left, fill_top, fill_right, fill_bottom, false);
 
-	RValue sprite_index = g_ModuleInterface->CallBuiltin(
-		"asset_get_index", {
-			"enemy_health_bar"
-		}
-	);
+	RValue sprite_index;
+	if (configuration.smaller_health_bar)
+		sprite_index = g_ModuleInterface->CallBuiltin("asset_get_index", { "enemy_health_bar_small" });
+	else
+		sprite_index = g_ModuleInterface->CallBuiltin("asset_get_index", { "enemy_health_bar" });
 
 	// Draw sprite on top (centered)
 	g_ModuleInterface->CallBuiltin(
-		"draw_sprite_ext",
+		"draw_sprite",
 		{
 			RValue(sprite_index),
 			RValue(-1),
 			RValue(left),
-			RValue(top),
-			RValue((double)health_bar_width / HEALTH_BAR_WIDTH),
-			RValue((double)health_bar_height / HEALTH_BAR_HEIGHT),
-			RValue(0),
-			RValue(16777215),
-			RValue(1.0)
+			RValue(top)
 		}
 	);
 
