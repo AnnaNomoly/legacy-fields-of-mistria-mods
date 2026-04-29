@@ -9,10 +9,11 @@ using namespace YYTK;
 using json = nlohmann::json;
 
 static const char* const MOD_NAME = "CropTimers";
-static const char* const VERSION = "1.0.1";
+static const char* const VERSION = "1.1.0";
 static const char* const GML_SCRIPT_ON_DRAW_GUI = "gml_Script_on_draw_gui@Display@Display";
 static const char* const GML_SCRIPT_NODE_OBJECT_SET_SPRITE = "gml_Script_set_sprite@gml_Object_obj_node_renderer_Create_0";
 static const char* const GML_SCRIPT_SETUP_MAIN_SCREEN = "gml_Script_setup_main_screen@TitleMenu@TitleMenu";
+static const char* const GML_SCRIPT_GO_TO_ROOM = "gml_Script_goto_gm_room";
 static const char* const TIMERS_START_VISIBLE_JSON_KEY = "timers_start_visible";
 static const char* const ONLY_SHOW_TIMER_ZERO_JSON_KEY = "only_show_timer_zero";
 static const char* const RED_TIMER_ZERO_JSON_KEY = "red_timer_zero";
@@ -45,6 +46,7 @@ static CInstance* global_instance = nullptr;
 static Configuration configuration = Configuration();
 static bool load_on_start = true;
 static bool processing_user_input = false;
+static std::string ari_current_gm_room = "";
 static std::map<std::string, int> object_category_to_id_map = {};
 
 int RValueAsInt(RValue value)
@@ -346,7 +348,6 @@ void ConfigureActivationButton()
 	}
 }
 
-
 void PrintError(std::exception_ptr eptr)
 {
 	try {
@@ -514,6 +515,11 @@ void CreateOrLoadConfigFile()
 	}
 }
 
+bool ShowCropTimers()
+{
+	return configuration.timers_visible && (ari_current_gm_room == "rm_farm" || ari_current_gm_room == "rm_small_greenhouse" || ari_current_gm_room == "rm_large_greenhouse");
+}
+
 RValue& GmlScriptOnDrawGuiCallback(
 	IN CInstance* Self,
 	IN CInstance* Other,
@@ -544,7 +550,8 @@ RValue& GmlScriptOnDrawGuiCallback(
 					RValue sprite_name = g_ModuleInterface->CallBuiltin("sprite_get_name", { sprite_index }); // spr_crop_wheat_stage3
 					std::string sprite_name_str = sprite_name.ToString();
 
-					if (sprite_name_str.contains("stage") && (sprite_name_str.contains("crop") || sprite_name_str.contains("forage")))
+					if ((sprite_name_str.contains("spr_crop") || sprite_name_str.contains("spr_flower") || sprite_name_str.contains("spr_forage")) &&
+						(sprite_name_str.contains("seed") || sprite_name_str.contains("stage")))
 					{
 						if (configuration.timers_visible)
 						{
@@ -570,6 +577,9 @@ RValue& GmlScriptOnDrawGuiCallback(
 										if (!regrow_cycle)
 										{
 											int days_remaining = growth_days - day_count;
+											if (days_remaining < 0)
+												days_remaining = 0;
+
 											if (configuration.only_show_timer_zero && days_remaining != 0)
 												continue;
 
@@ -588,6 +598,9 @@ RValue& GmlScriptOnDrawGuiCallback(
 
 											int regrowth_days = g_ModuleInterface->CallBuiltin("array_length", { post_harvest_day_to_stage_buffer }).ToInt64() - 1;
 											int days_remaining = regrowth_days - day_count;
+											if (days_remaining < 0)
+												days_remaining = 0;
+
 											if (configuration.only_show_timer_zero && days_remaining != 0)
 												continue;
 
@@ -653,7 +666,8 @@ RValue& GmlScriptNodeObjectSetSpriteCallback(
 			RValue sprite_name = g_ModuleInterface->CallBuiltin("sprite_get_name", { *Arguments[0] });
 			std::string sprite_name_str = sprite_name.ToString();
 
-			if (sprite_name_str.contains("stage") && (sprite_name_str.contains("crop") || sprite_name_str.contains("forage")))
+			if ((sprite_name_str.contains("spr_crop") || sprite_name_str.contains("spr_flower") || sprite_name_str.contains("spr_forage")) &&
+				(sprite_name_str.contains("seed") || sprite_name_str.contains("stage")))
 			{
 				RValue node = Self->GetMember("node");
 				if (StructVariableExists(node, "prototype"))
@@ -678,6 +692,9 @@ RValue& GmlScriptNodeObjectSetSpriteCallback(
 							{
 								bool ignore_node = false;
 								int days_remaining = growth_days - day_count;
+								if (days_remaining < 0)
+									days_remaining = 0;
+
 								if (configuration.only_show_timer_zero && days_remaining != 0)
 									ignore_node = true;
 
@@ -700,6 +717,9 @@ RValue& GmlScriptNodeObjectSetSpriteCallback(
 								bool ignore_node = false;
 								int regrowth_days = g_ModuleInterface->CallBuiltin("array_length", { post_harvest_day_to_stage_buffer }).ToInt64() - 1;
 								int days_remaining = regrowth_days - day_count;
+								if (days_remaining < 0)
+									days_remaining = 0;
+
 								if (configuration.only_show_timer_zero && days_remaining != 0)
 									ignore_node = true;
 
@@ -741,6 +761,8 @@ RValue& GmlScriptSetupMainScreenCallback(
 	IN RValue** Arguments
 )
 {
+	ari_current_gm_room = "";
+
 	if (load_on_start)
 	{
 		g_ModuleInterface->GetGlobalInstance(&global_instance);
@@ -759,6 +781,30 @@ RValue& GmlScriptSetupMainScreenCallback(
 		ArgumentCount,
 		Arguments
 	);
+
+	return Result;
+}
+
+RValue& GmlScriptGoToRoomCallback(
+	IN CInstance* Self,
+	IN CInstance* Other,
+	OUT RValue& Result,
+	IN int ArgumentCount,
+	IN RValue** Arguments
+)
+{
+	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_GO_TO_ROOM));
+	original(
+		Self,
+		Other,
+		Result,
+		ArgumentCount,
+		Arguments
+	);
+
+	RValue gm_room = StructVariableGet(Result, "gm_room");
+	RValue room_name = g_ModuleInterface->CallBuiltin("room_get_name", { gm_room });
+	ari_current_gm_room = room_name.ToString();
 
 	return Result;
 }
@@ -845,6 +891,33 @@ void CreateHookGmlScriptSetupMainScreen(AurieStatus& status)
 	}
 }
 
+void CreateHookGmlScriptGoToRoom(AurieStatus& status)
+{
+	CScript* gml_script_go_to_room = nullptr;
+	status = g_ModuleInterface->GetNamedRoutinePointer(
+		GML_SCRIPT_GO_TO_ROOM,
+		(PVOID*)&gml_script_go_to_room
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GO_TO_ROOM);
+	}
+
+	status = MmCreateHook(
+		g_ArSelfModule,
+		GML_SCRIPT_GO_TO_ROOM,
+		gml_script_go_to_room->m_Functions->m_ScriptFunction,
+		GmlScriptGoToRoomCallback,
+		nullptr
+	);
+
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GO_TO_ROOM);
+	}
+}
+
 EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path& ModulePath) {
 	UNREFERENCED_PARAMETER(ModulePath);
 
@@ -875,6 +948,13 @@ EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path&
 	}
 
 	CreateHookGmlScriptSetupMainScreen(status);
+	if (!AurieSuccess(status))
+	{
+		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
+		return status;
+	}
+
+	CreateHookGmlScriptGoToRoom(status);
 	if (!AurieSuccess(status))
 	{
 		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
