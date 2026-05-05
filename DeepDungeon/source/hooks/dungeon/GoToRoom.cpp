@@ -79,7 +79,7 @@ RValue& GmlScriptGoToRoomCallback(
 	// Process challenge mode.
 	if (is_challenge_mode)
 	{
-		if (ari_current_gm_room.contains("seal") && floor_number == challenge_mode_progress.highest_floor_reached + 20)
+		if ((ari_current_gm_room.contains("seal") || ari_current_gm_room == "rm_seridias_chamber") && floor_number == challenge_mode_progress.highest_floor_reached + 20)
 			StopChallengeMode(true, Self, Other);
 		else if (!AriCurrentGmRoomIsDungeonFloor())
 			StopChallengeMode(false, Self, Other);

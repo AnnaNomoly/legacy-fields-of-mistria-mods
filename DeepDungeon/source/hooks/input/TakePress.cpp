@@ -53,7 +53,7 @@ RValue& GmlScriptTakePressCallback(
 		offering_chance_occurred = true;
 	}
 	// Disable the elevator if config option set.
-	else if (in_game && is_interact && Config::config.disable_dungeon_lift && (ari_current_gm_room.contains("rm_mines") || ari_current_gm_room.contains("seal")) && obj_dungeon_elevator_focused)
+	else if (in_game && is_interact && Config::config.disable_dungeon_lift && (ari_current_gm_room.contains("rm_mines") || ari_current_gm_room.contains("seal") || ari_current_gm_room == "rm_priestess_quarters") && obj_dungeon_elevator_focused)
 	{
 		PlayConversation(ELEVATOR_LOCKED_CONVERSATION_KEY, Self, Other);
 		Result = false;
