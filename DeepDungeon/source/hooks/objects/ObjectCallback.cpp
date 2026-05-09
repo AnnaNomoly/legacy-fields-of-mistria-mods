@@ -145,6 +145,13 @@ static void AriProcessUsedItems(CInstance* ari_instance, CInstance* self)
 					double hit_points = monster->GetMember("hit_points").ToDouble();
 					if (IsNumeric(monster_id) && std::isfinite(hit_points) && hit_points > 0)
 						*monster->GetRefMember("hit_points") = 0;
+
+					if (monster_id.ToInt64() == monster_name_to_id_map["tome"])
+					{
+						RValue monster_instance_exists = g_ModuleInterface->CallBuiltin("instance_exists", { monster });
+						if (monster_instance_exists.ToBoolean())
+							g_ModuleInterface->CallBuiltin("instance_destroy", { monster });
+					}
 				}
 			}
 
