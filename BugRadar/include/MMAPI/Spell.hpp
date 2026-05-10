@@ -72,7 +72,7 @@ namespace MMAPI::Spell
 			);
 			original(Self, Other, Result, ArgumentCount, Arguments);
 
-			if (Arguments && ArgumentCount >= 1 && Arguments[0])
+			if (after_can_cast_spell_callback && Arguments && ArgumentCount >= 1 && Arguments[0])
 			{
 				MMAPI::Spell::CanCastSpellContext context{ Arguments[0]->ToInt64(), Result.ToBoolean() };
 				after_can_cast_spell_callback(context);
@@ -90,7 +90,7 @@ namespace MMAPI::Spell
 			IN YYTK::RValue** Arguments
 		)
 		{
-			if (Arguments && ArgumentCount >= 1 && Arguments[0])
+			if (before_spell_cast_callback && Arguments && ArgumentCount >= 1 && Arguments[0])
 			{
 				MMAPI::Spell::CastSpellContext context{ Arguments[0]->ToInt64() };
 				before_spell_cast_callback(context);
@@ -194,6 +194,21 @@ namespace MMAPI::Spell
 		Internal::SetCost(static_cast<int>(spell), cost);
 	}
 
+	/// Activates Spell utility functions and installs the can_cast_spell / cast_spell hook callbacks.
+	/// Safe to call before any Hooks::* registration — the callbacks no-op until a user callback is bound.
+	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
+	inline Aurie::AurieStatus Enable()
+	{
+		Aurie::AurieStatus status = MMAPI::Instance::Enable();
+		if (!Aurie::AurieSuccess(status))
+			return status;
+
+		return MMAPI::Internal::InstallScriptHooks({
+			{ Internal::GML_SCRIPT_CAN_CAST_SPELL, reinterpret_cast<PVOID>(Internal::GmlScriptCanCastSpellCallback) },
+			{ Internal::GML_SCRIPT_CAST_SPELL,     reinterpret_cast<PVOID>(Internal::GmlScriptCastSpellCallback) },
+		});
+	}
+
 	/// Returns true if Ari can currently cast the given spell.
 	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
 	/// @param spell The spell to check.
@@ -212,6 +227,25 @@ namespace MMAPI::Spell
 		YYTK::RValue* args[1] = { &spell_id };
 		gml_script->m_Functions->m_ScriptFunction(Self, Other, result, 1, args);
 		return result.ToBoolean();
+	}
+
+	/// Casts the given spell as Ari.
+	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
+	/// @param spell The spell to cast.
+	inline void Cast(MMAPI::Spell::Ids spell)
+	{
+		YYTK::CInstance* Self  = nullptr;
+		YYTK::CInstance* Other = nullptr;
+		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
+			return;
+
+		YYTK::CScript* gml_script = nullptr;
+		MMAPI::Internal::module_interface->GetNamedRoutinePointer(Internal::GML_SCRIPT_CAST_SPELL, reinterpret_cast<PVOID*>(&gml_script));
+
+		YYTK::RValue spell_id = static_cast<int>(spell);
+		YYTK::RValue result;
+		YYTK::RValue* args[1] = { &spell_id };
+		gml_script->m_Functions->m_ScriptFunction(Self, Other, result, 1, args);
 	}
 
 	namespace Hooks

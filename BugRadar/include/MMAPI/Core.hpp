@@ -2,8 +2,10 @@
 
 #include <chrono>
 #include <cstdint>
+#include <initializer_list>
 #include <map>
 #include <string>
+#include <utility>
 #include <vector>
 #include "YYToolkit/YYTK_Shared.hpp"
 
@@ -37,6 +39,20 @@ namespace MMAPI
 
 		inline std::map<std::string, bool> owned_script_hook_installed_map;
 
+		// Internal pub/sub list of handlers invoked from MMAPI's setup_main_screen hook,
+		// before any user callback runs. Used by modules that need to (re)build state
+		// when the game returns to the title screen with valid Self/Other context.
+		using OnSetupMainScreenHandler = void(*)(YYTK::CInstance* Self, YYTK::CInstance* Other);
+		inline std::vector<OnSetupMainScreenHandler> on_setup_main_screen_internal_handlers;
+
+		inline void RegisterOnSetupMainScreenHandler(OnSetupMainScreenHandler handler)
+		{
+			for (auto existing : on_setup_main_screen_internal_handlers)
+				if (existing == handler)
+					return;
+			on_setup_main_screen_internal_handlers.push_back(handler);
+		}
+
 		inline Aurie::AurieStatus InstallScriptHook(const char* script_name, PVOID callback)
 		{
 			if (!self_module || !module_interface)
@@ -68,6 +84,19 @@ namespace MMAPI
 			return status;
 		}
 
+		/// Installs a batch of script hooks. Returns the first failure (and stops short-circuit),
+		/// or AURIE_SUCCESS if every hook was installed (or already was).
+		inline Aurie::AurieStatus InstallScriptHooks(std::initializer_list<std::pair<const char*, PVOID>> hooks)
+		{
+			for (const auto& [script_name, callback] : hooks)
+			{
+				Aurie::AurieStatus status = InstallScriptHook(script_name, callback);
+				if (!Aurie::AurieSuccess(status))
+					return status;
+			}
+			return Aurie::AURIE_SUCCESS;
+		}
+
 		/// Captures the Self and Other instance context for a GML script the first time it is seen.
 		/// Used internally by MMAPI's per-module Enable() context-capture hooks.
 		inline void RegisterScriptContext(const char* script_name, YYTK::CInstance* Self, YYTK::CInstance* Other)
@@ -91,6 +120,53 @@ namespace MMAPI
 	{
 		Internal::script_reference_map.clear();
 		Internal::instance_reference_map.clear();
+	}
+
+	namespace Internal
+	{
+		// MMAPI-wide setup_main_screen hook. Owned by Core because its primary job is core infrastructure:
+		// clearing script/instance contexts on return-to-title and dispatching the internal handler pub/sub list.
+		// `MMAPI::Game::Hooks::BeforeSetupMainScreen` is a thin user-facing wrapper that registers a callback here.
+		inline constexpr const char* GML_SCRIPT_SETUP_MAIN_SCREEN = "gml_Script_setup_main_screen@TitleMenu@TitleMenu";
+
+		using BeforeSetupMainScreenCallback = void(*)();
+		inline BeforeSetupMainScreenCallback before_setup_main_screen_callback = nullptr;
+
+		inline YYTK::RValue& GmlScriptBeforeSetupMainScreenCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			MMAPI::ClearScriptContexts();
+
+			for (auto handler : on_setup_main_screen_internal_handlers)
+				handler(Self, Other);
+
+			if (before_setup_main_screen_callback)
+				before_setup_main_screen_callback();
+
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(self_module, GML_SCRIPT_SETUP_MAIN_SCREEN)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+			return Result;
+		}
+
+		inline Aurie::AurieStatus RegisterBeforeSetupMainScreenHook(BeforeSetupMainScreenCallback callback)
+		{
+			Aurie::AurieStatus status = InstallScriptHook(
+				GML_SCRIPT_SETUP_MAIN_SCREEN,
+				reinterpret_cast<PVOID>(GmlScriptBeforeSetupMainScreenCallback)
+			);
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			before_setup_main_screen_callback = callback;
+			return Aurie::AURIE_SUCCESS;
+		}
 	}
 
 	/// Initializes MMAPI. Call once from ModuleInitialize.

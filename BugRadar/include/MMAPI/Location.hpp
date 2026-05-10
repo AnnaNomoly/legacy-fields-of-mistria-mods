@@ -2,8 +2,10 @@
 
 #include "Core.hpp"
 #include "Engine.hpp"
-#include "Game.hpp"
 #include "Instance.hpp"
+
+#include <string>
+#include <unordered_map>
 
 #include "YYToolkit/YYTK_Shared.hpp"
 
@@ -92,12 +94,35 @@ namespace MMAPI::Location
 		WesternRuins            = 77
 	};
 
+	struct GoToRoomContext
+	{
+		std::string m_room_name;
+
+		std::string_view GetRoomName() const { return m_room_name; }
+	};
+
 	namespace Internal
 	{
-		inline constexpr const char* GML_SCRIPT_TRY_LOCATION_ID_TO_STRING = "gml_Script_try_location_id_to_string";
-		inline constexpr const char* GML_SCRIPT_TELEPORT_ARI_TO_ROOM      = "gml_Script_ari_teleport_to_room";
+		inline constexpr const char* GML_SCRIPT_LOCATION_ID_TO_GM_ROOM = "gml_Script_location_id_to_gm_room";
+		inline constexpr const char* GML_SCRIPT_GO_TO_ROOM             = "gml_Script_goto_gm_room";
+		inline constexpr const char* GML_SCRIPT_TELEPORT_ARI_TO_ROOM   = "gml_Script_ari_teleport_to_room";
 
-		inline int cached_current_location_id = -1;
+		inline constexpr const char* INTERNAL_NAME_DUNGEON = "dungeon";
+		inline constexpr const char* GM_ROOM_PREFIX_MINES  = "rm_mines";
+
+		// Pre-built lookup maps; populated by BuildMaps() via the setup_main_screen pub/sub.
+		inline std::unordered_map<int, std::string>         location_id_to_internal_name_map;
+		inline std::unordered_map<std::string, int>         location_internal_name_to_id_map;
+		inline std::unordered_map<std::string, int>         gm_room_name_to_location_id_map;
+		inline std::unordered_map<int, std::string>         location_id_to_gm_room_name_map;
+
+		// Current GM room — updated from the goto_gm_room hook's Result.gm_room.
+		// The game defers `room` changes to end-of-step, so this is the only reliable
+		// signal of where the player will be on the next frame.
+		inline std::string current_gm_room_name;
+
+		using AfterGoToRoomCallback = void(*)(MMAPI::Location::GoToRoomContext&);
+		inline AfterGoToRoomCallback after_go_to_room_callback = nullptr;
 
 		inline YYTK::RValue GetLocationData(int location_id)
 		{
@@ -119,7 +144,73 @@ namespace MMAPI::Location
 			return *location;
 		}
 
-		inline YYTK::RValue& GmlScriptTryLocationIdToStringCallback(
+		inline std::string LocationIdToGmRoomName(YYTK::CInstance* Self, YYTK::CInstance* Other, int location_id)
+		{
+			YYTK::CScript* gml_script = nullptr;
+			MMAPI::Internal::module_interface->GetNamedRoutinePointer(
+				GML_SCRIPT_LOCATION_ID_TO_GM_ROOM,
+				reinterpret_cast<PVOID*>(&gml_script)
+			);
+			if (!gml_script)
+				return {};
+
+			YYTK::RValue result;
+			YYTK::RValue location = location_id;
+			YYTK::RValue* location_ptr = &location;
+			gml_script->m_Functions->m_ScriptFunction(Self, Other, result, 1, { &location_ptr });
+
+			YYTK::RValue room_name = MMAPI::Internal::module_interface->CallBuiltin("room_get_name", { result });
+			if (room_name.m_Kind == YYTK::VALUE_UNDEFINED || room_name.m_Kind == YYTK::VALUE_UNSET)
+				return {};
+
+			return room_name.ToString();
+		}
+
+		// Pre-computes the location ↔ GM room lookup maps.
+		// Called from MMAPI's setup_main_screen pub/sub when valid Self/Other are available.
+		inline void BuildMaps(YYTK::CInstance* Self, YYTK::CInstance* Other)
+		{
+			if (!MMAPI::Internal::global_instance || !MMAPI::Internal::module_interface)
+				return;
+
+			location_id_to_internal_name_map.clear();
+			location_internal_name_to_id_map.clear();
+			gm_room_name_to_location_id_map.clear();
+			location_id_to_gm_room_name_map.clear();
+
+			YYTK::RValue location_ids = MMAPI::Internal::global_instance->GetMember("__location_id__");
+			size_t array_length = 0;
+			MMAPI::Internal::module_interface->GetArraySize(location_ids, array_length);
+
+			for (size_t i = 0; i < array_length; i++)
+			{
+				YYTK::RValue* element = nullptr;
+				MMAPI::Internal::module_interface->GetArrayEntry(location_ids, i, element);
+				if (!element)
+					continue;
+
+				std::string internal_name = element->ToString();
+				int id = static_cast<int>(i);
+				location_id_to_internal_name_map[id]            = internal_name;
+				location_internal_name_to_id_map[internal_name] = id;
+			}
+
+			for (const auto& [id, internal_name] : location_id_to_internal_name_map)
+			{
+				// DUNGEON is a procedural location — calling location_id_to_gm_room on it crashes the game.
+				if (internal_name == INTERNAL_NAME_DUNGEON)
+					continue;
+
+				std::string gm_room_name = LocationIdToGmRoomName(Self, Other, id);
+				if (gm_room_name.empty())
+					continue;
+
+				gm_room_name_to_location_id_map[gm_room_name] = id;
+				location_id_to_gm_room_name_map[id]           = gm_room_name;
+			}
+		}
+
+		inline YYTK::RValue& GmlScriptGoToRoomCallback(
 			IN YYTK::CInstance* Self,
 			IN YYTK::CInstance* Other,
 			OUT YYTK::RValue& Result,
@@ -128,19 +219,32 @@ namespace MMAPI::Location
 		)
 		{
 			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
-				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_TRY_LOCATION_ID_TO_STRING)
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_GO_TO_ROOM)
 			);
 			original(Self, Other, Result, ArgumentCount, Arguments);
 
-			// The game calls try_location_id_to_string for the location it is currently displaying or saving.
-			// Capture the most-recent valid id; serve TryGetCurrentLocation from this cache to avoid the fatal
-			// errors that polling location_id_to_gm_room hits for procedural locations (Dungeon, etc.).
-			if (Arguments && ArgumentCount >= 1 && Arguments[0])
+			YYTK::RValue gm_room = Result.GetMember("gm_room");
+			YYTK::RValue room_name_rv = MMAPI::Internal::module_interface->CallBuiltin("room_get_name", { gm_room });
+
+			std::string room_name;
+			if (room_name_rv.m_Kind != YYTK::VALUE_UNDEFINED && room_name_rv.m_Kind != YYTK::VALUE_UNSET)
+				room_name = room_name_rv.ToString();
+
+			current_gm_room_name = room_name;
+
+			// Procedurally-generated dungeon rooms aren't enumerated at startup, so map them to DUNGEON on first sight.
+			if (!room_name.empty()
+				&& !gm_room_name_to_location_id_map.contains(room_name)
+				&& room_name.find(GM_ROOM_PREFIX_MINES) != std::string::npos
+				&& location_internal_name_to_id_map.contains(INTERNAL_NAME_DUNGEON))
 			{
-				int id = static_cast<int>(Arguments[0]->ToInt64());
-				if (id >= static_cast<int>(MMAPI::Location::Ids::AbandonedMines) &&
-				    id <= static_cast<int>(MMAPI::Location::Ids::WesternRuins))
-					cached_current_location_id = id;
+				gm_room_name_to_location_id_map[room_name] = location_internal_name_to_id_map[INTERNAL_NAME_DUNGEON];
+			}
+
+			if (after_go_to_room_callback)
+			{
+				MMAPI::Location::GoToRoomContext context{ room_name };
+				after_go_to_room_callback(context);
 			}
 
 			return Result;
@@ -148,15 +252,18 @@ namespace MMAPI::Location
 	}
 
 	/// Activates Location utility functions that track the current location.
-	/// Installs an internal hook on `try_location_id_to_string` that observes the game's location queries
-	/// and caches the most-recently-seen id, which `TryGetCurrentLocation` reads from.
+	/// Installs an internal handler that builds GM-room ↔ location lookup maps at title-screen setup,
+	/// and a hook on `goto_gm_room` that tracks the player's current GM room. `TryGetCurrentLocation`
+	/// reads from those structures.
 	/// @return AURIE_SUCCESS if the hook is installed (or already was); otherwise the Aurie failure status.
 	inline Aurie::AurieStatus Enable()
 	{
-		return MMAPI::Internal::InstallScriptHook(
-			Internal::GML_SCRIPT_TRY_LOCATION_ID_TO_STRING,
-			reinterpret_cast<PVOID>(Internal::GmlScriptTryLocationIdToStringCallback)
-		);
+		MMAPI::Internal::RegisterOnSetupMainScreenHandler(Internal::BuildMaps);
+
+		return MMAPI::Internal::InstallScriptHooks({
+			{ MMAPI::Internal::GML_SCRIPT_SETUP_MAIN_SCREEN, reinterpret_cast<PVOID>(MMAPI::Internal::GmlScriptBeforeSetupMainScreenCallback) },
+			{ Internal::GML_SCRIPT_GO_TO_ROOM,               reinterpret_cast<PVOID>(Internal::GmlScriptGoToRoomCallback) },
+		});
 	}
 
 	/// Gets a location's internal name.
@@ -183,16 +290,20 @@ namespace MMAPI::Location
 		return *internal_name;
 	}
 
-	/// Gets the current location, observed from the game's `try_location_id_to_string` queries.
+	/// Gets the current location, resolved from the player's current GM room via pre-computed lookup maps.
 	/// @attention Requires MMAPI::Location::Enable() to have been called.
 	/// @param location The current location.
-	/// @return True if a location has been observed, false if the cache is cold (the game hasn't queried a location yet).
+	/// @return True if the current GM room maps to a known location; false if no GM-room transition has been observed yet.
 	inline bool TryGetCurrentLocation(MMAPI::Location::Ids& location)
 	{
-		if (Internal::cached_current_location_id < 0)
+		if (Internal::current_gm_room_name.empty())
 			return false;
 
-		location = static_cast<MMAPI::Location::Ids>(Internal::cached_current_location_id);
+		auto it = Internal::gm_room_name_to_location_id_map.find(Internal::current_gm_room_name);
+		if (it == Internal::gm_room_name_to_location_id_map.end())
+			return false;
+
+		location = static_cast<MMAPI::Location::Ids>(it->second);
 		return true;
 	}
 
@@ -270,5 +381,31 @@ namespace MMAPI::Location
 		YYTK::RValue result;
 		YYTK::RValue* args[3] = { &location_id, &rx, &ry };
 		gml_script->m_Functions->m_ScriptFunction(Self, Other, result, 3, args);
+	}
+
+	namespace Hooks
+	{
+		/// Registers a callback that runs after the game transitions to a new GM room.
+		/// Use ctx.GetRoomName() to read the name of the room that was entered.
+		/// @param callback A function called with the room transition context after the game processes it.
+		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
+		inline Aurie::AurieStatus AfterGoToRoom(Internal::AfterGoToRoomCallback callback)
+		{
+			if (!callback)
+				return Aurie::AURIE_INVALID_PARAMETER;
+
+			if (Internal::after_go_to_room_callback)
+				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
+				Internal::GML_SCRIPT_GO_TO_ROOM,
+				reinterpret_cast<PVOID>(Internal::GmlScriptGoToRoomCallback)
+			);
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			Internal::after_go_to_room_callback = callback;
+			return Aurie::AURIE_SUCCESS;
+		}
 	}
 }

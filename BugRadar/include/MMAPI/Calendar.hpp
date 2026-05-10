@@ -85,25 +85,16 @@ namespace MMAPI::Calendar
 			return result;
 		}
 
-		/// Gets the current 0-indexed calendar day from the Calendar script context.
-		/// @attention Requires MMAPI::Calendar::Enable() to have been called.
-		/// @return The current 0-indexed calendar day as an RValue, or undefined if the required context is unavailable.
 		inline YYTK::RValue GetDay()
 		{
 			return CallCalendarScript(GML_SCRIPT_GET_DAY);
 		}
 
-		/// Gets the current 0-indexed calendar season from the Calendar script context.
-		/// @attention Requires MMAPI::Calendar::Enable() to have been called.
-		/// @return The current 0-indexed calendar season as an RValue, or undefined if the required context is unavailable.
 		inline YYTK::RValue GetSeason()
 		{
 			return CallCalendarScript(GML_SCRIPT_GET_SEASON);
 		}
 
-		/// Gets the current 0-indexed calendar year from the Calendar script context.
-		/// @attention Requires MMAPI::Calendar::Enable() to have been called.
-		/// @return The current 0-indexed calendar year as an RValue, or undefined if the required context is unavailable.
 		inline YYTK::RValue GetYear()
 		{
 			return CallCalendarScript(GML_SCRIPT_GET_YEAR);
@@ -114,13 +105,12 @@ namespace MMAPI::Calendar
 	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
 	inline Aurie::AurieStatus Enable()
 	{
-		Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(Internal::GML_SCRIPT_GET_UNIFIED_TIME, reinterpret_cast<PVOID>(Internal::UnifiedTimeContextCallback));
-		if (!Aurie::AurieSuccess(status)) return status;
-		status = MMAPI::Internal::InstallScriptHook(Internal::GML_SCRIPT_GET_DAY, reinterpret_cast<PVOID>(Internal::DayContextCallback));
-		if (!Aurie::AurieSuccess(status)) return status;
-		status = MMAPI::Internal::InstallScriptHook(Internal::GML_SCRIPT_GET_SEASON, reinterpret_cast<PVOID>(Internal::SeasonContextCallback));
-		if (!Aurie::AurieSuccess(status)) return status;
-		return MMAPI::Internal::InstallScriptHook(Internal::GML_SCRIPT_GET_YEAR, reinterpret_cast<PVOID>(Internal::YearContextCallback));
+		return MMAPI::Internal::InstallScriptHooks({
+			{ Internal::GML_SCRIPT_GET_UNIFIED_TIME, reinterpret_cast<PVOID>(Internal::UnifiedTimeContextCallback) },
+			{ Internal::GML_SCRIPT_GET_DAY,          reinterpret_cast<PVOID>(Internal::DayContextCallback) },
+			{ Internal::GML_SCRIPT_GET_SEASON,       reinterpret_cast<PVOID>(Internal::SeasonContextCallback) },
+			{ Internal::GML_SCRIPT_GET_YEAR,         reinterpret_cast<PVOID>(Internal::YearContextCallback) },
+		});
 	}
 
 	/// Gets the current 1-indexed day of the month from the Calendar script context.

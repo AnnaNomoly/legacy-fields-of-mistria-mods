@@ -72,7 +72,6 @@ namespace MMAPI::Game
 		inline constexpr const char* GML_SCRIPT_JOURNAL_MENU_CLOSE      = "gml_Script_on_close@JournalMenu@JournalMenu";
 		inline constexpr const char* GML_SCRIPT_STORE_MENU_OPEN         = "gml_Script_init@StoreMenu@StoreMenu";
 		inline constexpr const char* GML_SCRIPT_STORE_MENU_CLOSE        = "gml_Script_anon@10878@StoreMenu@StoreMenu";
-		inline constexpr const char* GML_SCRIPT_SETUP_MAIN_SCREEN       = "gml_Script_setup_main_screen@TitleMenu@TitleMenu";
 
 		using EndDayCallback = void(*)();
 		using NewDayCallback = void(*)();
@@ -105,9 +104,6 @@ namespace MMAPI::Game
 		inline AfterJournalMenuCloseCallback  after_journal_menu_close_callback  = nullptr;
 		inline AfterStoreMenuOpenCallback     after_store_menu_open_callback     = nullptr;
 		inline AfterStoreMenuCloseCallback    after_store_menu_close_callback    = nullptr;
-
-		using BeforeSetupMainScreenCallback = void(*)();
-		inline BeforeSetupMainScreenCallback before_setup_main_screen_callback = nullptr;
 
 		inline constexpr const char* ToGameKey(MMAPI::Game::XpValues value)
 		{
@@ -549,37 +545,6 @@ namespace MMAPI::Game
 			return Aurie::AURIE_SUCCESS;
 		}
 
-		inline YYTK::RValue& GmlScriptBeforeSetupMainScreenCallback(
-			IN YYTK::CInstance* Self,
-			IN YYTK::CInstance* Other,
-			OUT YYTK::RValue& Result,
-			IN int ArgumentCount,
-			IN YYTK::RValue** Arguments
-		)
-		{
-			MMAPI::ClearScriptContexts();
-
-			if (before_setup_main_screen_callback)
-				before_setup_main_screen_callback();
-
-			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
-				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_SETUP_MAIN_SCREEN)
-			);
-			original(Self, Other, Result, ArgumentCount, Arguments);
-			return Result;
-		}
-
-		inline Aurie::AurieStatus RegisterBeforeSetupMainScreenHook(BeforeSetupMainScreenCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_SETUP_MAIN_SCREEN,
-				reinterpret_cast<PVOID>(GmlScriptBeforeSetupMainScreenCallback)
-			);
-			if (!Aurie::AurieSuccess(status))
-				return status;
-			before_setup_main_screen_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
 	}
 
 	/// Returns true if the game is currently paused.
@@ -704,11 +669,10 @@ namespace MMAPI::Game
 	/// @return The sale result as an RValue, or undefined if obj_ari has not been registered.
 	inline YYTK::RValue SellShippingBinItems()
 	{
-		const auto& refs = MMAPI::Internal::instance_reference_map;
-		if (!refs.contains(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI) || !MMAPI::Internal::global_instance)
+		YYTK::CInstance* Self  = nullptr;
+		YYTK::CInstance* Other = nullptr;
+		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
 			return {};
-		YYTK::CInstance* Self  = MMAPI::Internal::global_instance->GetRefMember("__ari")->ToInstance();
-		YYTK::CInstance* Other = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[0];
 
 		YYTK::CScript* gml_script = nullptr;
 		MMAPI::Internal::module_interface->GetNamedRoutinePointer(Internal::GML_SCRIPT_SELL_SHIPPING_BIN_ITEMS, reinterpret_cast<PVOID*>(&gml_script));
@@ -910,15 +874,15 @@ namespace MMAPI::Game
 		/// so mods returning to the title screen do not need to call ClearScriptContexts manually.
 		/// @param callback A function called before the title menu setup script runs (after MMAPI clears its contexts).
 		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus BeforeSetupMainScreen(Internal::BeforeSetupMainScreenCallback callback)
+		inline Aurie::AurieStatus BeforeSetupMainScreen(MMAPI::Internal::BeforeSetupMainScreenCallback callback)
 		{
 			if (!callback)
 				return Aurie::AURIE_INVALID_PARAMETER;
 
-			if (Internal::before_setup_main_screen_callback)
+			if (MMAPI::Internal::before_setup_main_screen_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
-			return Internal::RegisterBeforeSetupMainScreenHook(callback);
+			return MMAPI::Internal::RegisterBeforeSetupMainScreenHook(callback);
 		}
 	}
 }

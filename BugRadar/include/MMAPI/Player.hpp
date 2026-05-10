@@ -4,7 +4,6 @@
 #include "Core.hpp"
 #include "Engine.hpp"
 #include "Instance.hpp"
-#include "Spell.hpp"
 
 #include <optional>
 #include <string>
@@ -678,25 +677,6 @@ namespace MMAPI::Player
 		YYTK::RValue result;
 		gml_script->m_Functions->m_ScriptFunction(Self, Other, result, 0, nullptr);
 		return result;
-	}
-
-	/// Casts the given spell as Ari.
-	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
-	/// @param spell The spell to cast.
-	inline void CastSpell(MMAPI::Spell::Ids spell)
-	{
-		YYTK::CInstance* Self  = nullptr;
-		YYTK::CInstance* Other = nullptr;
-		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
-			return;
-
-		YYTK::CScript* gml_script = nullptr;
-		MMAPI::Internal::module_interface->GetNamedRoutinePointer(MMAPI::Spell::Internal::GML_SCRIPT_CAST_SPELL, reinterpret_cast<PVOID*>(&gml_script));
-
-		YYTK::RValue spell_id = static_cast<int>(spell);
-		YYTK::RValue result;
-		YYTK::RValue* args[1] = { &spell_id };
-		gml_script->m_Functions->m_ScriptFunction(Self, Other, result, 1, args);
 	}
 
 	/// Activates Player utility functions that directly call game scripts.

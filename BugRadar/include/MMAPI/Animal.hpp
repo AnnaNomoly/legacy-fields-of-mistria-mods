@@ -189,17 +189,6 @@ namespace MMAPI::Animal
 			gml_script->m_Functions->m_ScriptFunction(Self, Other, result, 2, args);
 		}
 
-		inline bool TryGetAriContext(YYTK::CInstance*& Self, YYTK::CInstance*& Other)
-		{
-			const auto& refs = MMAPI::Internal::instance_reference_map;
-			if (!refs.contains(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI) || !MMAPI::Internal::global_instance)
-				return false;
-
-			Self  = MMAPI::Internal::global_instance->GetRefMember("__ari")->ToInstance();
-			Other = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[0];
-			return true;
-		}
-
 		inline constexpr const char* ToGameKey(MMAPI::Animal::XpValues value)
 		{
 			switch (value)
@@ -237,7 +226,7 @@ namespace MMAPI::Animal
 
 		YYTK::CInstance* Self = nullptr;
 		YYTK::CInstance* Other = nullptr;
-		if (!Internal::TryGetAriContext(Self, Other))
+		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
 			return {};
 
 		YYTK::RValue result;
@@ -379,8 +368,9 @@ namespace MMAPI::Animal
 	/// @param amount The number of beads to spawn. Clamped to [1, 999].
 	inline void SpawnShinyBeads(YYTK::CInstance* animal, int amount)
 	{
-		const auto& refs = MMAPI::Internal::instance_reference_map;
-		if (!refs.contains(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI))
+		YYTK::CInstance* ari_struct = nullptr;
+		YYTK::CInstance* ari_instance = nullptr;
+		if (!MMAPI::Instance::Internal::TryGetAriContext(ari_struct, ari_instance))
 			return;
 
 		if (amount <= 0)
@@ -388,8 +378,7 @@ namespace MMAPI::Animal
 		if (amount > 999)
 			amount = 999;
 
-		YYTK::CInstance* ari = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[0];
-		Internal::SpawnShinyBeads(animal, ari, amount);
+		Internal::SpawnShinyBeads(animal, ari_instance, amount);
 	}
 
 	namespace Hooks

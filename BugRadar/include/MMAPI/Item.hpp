@@ -140,6 +140,21 @@ namespace MMAPI::Item
 
 	}
 
+	/// Returns the game's `__item_data` array containing every item's struct definition.
+	/// @return The full item data collection as an RValue, or undefined if MMAPI has not been initialized.
+	inline YYTK::RValue GetItemData()
+	{
+		return Internal::GetItemData();
+	}
+
+	/// Returns the struct definition for a single item.
+	/// @param item_id The item ID to read.
+	/// @return The item struct as an RValue, or undefined if the item ID is out of bounds.
+	inline YYTK::RValue GetItemData(int item_id)
+	{
+		return Internal::GetItemData(item_id);
+	}
+
 	/// Gets the maximum stack size for an item.
 	/// @param item_id The item ID to read.
 	/// @return The max stack size as an RValue, or undefined if the item ID is out of bounds.

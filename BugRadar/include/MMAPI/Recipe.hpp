@@ -29,7 +29,7 @@ namespace MMAPI::Recipe
 
 		inline YYTK::RValue GetRecipeComponent(int item_id, size_t component_index)
 		{
-			YYTK::RValue item = MMAPI::Item::Internal::GetItemData(item_id);
+			YYTK::RValue item = MMAPI::Item::GetItemData(item_id);
 			if (item.m_Kind == YYTK::VALUE_UNDEFINED)
 				return {};
 
@@ -59,6 +59,13 @@ namespace MMAPI::Recipe
 
 			return *component;
 		}
+	}
+
+	/// Activates Recipe utility functions that resolve Ari context.
+	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
+	inline Aurie::AurieStatus Enable()
+	{
+		return MMAPI::Instance::Enable();
 	}
 
 	/// Returns true if Ari has unlocked the recipe for the given item ID.
