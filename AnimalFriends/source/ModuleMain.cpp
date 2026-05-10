@@ -38,6 +38,8 @@ static const bool DEFAULT_GAIN_RANCHING_XP = true;
 
 static const int EIGHT_AM_IN_SECONDS = 28800;
 static const int SIX_PM_IN_SECONDS = 64800;
+static const int MAX_ANIMAL_HEART_POINTS = 1800;
+static const int BASE_HEART_POINTS_PER_ACTION = 5;
 
 struct AnimalFriendsConfig
 {
@@ -95,20 +97,6 @@ static AnimalFriendsConfig config = {};
 static bool once_per_day = true;
 static int num_player_animals = 0;
 static bool extra_beads_daily_received = false;
-
-bool IsAnimalWakeUpTime(int clock_time_in_seconds)
-{
-	if (clock_time_in_seconds >= config.animal_wake_up_time)
-		return true;
-	return false;
-}
-
-bool IsAnimalBedtime(int clock_time_in_seconds)
-{
-	if (clock_time_in_seconds >= config.animal_bed_time)
-		return true;
-	return false;
-}
 
 void handle_eptr(std::exception_ptr eptr)
 {
@@ -206,129 +194,139 @@ void ResetStaticFields(bool returnedToTitleScreen)
 	extra_beads_daily_received = false;
 }
 
-void ObjectCallback(
-	IN FWCodeEvent& CodeEvent
-)
+void AutoFeedAnimal(RValue animal, int& xp_out)
+{
+	if (MMAPI::Animal::HasEaten(animal))
+		return;
+
+	if (config.gain_ranching_xp)
+		xp_out += MMAPI::Animal::GetXpValueOrDefault(MMAPI::Animal::XpValues::Feed, 2);
+
+	MMAPI::Animal::SetHasEaten(animal, true);
+
+	int original = MMAPI::Animal::GetHeartPoints(animal);
+	if (original < MAX_ANIMAL_HEART_POINTS)
+	{
+		int updated = min(original + (BASE_HEART_POINTS_PER_ACTION * config.friendship_multiplier), MAX_ANIMAL_HEART_POINTS);
+		MMAPI::Animal::SetHeartPoints(animal, updated);
+		g_ModuleInterface->Print(CM_LIGHTGREEN, "[AnimalFriends %s] - AUTO FEEDER fed an animal, and boosted it's heart points from %d to %d!", VERSION, original, updated);
+	}
+	else
+	{
+		g_ModuleInterface->Print(CM_LIGHTGREEN, "[AnimalFriends %s] - AUTO FEEDER fed an animal, but it's already at MAX heart points!", VERSION);
+	}
+}
+
+void AutoPetAnimal(RValue animal, int& xp_out)
+{
+	if (config.gain_ranching_xp)
+		xp_out += MMAPI::Animal::GetXpValueOrDefault(MMAPI::Animal::XpValues::Pet, 2);
+
+	if (MMAPI::Animal::HasBeenPet(animal))
+		return;
+
+	MMAPI::Animal::SetHasBeenPet(animal, true);
+
+	int original = MMAPI::Animal::GetHeartPoints(animal);
+	if (original < MAX_ANIMAL_HEART_POINTS)
+	{
+		int updated = min(original + (BASE_HEART_POINTS_PER_ACTION * config.friendship_multiplier), MAX_ANIMAL_HEART_POINTS);
+		MMAPI::Animal::SetHeartPoints(animal, updated);
+		g_ModuleInterface->Print(CM_LIGHTGREEN, "[AnimalFriends %s] - AUTO PETTER pet an animal, and boosted it's heart points from %d to %d!", VERSION, original, updated);
+	}
+	else
+	{
+		g_ModuleInterface->Print(CM_LIGHTGREEN, "[AnimalFriends %s] - AUTO PETTER pet an animal, but it's already at MAX heart points!", VERSION);
+	}
+}
+
+void HandleAri(CInstance* self)
+{
+	MMAPI::RegisterInstanceContext(
+		MMAPI::Instance::Internal::INSTANCE_OBJ_ARI,
+		MMAPI::Internal::global_instance->GetRefMember("__ari")->ToInstance(),
+		self
+	);
+
+	if (!once_per_day || !(config.auto_pet || config.auto_feed))
+		return;
+
+	RValue all_animals = MMAPI::Animal::GetAllAnimals();
+	if (all_animals.m_Kind != VALUE_OBJECT)
+	{
+		once_per_day = false;
+		return;
+	}
+
+	RValue buffer = *all_animals.GetRefMember("__buffer");
+	if (buffer.m_Kind != VALUE_ARRAY)
+	{
+		once_per_day = false;
+		return;
+	}
+
+	size_t size = 0;
+	g_ModuleInterface->GetArraySize(buffer, size);
+	num_player_animals = static_cast<int>(size);
+	int ranching_xp_gained = 0;
+
+	for (size_t i = 0; i < size; i++)
+	{
+		RValue entry = buffer[i];
+		if (config.auto_feed) AutoFeedAnimal(entry, ranching_xp_gained);
+		if (config.auto_pet)  AutoPetAnimal(entry, ranching_xp_gained);
+	}
+
+	if (ranching_xp_gained > 0)
+	{
+		MMAPI::Skill::GainExperience(MMAPI::Skill::Ids::Ranching, ranching_xp_gained);
+		g_ModuleInterface->Print(CM_LIGHTGREEN, "[AnimalFriends %s] - Ari gained %d ranching experience from the AUTO PETTER and AUTO FEEDER!", VERSION, ranching_xp_gained);
+	}
+
+	once_per_day = false;
+}
+
+void HandleFarmBell(CInstance* self)
+{
+	int time = MMAPI::Game::GetCurrentTimeInSeconds();
+	bool is_sunny = MMAPI::Weather::IsSunny();
+
+	if (config.auto_bell_in)
+	{
+		if ((time >= config.animal_bed_time || !is_sunny) &&
+			!MMAPI::Engine::StructVariableExists(self, "__animal_friends__bell_in"))
+		{
+			MMAPI::Animal::RingBellIn(self);
+			if (config.mute_auto_bell_sounds)
+				MMAPI::Engine::StopSoundEffect("snd_Bell_Bring_Inside");
+			MMAPI::Engine::StructVariableSet(self, "__animal_friends__bell_in", true);
+		}
+	}
+
+	if (config.auto_bell_out)
+	{
+		if (time >= config.animal_wake_up_time && time < config.animal_bed_time && is_sunny &&
+			!MMAPI::Engine::StructVariableExists(self, "__animal_friends__bell_out"))
+		{
+			MMAPI::Animal::RingBellOut(self);
+			if (config.mute_auto_bell_sounds)
+				MMAPI::Engine::StopSoundEffect("snd_Bell_Bring_Outside");
+			MMAPI::Engine::StructVariableSet(self, "__animal_friends__bell_out", true);
+		}
+	}
+}
+
+void ObjectCallback(IN FWCodeEvent& CodeEvent)
 {
 	auto& [self, other, code, argc, argv] = CodeEvent.Arguments();
 
-	if (!self || !self->m_Object)
+	if (!self || !self->m_Object || MMAPI::Game::IsPaused())
 		return;
 
-	if (MMAPI::Instance::NameContains(self, "obj_ari") && !MMAPI::Game::IsPaused())
-	{
-		MMAPI::RegisterInstanceContext(
-			MMAPI::Instance::Internal::INSTANCE_OBJ_ARI,
-			MMAPI::Internal::global_instance->GetRefMember("__ari")->ToInstance(),
-			self
-		);
-
-		if (once_per_day)
-		{
-			if (config.auto_pet || config.auto_feed)
-			{
-				RValue all_animals = MMAPI::Animal::GetAllAnimals();
-
-				if (all_animals.m_Kind == VALUE_OBJECT)
-				{
-					RValue __buffer = *all_animals.GetRefMember("__buffer");
-					if (__buffer.m_Kind == VALUE_ARRAY)
-					{
-						size_t size = 0;
-						g_ModuleInterface->GetArraySize(__buffer, size);
-						num_player_animals = static_cast<int>(size);
-						int ranching_xp_gained = 0;
-
-						for (size_t i = 0; i < size; i++)
-						{
-							RValue entry = __buffer[i];
-
-							if (config.auto_feed && !MMAPI::Animal::HasEaten(entry))
-							{
-								if (config.gain_ranching_xp)
-									ranching_xp_gained += MMAPI::Animal::GetXpValueOrDefault(MMAPI::Animal::XpValues::Feed, 2);
-
-								MMAPI::Animal::SetHasEaten(entry, true);
-
-								int original_heart_points = MMAPI::Animal::GetHeartPoints(entry);
-								if (original_heart_points < 1800)
-								{
-									int new_heart_points = min(original_heart_points + (5 * config.friendship_multiplier), 1800);
-									MMAPI::Animal::SetHeartPoints(entry, new_heart_points);
-									g_ModuleInterface->Print(CM_LIGHTGREEN, "[AnimalFriends %s] - AUTO FEEDER fed an animal, and boosted it's heart points from %d to %d!", VERSION, original_heart_points, new_heart_points);
-								}
-								else
-								{
-									g_ModuleInterface->Print(CM_LIGHTGREEN, "[AnimalFriends %s] - AUTO FEEDER fed an animal, but it's already at MAX heart points!", VERSION);
-								}
-							}
-
-							if (config.auto_pet)
-							{
-								if (config.gain_ranching_xp)
-									ranching_xp_gained += MMAPI::Animal::GetXpValueOrDefault(MMAPI::Animal::XpValues::Pet, 2);
-
-								if (!MMAPI::Animal::HasBeenPet(entry))
-								{
-									MMAPI::Animal::SetHasBeenPet(entry, true);
-
-									int original_heart_points = MMAPI::Animal::GetHeartPoints(entry);
-									if (original_heart_points < 1800)
-									{
-										int new_heart_points = min(original_heart_points + (5 * config.friendship_multiplier), 1800);
-										MMAPI::Animal::SetHeartPoints(entry, new_heart_points);
-										g_ModuleInterface->Print(CM_LIGHTGREEN, "[AnimalFriends %s] - AUTO PETTER pet an animal, and boosted it's heart points from %d to %d!", VERSION, original_heart_points, new_heart_points);
-									}
-									else
-									{
-										g_ModuleInterface->Print(CM_LIGHTGREEN, "[AnimalFriends %s] - AUTO PETTER pet an animal, but it's already at MAX heart points!", VERSION);
-									}
-								}
-							}
-						}
-
-						if (ranching_xp_gained > 0)
-						{
-							MMAPI::Skill::GainExperience(MMAPI::Skill::Ids::Ranching, ranching_xp_gained);
-							g_ModuleInterface->Print(CM_LIGHTGREEN, "[AnimalFriends %s] - Ari gained %d ranching experience from the AUTO PETTER and AUTO FEEDER!", VERSION, ranching_xp_gained);
-						}
-					}
-				}
-			}
-
-			once_per_day = false;
-		}
-	}
-
-	if (MMAPI::Instance::NameContains(self, "obj_farm_bell") && !MMAPI::Game::IsPaused())
-	{
-		int current_time_in_seconds = MMAPI::Game::GetCurrentTimeInSeconds();
-		bool is_sunny = MMAPI::Weather::IsSunny();
-
-		if (config.auto_bell_in)
-		{
-			if ((IsAnimalBedtime(current_time_in_seconds) || !is_sunny) &&
-				!MMAPI::Engine::StructVariableExists(self, "__animal_friends__bell_in"))
-			{
-				MMAPI::Animal::RingBellIn(self);
-				if (config.mute_auto_bell_sounds)
-					MMAPI::Engine::StopSoundEffect("snd_Bell_Bring_Inside");
-				MMAPI::Engine::StructVariableSet(self, "__animal_friends__bell_in", true);
-			}
-		}
-
-		if (config.auto_bell_out)
-		{
-			if (IsAnimalWakeUpTime(current_time_in_seconds) && !IsAnimalBedtime(current_time_in_seconds) && is_sunny &&
-				!MMAPI::Engine::StructVariableExists(self, "__animal_friends__bell_out"))
-			{
-				MMAPI::Animal::RingBellOut(self);
-				if (config.mute_auto_bell_sounds)
-					MMAPI::Engine::StopSoundEffect("snd_Bell_Bring_Outside");
-				MMAPI::Engine::StructVariableSet(self, "__animal_friends__bell_out", true);
-			}
-		}
-	}
+	if (MMAPI::Instance::NameContains(self, "obj_ari"))
+		HandleAri(self);
+	else if (MMAPI::Instance::NameContains(self, "obj_farm_bell"))
+		HandleFarmBell(self);
 }
 
 void OnAnimalHeartPointsChanged(MMAPI::Animal::HeartPointsChangedContext& ctx)
