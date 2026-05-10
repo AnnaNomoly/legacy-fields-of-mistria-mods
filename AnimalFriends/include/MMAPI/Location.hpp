@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core.hpp"
+#include "Game.hpp"
 #include "Instance.hpp"
 
 #include "YYToolkit/YYTK_Shared.hpp"
@@ -92,7 +93,75 @@ namespace MMAPI::Location
 
 	namespace Internal
 	{
+		inline constexpr const char* GML_SCRIPT_LOCATION_ID_TO_GM_ROOM = "gml_Script_location_id_to_gm_room";
 		inline constexpr const char* GML_SCRIPT_TELEPORT_ARI_TO_ROOM = "gml_Script_ari_teleport_to_room";
+
+		inline YYTK::RValue GetLocationData(int location_id)
+		{
+			if (!MMAPI::Internal::global_instance)
+				return {};
+
+			YYTK::RValue locations = MMAPI::Internal::global_instance->GetMember("__locations");
+			size_t location_count = 0;
+			MMAPI::Internal::module_interface->GetArraySize(locations, location_count);
+
+			if (location_id < 0 || location_id >= static_cast<int>(location_count))
+				return {};
+
+			YYTK::RValue* location = nullptr;
+			MMAPI::Internal::module_interface->GetArrayEntry(locations, location_id, location);
+			if (!location)
+				return {};
+
+			return *location;
+		}
+
+		inline YYTK::RValue GetRoomName(int location_id)
+		{
+			YYTK::CScript* gml_script = nullptr;
+			MMAPI::Internal::module_interface->GetNamedRoutinePointer(GML_SCRIPT_LOCATION_ID_TO_GM_ROOM, reinterpret_cast<PVOID*>(&gml_script));
+
+			YYTK::RValue location = location_id;
+			YYTK::RValue result;
+			YYTK::RValue* args[1] = { &location };
+			gml_script->m_Functions->m_ScriptFunction(nullptr, nullptr, result, 1, args);
+
+			if (result.m_Kind == YYTK::VALUE_UNDEFINED || result.m_Kind == YYTK::VALUE_UNSET)
+				return {};
+
+			return MMAPI::Internal::module_interface->CallBuiltin("room_get_name", { result });
+		}
+
+		inline YYTK::RValue GetLocationIdForCurrentRoom()
+		{
+			std::string current_room_name = MMAPI::Game::GetCurrentRoomName();
+			if (current_room_name.empty() || !MMAPI::Internal::global_instance)
+				return {};
+
+			YYTK::RValue location_ids = MMAPI::Internal::global_instance->GetMember("__location_id__");
+			size_t location_count = 0;
+			MMAPI::Internal::module_interface->GetArraySize(location_ids, location_count);
+
+			for (size_t i = 0; i < location_count; i++)
+			{
+				YYTK::RValue* location_internal_name = nullptr;
+				MMAPI::Internal::module_interface->GetArrayEntry(location_ids, i, location_internal_name);
+				if (!location_internal_name)
+					continue;
+
+				YYTK::RValue room_name = GetRoomName(static_cast<int>(i));
+				if (room_name.m_Kind == YYTK::VALUE_UNDEFINED || room_name.m_Kind == YYTK::VALUE_UNSET)
+					continue;
+
+				if (room_name.ToString() == current_room_name)
+					return static_cast<int>(i);
+			}
+
+			if (current_room_name.contains("rm_mines"))
+				return static_cast<int>(MMAPI::Location::Ids::Dungeon);
+
+			return {};
+		}
 	}
 
 	/// Gets a location's internal name.
@@ -100,14 +169,94 @@ namespace MMAPI::Location
 	/// @return The location internal name as an RValue.
 	inline YYTK::RValue GetInternalName(MMAPI::Location::Ids location)
 	{
-		YYTK::CScript* gml_script = nullptr;
-		MMAPI::Internal::module_interface->GetNamedRoutinePointer("gml_Script_try_location_id_to_string", reinterpret_cast<PVOID*>(&gml_script));
+		if (!MMAPI::Internal::global_instance)
+			return {};
 
-		YYTK::RValue result;
-		YYTK::RValue location_id = static_cast<int>(location);
-		YYTK::RValue* args[1] = { &location_id };
-		gml_script->m_Functions->m_ScriptFunction(nullptr, nullptr, result, 1, args);
-		return result;
+		YYTK::RValue location_ids = MMAPI::Internal::global_instance->GetMember("__location_id__");
+		size_t location_count = 0;
+		MMAPI::Internal::module_interface->GetArraySize(location_ids, location_count);
+
+		int location_id = static_cast<int>(location);
+		if (location_id < 0 || location_id >= static_cast<int>(location_count))
+			return {};
+
+		YYTK::RValue* internal_name = nullptr;
+		MMAPI::Internal::module_interface->GetArrayEntry(location_ids, location_id, internal_name);
+		if (!internal_name)
+			return {};
+
+		return *internal_name;
+	}
+
+	/// Gets the current location by matching the current GM room name against the game's location-to-room conversion.
+	/// @param location The current location.
+	/// @return True if the current location was resolved, false if the current room cannot be matched to a location.
+	inline bool TryGetCurrentLocation(MMAPI::Location::Ids& location)
+	{
+		YYTK::RValue location_id = Internal::GetLocationIdForCurrentRoom();
+		if (location_id.m_Kind == YYTK::VALUE_UNDEFINED || location_id.m_Kind == YYTK::VALUE_UNSET)
+			return false;
+
+		int current_location_id = static_cast<int>(location_id.ToInt64());
+		if (current_location_id < static_cast<int>(MMAPI::Location::Ids::AbandonedMines) ||
+		    current_location_id > static_cast<int>(MMAPI::Location::Ids::WesternRuins))
+			return false;
+
+		location = static_cast<MMAPI::Location::Ids>(current_location_id);
+		return true;
+	}
+
+	/// Returns true if the current location matches location.
+	/// @param location The location to compare against.
+	inline bool IsCurrentLocation(MMAPI::Location::Ids location)
+	{
+		MMAPI::Location::Ids current_location;
+		if (!TryGetCurrentLocation(current_location))
+			return false;
+
+		return current_location == location;
+	}
+
+	/// Returns true if the location is marked as outdoors in globalInstance.__locations.
+	/// @param location The location to check.
+	inline bool IsOutdoors(MMAPI::Location::Ids location)
+	{
+		YYTK::RValue location_data = Internal::GetLocationData(static_cast<int>(location));
+		if (location_data.m_Kind == YYTK::VALUE_UNDEFINED)
+			return false;
+
+		return location_data.GetMember("outdoor").ToBoolean();
+	}
+
+	/// Returns true if the location is marked as indoors in globalInstance.__locations.
+	/// @param location The location to check.
+	inline bool IsIndoors(MMAPI::Location::Ids location)
+	{
+		YYTK::RValue location_data = Internal::GetLocationData(static_cast<int>(location));
+		if (location_data.m_Kind == YYTK::VALUE_UNDEFINED)
+			return false;
+
+		return !location_data.GetMember("outdoor").ToBoolean();
+	}
+
+	/// Returns true if the current location is marked as outdoors in globalInstance.__locations.
+	inline bool IsCurrentLocationOutdoors()
+	{
+		MMAPI::Location::Ids current_location;
+		if (!TryGetCurrentLocation(current_location))
+			return false;
+
+		return IsOutdoors(current_location);
+	}
+
+	/// Returns true if the current location is marked as indoors in globalInstance.__locations.
+	inline bool IsCurrentLocationIndoors()
+	{
+		MMAPI::Location::Ids current_location;
+		if (!TryGetCurrentLocation(current_location))
+			return false;
+
+		return IsIndoors(current_location);
 	}
 
 	/// Teleports Ari to the given location at the specified coordinates.

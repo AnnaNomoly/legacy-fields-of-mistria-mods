@@ -4,8 +4,6 @@
 #include "Engine.hpp"
 #include "Instance.hpp"
 
-#include <algorithm>
-
 #include "YYToolkit/YYTK_Shared.hpp"
 
 namespace MMAPI::Spell
@@ -20,9 +18,122 @@ namespace MMAPI::Spell
 		SummonRain  = 4
 	};
 
+	struct CanCastSpellContext
+	{
+		int m_spell_id = 0;
+		bool m_result = false;
+
+		/// Returns the spell being checked.
+		MMAPI::Spell::Ids GetSpell() const { return static_cast<MMAPI::Spell::Ids>(m_spell_id); }
+
+		/// Returns the can-cast result as computed by the game.
+		bool GetResult() const { return m_result; }
+
+		/// Overrides whether the game allows casting this spell.
+		void SetResult(bool can_cast) { m_result = can_cast; }
+	};
+
+	struct CastSpellContext
+	{
+		int m_spell_id = 0;
+		bool m_cancelled = false;
+
+		/// Returns the spell being cast.
+		MMAPI::Spell::Ids GetSpell() const { return static_cast<MMAPI::Spell::Ids>(m_spell_id); }
+
+		/// Prevents the game's cast_spell script from running.
+		void Cancel() { m_cancelled = true; }
+
+		/// Returns true if the callback has cancelled this spell cast.
+		bool IsCancelled() const { return m_cancelled; }
+	};
+
 	namespace Internal
 	{
 		inline constexpr const char* GML_SCRIPT_CAN_CAST_SPELL = "gml_Script_can_cast_spell";
+		inline constexpr const char* GML_SCRIPT_CAST_SPELL      = "gml_Script_cast_spell";
+
+		using OnCanCastSpellCallback = void(*)(MMAPI::Spell::CanCastSpellContext&);
+		using OnSpellCastCallback    = void(*)(MMAPI::Spell::CastSpellContext&);
+
+		inline OnCanCastSpellCallback on_can_cast_spell_callback = nullptr;
+		inline OnSpellCastCallback    on_spell_cast_callback     = nullptr;
+
+		inline YYTK::RValue& GmlScriptCanCastSpellCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_CAN_CAST_SPELL)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			if (Arguments && ArgumentCount >= 1 && Arguments[0])
+			{
+				MMAPI::Spell::CanCastSpellContext context{ Arguments[0]->ToInt64(), Result.ToBoolean() };
+				on_can_cast_spell_callback(context);
+				Result = context.m_result;
+			}
+
+			return Result;
+		}
+
+		inline YYTK::RValue& GmlScriptCastSpellCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			if (Arguments && ArgumentCount >= 1 && Arguments[0])
+			{
+				MMAPI::Spell::CastSpellContext context{ Arguments[0]->ToInt64() };
+				on_spell_cast_callback(context);
+
+				if (context.m_cancelled)
+					return Result;
+			}
+
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_CAST_SPELL)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			return Result;
+		}
+
+		inline Aurie::AurieStatus RegisterCanCastSpellHook(OnCanCastSpellCallback callback)
+		{
+			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
+				GML_SCRIPT_CAN_CAST_SPELL,
+				reinterpret_cast<PVOID>(GmlScriptCanCastSpellCallback)
+			);
+
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			on_can_cast_spell_callback = callback;
+			return Aurie::AURIE_SUCCESS;
+		}
+
+		inline Aurie::AurieStatus RegisterSpellCastHook(OnSpellCastCallback callback)
+		{
+			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
+				GML_SCRIPT_CAST_SPELL,
+				reinterpret_cast<PVOID>(GmlScriptCastSpellCallback)
+			);
+
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			on_spell_cast_callback = callback;
+			return Aurie::AURIE_SUCCESS;
+		}
 
 		inline YYTK::RValue GetSpellData()
 		{
@@ -102,5 +213,40 @@ namespace MMAPI::Spell
 		YYTK::RValue* args[1] = { &spell_id };
 		gml_script->m_Functions->m_ScriptFunction(Self, Other, result, 1, args);
 		return result.ToBoolean();
+	}
+
+	namespace Hooks
+	{
+		/// Registers a callback that can override the game's can_cast_spell result after it runs.
+		/// Use ctx.SetResult(bool) to allow or block casting the spell.
+		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
+		/// @param callback A function called with the can-cast context after the game evaluates it.
+		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
+		inline Aurie::AurieStatus OnCanCastSpell(Internal::OnCanCastSpellCallback callback)
+		{
+			if (!callback)
+				return Aurie::AURIE_INVALID_PARAMETER;
+
+			if (Internal::on_can_cast_spell_callback)
+				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			return Internal::RegisterCanCastSpellHook(callback);
+		}
+
+		/// Registers a callback that runs before the game's cast_spell script executes.
+		/// Call ctx.Cancel() to prevent the game from processing the spell cast.
+		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
+		/// @param callback A function called with the cast spell context before the game processes it.
+		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
+		inline Aurie::AurieStatus OnSpellCast(Internal::OnSpellCastCallback callback)
+		{
+			if (!callback)
+				return Aurie::AURIE_INVALID_PARAMETER;
+
+			if (Internal::on_spell_cast_callback)
+				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			return Internal::RegisterSpellCastHook(callback);
+		}
 	}
 }

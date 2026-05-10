@@ -28,6 +28,42 @@ namespace MMAPI::Cosmetic
 		}
 	}
 
+	/// Returns true if the named cosmetic is equipped in Ari's currently selected preset.
+	/// @param cosmetic_name The internal cosmetic name to check.
+	inline bool IsEquipped(const std::string& cosmetic_name)
+	{
+		YYTK::RValue ari = MMAPI::Internal::global_instance->GetMember("__ari");
+		int preset_index = static_cast<int>(ari.GetMember("preset_index_selected").ToInt64());
+
+		YYTK::RValue presets = ari.GetMember("presets");
+		YYTK::RValue preset_buffer = presets.GetMember("__buffer");
+
+		size_t preset_count = 0;
+		MMAPI::Internal::module_interface->GetArraySize(preset_buffer, preset_count);
+		if (preset_index < 0 || static_cast<size_t>(preset_index) >= preset_count)
+			return false;
+
+		YYTK::RValue* selected_preset = nullptr;
+		MMAPI::Internal::module_interface->GetArrayEntry(preset_buffer, static_cast<size_t>(preset_index), selected_preset);
+
+		YYTK::RValue assets = selected_preset->GetMember("assets");
+		YYTK::RValue asset_buffer = assets.GetMember("__buffer");
+
+		size_t asset_count = 0;
+		MMAPI::Internal::module_interface->GetArraySize(asset_buffer, asset_count);
+
+		for (size_t i = 0; i < asset_count; i++)
+		{
+			YYTK::RValue* equipped_cosmetic = nullptr;
+			MMAPI::Internal::module_interface->GetArrayEntry(asset_buffer, i, equipped_cosmetic);
+
+			if (equipped_cosmetic->GetMember("name").ToString() == cosmetic_name)
+				return true;
+		}
+
+		return false;
+	}
+
 	/// Returns true if Ari has unlocked the given cosmetic.
 	/// @param cosmetic_name The internal cosmetic name to check.
 	inline bool IsUnlocked(const std::string& cosmetic_name)

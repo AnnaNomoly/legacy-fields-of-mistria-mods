@@ -2,6 +2,7 @@
 
 #include "Bark.hpp"
 #include "Core.hpp"
+#include "Engine.hpp"
 #include "Instance.hpp"
 #include "Spell.hpp"
 
@@ -47,6 +48,61 @@ namespace MMAPI::Player
 		double y = 0.0;
 	};
 
+	struct MoveSpeedContext
+	{
+		double m_result = 0.0;
+		double m_modifier_sum = 0.0;
+		bool m_has_override = false;
+		double m_override_value = 0.0;
+
+		/// Returns the movement speed calculated by the game before any MMAPI modifications.
+		double GetResult() const { return m_result; }
+
+		/// Adds a signed value to the game's calculated movement speed. Accumulates across multiple callbacks.
+		void AddModifier(double value) { m_modifier_sum += value; }
+
+		/// Overrides the final movement speed to the given value, ignoring any accumulated modifiers.
+		/// If multiple callbacks call SetOverride, the last one wins.
+		void SetOverride(double value)
+		{
+			m_has_override = true;
+			m_override_value = value;
+		}
+	};
+
+	struct ModifyHealthChangeContext
+	{
+		double m_amount = 0.0;
+
+		/// Returns the health change amount. Negative values are damage; positive values are healing.
+		double GetAmount() const { return m_amount; }
+
+		/// Overrides the health change amount passed to the game.
+		void SetAmount(double amount) { m_amount = amount; }
+	};
+
+	struct ModifyStaminaChangeContext
+	{
+		double m_amount = 0.0;
+
+		/// Returns the stamina change amount. Negative values are costs; positive values are recovery.
+		double GetAmount() const { return m_amount; }
+
+		/// Overrides the stamina change amount passed to the game.
+		void SetAmount(double amount) { m_amount = amount; }
+	};
+
+	struct ModifyManaChangeContext
+	{
+		double m_amount = 0.0;
+
+		/// Returns the mana change amount. Negative values are costs; positive values are recovery.
+		double GetAmount() const { return m_amount; }
+
+		/// Overrides the mana change amount passed to the game.
+		void SetAmount(double amount) { m_amount = amount; }
+	};
+
 	namespace Internal
 	{
 		inline constexpr const char* GML_SCRIPT_GET_HEALTH             = "gml_Script_get_health@Ari@Ari";
@@ -63,8 +119,191 @@ namespace MMAPI::Player
 		inline constexpr const char* GML_SCRIPT_MODIFY_ESSENCE         = "gml_Script_modify_essence@Ari@Ari";
 		inline constexpr const char* GML_SCRIPT_GET_MOVE_SPEED         = "gml_Script_get_move_speed@Ari@Ari";
 		inline constexpr const char* GML_SCRIPT_HELD_ITEM              = "gml_Script_held_item@Ari@Ari";
-		inline constexpr const char* GML_SCRIPT_CAST_SPELL             = "gml_Script_cast_spell";
 		inline constexpr const char* GML_SCRIPT_BARK_EMITTER_EMIT      = "gml_Script_emit@BarkEmitter@BarkEmitter";
+
+		using OnMoveSpeedCallback     = void(*)(MMAPI::Player::MoveSpeedContext&);
+		using OnHealthChangeCallback  = void(*)(MMAPI::Player::ModifyHealthChangeContext&);
+		using OnStaminaChangeCallback = void(*)(MMAPI::Player::ModifyStaminaChangeContext&);
+		using OnManaChangeCallback    = void(*)(MMAPI::Player::ModifyManaChangeContext&);
+
+		inline OnMoveSpeedCallback     on_move_speed_callback     = nullptr;
+		inline OnHealthChangeCallback  on_health_change_callback  = nullptr;
+		inline OnStaminaChangeCallback on_stamina_change_callback = nullptr;
+		inline OnManaChangeCallback    on_mana_change_callback    = nullptr;
+
+		inline YYTK::RValue GetStateId()
+		{
+			const auto& refs = MMAPI::Internal::instance_reference_map;
+			if (!refs.contains(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI))
+				return {};
+			YYTK::CInstance* Ari = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[1];
+
+			YYTK::RValue ari = Ari->ToRValue();
+			YYTK::RValue fsm = ari.GetMember("fsm");
+			YYTK::RValue state = fsm.GetMember("state");
+			return state.GetMember("state_id");
+		}
+
+		inline YYTK::RValue& GmlScriptGetMoveSpeedCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(
+					MMAPI::Internal::self_module,
+					GML_SCRIPT_GET_MOVE_SPEED
+				)
+			);
+
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			if (MMAPI::Engine::IsNumeric(Result))
+			{
+				MMAPI::Player::MoveSpeedContext context{ Result.ToDouble() };
+				on_move_speed_callback(context);
+				Result = context.m_has_override ? context.m_override_value : context.m_result + context.m_modifier_sum;
+			}
+
+			return Result;
+		}
+
+		inline Aurie::AurieStatus RegisterMoveSpeedHook(OnMoveSpeedCallback callback)
+		{
+			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
+				GML_SCRIPT_GET_MOVE_SPEED,
+				reinterpret_cast<PVOID>(GmlScriptGetMoveSpeedCallback)
+			);
+
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			on_move_speed_callback = callback;
+			return Aurie::AURIE_SUCCESS;
+		}
+
+		inline YYTK::RValue& GmlScriptModifyHealthCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			if (Arguments && ArgumentCount >= 1 && Arguments[0] && MMAPI::Engine::IsNumeric(*Arguments[0]))
+			{
+				MMAPI::Player::ModifyHealthChangeContext context{ Arguments[0]->ToDouble() };
+				on_health_change_callback(context);
+				*Arguments[0] = context.m_amount;
+			}
+
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(
+					MMAPI::Internal::self_module,
+					GML_SCRIPT_MODIFY_HEALTH
+				)
+			);
+
+			original(Self, Other, Result, ArgumentCount, Arguments);
+			return Result;
+		}
+
+		inline YYTK::RValue& GmlScriptModifyStaminaCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			if (Arguments && ArgumentCount >= 1 && Arguments[0] && MMAPI::Engine::IsNumeric(*Arguments[0]))
+			{
+				MMAPI::Player::ModifyStaminaChangeContext context{ Arguments[0]->ToDouble() };
+				on_stamina_change_callback(context);
+				*Arguments[0] = context.m_amount;
+			}
+
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(
+					MMAPI::Internal::self_module,
+					GML_SCRIPT_MODIFY_STAMINA
+				)
+			);
+
+			original(Self, Other, Result, ArgumentCount, Arguments);
+			return Result;
+		}
+
+		inline YYTK::RValue& GmlScriptModifyManaCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			if (Arguments && ArgumentCount >= 1 && Arguments[0] && MMAPI::Engine::IsNumeric(*Arguments[0]))
+			{
+				MMAPI::Player::ModifyManaChangeContext context{ Arguments[0]->ToDouble() };
+				on_mana_change_callback(context);
+				*Arguments[0] = context.m_amount;
+			}
+
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(
+					MMAPI::Internal::self_module,
+					GML_SCRIPT_MODIFY_MANA
+				)
+			);
+
+			original(Self, Other, Result, ArgumentCount, Arguments);
+			return Result;
+		}
+
+		inline Aurie::AurieStatus RegisterHealthChangeHook(OnHealthChangeCallback callback)
+		{
+			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
+				GML_SCRIPT_MODIFY_HEALTH,
+				reinterpret_cast<PVOID>(GmlScriptModifyHealthCallback)
+			);
+
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			on_health_change_callback = callback;
+			return Aurie::AURIE_SUCCESS;
+		}
+
+		inline Aurie::AurieStatus RegisterStaminaChangeHook(OnStaminaChangeCallback callback)
+		{
+			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
+				GML_SCRIPT_MODIFY_STAMINA,
+				reinterpret_cast<PVOID>(GmlScriptModifyStaminaCallback)
+			);
+
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			on_stamina_change_callback = callback;
+			return Aurie::AURIE_SUCCESS;
+		}
+
+		inline Aurie::AurieStatus RegisterManaChangeHook(OnManaChangeCallback callback)
+		{
+			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
+				GML_SCRIPT_MODIFY_MANA,
+				reinterpret_cast<PVOID>(GmlScriptModifyManaCallback)
+			);
+
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			on_mana_change_callback = callback;
+			return Aurie::AURIE_SUCCESS;
+		}
 	}
 
 	/// Returns the number of invulnerability hits remaining for Ari.
@@ -126,20 +365,23 @@ namespace MMAPI::Player
 		return held_item.GetMember("item_id");
 	}
 
-	/// Returns Ari's current player state ID.
+	/// Gets Ari's current player state.
 	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
-	/// @return The current player state ID as an RValue, or undefined if the required context is unavailable.
-	inline YYTK::RValue GetStateId()
+	/// @param state Ari's current player state.
+	/// @return True if the player state was resolved, false if the required context is unavailable.
+	inline bool TryGetState(MMAPI::Player::States& state)
 	{
-		const auto& refs = MMAPI::Internal::instance_reference_map;
-		if (!refs.contains(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI))
-			return {};
-		YYTK::CInstance* Ari = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[1];
+		YYTK::RValue state_id = Internal::GetStateId();
+		if (state_id.m_Kind == YYTK::VALUE_UNDEFINED || state_id.m_Kind == YYTK::VALUE_UNSET)
+			return false;
 
-		YYTK::RValue ari = Ari->ToRValue();
-		YYTK::RValue fsm = ari.GetMember("fsm");
-		YYTK::RValue state = fsm.GetMember("state");
-		return state.GetMember("state_id");
+		int player_state_id = static_cast<int>(state_id.ToInt64());
+		if (player_state_id < static_cast<int>(MMAPI::Player::States::Default) ||
+		    player_state_id > static_cast<int>(MMAPI::Player::States::MountJump))
+			return false;
+
+		state = static_cast<MMAPI::Player::States>(player_state_id);
+		return true;
 	}
 
 	/// Returns true if Ari is currently in the given player state.
@@ -147,11 +389,11 @@ namespace MMAPI::Player
 	/// @param state The player state to check.
 	inline bool IsInState(MMAPI::Player::States state)
 	{
-		YYTK::RValue state_id = GetStateId();
-		if (state_id.m_Kind == YYTK::VALUE_UNDEFINED)
+		MMAPI::Player::States current_state;
+		if (!TryGetState(current_state))
 			return false;
 
-		return state_id.ToInt64() == static_cast<int>(state);
+		return current_state == state;
 	}
 
 	/// Gets Ari's current room position from the live obj_ari instance.
@@ -464,7 +706,7 @@ namespace MMAPI::Player
 		YYTK::CInstance* Other = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[1];
 
 		YYTK::CScript* gml_script = nullptr;
-		MMAPI::Internal::module_interface->GetNamedRoutinePointer(Internal::GML_SCRIPT_CAST_SPELL, reinterpret_cast<PVOID*>(&gml_script));
+		MMAPI::Internal::module_interface->GetNamedRoutinePointer(MMAPI::Spell::Internal::GML_SCRIPT_CAST_SPELL, reinterpret_cast<PVOID*>(&gml_script));
 
 		YYTK::RValue spell_id = static_cast<int>(spell);
 		YYTK::RValue result;
@@ -497,39 +739,72 @@ namespace MMAPI::Player
 		gml_script->m_Functions->m_ScriptFunction(Self, Other, result, 2, args);
 	}
 
-	/// Returns true if Ari has the named cosmetic equipped in the currently selected preset.
-	/// @param cosmetic_name The internal cosmetic name to check.
-	inline bool HasCosmeticEquipped(std::string cosmetic_name)
+	namespace Hooks
 	{
-		YYTK::RValue ari = MMAPI::Internal::global_instance->GetMember("__ari");
-		int preset_index = static_cast<int>(ari.GetMember("preset_index_selected").ToInt64());
-
-		YYTK::RValue presets = ari.GetMember("presets");
-		YYTK::RValue preset_buffer = presets.GetMember("__buffer");
-
-		size_t preset_count = 0;
-		MMAPI::Internal::module_interface->GetArraySize(preset_buffer, preset_count);
-		if (preset_index < 0 || static_cast<size_t>(preset_index) >= preset_count)
-			return false;
-
-		YYTK::RValue* selected_preset = nullptr;
-		MMAPI::Internal::module_interface->GetArrayEntry(preset_buffer, static_cast<size_t>(preset_index), selected_preset);
-
-		YYTK::RValue assets = selected_preset->GetMember("assets");
-		YYTK::RValue asset_buffer = assets.GetMember("__buffer");
-
-		size_t asset_count = 0;
-		MMAPI::Internal::module_interface->GetArraySize(asset_buffer, asset_count);
-
-		for (size_t i = 0; i < asset_count; i++)
+		/// Registers a callback that can modify Ari's movement speed after the game calculates it.
+		/// Use ctx.AddModifier(value) to add a signed offset, or ctx.SetOverride(value) to force a specific speed.
+		/// If multiple callbacks call SetOverride, the last registered callback wins.
+		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
+		/// @param callback A function called with a mutable move speed context after the game calculates it.
+		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
+		inline Aurie::AurieStatus OnMoveSpeed(Internal::OnMoveSpeedCallback callback)
 		{
-			YYTK::RValue* equipped_cosmetic = nullptr;
-			MMAPI::Internal::module_interface->GetArrayEntry(asset_buffer, i, equipped_cosmetic);
+			if (!callback)
+				return Aurie::AURIE_INVALID_PARAMETER;
 
-			if (equipped_cosmetic->GetMember("name").ToString() == cosmetic_name)
-				return true;
+			if (Internal::on_move_speed_callback)
+				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			return Internal::RegisterMoveSpeedHook(callback);
 		}
 
-		return false;
+		/// Registers a callback that can modify the amount passed to the game's modify_health script.
+		/// Use ctx.SetAmount(value) to change the health delta before the game applies it.
+		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
+		/// @param callback A function called with a mutable health change context before the game processes it.
+		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
+		inline Aurie::AurieStatus OnHealthChange(Internal::OnHealthChangeCallback callback)
+		{
+			if (!callback)
+				return Aurie::AURIE_INVALID_PARAMETER;
+
+			if (Internal::on_health_change_callback)
+				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			return Internal::RegisterHealthChangeHook(callback);
+		}
+
+		/// Registers a callback that can modify the amount passed to the game's modify_stamina script.
+		/// Use ctx.SetAmount(value) to change the stamina delta before the game applies it.
+		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
+		/// @param callback A function called with a mutable stamina change context before the game processes it.
+		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
+		inline Aurie::AurieStatus OnStaminaChange(Internal::OnStaminaChangeCallback callback)
+		{
+			if (!callback)
+				return Aurie::AURIE_INVALID_PARAMETER;
+
+			if (Internal::on_stamina_change_callback)
+				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			return Internal::RegisterStaminaChangeHook(callback);
+		}
+
+		/// Registers a callback that can modify the amount passed to the game's modify_mana script.
+		/// Use ctx.SetAmount(value) to change the mana delta before the game applies it.
+		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
+		/// @param callback A function called with a mutable mana change context before the game processes it.
+		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
+		inline Aurie::AurieStatus OnManaChange(Internal::OnManaChangeCallback callback)
+		{
+			if (!callback)
+				return Aurie::AURIE_INVALID_PARAMETER;
+
+			if (Internal::on_mana_change_callback)
+				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			return Internal::RegisterManaChangeHook(callback);
+		}
 	}
+
 }

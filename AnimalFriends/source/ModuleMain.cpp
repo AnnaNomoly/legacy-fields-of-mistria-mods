@@ -22,12 +22,8 @@ static const char* const SPAWN_EXTRA_BEADS_DAILY_KEY = "spawn_extra_beads_daily"
 static const char* const EXTRA_BEADS_DAILY_MULTIPLIER_KEY = "extra_beads_daily_multiplier";
 static const char* const GAIN_RANCHING_XP_KEY = "gain_ranching_xp";
 
-static const char* const GML_SCRIPT_ADD_HEART_POINTS_ANIMAL = "gml_Script_add_heart_points@PlayerAnimal@Animal";
 static const char* const GML_SCRIPT_SETUP_MAIN_SCREEN = "gml_Script_setup_main_screen@TitleMenu@TitleMenu";
-static const char* const GML_SCRIPT_ON_NEW_DAY = "gml_Script_on_new_day@Ari@Ari";
 static const char* const GML_SCRIPT_GET_WEATHER = "gml_Script_get_weather@WeatherManager@Weather";
-static const char* const GML_SCRIPT_PUT_DOWN_PLAYER_ANIMAL = "gml_Script_put_down@gml_Object_obj_player_animal_Create_0";
-static const char* const GML_SCRIPT_ON_PET_PLAYER_ANIMAL = "gml_Script_on_pet@gml_Object_obj_player_animal_Create_0";
 
 static const int DEFAULT_FRIENDSHIP_MULTIPLIER = 5;
 static const bool DEFAULT_PREVENT_FRIENDSHIP_LOSS = true;
@@ -335,45 +331,21 @@ void ObjectCallback(
 	}
 }
 
-RValue& GmlScriptAddHeartPointsAnimalCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
+void OnAnimalHeartPointsChanged(MMAPI::Animal::HeartPointsChangedContext& ctx)
 {
-	int original_heart_points = static_cast<int>(Arguments[0]->m_Real);
+	double amount = ctx.GetAmount();
 
-	// Prevent friendship loss.
-	if (config.prevent_friendship_loss)
+	if (config.prevent_friendship_loss && amount < 0.0)
 	{
-		if (original_heart_points < 0)
-		{
-			original_heart_points = 0;
-			Arguments[0]->m_Real = 0.0;
-			g_ModuleInterface->Print(CM_LIGHTGREEN, "[AnimalFriends %s] - Prevented an animal's heart points from being reduced!", VERSION);
-		}
+		amount = 0.0;
+		g_ModuleInterface->Print(CM_LIGHTGREEN, "[AnimalFriends %s] - Prevented an animal's heart points from being reduced!", VERSION);
 	}
 
-	// Boost friendship gained.
-	int modified_heart_points = static_cast<int>(std::round(Arguments[0]->m_Real * config.friendship_multiplier));
-	Arguments[0]->m_Real = static_cast<double>(modified_heart_points);
-	if (modified_heart_points > 0)
-	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[AnimalFriends %s] - Boosted the heart points gained for animal from %d to %d!", VERSION, original_heart_points, modified_heart_points);
-	}
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_ADD_HEART_POINTS_ANIMAL));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
+	int original_amount = static_cast<int>(amount);
+	int modified_amount = static_cast<int>(std::round(amount * config.friendship_multiplier));
+	ctx.SetAmount(static_cast<double>(modified_amount));
+	if (modified_amount > 0)
+		g_ModuleInterface->Print(CM_LIGHTGREEN, "[AnimalFriends %s] - Boosted the heart points gained for animal from %d to %d!", VERSION, original_amount, modified_amount);
 }
 
 RValue& GmlScriptSetupMainScreenCallback(
@@ -391,7 +363,11 @@ RValue& GmlScriptSetupMainScreenCallback(
 	{
 		CInstance* global_instance = nullptr;
 		g_ModuleInterface->GetGlobalInstance(&global_instance);
-		MMAPI::Initialize(g_ModuleInterface, global_instance);
+		MMAPI::Initialize(g_ModuleInterface, global_instance, g_ArSelfModule);
+		MMAPI::Animal::Hooks::OnHeartPointsChanged(OnAnimalHeartPointsChanged);
+		MMAPI::Animal::Hooks::OnPutDown(OnAnimalPutDown);
+		MMAPI::Animal::Hooks::OnPet(OnAnimalPet);
+		MMAPI::Game::Hooks::OnNewDay(OnNewDay);
 		LoadOrCreateConfigFile();
 		load_on_start = false;
 	}
@@ -408,26 +384,9 @@ RValue& GmlScriptSetupMainScreenCallback(
 	return Result;
 }
 
-RValue& GmlScriptOnNewDayCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
+void OnNewDay()
 {
 	ResetStaticFields(false);
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_ON_NEW_DAY));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
 }
 
 RValue& GmlScriptGetWeatherCallback(
@@ -452,56 +411,22 @@ RValue& GmlScriptGetWeatherCallback(
 	return Result;
 }
 
-RValue& GmlScriptCreatePutDownPlayerAnimalCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
+void OnAnimalPutDown(CInstance* animal)
 {
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_PUT_DOWN_PLAYER_ANIMAL));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
 	if (config.spawn_extra_beads_daily && !extra_beads_daily_received)
 	{
 		extra_beads_daily_received = true;
-		MMAPI::Animal::SpawnShinyBeads(Self, num_player_animals * config.extra_beads_daily_multiplier);
+		MMAPI::Animal::SpawnShinyBeads(animal, num_player_animals * config.extra_beads_daily_multiplier);
 	}
-
-	return Result;
 }
 
-RValue& GmlScriptCreateOnPetPlayerAnimalCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
+void OnAnimalPet(CInstance* animal)
 {
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_ON_PET_PLAYER_ANIMAL));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
 	if (config.spawn_extra_beads_daily && !extra_beads_daily_received)
 	{
 		extra_beads_daily_received = true;
-		MMAPI::Animal::SpawnShinyBeads(Self, num_player_animals * config.extra_beads_daily_multiplier);
+		MMAPI::Animal::SpawnShinyBeads(animal, num_player_animals * config.extra_beads_daily_multiplier);
 	}
-
-	return Result;
 }
 
 AurieStatus RegisterHook(const char* script_name, PVOID callback)
@@ -529,12 +454,8 @@ AurieStatus RegisterHook(const char* script_name, PVOID callback)
 }
 
 static const struct HookEntry { const char* script_name; PVOID callback; } HOOK_TABLE[] = {
-	{ GML_SCRIPT_SETUP_MAIN_SCREEN,       reinterpret_cast<PVOID>(GmlScriptSetupMainScreenCallback)             },
-	{ GML_SCRIPT_ADD_HEART_POINTS_ANIMAL, reinterpret_cast<PVOID>(GmlScriptAddHeartPointsAnimalCallback)        },
-	{ GML_SCRIPT_ON_NEW_DAY,              reinterpret_cast<PVOID>(GmlScriptOnNewDayCallback)                    },
-	{ GML_SCRIPT_GET_WEATHER,             reinterpret_cast<PVOID>(GmlScriptGetWeatherCallback)                  },
-	{ GML_SCRIPT_PUT_DOWN_PLAYER_ANIMAL,  reinterpret_cast<PVOID>(GmlScriptCreatePutDownPlayerAnimalCallback)   },
-	{ GML_SCRIPT_ON_PET_PLAYER_ANIMAL,    reinterpret_cast<PVOID>(GmlScriptCreateOnPetPlayerAnimalCallback)     },
+	{ GML_SCRIPT_SETUP_MAIN_SCREEN, reinterpret_cast<PVOID>(GmlScriptSetupMainScreenCallback) },
+	{ GML_SCRIPT_GET_WEATHER,       reinterpret_cast<PVOID>(GmlScriptGetWeatherCallback)      },
 };
 
 EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path& ModulePath) {

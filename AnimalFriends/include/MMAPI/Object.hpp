@@ -34,6 +34,8 @@ namespace MMAPI::Object
 			return result;
 		}
 
+		// Custom mod objects are absent from globalInstance.__object_id__, so we resolve via
+		// gml_Script_try_object_id_to_string instead. Custom mod items do appear in __item_data.
 		inline bool EnsureObjectIdCache()
 		{
 			if (!object_id_to_internal_name_map.empty())

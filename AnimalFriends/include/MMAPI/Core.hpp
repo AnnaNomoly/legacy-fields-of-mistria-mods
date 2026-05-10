@@ -25,12 +25,48 @@ namespace MMAPI
 		// The GML global instance, typically obtained from the YYTK interface during initialization.
 		inline YYTK::CInstance* global_instance = nullptr;
 
+		// The Aurie module using MMAPI. Required for MMAPI-owned hooks.
+		inline Aurie::AurieModule* self_module = nullptr;
+
 		// Persisted Self/Other pairs captured from GML script hook callbacks, keyed by GML script name.
 		inline std::map<std::string, std::vector<YYTK::CInstance*>> script_reference_map;
 
 		// Persisted game object instance pairs, keyed by a descriptive instance name.
 		// Used for objects like obj_ari whose context is captured from an object callback rather than a script hook.
 		inline std::map<std::string, std::vector<YYTK::CInstance*>> instance_reference_map;
+
+		inline std::map<std::string, bool> owned_script_hook_installed_map;
+
+		inline Aurie::AurieStatus InstallScriptHook(const char* script_name, PVOID callback)
+		{
+			if (!self_module || !module_interface)
+				return Aurie::AURIE_INVALID_PARAMETER;
+
+			if (owned_script_hook_installed_map[script_name])
+				return Aurie::AURIE_SUCCESS;
+
+			YYTK::CScript* gml_script = nullptr;
+			Aurie::AurieStatus status = module_interface->GetNamedRoutinePointer(
+				script_name,
+				reinterpret_cast<PVOID*>(&gml_script)
+			);
+
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			status = Aurie::MmCreateHook(
+				self_module,
+				script_name,
+				gml_script->m_Functions->m_ScriptFunction,
+				callback,
+				nullptr
+			);
+
+			if (Aurie::AurieSuccess(status))
+				owned_script_hook_installed_map[script_name] = true;
+
+			return status;
+		}
 
 	}
 
@@ -72,5 +108,15 @@ namespace MMAPI
 	{
 		MMAPI::Internal::module_interface = module_interface;
 		MMAPI::Internal::global_instance = global;
+	}
+
+	/// Initializes MMAPI. Call once from ModuleInitialize, after obtaining the YYTKInterface and global instance.
+	/// @param module_interface The YYTKInterface pointer received in ModuleInitialize.
+	/// @param global The GML global instance pointer obtained from GetGlobalInstance.
+	/// @param module The Aurie module pointer received in ModuleInitialize. Required for MMAPI-owned hooks.
+	inline void Initialize(YYTK::YYTKInterface* module_interface, YYTK::CInstance* global, Aurie::AurieModule* module)
+	{
+		Initialize(module_interface, global);
+		MMAPI::Internal::self_module = module;
 	}
 }

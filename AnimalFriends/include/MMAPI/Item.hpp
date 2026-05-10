@@ -11,10 +11,25 @@
 
 namespace MMAPI::Item
 {
+	struct UseItemContext
+	{
+		int  m_item_id   = -1;
+		bool m_cancelled = false;
+
+		int GetItemId() const { return m_item_id; }
+		void Cancel() { m_cancelled = true; }
+		bool IsCancelled() const { return m_cancelled; }
+	};
+
 	namespace Internal
 	{
 		inline constexpr const char* GML_SCRIPT_DESERIALIZE_LIVE_ITEM = "gml_Script_deserialize_live_item";
 		inline constexpr const char* GML_SCRIPT_DROP_ITEM             = "gml_Script_drop_item";
+		inline constexpr const char* GML_SCRIPT_USE_ITEM              = "gml_Script_use_item";
+
+		using OnUseItemCallback = void(*)(MMAPI::Item::UseItemContext&);
+
+		inline OnUseItemCallback on_use_item_callback = nullptr;
 
 		inline YYTK::RValue GetItemData()
 		{
@@ -74,6 +89,44 @@ namespace MMAPI::Item
 			YYTK::RValue* args[1] = { &input };
 			gml_script->m_Functions->m_ScriptFunction(Self, Other, result, 1, args);
 			return result;
+		}
+
+		inline YYTK::RValue& GmlScriptUseItemCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			if (Arguments && ArgumentCount >= 1 && Arguments[0])
+			{
+				MMAPI::Item::UseItemContext context{ static_cast<int>(Arguments[0]->GetMember("item_id").ToInt64()) };
+				on_use_item_callback(context);
+
+				if (context.m_cancelled)
+					return Result;
+			}
+
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_USE_ITEM)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			return Result;
+		}
+
+		inline Aurie::AurieStatus RegisterUseItemHook(OnUseItemCallback callback)
+		{
+			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
+				GML_SCRIPT_USE_ITEM,
+				reinterpret_cast<PVOID>(GmlScriptUseItemCallback)
+			);
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			on_use_item_callback = callback;
+			return Aurie::AURIE_SUCCESS;
 		}
 
 	}
@@ -417,5 +470,24 @@ namespace MMAPI::Item
 		YYTK::RValue result;
 		YYTK::RValue* args[4] = { &item, &x_value, &y_value, &undefined };
 		gml_script->m_Functions->m_ScriptFunction(Self, Other, result, 4, args);
+	}
+
+	namespace Hooks
+	{
+		/// Registers a callback that runs before the game processes an item use.
+		/// Call ctx.Cancel() to prevent the game from processing the item use.
+		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
+		/// @param callback A function called with a mutable use context before the game processes it.
+		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
+		inline Aurie::AurieStatus OnUseItem(Internal::OnUseItemCallback callback)
+		{
+			if (!callback)
+				return Aurie::AURIE_INVALID_PARAMETER;
+
+			if (Internal::on_use_item_callback)
+				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			return Internal::RegisterUseItemHook(callback);
+		}
 	}
 }

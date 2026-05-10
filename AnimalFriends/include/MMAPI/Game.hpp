@@ -27,11 +27,83 @@ namespace MMAPI::Game
 		WaterDirt        = 10
 	};
 
+	struct SaveGameContext
+	{
+		bool m_cancelled = false;
+
+		void Cancel() { m_cancelled = true; }
+		bool IsCancelled() const { return m_cancelled; }
+	};
+
+	struct PlayAudioContext
+	{
+		std::string m_audio_name;
+		bool m_cancelled = false;
+
+		std::string_view GetAudioName() const { return m_audio_name; }
+		void SetAudioName(std::string name) { m_audio_name = std::move(name); }
+		void Cancel() { m_cancelled = true; }
+		bool IsCancelled() const { return m_cancelled; }
+	};
+
+	struct HudShouldShowContext
+	{
+		bool m_result = true;
+
+		bool GetResult() const { return m_result; }
+		void SetResult(bool result) { m_result = result; }
+	};
+
 	namespace Internal
 	{
 		inline std::unordered_map<std::string, uint64_t> notification_last_display_time;
-		inline constexpr const char* GML_SCRIPT_CREATE_NOTIFICATION   = "gml_Script_create_notification";
+		inline constexpr const char* GML_SCRIPT_CREATE_NOTIFICATION     = "gml_Script_create_notification";
 		inline constexpr const char* GML_SCRIPT_SELL_SHIPPING_BIN_ITEMS = "gml_Script_sell_shipping_bin_items";
+		inline constexpr const char* GML_SCRIPT_END_DAY                 = "gml_Script_end_day";
+		inline constexpr const char* GML_SCRIPT_ARI_ON_NEW_DAY          = "gml_Script_on_new_day@Ari@Ari";
+		inline constexpr const char* GML_SCRIPT_LOAD_GAME               = "gml_Script_load_game";
+		inline constexpr const char* GML_SCRIPT_SAVE_GAME               = "gml_Script_save_game";
+		inline constexpr const char* GML_SCRIPT_SCENE_AUDIO_PLAYER_PLAY = "gml_Script_play@SceneAudioPlayer@SceneAudioPlayer";
+		inline constexpr const char* GML_SCRIPT_ON_DRAW_GUI             = "gml_Script_on_draw_gui@Display@Display";
+		inline constexpr const char* GML_SCRIPT_HUD_SHOULD_SHOW         = "gml_Script_hud_should_show";
+		inline constexpr const char* GML_SCRIPT_CRAFTING_MENU_OPEN      = "gml_Script_initialize@CraftingMenu@CraftingMenu";
+		inline constexpr const char* GML_SCRIPT_CRAFTING_MENU_CLOSE     = "gml_Script_on_close@CraftingMenu@CraftingMenu";
+		inline constexpr const char* GML_SCRIPT_JOURNAL_MENU_OPEN       = "gml_Script_initialize@JournalMenu@JournalMenu";
+		inline constexpr const char* GML_SCRIPT_JOURNAL_MENU_CLOSE      = "gml_Script_on_close@JournalMenu@JournalMenu";
+		inline constexpr const char* GML_SCRIPT_STORE_MENU_OPEN         = "gml_Script_init@StoreMenu@StoreMenu";
+		inline constexpr const char* GML_SCRIPT_STORE_MENU_CLOSE        = "gml_Script_anon@10878@StoreMenu@StoreMenu";
+
+		using EndDayCallback = void(*)();
+		using NewDayCallback = void(*)();
+
+		inline EndDayCallback end_day_callback = nullptr;
+		inline NewDayCallback new_day_callback = nullptr;
+
+		using LoadGameCallback    = void(*)();
+		using OnSaveGameCallback  = void(*)(MMAPI::Game::SaveGameContext&);
+		using OnPlayAudioCallback = void(*)(MMAPI::Game::PlayAudioContext&);
+
+		inline LoadGameCallback    on_load_game_callback  = nullptr;
+		inline OnSaveGameCallback  on_save_game_callback  = nullptr;
+		inline OnPlayAudioCallback on_play_audio_callback = nullptr;
+
+		using OnDrawGuiCallback          = void(*)();
+		using OnHudShouldShowCallback    = void(*)(MMAPI::Game::HudShouldShowContext&);
+		using OnCraftingMenuOpenCallback  = void(*)();
+		using OnCraftingMenuCloseCallback = void(*)();
+		using OnJournalMenuOpenCallback   = void(*)();
+		using OnJournalMenuCloseCallback  = void(*)();
+		using OnStoreMenuOpenCallback     = void(*)();
+		using OnStoreMenuCloseCallback    = void(*)();
+
+		inline OnDrawGuiCallback          on_draw_gui_callback           = nullptr;
+		inline OnHudShouldShowCallback    on_hud_should_show_callback    = nullptr;
+		inline OnCraftingMenuOpenCallback  on_crafting_menu_open_callback  = nullptr;
+		inline OnCraftingMenuCloseCallback on_crafting_menu_close_callback = nullptr;
+		inline OnJournalMenuOpenCallback   on_journal_menu_open_callback   = nullptr;
+		inline OnJournalMenuCloseCallback  on_journal_menu_close_callback  = nullptr;
+		inline OnStoreMenuOpenCallback     on_store_menu_open_callback     = nullptr;
+		inline OnStoreMenuCloseCallback    on_store_menu_close_callback    = nullptr;
 
 		inline constexpr const char* ToGameKey(MMAPI::Game::XpValues value)
 		{
@@ -62,6 +134,415 @@ namespace MMAPI::Game
 				default:
 					return nullptr;
 			}
+		}
+
+		inline YYTK::RValue& GmlScriptEndDayCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(
+					MMAPI::Internal::self_module,
+					GML_SCRIPT_END_DAY
+				)
+			);
+
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			end_day_callback();
+
+			return Result;
+		}
+
+		inline Aurie::AurieStatus RegisterEndDayHook(EndDayCallback callback)
+		{
+			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
+				GML_SCRIPT_END_DAY,
+				reinterpret_cast<PVOID>(GmlScriptEndDayCallback)
+			);
+
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			end_day_callback = callback;
+			return Aurie::AURIE_SUCCESS;
+		}
+
+		inline YYTK::RValue& GmlScriptAriOnNewDayCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			new_day_callback();
+
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(
+					MMAPI::Internal::self_module,
+					GML_SCRIPT_ARI_ON_NEW_DAY
+				)
+			);
+
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			return Result;
+		}
+
+		inline Aurie::AurieStatus RegisterNewDayHook(NewDayCallback callback)
+		{
+			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
+				GML_SCRIPT_ARI_ON_NEW_DAY,
+				reinterpret_cast<PVOID>(GmlScriptAriOnNewDayCallback)
+			);
+
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			new_day_callback = callback;
+			return Aurie::AURIE_SUCCESS;
+		}
+
+		inline YYTK::RValue& GmlScriptLoadGameCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_LOAD_GAME)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			on_load_game_callback();
+
+			return Result;
+		}
+
+		inline Aurie::AurieStatus RegisterLoadGameHook(LoadGameCallback callback)
+		{
+			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
+				GML_SCRIPT_LOAD_GAME,
+				reinterpret_cast<PVOID>(GmlScriptLoadGameCallback)
+			);
+
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			on_load_game_callback = callback;
+			return Aurie::AURIE_SUCCESS;
+		}
+
+		inline YYTK::RValue& GmlScriptSaveGameCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			MMAPI::Game::SaveGameContext context;
+			on_save_game_callback(context);
+
+			if (context.m_cancelled)
+				return Result;
+
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_SAVE_GAME)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			return Result;
+		}
+
+		inline Aurie::AurieStatus RegisterSaveGameHook(OnSaveGameCallback callback)
+		{
+			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
+				GML_SCRIPT_SAVE_GAME,
+				reinterpret_cast<PVOID>(GmlScriptSaveGameCallback)
+			);
+
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			on_save_game_callback = callback;
+			return Aurie::AURIE_SUCCESS;
+		}
+
+		inline YYTK::RValue& GmlScriptPlayAudioCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			if (Arguments && ArgumentCount >= 1 && Arguments[0])
+			{
+				MMAPI::Game::PlayAudioContext context{ Arguments[0]->ToString() };
+				on_play_audio_callback(context);
+
+				if (context.m_cancelled)
+					return Result;
+
+				*Arguments[0] = YYTK::RValue(context.m_audio_name);
+			}
+
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_SCENE_AUDIO_PLAYER_PLAY)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			return Result;
+		}
+
+		inline Aurie::AurieStatus RegisterPlayAudioHook(OnPlayAudioCallback callback)
+		{
+			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
+				GML_SCRIPT_SCENE_AUDIO_PLAYER_PLAY,
+				reinterpret_cast<PVOID>(GmlScriptPlayAudioCallback)
+			);
+
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			on_play_audio_callback = callback;
+			return Aurie::AURIE_SUCCESS;
+		}
+
+		inline YYTK::RValue& GmlScriptOnDrawGuiCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_ON_DRAW_GUI)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			on_draw_gui_callback();
+
+			return Result;
+		}
+
+		inline Aurie::AurieStatus RegisterDrawGuiHook(OnDrawGuiCallback callback)
+		{
+			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
+				GML_SCRIPT_ON_DRAW_GUI,
+				reinterpret_cast<PVOID>(GmlScriptOnDrawGuiCallback)
+			);
+
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			on_draw_gui_callback = callback;
+			return Aurie::AURIE_SUCCESS;
+		}
+
+		inline YYTK::RValue& GmlScriptHudShouldShowCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_HUD_SHOULD_SHOW)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			MMAPI::Game::HudShouldShowContext context{ Result.ToBoolean() };
+			on_hud_should_show_callback(context);
+			Result = context.m_result;
+
+			return Result;
+		}
+
+		inline Aurie::AurieStatus RegisterHudShouldShowHook(OnHudShouldShowCallback callback)
+		{
+			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
+				GML_SCRIPT_HUD_SHOULD_SHOW,
+				reinterpret_cast<PVOID>(GmlScriptHudShouldShowCallback)
+			);
+
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			on_hud_should_show_callback = callback;
+			return Aurie::AURIE_SUCCESS;
+		}
+
+		inline YYTK::RValue& GmlScriptCraftingMenuOpenCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_CRAFTING_MENU_OPEN)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+			on_crafting_menu_open_callback();
+			return Result;
+		}
+
+		inline Aurie::AurieStatus RegisterCraftingMenuOpenHook(OnCraftingMenuOpenCallback callback)
+		{
+			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
+				GML_SCRIPT_CRAFTING_MENU_OPEN, reinterpret_cast<PVOID>(GmlScriptCraftingMenuOpenCallback)
+			);
+			if (!Aurie::AurieSuccess(status))
+				return status;
+			on_crafting_menu_open_callback = callback;
+			return Aurie::AURIE_SUCCESS;
+		}
+
+		inline YYTK::RValue& GmlScriptCraftingMenuCloseCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_CRAFTING_MENU_CLOSE)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+			on_crafting_menu_close_callback();
+			return Result;
+		}
+
+		inline Aurie::AurieStatus RegisterCraftingMenuCloseHook(OnCraftingMenuCloseCallback callback)
+		{
+			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
+				GML_SCRIPT_CRAFTING_MENU_CLOSE, reinterpret_cast<PVOID>(GmlScriptCraftingMenuCloseCallback)
+			);
+			if (!Aurie::AurieSuccess(status))
+				return status;
+			on_crafting_menu_close_callback = callback;
+			return Aurie::AURIE_SUCCESS;
+		}
+
+		inline YYTK::RValue& GmlScriptJournalMenuOpenCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_JOURNAL_MENU_OPEN)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+			on_journal_menu_open_callback();
+			return Result;
+		}
+
+		inline Aurie::AurieStatus RegisterJournalMenuOpenHook(OnJournalMenuOpenCallback callback)
+		{
+			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
+				GML_SCRIPT_JOURNAL_MENU_OPEN, reinterpret_cast<PVOID>(GmlScriptJournalMenuOpenCallback)
+			);
+			if (!Aurie::AurieSuccess(status))
+				return status;
+			on_journal_menu_open_callback = callback;
+			return Aurie::AURIE_SUCCESS;
+		}
+
+		inline YYTK::RValue& GmlScriptJournalMenuCloseCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_JOURNAL_MENU_CLOSE)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+			on_journal_menu_close_callback();
+			return Result;
+		}
+
+		inline Aurie::AurieStatus RegisterJournalMenuCloseHook(OnJournalMenuCloseCallback callback)
+		{
+			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
+				GML_SCRIPT_JOURNAL_MENU_CLOSE, reinterpret_cast<PVOID>(GmlScriptJournalMenuCloseCallback)
+			);
+			if (!Aurie::AurieSuccess(status))
+				return status;
+			on_journal_menu_close_callback = callback;
+			return Aurie::AURIE_SUCCESS;
+		}
+
+		inline YYTK::RValue& GmlScriptStoreMenuOpenCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_STORE_MENU_OPEN)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+			on_store_menu_open_callback();
+			return Result;
+		}
+
+		inline Aurie::AurieStatus RegisterStoreMenuOpenHook(OnStoreMenuOpenCallback callback)
+		{
+			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
+				GML_SCRIPT_STORE_MENU_OPEN, reinterpret_cast<PVOID>(GmlScriptStoreMenuOpenCallback)
+			);
+			if (!Aurie::AurieSuccess(status))
+				return status;
+			on_store_menu_open_callback = callback;
+			return Aurie::AURIE_SUCCESS;
+		}
+
+		inline YYTK::RValue& GmlScriptStoreMenuCloseCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_STORE_MENU_CLOSE)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+			on_store_menu_close_callback();
+			return Result;
+		}
+
+		inline Aurie::AurieStatus RegisterStoreMenuCloseHook(OnStoreMenuCloseCallback callback)
+		{
+			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
+				GML_SCRIPT_STORE_MENU_CLOSE, reinterpret_cast<PVOID>(GmlScriptStoreMenuCloseCallback)
+			);
+			if (!Aurie::AurieSuccess(status))
+				return status;
+			on_store_menu_close_callback = callback;
+			return Aurie::AURIE_SUCCESS;
 		}
 	}
 
@@ -193,4 +674,204 @@ namespace MMAPI::Game
 		return result;
 	}
 
+	namespace Hooks
+	{
+		/// Registers a callback that runs after the game ends the current day.
+		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
+		/// @param callback A function called after the game's end day script runs.
+		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
+		inline Aurie::AurieStatus OnEndDay(Internal::EndDayCallback callback)
+		{
+			if (!callback)
+				return Aurie::AURIE_INVALID_PARAMETER;
+
+			if (Internal::end_day_callback)
+				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			return Internal::RegisterEndDayHook(callback);
+		}
+
+		/// Registers a callback that runs before the game starts a new day for Ari.
+		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
+		/// @param callback A function called before Ari's on new day script runs.
+		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
+		inline Aurie::AurieStatus OnNewDay(Internal::NewDayCallback callback)
+		{
+			if (!callback)
+				return Aurie::AURIE_INVALID_PARAMETER;
+
+			if (Internal::new_day_callback)
+				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			return Internal::RegisterNewDayHook(callback);
+		}
+
+		/// Registers a callback that runs after the game loads a save file.
+		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
+		/// @param callback A function called after the game's load_game script runs.
+		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
+		inline Aurie::AurieStatus OnLoadGame(Internal::LoadGameCallback callback)
+		{
+			if (!callback)
+				return Aurie::AURIE_INVALID_PARAMETER;
+
+			if (Internal::on_load_game_callback)
+				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			return Internal::RegisterLoadGameHook(callback);
+		}
+
+		/// Registers a callback that runs before the game saves.
+		/// Call ctx.Cancel() to prevent the game from saving.
+		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
+		/// @param callback A function called with a mutable save context before the game processes it.
+		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
+		inline Aurie::AurieStatus OnSaveGame(Internal::OnSaveGameCallback callback)
+		{
+			if (!callback)
+				return Aurie::AURIE_INVALID_PARAMETER;
+
+			if (Internal::on_save_game_callback)
+				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			return Internal::RegisterSaveGameHook(callback);
+		}
+
+		/// Registers a callback that runs before the game plays an audio track.
+		/// Use ctx.SetAudioName() to redirect to a different audio asset, or ctx.Cancel() to prevent playback.
+		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
+		/// @param callback A function called with a mutable audio context before the game processes it.
+		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
+		inline Aurie::AurieStatus OnPlayAudio(Internal::OnPlayAudioCallback callback)
+		{
+			if (!callback)
+				return Aurie::AURIE_INVALID_PARAMETER;
+
+			if (Internal::on_play_audio_callback)
+				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			return Internal::RegisterPlayAudioHook(callback);
+		}
+
+		/// Registers a callback that runs after each GUI draw step.
+		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
+		/// @param callback A function called after the game's draw GUI script runs.
+		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
+		inline Aurie::AurieStatus OnDrawGui(Internal::OnDrawGuiCallback callback)
+		{
+			if (!callback)
+				return Aurie::AURIE_INVALID_PARAMETER;
+
+			if (Internal::on_draw_gui_callback)
+				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			return Internal::RegisterDrawGuiHook(callback);
+		}
+
+		/// Registers a callback that runs after the game evaluates whether the HUD should be shown.
+		/// Use ctx.SetResult(false) to hide the HUD.
+		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
+		/// @param callback A function called with a mutable HUD visibility context after the game evaluates it.
+		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
+		inline Aurie::AurieStatus OnHudShouldShow(Internal::OnHudShouldShowCallback callback)
+		{
+			if (!callback)
+				return Aurie::AURIE_INVALID_PARAMETER;
+
+			if (Internal::on_hud_should_show_callback)
+				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			return Internal::RegisterHudShouldShowHook(callback);
+		}
+
+		/// Registers a callback that runs after the crafting menu opens.
+		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
+		/// @param callback A function called after the crafting menu's initialize script runs.
+		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
+		inline Aurie::AurieStatus OnCraftingMenuOpen(Internal::OnCraftingMenuOpenCallback callback)
+		{
+			if (!callback)
+				return Aurie::AURIE_INVALID_PARAMETER;
+
+			if (Internal::on_crafting_menu_open_callback)
+				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			return Internal::RegisterCraftingMenuOpenHook(callback);
+		}
+
+		/// Registers a callback that runs after the crafting menu closes.
+		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
+		/// @param callback A function called after the crafting menu's close script runs.
+		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
+		inline Aurie::AurieStatus OnCraftingMenuClose(Internal::OnCraftingMenuCloseCallback callback)
+		{
+			if (!callback)
+				return Aurie::AURIE_INVALID_PARAMETER;
+
+			if (Internal::on_crafting_menu_close_callback)
+				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			return Internal::RegisterCraftingMenuCloseHook(callback);
+		}
+
+		/// Registers a callback that runs after the journal menu opens.
+		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
+		/// @param callback A function called after the journal menu's initialize script runs.
+		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
+		inline Aurie::AurieStatus OnJournalMenuOpen(Internal::OnJournalMenuOpenCallback callback)
+		{
+			if (!callback)
+				return Aurie::AURIE_INVALID_PARAMETER;
+
+			if (Internal::on_journal_menu_open_callback)
+				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			return Internal::RegisterJournalMenuOpenHook(callback);
+		}
+
+		/// Registers a callback that runs after the journal menu closes.
+		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
+		/// @param callback A function called after the journal menu's close script runs.
+		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
+		inline Aurie::AurieStatus OnJournalMenuClose(Internal::OnJournalMenuCloseCallback callback)
+		{
+			if (!callback)
+				return Aurie::AURIE_INVALID_PARAMETER;
+
+			if (Internal::on_journal_menu_close_callback)
+				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			return Internal::RegisterJournalMenuCloseHook(callback);
+		}
+
+		/// Registers a callback that runs after the store menu opens.
+		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
+		/// @param callback A function called after the store menu's initialize script runs.
+		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
+		inline Aurie::AurieStatus OnStoreMenuOpen(Internal::OnStoreMenuOpenCallback callback)
+		{
+			if (!callback)
+				return Aurie::AURIE_INVALID_PARAMETER;
+
+			if (Internal::on_store_menu_open_callback)
+				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			return Internal::RegisterStoreMenuOpenHook(callback);
+		}
+
+		/// Registers a callback that runs after the store menu closes.
+		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
+		/// @param callback A function called after the store menu's close script runs.
+		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
+		inline Aurie::AurieStatus OnStoreMenuClose(Internal::OnStoreMenuCloseCallback callback)
+		{
+			if (!callback)
+				return Aurie::AURIE_INVALID_PARAMETER;
+
+			if (Internal::on_store_menu_close_callback)
+				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			return Internal::RegisterStoreMenuCloseHook(callback);
+		}
+	}
 }

@@ -1,11 +1,35 @@
 #pragma once
 
 #include "Core.hpp"
+#include "Game.hpp"
 
 #include "YYToolkit/YYTK_Shared.hpp"
 
 namespace MMAPI::Calendar
 {
+	inline constexpr int NightStartTimeInSeconds = 72000;
+
+	/// Source: globalInstance.__day__
+	enum class Weekdays : int
+	{
+		Monday    = 0,
+		Tuesday   = 1,
+		Wednesday = 2,
+		Thursday  = 3,
+		Friday    = 4,
+		Saturday  = 5,
+		Sunday    = 6
+	};
+
+	/// Source: globalInstance.__season__
+	enum class Seasons : int
+	{
+		Spring = 0,
+		Summer = 1,
+		Fall   = 2,
+		Winter = 3
+	};
+
 	namespace Internal
 	{
 		inline constexpr const char* GML_SCRIPT_GET_UNIFIED_TIME = "gml_Script_unified_time@Calendar@Calendar";
@@ -28,30 +52,130 @@ namespace MMAPI::Calendar
 			gml_script->m_Functions->m_ScriptFunction(Self, Other, result, 0, nullptr);
 			return result;
 		}
+
+		/// Gets the current 0-indexed calendar day from the Calendar script context.
+		/// @attention Requires MMAPI::Calendar::Internal::GML_SCRIPT_GET_DAY to be registered via RegisterScriptContext.
+		/// @return The current 0-indexed calendar day as an RValue, or undefined if the required context is unavailable.
+		inline YYTK::RValue GetDay()
+		{
+			return CallCalendarScript(GML_SCRIPT_GET_DAY);
+		}
+
+		/// Gets the current 0-indexed calendar season from the Calendar script context.
+		/// @attention Requires MMAPI::Calendar::Internal::GML_SCRIPT_GET_SEASON to be registered via RegisterScriptContext.
+		/// @return The current 0-indexed calendar season as an RValue, or undefined if the required context is unavailable.
+		inline YYTK::RValue GetSeason()
+		{
+			return CallCalendarScript(GML_SCRIPT_GET_SEASON);
+		}
+
+		/// Gets the current 0-indexed calendar year from the Calendar script context.
+		/// @attention Requires MMAPI::Calendar::Internal::GML_SCRIPT_GET_YEAR to be registered via RegisterScriptContext.
+		/// @return The current 0-indexed calendar year as an RValue, or undefined if the required context is unavailable.
+		inline YYTK::RValue GetYear()
+		{
+			return CallCalendarScript(GML_SCRIPT_GET_YEAR);
+		}
 	}
 
-	/// Gets the current 0-indexed calendar day from the Calendar script context.
+	/// Gets the current 1-indexed day of the month from the Calendar script context.
 	/// @attention Requires MMAPI::Calendar::Internal::GML_SCRIPT_GET_DAY to be registered via RegisterScriptContext.
-	/// @return The current 0-indexed calendar day as an RValue, or undefined if the required context is unavailable.
+	/// @return The current day of the month from 1 to 28 as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetDay()
 	{
-		return Internal::CallCalendarScript(Internal::GML_SCRIPT_GET_DAY);
+		YYTK::RValue day = Internal::GetDay();
+		if (day.m_Kind == YYTK::VALUE_UNDEFINED)
+			return {};
+
+		return static_cast<int>(day.ToInt64()) + 1;
 	}
 
-	/// Gets the current 0-indexed calendar season from the Calendar script context.
-	/// @attention Requires MMAPI::Calendar::Internal::GML_SCRIPT_GET_SEASON to be registered via RegisterScriptContext.
-	/// @return The current 0-indexed calendar season as an RValue, or undefined if the required context is unavailable.
-	inline YYTK::RValue GetSeason()
+	/// Gets the current weekday from the Calendar script context.
+	/// @attention Requires MMAPI::Calendar::Internal::GML_SCRIPT_GET_DAY to be registered via RegisterScriptContext.
+	/// @param weekday The current weekday.
+	/// @return True if the weekday was resolved, false if the required context is unavailable.
+	inline bool TryGetWeekday(MMAPI::Calendar::Weekdays& weekday)
 	{
-		return Internal::CallCalendarScript(Internal::GML_SCRIPT_GET_SEASON);
+		YYTK::RValue day_of_month = GetDay();
+		if (day_of_month.m_Kind == YYTK::VALUE_UNDEFINED || day_of_month.m_Kind == YYTK::VALUE_UNSET)
+			return false;
+
+		int weekday_id = (static_cast<int>(day_of_month.ToInt64()) - 1) % 7;
+		if (weekday_id < static_cast<int>(MMAPI::Calendar::Weekdays::Monday) ||
+		    weekday_id > static_cast<int>(MMAPI::Calendar::Weekdays::Sunday))
+			return false;
+
+		weekday = static_cast<MMAPI::Calendar::Weekdays>(weekday_id);
+		return true;
 	}
 
-	/// Gets the current 0-indexed calendar year from the Calendar script context.
+	/// Returns true if the current weekday matches weekday.
+	/// @attention Requires MMAPI::Calendar::Internal::GML_SCRIPT_GET_DAY to be registered via RegisterScriptContext.
+	/// @param weekday The weekday to compare against.
+	inline bool IsWeekday(MMAPI::Calendar::Weekdays weekday)
+	{
+		MMAPI::Calendar::Weekdays current_weekday;
+		if (!TryGetWeekday(current_weekday))
+			return false;
+
+		return current_weekday == weekday;
+	}
+
+	/// Gets the current season from the Calendar script context.
+	/// @attention Requires MMAPI::Calendar::Internal::GML_SCRIPT_GET_SEASON to be registered via RegisterScriptContext.
+	/// @param season The current season.
+	/// @return True if the season was resolved, false if the required context is unavailable.
+	inline bool TryGetSeason(MMAPI::Calendar::Seasons& season)
+	{
+		YYTK::RValue current_season = Internal::GetSeason();
+		if (current_season.m_Kind == YYTK::VALUE_UNDEFINED || current_season.m_Kind == YYTK::VALUE_UNSET)
+			return false;
+
+		int season_id = static_cast<int>(current_season.ToInt64());
+		if (season_id < static_cast<int>(MMAPI::Calendar::Seasons::Spring) ||
+		    season_id > static_cast<int>(MMAPI::Calendar::Seasons::Winter))
+			return false;
+
+		season = static_cast<MMAPI::Calendar::Seasons>(season_id);
+		return true;
+	}
+
+	/// Returns true if the current season matches season.
+	/// @attention Requires MMAPI::Calendar::Internal::GML_SCRIPT_GET_SEASON to be registered via RegisterScriptContext.
+	/// @param season The season to compare against.
+	inline bool IsSeason(MMAPI::Calendar::Seasons season)
+	{
+		MMAPI::Calendar::Seasons current_season;
+		if (!TryGetSeason(current_season))
+			return false;
+
+		return current_season == season;
+	}
+
+	/// Gets the current 1-indexed calendar year from the Calendar script context.
 	/// @attention Requires MMAPI::Calendar::Internal::GML_SCRIPT_GET_YEAR to be registered via RegisterScriptContext.
-	/// @return The current 0-indexed calendar year as an RValue, or undefined if the required context is unavailable.
+	/// @return The current calendar year as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetYear()
 	{
-		return Internal::CallCalendarScript(Internal::GML_SCRIPT_GET_YEAR);
+		YYTK::RValue year = Internal::GetYear();
+		if (year.m_Kind == YYTK::VALUE_UNDEFINED)
+			return {};
+
+		return static_cast<int>(year.ToInt64()) + 1;
+	}
+
+	/// Returns true if the current game clock time is night.
+	/// Night starts at 8 PM, matching the game's daytime/nighttime split.
+	inline bool IsNight()
+	{
+		return MMAPI::Game::GetCurrentTimeInSeconds() >= NightStartTimeInSeconds;
+	}
+
+	/// Returns true if the current game clock time is day.
+	/// Day is any time before 8 PM, matching the game's daytime/nighttime split.
+	inline bool IsDay()
+	{
+		return !IsNight();
 	}
 
 	/// Gets the current unified game time from the Calendar script context.

@@ -7,6 +7,7 @@
 #include "Calendar.hpp"
 #include "Config.hpp"
 #include "Cosmetic.hpp"
+#include "Damage.hpp"
 #include "Dungeon.hpp"
 #include "Engine.hpp"
 #include "Equipment.hpp"
