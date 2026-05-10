@@ -6,6 +6,48 @@
 
 namespace MMAPI::Monster
 {
+	/// Source: __monster_id.json.__monster_id__
+	enum class Ids : int
+	{
+		Barrel            = 0,
+		Bat               = 1,
+		BatBlue           = 2,
+		Cat               = 3,
+		CatVoid           = 4,
+		Copperclod        = 5,
+		Enchantern        = 6,
+		EnchanternBlue    = 7,
+		Goldclod          = 8,
+		GriffinStatue     = 9,
+		Ironclod          = 10,
+		Mimic             = 11,
+		Mistrilclod       = 12,
+		Mushroom          = 13,
+		MushroomBlue      = 14,
+		MushroomGreen     = 15,
+		MushroomPurple    = 16,
+		RockStack         = 17,
+		Rockclod          = 18,
+		RockclodBlue      = 19,
+		RockclodGreen     = 20,
+		RockclodPurple    = 21,
+		RockclodRed       = 22,
+		Sapling           = 23,
+		SaplingBlue       = 24,
+		SaplingCool       = 25,
+		SaplingOrange     = 26,
+		SaplingOrangeMini = 27,
+		SaplingPink       = 28,
+		SaplingPurple     = 29,
+		Silverclod        = 30,
+		Spirit            = 31,
+		SpiritPurple      = 32,
+		Stalagmite        = 33,
+		StalagmiteGreen   = 34,
+		StalagmitePurple  = 35,
+		Tome              = 36
+	};
+
 	struct SpawnMonsterContext
 	{
 		int m_monster_id = 0;
@@ -73,48 +115,6 @@ namespace MMAPI::Monster
 			return Aurie::AURIE_SUCCESS;
 		}
 	}
-
-	/// Source: __monster_id.json.__monster_id__
-	enum class Ids : int
-	{
-		Barrel            = 0,
-		Bat               = 1,
-		BatBlue           = 2,
-		Cat               = 3,
-		CatVoid           = 4,
-		Copperclod        = 5,
-		Enchantern        = 6,
-		EnchanternBlue    = 7,
-		Goldclod          = 8,
-		GriffinStatue     = 9,
-		Ironclod          = 10,
-		Mimic             = 11,
-		Mistrilclod       = 12,
-		Mushroom          = 13,
-		MushroomBlue      = 14,
-		MushroomGreen     = 15,
-		MushroomPurple    = 16,
-		RockStack         = 17,
-		Rockclod          = 18,
-		RockclodBlue      = 19,
-		RockclodGreen     = 20,
-		RockclodPurple    = 21,
-		RockclodRed       = 22,
-		Sapling           = 23,
-		SaplingBlue       = 24,
-		SaplingCool       = 25,
-		SaplingOrange     = 26,
-		SaplingOrangeMini = 27,
-		SaplingPink       = 28,
-		SaplingPurple     = 29,
-		Silverclod        = 30,
-		Spirit            = 31,
-		SpiritPurple      = 32,
-		Stalagmite        = 33,
-		StalagmiteGreen   = 34,
-		StalagmitePurple  = 35,
-		Tome              = 36
-	};
 
 	namespace Hooks
 	{

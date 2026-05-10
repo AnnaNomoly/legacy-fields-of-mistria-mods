@@ -335,6 +335,29 @@ void OnAnimalHeartPointsChanged(MMAPI::Animal::HeartPointsChangedContext& ctx)
 		g_ModuleInterface->Print(CM_LIGHTGREEN, "[AnimalFriends %s] - Boosted the heart points gained for animal from %d to %d!", VERSION, original_amount, modified_amount);
 }
 
+void OnNewDay()
+{
+	ResetStaticFields(false);
+}
+
+void OnAnimalPutDown(CInstance* animal)
+{
+	if (config.spawn_extra_beads_daily && !extra_beads_daily_received)
+	{
+		extra_beads_daily_received = true;
+		MMAPI::Animal::SpawnShinyBeads(animal, num_player_animals * config.extra_beads_daily_multiplier);
+	}
+}
+
+void OnAnimalPet(CInstance* animal)
+{
+	if (config.spawn_extra_beads_daily && !extra_beads_daily_received)
+	{
+		extra_beads_daily_received = true;
+		MMAPI::Animal::SpawnShinyBeads(animal, num_player_animals * config.extra_beads_daily_multiplier);
+	}
+}
+
 RValue& GmlScriptSetupMainScreenCallback(
 	IN CInstance* Self,
 	IN CInstance* Other,
@@ -371,11 +394,6 @@ RValue& GmlScriptSetupMainScreenCallback(
 	return Result;
 }
 
-void OnNewDay()
-{
-	ResetStaticFields(false);
-}
-
 RValue& GmlScriptGetWeatherCallback(
 	IN CInstance* Self,
 	IN CInstance* Other,
@@ -396,24 +414,6 @@ RValue& GmlScriptGetWeatherCallback(
 	MMAPI::RegisterScriptContext(MMAPI::Weather::Internal::GML_SCRIPT_GET_WEATHER, Self, Other);
 
 	return Result;
-}
-
-void OnAnimalPutDown(CInstance* animal)
-{
-	if (config.spawn_extra_beads_daily && !extra_beads_daily_received)
-	{
-		extra_beads_daily_received = true;
-		MMAPI::Animal::SpawnShinyBeads(animal, num_player_animals * config.extra_beads_daily_multiplier);
-	}
-}
-
-void OnAnimalPet(CInstance* animal)
-{
-	if (config.spawn_extra_beads_daily && !extra_beads_daily_received)
-	{
-		extra_beads_daily_received = true;
-		MMAPI::Animal::SpawnShinyBeads(animal, num_player_animals * config.extra_beads_daily_multiplier);
-	}
 }
 
 AurieStatus RegisterHook(const char* script_name, PVOID callback)
