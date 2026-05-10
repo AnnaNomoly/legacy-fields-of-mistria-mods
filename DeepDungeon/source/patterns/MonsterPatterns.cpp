@@ -33,7 +33,7 @@ std::vector<std::vector<double>> generate_cross(int threshold, int lower_bound, 
 	{
 		for (int x = lower_bound; x <= upper_bound; x += increment)
 		{
-			if (min(std::abs(x), std::abs(y)) < threshold && (std::abs(x) + std::abs(y)) != 0)
+			if (std::min(std::abs(x), std::abs(y)) < threshold && (std::abs(x) + std::abs(y)) != 0)
 			{
 				std::complex<double> z(x, y);
 				std::complex<double> c;

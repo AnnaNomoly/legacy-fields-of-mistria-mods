@@ -145,6 +145,13 @@ static void AriProcessUsedItems(CInstance* ari_instance, CInstance* self)
 					double hit_points = monster->GetMember("hit_points").ToDouble();
 					if (IsNumeric(monster_id) && std::isfinite(hit_points) && hit_points > 0)
 						*monster->GetRefMember("hit_points") = 0;
+
+					if (monster_id.ToInt64() == monster_name_to_id_map["tome"])
+					{
+						RValue monster_instance_exists = g_ModuleInterface->CallBuiltin("instance_exists", { monster });
+						if (monster_instance_exists.ToBoolean())
+							g_ModuleInterface->CallBuiltin("instance_destroy", { monster });
+					}
 				}
 			}
 
@@ -315,7 +322,7 @@ void ObjectCallback(
 		ari_y = y.ToDouble();
 
 		// Progression Mode Biome Cleared Rewards
-		if (Config::config.disable_dungeon_lift && drop_biome_reward && ari_x != 0 && ari_y != 0 && script_name_to_reference_map.contains(GML_SCRIPT_DROP_ITEM))
+		if (!is_challenge_mode && Config::config.disable_dungeon_lift && drop_biome_reward && ari_x != 0 && ari_y != 0 && script_name_to_reference_map.contains(GML_SCRIPT_DROP_ITEM))
 		{
 			// Upper Mines
 			if (ari_current_gm_room == "rm_water_seal")
@@ -379,7 +386,7 @@ void ObjectCallback(
 						if (std::isfinite(hit_points))
 						{
 							int monster_hp_penalty = std::trunc(hit_points * Config::config.exploding_trap_current_health_damage_percent / 100);
-							*monster->GetRefMember("hit_points") = max(0, hit_points - monster_hp_penalty);
+							*monster->GetRefMember("hit_points") = std::max(0.0, hit_points - monster_hp_penalty);
 
 							if (StructVariableExists(monster, "monster_id"))
 							{
@@ -430,7 +437,7 @@ void ObjectCallback(
 			if (current_health > 0 && deep_wounds_damage_pool > 0)
 			{
 				int damage = std::clamp(deep_wounds_damage_pool * 10 / 100, 1, 10);
-				damage = min(damage, deep_wounds_damage_pool);
+				damage = std::min(damage, deep_wounds_damage_pool);
 
 				deep_wounds_damage_pool -= damage;
 				ModifyHealth(ari_instance, self, -1 * damage);
@@ -648,7 +655,7 @@ void ObjectCallback(
 				}
 
 				// Regular loot drops
-				if (!ari_current_gm_room.contains("seal") && !StructVariableExists(monster, "__deep_dungeon__loot_drop") && StructVariableExists(monster, "hit_points"))
+				if (!is_challenge_mode && boss_battle == BossBattle::NONE && !ari_current_gm_room.contains("seal") && !StructVariableExists(monster, "__deep_dungeon__loot_drop") && StructVariableExists(monster, "hit_points"))
 				{
 					double hit_points = monster.GetMember("hit_points").ToDouble();
 					if (std::isfinite(hit_points) && hit_points <= 0 && script_name_to_reference_map.contains(GML_SCRIPT_DROP_ITEM))
@@ -729,7 +736,7 @@ void ObjectCallback(
 				}
 
 				// Boss loot drops
-				if (boss_battle != BossBattle::NONE && boss_monsters_configured > 0)
+				if (boss_battle != BossBattle::NONE && boss_battle != BossBattle::CLEARED && boss_monsters_configured > 0)
 				{
 					int boss_monsters_defeated = 0;
 					for (CInstance* m : current_floor_monsters)

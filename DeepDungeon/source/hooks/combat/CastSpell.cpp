@@ -106,7 +106,7 @@ RValue& GmlScriptCastSpellCallback(
 						if (std::isfinite(hit_points) && hit_points > 0)
 						{
 							int monster_quake_damage = std::trunc(hit_points * 0.9);
-							*monster->GetRefMember("hit_points") = max(0, hit_points - monster_quake_damage);
+							*monster->GetRefMember("hit_points") = std::max(0.0, hit_points - monster_quake_damage);
 						}
 					}
 				}

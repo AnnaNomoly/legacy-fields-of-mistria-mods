@@ -17,6 +17,9 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 	UnlockLiftKeyRecipe(Self, Other);
 	ResetCustomDrawFields();
 
+	if (is_challenge_mode)
+		DropItemsForChallengeMode(Self, Other);
+
 	salves_used.clear();
 	active_sigils.clear();
 	active_greater_sigils.clear();
@@ -38,7 +41,7 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 	dread_beast_monster_id = -1;
 	dread_beasts_configured = 0;
 	boss_monsters_configured = 0;
-	if (active_offerings.empty() && ari_current_gm_room != "rm_mines_entry" && ari_current_gm_room != "rm_priestess_quarters" && ari_current_gm_room != "rm_seridias_chamber" && !ari_current_gm_room.contains("seal") && !ari_current_gm_room.contains("ritual") && !ari_current_gm_room.contains("treasure") && !ari_current_gm_room.contains("milestone"))
+	if (!is_challenge_mode && active_offerings.empty() && ari_current_gm_room != "rm_mines_entry" && ari_current_gm_room != "rm_priestess_quarters" && ari_current_gm_room != "rm_seridias_chamber" && !ari_current_gm_room.contains("seal") && !ari_current_gm_room.contains("ritual") && !ari_current_gm_room.contains("treasure") && !ari_current_gm_room.contains("milestone"))
 	{
 		static thread_local pcg32 random_generator([] {
 			std::random_device rd;
@@ -80,7 +83,7 @@ RValue& GmlScriptOnDungeonRoomStartCallback(
 	deep_wounds_damage_pool = 0;
 	stoneskin_shield_amount = 0;
 	sigil_of_silence_count = 0;
-	sigil_of_alteration_monster_id = 0;
+	sigil_of_alteration_monster_id = -1;
 
 	// Track Unmodified Max HP
 	unmodified_base_health = GetMaxHealth(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1]).ToInt64();

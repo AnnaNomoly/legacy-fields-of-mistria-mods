@@ -59,7 +59,8 @@ namespace Config
 			{ GLOOM_HEALTH_MODIFIER_JSON_KEY, use_defaults ? DEFAULT_GLOOM_HEALTH_MODIFIER : config.gloom_health_modifier },
 			{ EXPERIMENTAL_MAX_HEALTH_BUG_FIX_JSON_KEY, use_defaults ? DEFAULT_EXPERIMENTAL_MAX_HEALTH_BUG_FIX : config.experimental_max_health_bug_fix },
 			{ EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS_JSON_KEY, use_defaults ? DEFAULT_EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS : config.experimental_extra_floor_enchantments_and_offerings },
-			{ EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER_JSON_KEY, use_defaults ? DEFAULT_EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER : config.experimental_monster_base_stat_difficulty_modifier }
+			{ EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER_JSON_KEY, use_defaults ? DEFAULT_EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER : config.experimental_monster_base_stat_difficulty_modifier },
+			{ EXPERIMENTAL_STOP_TIME_IN_DUNGEON_JSON_KEY, use_defaults ? DEFAULT_EXPERIMENTAL_STOP_TIME_IN_DUNGEON : config.experimental_stop_time_in_dungeon }
 		};
 		return config_json;
 	}
@@ -240,7 +241,7 @@ namespace Config
 								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, MOD_VERSION, MANA_SALVE_POTENCY_JSON_KEY, config_file.c_str());
 
 							// Try loading the sustaining_potion_duration_modifier value.
-							if (json_object.contains(SUSTAINING_POTION_DURATION_MODIFIER_JSON_KEY) && json_object.at(SUSTAINING_POTION_DURATION_MODIFIER_JSON_KEY).is_number_float())
+							if (json_object.contains(SUSTAINING_POTION_DURATION_MODIFIER_JSON_KEY) && json_object.at(SUSTAINING_POTION_DURATION_MODIFIER_JSON_KEY).is_number())
 							{
 								double sustaining_potion_duration_modifier = json_object[SUSTAINING_POTION_DURATION_MODIFIER_JSON_KEY];
 								if (sustaining_potion_duration_modifier >= 0.5 && sustaining_potion_duration_modifier <= 2.0)
@@ -318,7 +319,7 @@ namespace Config
 								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, MOD_VERSION, OFFERING_MANA_REQUIREMENT_JSON_KEY, config_file.c_str());
 
 							// Try loading the cursed_armor_drop_chance_modifier value.
-							if (json_object.contains(CURSED_ARMOR_DROP_CHANCE_MODIFIER_JSON_KEY) && json_object.at(CURSED_ARMOR_DROP_CHANCE_MODIFIER_JSON_KEY).is_number_float())
+							if (json_object.contains(CURSED_ARMOR_DROP_CHANCE_MODIFIER_JSON_KEY) && json_object.at(CURSED_ARMOR_DROP_CHANCE_MODIFIER_JSON_KEY).is_number())
 							{
 								double cursed_armor_drop_chance_modifier = json_object[CURSED_ARMOR_DROP_CHANCE_MODIFIER_JSON_KEY];
 								if (cursed_armor_drop_chance_modifier >= 1.0 && cursed_armor_drop_chance_modifier <= 10.0)
@@ -432,7 +433,7 @@ namespace Config
 								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, MOD_VERSION, GAZE_TRAP_MAX_HEALTH_DAMAGE_PERCENT_JSON_KEY, config_file.c_str());
 
 							// Try loading meteor_trap_scaling_factor
-							if (json_object.contains(METEOR_TRAP_SCALING_FACTOR_JSON_KEY) && json_object.at(METEOR_TRAP_SCALING_FACTOR_JSON_KEY).is_number_float())
+							if (json_object.contains(METEOR_TRAP_SCALING_FACTOR_JSON_KEY) && json_object.at(METEOR_TRAP_SCALING_FACTOR_JSON_KEY).is_number())
 							{
 								double meteor_trap_scaling_factor = json_object[METEOR_TRAP_SCALING_FACTOR_JSON_KEY];
 								if (meteor_trap_scaling_factor == 0 || meteor_trap_scaling_factor == 1 || meteor_trap_scaling_factor == 1.5 || meteor_trap_scaling_factor == 2 || meteor_trap_scaling_factor == 2.5 || meteor_trap_scaling_factor == 3)
@@ -480,7 +481,7 @@ namespace Config
 								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, MOD_VERSION, SALVES_STORE_PRICE_JSON_KEY, config_file.c_str());
 
 							// Try loading the dread_beast_damage_modifier value.
-							if (json_object.contains(DREAD_BEAST_DAMAGE_MODIFIER_JSON_KEY) && json_object.at(DREAD_BEAST_DAMAGE_MODIFIER_JSON_KEY).is_number_float())
+							if (json_object.contains(DREAD_BEAST_DAMAGE_MODIFIER_JSON_KEY) && json_object.at(DREAD_BEAST_DAMAGE_MODIFIER_JSON_KEY).is_number())
 							{
 								double dread_beast_damage_modifier = json_object[DREAD_BEAST_DAMAGE_MODIFIER_JSON_KEY];
 								if (dread_beast_damage_modifier >= 1.0 && dread_beast_damage_modifier <= 2.0)
@@ -492,7 +493,7 @@ namespace Config
 								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, MOD_VERSION, DREAD_BEAST_DAMAGE_MODIFIER_JSON_KEY, config_file.c_str());
 
 							// Try loading the dread_beast_health_modifier value.
-							if (json_object.contains(DREAD_BEAST_HEALTH_MODIFIER_JSON_KEY) && json_object.at(DREAD_BEAST_HEALTH_MODIFIER_JSON_KEY).is_number_float())
+							if (json_object.contains(DREAD_BEAST_HEALTH_MODIFIER_JSON_KEY) && json_object.at(DREAD_BEAST_HEALTH_MODIFIER_JSON_KEY).is_number())
 							{
 								double dread_beast_health_modifier = json_object[DREAD_BEAST_HEALTH_MODIFIER_JSON_KEY];
 								if (dread_beast_health_modifier >= 1.0 && dread_beast_health_modifier <= 3.0)
@@ -504,7 +505,7 @@ namespace Config
 								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, MOD_VERSION, DREAD_BEAST_HEALTH_MODIFIER_JSON_KEY, config_file.c_str());
 
 							// Try loading the gloom_damage_dealt_modifier value.
-							if (json_object.contains(GLOOM_DAMAGE_DEALT_MODIFIER_JSON_KEY) && json_object.at(GLOOM_DAMAGE_DEALT_MODIFIER_JSON_KEY).is_number_float())
+							if (json_object.contains(GLOOM_DAMAGE_DEALT_MODIFIER_JSON_KEY) && json_object.at(GLOOM_DAMAGE_DEALT_MODIFIER_JSON_KEY).is_number())
 							{
 								double gloom_damage_dealt_modifier = json_object[GLOOM_DAMAGE_DEALT_MODIFIER_JSON_KEY];
 								if (gloom_damage_dealt_modifier >= 1.0 && gloom_damage_dealt_modifier <= 1.5)
@@ -516,7 +517,7 @@ namespace Config
 								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, MOD_VERSION, GLOOM_DAMAGE_DEALT_MODIFIER_JSON_KEY, config_file.c_str());
 
 							// Try loading the gloom_damage_received_modifier value.
-							if (json_object.contains(GLOOM_DAMAGE_RECEIVED_MODIFIER_JSON_KEY) && json_object.at(GLOOM_DAMAGE_RECEIVED_MODIFIER_JSON_KEY).is_number_float())
+							if (json_object.contains(GLOOM_DAMAGE_RECEIVED_MODIFIER_JSON_KEY) && json_object.at(GLOOM_DAMAGE_RECEIVED_MODIFIER_JSON_KEY).is_number())
 							{
 								double gloom_damage_received_modifier = json_object[GLOOM_DAMAGE_RECEIVED_MODIFIER_JSON_KEY];
 								if (gloom_damage_received_modifier >= 0.5 && gloom_damage_received_modifier <= 1.0)
@@ -528,7 +529,7 @@ namespace Config
 								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, MOD_VERSION, GLOOM_DAMAGE_RECEIVED_MODIFIER_JSON_KEY, config_file.c_str());
 
 							// Try loading the gloom_health_modifier value.
-							if (json_object.contains(GLOOM_HEALTH_MODIFIER_JSON_KEY) && json_object.at(GLOOM_HEALTH_MODIFIER_JSON_KEY).is_number_float())
+							if (json_object.contains(GLOOM_HEALTH_MODIFIER_JSON_KEY) && json_object.at(GLOOM_HEALTH_MODIFIER_JSON_KEY).is_number())
 							{
 								double gloom_health_modifier = json_object[GLOOM_HEALTH_MODIFIER_JSON_KEY];
 								if (gloom_health_modifier >= 1.0 && gloom_health_modifier <= 1.5)
@@ -552,7 +553,7 @@ namespace Config
 								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, MOD_VERSION, EXPERIMENTAL_EXTRA_FLOOR_ENCHANTMENTS_AND_OFFERINGS_JSON_KEY, config_file.c_str());
 
 							// Try loading the experimental_monster_base_stat_difficulty_modifier value.
-							if (json_object.contains(EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER_JSON_KEY) && json_object.at(EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER_JSON_KEY).is_number_float())
+							if (json_object.contains(EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER_JSON_KEY) && json_object.at(EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER_JSON_KEY).is_number())
 							{
 								double experimental_monster_base_stat_difficulty_modifier = json_object[EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER_JSON_KEY];
 								if (experimental_monster_base_stat_difficulty_modifier >= 1.0 && experimental_monster_base_stat_difficulty_modifier <= 3.0)
@@ -562,6 +563,12 @@ namespace Config
 							}
 							else
 								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, MOD_VERSION, EXPERIMENTAL_MONSTER_BASE_STAT_DIFFICULTY_MODIFIER_JSON_KEY, config_file.c_str());
+
+							// Try loading the experimental_stop_time_in_dungeon value.
+							if (json_object.contains(EXPERIMENTAL_STOP_TIME_IN_DUNGEON_JSON_KEY) && json_object.at(EXPERIMENTAL_STOP_TIME_IN_DUNGEON_JSON_KEY).is_boolean())
+								config.experimental_stop_time_in_dungeon = json_object[EXPERIMENTAL_STOP_TIME_IN_DUNGEON_JSON_KEY];
+							else
+								g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing or invalid \"%s\" value in mod configuration file: %s!", MOD_NAME, MOD_VERSION, EXPERIMENTAL_STOP_TIME_IN_DUNGEON_JSON_KEY, config_file.c_str());
 						}
 					}
 
@@ -608,6 +615,21 @@ namespace Config
 
 			eptr = std::current_exception();
 			PrintError(eptr);
+		}
+	}
+
+	void OverrideWithDefaultsForChallengeMode()
+	{
+		State::Player::saved_config = config;
+		config = Configuration{};
+	}
+
+	void RestoreAfterChallengeMode()
+	{
+		if (State::Player::saved_config.has_value())
+		{
+			config = *State::Player::saved_config;
+			State::Player::saved_config = std::nullopt;
 		}
 	}
 

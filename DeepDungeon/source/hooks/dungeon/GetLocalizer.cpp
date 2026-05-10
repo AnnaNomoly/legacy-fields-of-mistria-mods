@@ -183,6 +183,24 @@ RValue& GmlScriptGetLocalizerCallback(
 			Result = RValue(result_str);
 			return Result;
 		}
+		// Dread Contracts
+		if (crafting_menu_open &&
+		   (localization_key == UPPER_MINES_DREAD_CONTRACT_DESCRIPTION_LOCALIZED_TEXT_KEY ||
+			localization_key == TIDE_CAVERNS_DREAD_CONTRACT_DESCRIPTION_LOCALIZED_TEXT_KEY ||
+			localization_key == DEEP_EARTH_DREAD_CONTRACT_DESCRIPTION_LOCALIZED_TEXT_KEY ||
+			localization_key == LAVA_CAVES_DREAD_CONTRACT_DESCRIPTION_LOCALIZED_TEXT_KEY ||
+			localization_key == RUINS_DREAD_CONTRACT_DESCRIPTION_LOCALIZED_TEXT_KEY))
+		{
+			std::string result_str = Result.ToString();
+
+			size_t index = result_str.find("\n\n");
+			if (index == std::string::npos)
+				return Result;
+
+			result_str = result_str.substr(0, index);
+			Result = RValue(result_str);
+			return Result;
+		}
 		// Health Salve
 		else if (localization_key == HEALTH_SALVE_DESCRIPTION_LOCALIZED_TEXT_KEY)
 		{

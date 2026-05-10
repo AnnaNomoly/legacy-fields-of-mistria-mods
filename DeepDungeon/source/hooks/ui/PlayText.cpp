@@ -4,6 +4,18 @@ using namespace State::Player;
 using namespace State::Floor;
 using namespace State::Maps;
 
+static void StartChallengeMode(int starting_floor)
+{
+	is_challenge_mode = true;
+	challenge_mode_progress.run_in_progress = true;
+	WriteChallengeModeFile();
+	Config::OverrideWithDefaultsForChallengeMode();
+	RefreshPrototypes();
+	RemoveItemsFromInventoryForChallengeMode();
+	floor_number = starting_floor;
+	EnterDungeon(starting_floor, script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][0], script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE][1]);
+}
+
 RValue& GmlScriptPlayTextCallback(
 	IN CInstance* Self,
 	IN CInstance* Other,
@@ -134,6 +146,30 @@ RValue& GmlScriptPlayTextCallback(
 			return Result;
 		}
 		else if (localization_key == "Conversations/Mods/Deep Dungeon/teleport_to_mines/2" || localization_key == "Conversations/Mods/Deep Dungeon/teleport_to_mines_or_deep_woods/3")
+		{
+			CloseTextbox(Self, Other);
+			return Result;
+		}
+		else if (localization_key == "Conversations/Mods/Deep Dungeon/challenge_mode/start")
+		{
+			CloseTextbox(Self, Other);
+
+			if (challenge_mode_progress.highest_floor_reached == 0)
+				StartChallengeMode(0);
+			else if (challenge_mode_progress.highest_floor_reached == 20)
+				StartChallengeMode(20);
+			else if (challenge_mode_progress.highest_floor_reached == 40)
+				StartChallengeMode(40);
+			else if (challenge_mode_progress.highest_floor_reached == 60)
+				StartChallengeMode(60);
+			else if (challenge_mode_progress.highest_floor_reached == 80)
+				StartChallengeMode(80);
+			else
+				CreateNotification(false, CHALLENGE_MODE_ALREADY_COMPLETED_NOTIFICATION_KEY, Self, Other);
+
+			return Result;
+		}
+		else if (localization_key == "Conversations/Mods/Deep Dungeon/challenge_mode/cancel")
 		{
 			CloseTextbox(Self, Other);
 			return Result;

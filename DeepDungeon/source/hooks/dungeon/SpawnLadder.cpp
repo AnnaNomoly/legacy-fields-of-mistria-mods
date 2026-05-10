@@ -13,7 +13,7 @@ RValue& GmlScriptSpawnLadderCallback(
 {
 	if (ari_current_gm_room.contains("seal"))
 		return Result;
-	if (boss_battle != BossBattle::NONE && boss_battle != BossBattle::CLEARED && ari_current_gm_room.contains("ritual_chamber"))
+	if (boss_battle != BossBattle::NONE && ari_current_gm_room.contains("ritual_chamber"))
 		return Result;
 
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_SPAWN_LADDER));

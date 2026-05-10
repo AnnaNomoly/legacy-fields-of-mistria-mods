@@ -317,19 +317,19 @@ void ModifyMonsterPrototypes()
 		if (monster_id == monster_name_to_id_map["barrel"])
 			continue;
 
-		double hp = monster_prototype->GetMember("hp").ToDouble();
-		hp = std::trunc(hp * Config::config.experimental_monster_base_stat_difficulty_modifier);
-		*monster_prototype->GetRefMember("hp") = hp;
+		if (!monster_id_to_original_hp_map.contains(monster_id))
+			monster_id_to_original_hp_map[monster_id] = monster_prototype->GetMember("hp").ToDouble();
+		*monster_prototype->GetRefMember("hp") = std::trunc(monster_id_to_original_hp_map[monster_id] * Config::config.experimental_monster_base_stat_difficulty_modifier);
 
-		double damage = monster_prototype->GetMember("damage").ToDouble();
-		damage = std::trunc(damage * Config::config.experimental_monster_base_stat_difficulty_modifier);
-		*monster_prototype->GetRefMember("damage") = damage;
+		if (!monster_id_to_original_damage_map.contains(monster_id))
+			monster_id_to_original_damage_map[monster_id] = monster_prototype->GetMember("damage").ToDouble();
+		*monster_prototype->GetRefMember("damage") = std::trunc(monster_id_to_original_damage_map[monster_id] * Config::config.experimental_monster_base_stat_difficulty_modifier);
 
 		if (StructVariableExists(*monster_prototype, "projectile_damage"))
 		{
-			double projectile_damage = monster_prototype->GetMember("projectile_damage").ToDouble();
-			projectile_damage = std::trunc(projectile_damage * Config::config.experimental_monster_base_stat_difficulty_modifier);
-			*monster_prototype->GetRefMember("projectile_damage") = projectile_damage;
+			if (!monster_id_to_original_projectile_damage_map.contains(monster_id))
+				monster_id_to_original_projectile_damage_map[monster_id] = monster_prototype->GetMember("projectile_damage").ToDouble();
+			*monster_prototype->GetRefMember("projectile_damage") = std::trunc(monster_id_to_original_projectile_damage_map[monster_id] * Config::config.experimental_monster_base_stat_difficulty_modifier);
 		}
 	}
 }
@@ -427,6 +427,7 @@ void LoadItems()
 			int item_id = item->GetMember("item_id").ToInt64();
 			std::string item_name = item->GetMember("recipe_key").ToString(); // The internal item name
 			item_name_to_id_map[item_name] = item_id;
+			item_id_to_name_map[item_id] = item_name;
 
 			// Sigils
 			if (item_name_to_sigil_map.contains(item_name))
@@ -497,18 +498,29 @@ void LoadItems()
 					RValue* array_element;
 					g_ModuleInterface->GetArrayEntry(buffer, i, array_element);
 
-					if (Config::config.restrict_armor && array_element->ToString() == "armor")
-						*item->GetRefMember("defense") = 0;
+					if (array_element->ToString() == "armor")
+					{
+						if (!item_id_to_original_defense_map.contains(item_id))
+							item_id_to_original_defense_map[item_id] = item->GetMember("defense").ToDouble();
+						*item->GetRefMember("defense") = Config::config.restrict_armor ? 0 : item_id_to_original_defense_map[item_id];
+					}
 
 					if (array_element->ToString() == "weapon")
 					{
 						if (item_name == MISTPOOL_SWORD_NAME)
 							deep_dungeon_items.insert(item_id);
-						else if (Config::config.restrict_weapons)
+						else
 						{
-							*item->GetRefMember("damage") = 0;
-							restricted_items.insert(item_id);
-							default_sword_items.insert(item_id);
+							if (!item_id_to_original_damage_map.contains(item_id))
+								item_id_to_original_damage_map[item_id] = item->GetMember("damage").ToDouble();
+							if (Config::config.restrict_weapons)
+							{
+								*item->GetRefMember("damage") = 0;
+								restricted_items.insert(item_id);
+								default_sword_items.insert(item_id);
+							}
+							else
+								*item->GetRefMember("damage") = item_id_to_original_damage_map[item_id];
 						}
 					}
 
@@ -518,11 +530,23 @@ void LoadItems()
 							restricted_items.insert(item_id);
 					}
 
-					if (Config::config.restrict_items && array_element->ToString() == "bomb")
+					if (array_element->ToString() == "bomb")
 					{
-						*item->GetRefMember("damage") = 0;
-						*item->GetRefMember("bomb")->GetRefMember("damage") = 0;
-						restricted_items.insert(item_id);
+						if (!item_id_to_original_damage_map.contains(item_id))
+							item_id_to_original_damage_map[item_id] = item->GetMember("damage").ToDouble();
+						if (!item_id_to_original_bomb_damage_map.contains(item_id))
+							item_id_to_original_bomb_damage_map[item_id] = item->GetMember("bomb").GetMember("damage").ToDouble();
+						if (Config::config.restrict_items)
+						{
+							*item->GetRefMember("damage") = 0;
+							*item->GetRefMember("bomb")->GetRefMember("damage") = 0;
+							restricted_items.insert(item_id);
+						}
+						else
+						{
+							*item->GetRefMember("damage") = item_id_to_original_damage_map[item_id];
+							*item->GetRefMember("bomb")->GetRefMember("damage") = item_id_to_original_bomb_damage_map[item_id];
+						}
 					}
 				}
 			}
@@ -616,4 +640,13 @@ void ModifyItems()
 		SetItemShopPrice(item_name_to_id_map[armor_name], Config::config.mistpool_equipment_store_price);
 	for (const auto& pair : salve_name_to_id_map)
 		SetItemShopPrice(pair.second, Config::config.salves_store_price);
+}
+
+void RefreshPrototypes()
+{
+	restricted_items.clear();
+	default_sword_items.clear();
+	LoadItems();
+	ModifyItems();
+	ModifyMonsterPrototypes();
 }

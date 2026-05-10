@@ -53,12 +53,12 @@ RValue& GmlScriptTakePressCallback(
 		offering_chance_occurred = true;
 	}
 	// Disable the elevator if config option set.
-	else if (in_game && is_interact && Config::config.disable_dungeon_lift && (ari_current_gm_room.contains("rm_mines") || ari_current_gm_room.contains("seal")) && obj_dungeon_elevator_focused)
+	else if (in_game && is_interact && Config::config.disable_dungeon_lift && (ari_current_gm_room.contains("rm_mines") || ari_current_gm_room.contains("seal") || ari_current_gm_room == "rm_priestess_quarters") && obj_dungeon_elevator_focused)
 	{
 		PlayConversation(ELEVATOR_LOCKED_CONVERSATION_KEY, Self, Other);
 		Result = false;
 	}
-	else if (in_game && is_interact && ari_current_gm_room == "rm_farm" && obj_dragonshrine_focused && T2Read(script_name_to_reference_map[GML_SCRIPT_T2_READ][0], script_name_to_reference_map[GML_SCRIPT_T2_READ][1], "caldarus_has_met").ToBoolean())
+	else if (in_game && is_interact && ari_current_gm_room == "rm_farm" && obj_dragonshrine_focused && T2Read(script_name_to_reference_map[GML_SCRIPT_T2_READ][0], script_name_to_reference_map[GML_SCRIPT_T2_READ][1], "caldarus_is_human").ToBoolean())
 	{
 		PlayConversation("Conversations/Mods/Deep Dungeon/teleport_to_mines_or_deep_woods", Self, Other);
 		Result = false;

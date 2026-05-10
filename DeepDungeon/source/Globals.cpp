@@ -14,8 +14,13 @@ RValue __YYTK;
 namespace State {
 
 	namespace Player {
+		ChallengeModeProgress challenge_mode_progress = {};
+		std::unordered_set<int> challenge_mode_bulk_given_item_ids = {};
+		std::map<int, int> challenge_mode_item_drop_quantities = {};
+		std::optional<Config::Configuration> saved_config = std::nullopt;
 		bool load_on_start = true;
 		bool is_new_game = false;
+		bool is_challenge_mode = false;
 		bool in_whirl_pool = false;
 		bool localize_mod_text = false;
 		bool game_is_active = false;
@@ -41,6 +46,7 @@ namespace State {
 		int held_item_id = -1;
 		int unmodified_base_health = -1;
 		int hp_penalty_amount = -1;
+		std::string save_prefix = "";
 		std::string ari_current_location = "";
 		std::string ari_current_gm_room = "";
 		std::map<AriResources, int> ari_resource_to_value_map = {};
@@ -143,6 +149,7 @@ namespace State {
 		std::map<std::string, int> status_effect_name_to_id_map = {};
 		std::map<std::string, int> location_name_to_id_map = {};
 		std::map<std::string, int> item_name_to_id_map = {};
+		std::map<int, std::string> item_id_to_name_map = {};
 		std::map<std::string, int> bark_name_to_id_map = {};
 		std::map<Offerings, std::string> offerings_to_localized_string_map = {};
 		std::map<Classes, std::string> classes_to_localized_armor_description_string_map = {};
@@ -150,6 +157,12 @@ namespace State {
 		std::map<Classes, std::map<std::string, std::string>> class_armor_to_localized_string_map = {};
 		std::map<std::string, uint64_t> notification_name_to_last_display_time_map = {};
 		std::map<int, RValue> item_id_to_prototype_map = {};
+		std::map<int, double> item_id_to_original_defense_map = {};
+		std::map<int, double> item_id_to_original_damage_map = {};
+		std::map<int, double> item_id_to_original_bomb_damage_map = {};
+		std::map<int, double> monster_id_to_original_hp_map = {};
+		std::map<int, double> monster_id_to_original_damage_map = {};
+		std::map<int, double> monster_id_to_original_projectile_damage_map = {};
 		std::map<std::string, std::unordered_set<int>> dungeon_biome_to_candidate_monsters_map = {};
 		std::map<int, std::string> floor_number_to_biome_name_map = {};
 		std::map<std::string, std::vector<CInstance*>> script_name_to_reference_map;

@@ -14,8 +14,45 @@ static const std::map<Classes, std::unordered_set<std::string>> CLASS_NAME_TO_AR
 	{ Classes::ORACLE, { ORACLE_HELMET_NAME, ORACLE_CHESTPIECE_NAME, ORACLE_GLOVES_NAME, ORACLE_PANTS_NAME, ORACLE_BOOTS_NAME } }
 };
 
+std::set<std::string> GetEquippedArmor()
+{
+	RValue ari = global_instance->GetMember("__ari");
+	RValue armor = ari.GetMember("armor");
+	RValue slots = armor.GetMember("slots");
+	RValue buffer = slots.GetMember("__buffer");
+
+	size_t array_length;
+	g_ModuleInterface->GetArraySize(buffer, array_length);
+
+	std::set<std::string> equipped_armor = {};
+	for (size_t i = 0; i < array_length; i++)
+	{
+		RValue* array_entry;
+		g_ModuleInterface->GetArrayEntry(buffer, i, array_entry);
+
+		if (StructVariableExists(*array_entry, "item"))
+		{
+			RValue item = array_entry->GetMember("item");
+			if (item.m_Kind == VALUE_OBJECT && StructVariableExists(item, "prototype"))
+			{
+				RValue prototype = item.GetMember("prototype");
+				if (StructVariableExists(prototype, "recipe_key"))
+				{
+					std::string recipe_key = prototype.GetMember("recipe_key").ToString();
+					equipped_armor.insert(recipe_key);
+				}
+			}
+		}
+	}
+
+	return equipped_armor;
+}
+
 std::map<Classes, int> CountEquippedClassArmor()
 {
+	if (is_challenge_mode)
+		return {};
+
 	RValue ari = global_instance->GetMember("__ari");
 	RValue armor = ari.GetMember("armor");
 	RValue slots = armor.GetMember("slots");

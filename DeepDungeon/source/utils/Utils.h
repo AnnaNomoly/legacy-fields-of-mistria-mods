@@ -69,6 +69,7 @@ void SetItemStaminaModifier(int item_id, double stamina_modifier);
 void SetItemManaModifier(int item_id, double mana_modifier);
 void SetItemShopPrice(int item_id, int store_price);
 void ModifyItems();
+void RefreshPrototypes();
 void MarkDungeonTutorialUnseen();
 void ModifyMistpoolWeaponSprites();
 void ModifyMistpoolPickaxeSprites();
@@ -127,6 +128,7 @@ struct ArmorSetBonuses
 };
 
 ArmorSetBonuses GetArmorSetBonuses();
+std::set<std::string> GetEquippedArmor();
 std::map<Classes, int> CountEquippedClassArmor();
 std::map<int, int> GetClassArmorInfusions();
 bool CanAffordSpell(const std::string& spell_name);
@@ -197,3 +199,8 @@ void UnlockLiftKeyRecipe(CInstance* Self, CInstance* Other);
 void TeleportAriToRoom(CInstance* Self, CInstance* Other, int location_id, int x_coordinate, int y_coordinate);
 void LoadStalagmiteAttackData();
 void TickTimeStoppedSystems(CInstance* Self, CInstance* Other, int64_t tick_delta);
+void WriteChallengeModeFile();
+bool ReadChallengeModeFile();
+void RemoveItemsFromInventoryForChallengeMode();
+void DropItemsForChallengeMode(CInstance* Self, CInstance* Other);
+void UpdateChallengeModeProgress();

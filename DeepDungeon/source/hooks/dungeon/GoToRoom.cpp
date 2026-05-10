@@ -5,6 +5,33 @@ using namespace State::Floor;
 using namespace State::Combat;
 using namespace State::Maps;
 
+static void StopChallengeMode(bool cleared, CInstance* Self, CInstance* Other)
+{
+	time_stopped = false;
+	is_challenge_mode = false;
+	Config::RestoreAfterChallengeMode();
+	RefreshPrototypes();
+
+	if (cleared)
+	{
+		UpdateChallengeModeProgress();
+
+		if (floor_number != 100)
+			CreateNotification(false, CHALLENGE_MODE_BIOME_CLEARED_NOTIFICATION_KEY, Self, Other);
+		else
+			CreateNotification(false, CHALLENGE_MODE_COMPLETED_NOTIFICATION_KEY, Self, Other);
+	}
+	else
+	{
+		challenge_mode_progress = {};
+		CreateNotification(false, CHALLENGE_MODE_FAILED_NOTIFICATION_KEY, Self, Other);
+	}
+
+	challenge_mode_progress.run_in_progress = false;
+	WriteChallengeModeFile();
+	RemoveItemsFromInventoryForChallengeMode();
+}
+
 RValue& GmlScriptGoToRoomCallback(
 	IN CInstance* Self,
 	IN CInstance* Other,
@@ -43,10 +70,23 @@ RValue& GmlScriptGoToRoomCallback(
 	RValue room_name = g_ModuleInterface->CallBuiltin("room_get_name", { gm_room });
 	ari_current_gm_room = room_name.ToString();
 
+	// Set the floor number.
 	if ((ari_current_gm_room.contains("rm_mines") || ari_current_gm_room.contains("seal") || ari_current_gm_room == "rm_priestess_quarters" || ari_current_gm_room == "rm_seridias_chamber") && ari_current_gm_room != "rm_mines_entry")
 		SetFloorNumber();
 	else
 		floor_number = 0;
+
+	// Process challenge mode.
+	if (is_challenge_mode)
+	{
+		if ((ari_current_gm_room.contains("seal") || ari_current_gm_room == "rm_seridias_chamber") && floor_number == challenge_mode_progress.highest_floor_reached + 20)
+			StopChallengeMode(true, Self, Other);
+		else if (!AriCurrentGmRoomIsDungeonFloor())
+			StopChallengeMode(false, Self, Other);
+	}
+
+	// Stop time on active dungeon floors when challenge mode or the experimental config enables it.
+	time_stopped = AriCurrentGmRoomIsDungeonFloor() && (is_challenge_mode || Config::config.experimental_stop_time_in_dungeon);
 
 	// Store the floor number in the global instance for other mods.
 	*__YYTK.GetRefMember(MOD_NAME)->GetRefMember("floor") = floor_number;
@@ -198,7 +238,7 @@ RValue& GmlScriptGoToRoomCallback(
 		stoneskin_shield_amount = 0;
 		spirit_link_combined_health_pool = 0;
 		sigil_of_silence_count = 0;
-		sigil_of_alteration_monster_id = 0;
+		sigil_of_alteration_monster_id = -1;
 		dread_beast_monster_id = -1;
 		dread_beasts_configured = 0;
 		boss_monsters_configured = 0;

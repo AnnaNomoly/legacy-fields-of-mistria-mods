@@ -22,6 +22,7 @@ RValue& GmlScriptPlayConversationCallback(IN CInstance* Self, IN CInstance* Othe
 RValue& GmlScriptUseItemCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
 RValue& GmlScriptHeldItemCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
 RValue& GmlScriptDropItemCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
+RValue& GmlScriptGiveItemCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
 RValue& GmlScriptGetMinutesCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
 RValue& GmlScriptGetLocalizerCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
 RValue& GmlScriptGetWeatherCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
@@ -50,6 +51,7 @@ RValue& GmlScriptVertigoDrawWithColorCallback(IN CInstance* Self, IN CInstance* 
 RValue& GmlScriptSceneAudioPlayerPlayCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
 RValue& GmlScriptFindNpcBlipNoiseCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
 RValue& GmlScriptSaveGameCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
+RValue& GmlScriptLoadGameCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
 RValue& GmlScriptAriFaceDirCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
 RValue& GmlScriptOnBeginStepCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
 RValue& GmlScriptRecipeGenerateInfusionsCallback(IN CInstance* Self, IN CInstance* Other, OUT RValue& Result, IN int ArgumentCount, IN RValue** Arguments);
@@ -95,6 +97,7 @@ static const struct HookEntry { const char* name; PVOID callback; } HOOK_TABLE[]
     { GML_SCRIPT_USE_ITEM,                      (PVOID)GmlScriptUseItemCallback                     },
     { GML_SCRIPT_HELD_ITEM,                     (PVOID)GmlScriptHeldItemCallback                    },
     { GML_SCRIPT_DROP_ITEM,                     (PVOID)GmlScriptDropItemCallback                    },
+    { GML_SCRIPT_GIVE_ITEM,                     (PVOID)GmlScriptGiveItemCallback                    },
     { GML_SCRIPT_GET_MINUTES,                   (PVOID)GmlScriptGetMinutesCallback                  },
     { GML_SCRIPT_GET_LOCALIZER,                 (PVOID)GmlScriptGetLocalizerCallback                },
     { GML_SCRIPT_GET_WEATHER,                   (PVOID)GmlScriptGetWeatherCallback                  },
@@ -123,6 +126,7 @@ static const struct HookEntry { const char* name; PVOID callback; } HOOK_TABLE[]
     { GML_SCRIPT_SCENE_AUDIO_PLAYER_PLAY,       (PVOID)GmlScriptSceneAudioPlayerPlayCallback        },
     { GML_SCRIPT_FIND_NPC_BLIP_NOISE,           (PVOID)GmlScriptFindNpcBlipNoiseCallback            },
     { GML_SCRIPT_SAVE_GAME,                     (PVOID)GmlScriptSaveGameCallback                    },
+    { GML_SCRIPT_LOAD_GAME,                     (PVOID)GmlScriptLoadGameCallback                    },
     { GML_SCRIPT_ARI_FACE_DIR,                  (PVOID)GmlScriptAriFaceDirCallback                  },
     { GML_SCRIPT_ON_BEGIN_STEP,                 (PVOID)GmlScriptOnBeginStepCallback                 },
     { GML_SCRIPT_RECIPE_GENERATE_INFUSIONS,     (PVOID)GmlScriptRecipeGenerateInfusionsCallback     },
