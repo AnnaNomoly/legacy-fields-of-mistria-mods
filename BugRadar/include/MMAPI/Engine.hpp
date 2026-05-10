@@ -1,0 +1,164 @@
+#pragma once
+
+#include "Core.hpp"
+
+#include <string>
+
+#include "YYToolkit/YYTK_Shared.hpp"
+
+namespace MMAPI::Engine
+{
+	/// Returns true if the RValue holds a numeric type (int32, int64, or real).
+	/// @param value The RValue to test.
+	/// @return True if the value is VALUE_INT32, VALUE_INT64, or VALUE_REAL.
+	inline bool IsNumeric(YYTK::RValue value)
+	{
+		return value.m_Kind == YYTK::VALUE_INT32 || value.m_Kind == YYTK::VALUE_INT64 || value.m_Kind == YYTK::VALUE_REAL;
+	}
+
+	/// Returns true if the RValue holds a GML object or struct.
+	/// @param value The RValue to test.
+	/// @return True if the value is VALUE_OBJECT.
+	inline bool IsObject(YYTK::RValue value)
+	{
+		return value.m_Kind == YYTK::VALUE_OBJECT;
+	}
+
+	/// Returns true if the named member exists on the given GML struct.
+	/// @param the_struct The GML struct to query.
+	/// @param variable_name The member name to check for.
+	/// @return True if the member exists on the struct.
+	inline bool StructVariableExists(YYTK::RValue the_struct, const char* variable_name)
+	{
+		return MMAPI::Internal::module_interface->CallBuiltin("struct_exists", { the_struct, variable_name }).ToBoolean();
+	}
+
+	/// Gets the value of a named member from a GML struct.
+	/// @param the_struct The GML struct to read from.
+	/// @param variable_name The member name to retrieve.
+	/// @return The RValue of the member, or undefined if it does not exist.
+	inline YYTK::RValue StructVariableGet(YYTK::RValue the_struct, const char* variable_name)
+	{
+		return MMAPI::Internal::module_interface->CallBuiltin("struct_get", { the_struct, variable_name });
+	}
+
+	/// Sets a named member on a GML struct to the given value. Creates the member if it does not exist.
+	/// @param the_struct The GML struct to write to.
+	/// @param variable_name The member name to set.
+	/// @param value The value to assign.
+	/// @return The RValue returned by the underlying GML builtin.
+	inline YYTK::RValue StructVariableSet(YYTK::RValue the_struct, const char* variable_name, YYTK::RValue value)
+	{
+		return MMAPI::Internal::module_interface->CallBuiltin("struct_set", { the_struct, variable_name, value });
+	}
+
+	/// Sets a numeric member on a GML struct to the given value. Creates the member if it does not exist.
+	/// @param the_struct The GML struct to write to.
+	/// @param variable_name The numeric member key to set.
+	/// @param value The value to assign.
+	/// @return The RValue returned by the underlying GML builtin.
+	inline YYTK::RValue StructVariableSet(YYTK::RValue the_struct, int variable_name, YYTK::RValue value)
+	{
+		return MMAPI::Internal::module_interface->CallBuiltin("struct_set", { the_struct, variable_name, value });
+	}
+
+	/// Removes a named member from a GML struct. Does nothing if the member does not exist.
+	/// @param the_struct The GML struct to modify.
+	/// @param variable_name The member name to remove.
+	inline void StructVariableRemove(YYTK::RValue the_struct, const char* variable_name)
+	{
+		if (StructVariableExists(the_struct, variable_name))
+			MMAPI::Internal::module_interface->CallBuiltin("struct_remove", { the_struct, variable_name });
+	}
+
+	/// Returns true if the named GML global variable has been declared.
+	/// @param variable_name The global variable name to check.
+	/// @return True if the global variable exists.
+	inline bool GlobalVariableExists(const char* variable_name)
+	{
+		return MMAPI::Internal::module_interface->CallBuiltin("variable_global_exists", { variable_name }).ToBoolean();
+	}
+
+	/// Gets the value of a GML global variable.
+	/// @param variable_name The global variable name to retrieve.
+	/// @return The current value of the global variable.
+	inline YYTK::RValue GlobalVariableGet(const char* variable_name)
+	{
+		return MMAPI::Internal::module_interface->CallBuiltin("variable_global_get", { variable_name });
+	}
+
+	/// Sets a GML global variable to the given value.
+	/// @param variable_name The global variable name to set.
+	/// @param value The value to assign.
+	/// @return The RValue returned by the underlying GML builtin.
+	inline YYTK::RValue GlobalVariableSet(const char* variable_name, YYTK::RValue value)
+	{
+		return MMAPI::Internal::module_interface->CallBuiltin("variable_global_set", { variable_name, value });
+	}
+
+	/// Returns the current width of the game window in pixels.
+	/// @return The window width as an RValue.
+	inline YYTK::RValue GetWindowWidth()
+	{
+		return MMAPI::Internal::module_interface->CallBuiltin("window_get_width", {});
+	}
+
+	/// Returns the current height of the game window in pixels.
+	/// @return The window height as an RValue.
+	inline YYTK::RValue GetWindowHeight()
+	{
+		return MMAPI::Internal::module_interface->CallBuiltin("window_get_height", {});
+	}
+
+	/// Gets a GML asset index by asset name.
+	/// @param asset_name The GML asset name to look up.
+	/// @return The asset index as an RValue.
+	inline YYTK::RValue AssetGetIndex(const std::string& asset_name)
+	{
+		return MMAPI::Internal::module_interface->CallBuiltin("asset_get_index", { asset_name.c_str() });
+	}
+
+	/// Returns true if the given sound effect asset index is currently playing.
+	/// @param sound_effect_index The sound effect asset index to check.
+	/// @return True if the sound effect is currently playing.
+	inline bool AudioIsPlaying(YYTK::RValue sound_effect_index)
+	{
+		return MMAPI::Internal::module_interface->CallBuiltin("audio_is_playing", { sound_effect_index }).ToBoolean();
+	}
+
+	/// Plays a game sound effect by asset name.
+	/// @param sound_name The GML asset name of the sound (e.g. "snd_sword_swing").
+	/// @param priority Playback priority. Higher values take precedence when the audio channel limit is reached.
+	/// @param gain Volume multiplier (0.0 = silent, 1.0 = full volume).
+	inline void PlaySoundEffect(const char* sound_name, int priority, double gain)
+	{
+		YYTK::RValue sound_index = AssetGetIndex(sound_name);
+		MMAPI::Internal::module_interface->CallBuiltin("audio_play_sound", { sound_index, priority, false, gain });
+	}
+
+	/// Stops a currently playing game sound effect by asset name.
+	/// @param sound_name The GML asset name of the sound (e.g. "snd_sword_swing").
+	inline void StopSoundEffect(const char* sound_name)
+	{
+		YYTK::RValue sound_index = AssetGetIndex(sound_name);
+		MMAPI::Internal::module_interface->CallBuiltin("audio_stop_sound", { sound_index });
+	}
+
+	/// Gets the value of a GML built-in instance variable by name.
+	/// @param instance The instance to read from.
+	/// @param variable_name The built-in variable name (e.g. "sprite_index", "x", "depth").
+	/// @return The variable value as an RValue.
+	inline YYTK::RValue InstanceVariableGet(YYTK::CInstance* instance, const char* variable_name)
+	{
+		return MMAPI::Internal::module_interface->CallBuiltin("variable_instance_get", { instance, variable_name });
+	}
+
+	/// Sets the value of a GML built-in instance variable by name.
+	/// @param instance The instance to modify.
+	/// @param variable_name The built-in variable name (e.g. "sprite_index", "image_speed", "depth").
+	/// @param value The value to assign.
+	inline void InstanceVariableSet(YYTK::CInstance* instance, const char* variable_name, YYTK::RValue value)
+	{
+		MMAPI::Internal::module_interface->CallBuiltin("variable_instance_set", { instance, variable_name, value });
+	}
+}

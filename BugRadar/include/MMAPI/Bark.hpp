@@ -1,0 +1,148 @@
+#pragma once
+
+#include "Core.hpp"
+
+#include "YYToolkit/YYTK_Shared.hpp"
+
+namespace MMAPI::Bark
+{
+	namespace Internal
+	{
+		inline constexpr const char* GML_SCRIPT_BARK_EMITTER = "gml_Script_BarkEmitter";
+
+		inline YYTK::RValue& BarkEmitterContextCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			MMAPI::Internal::RegisterScriptContext(GML_SCRIPT_BARK_EMITTER, Self, Other);
+
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_BARK_EMITTER)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+			return Result;
+		}
+	}
+
+	/// Activates Bark utility functions that directly call game scripts.
+	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
+	inline Aurie::AurieStatus Enable()
+	{
+		return MMAPI::Internal::InstallScriptHook(
+			Internal::GML_SCRIPT_BARK_EMITTER,
+			reinterpret_cast<PVOID>(Internal::BarkEmitterContextCallback)
+		);
+	}
+
+	/// Source: bark_icons.json.__bark_id__
+	enum class Icons : int
+	{
+		Adeline            = 0,
+		Angry              = 1,
+		Annoyed            = 2,
+		Archaeology        = 3,
+		Balor              = 4,
+		Bathhouse          = 5,
+		Beach              = 6,
+		Blush              = 7,
+		Book               = 8,
+		BreathOfFlame      = 9,
+		BreedFemale        = 10,
+		BreedMale          = 11,
+		Caldarus           = 12,
+		Celebration        = 13,
+		Celine             = 14,
+		CherryBlossoms     = 15,
+		Chicken            = 16,
+		Coin               = 17,
+		ColdDrink          = 18,
+		Cooking            = 19,
+		Cow                = 20,
+		Crafting           = 21,
+		Crown              = 22,
+		CuteFace           = 23,
+		Darcy              = 24,
+		Dell               = 25,
+		Dozy               = 26,
+		Eight              = 27,
+		Eiland             = 28,
+		Ellipses           = 29,
+		Elsie              = 30,
+		EmptyHeart         = 31,
+		Errol              = 32,
+		ExclamationMark    = 33,
+		Fall               = 34,
+		Farming            = 35,
+		Fire               = 36,
+		Firesail           = 37,
+		FishBait           = 38,
+		Fishing            = 39,
+		Five               = 40,
+		Forest             = 41,
+		Four               = 42,
+		Gem                = 43,
+		Hay                = 44,
+		Hayden             = 45,
+		Heart              = 46,
+		Heatwave           = 47,
+		Hemlock            = 48,
+		Henrietta          = 49,
+		Holt               = 50,
+		Horse              = 51,
+		HotDrink           = 52,
+		Hungry             = 53,
+		Josephine          = 54,
+		Juniper            = 55,
+		Lake               = 56,
+		Landen             = 57,
+		Louis              = 58,
+		Luc                = 59,
+		Maple              = 60,
+		March              = 61,
+		Merri              = 62,
+		Mining             = 63,
+		Mist               = 64,
+		Moon               = 65,
+		Mountain           = 66,
+		Music              = 67,
+		Nine               = 68,
+		NoCoin             = 69,
+		Nora               = 70,
+		Obsidian           = 71,
+		Olric              = 72,
+		One                = 73,
+		PlantTonic         = 74,
+		Priestess          = 75,
+		QuestionMark       = 76,
+		Rainy              = 77,
+		Reina              = 78,
+		RelationshipStatus = 79,
+		Ryis               = 80,
+		Seed               = 81,
+		Seven              = 82,
+		Six                = 83,
+		Sleepy             = 84,
+		SmokeMoth          = 85,
+		Snow               = 86,
+		Spring             = 87,
+		Stars              = 88,
+		Summer             = 89,
+		Sunny              = 90,
+		SweatDrop          = 91,
+		Terithia           = 92,
+		Thread             = 93,
+		Three              = 94,
+		Thunderstorm       = 95,
+		Two                = 96,
+		Valen              = 97,
+		Vera               = 98,
+		Wheedle            = 99,
+		Winter             = 100,
+		Woodcrafting       = 101,
+		Yum                = 102
+	};
+}
