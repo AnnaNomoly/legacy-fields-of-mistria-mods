@@ -19,9 +19,6 @@ static const char* const SPAWN_EXTRA_BEADS_DAILY_KEY = "spawn_extra_beads_daily"
 static const char* const EXTRA_BEADS_DAILY_MULTIPLIER_KEY = "extra_beads_daily_multiplier";
 static const char* const GAIN_RANCHING_XP_KEY = "gain_ranching_xp";
 
-static const char* const GML_SCRIPT_SETUP_MAIN_SCREEN = "gml_Script_setup_main_screen@TitleMenu@TitleMenu";
-static const char* const GML_SCRIPT_GET_WEATHER = "gml_Script_get_weather@WeatherManager@Weather";
-
 static const int DEFAULT_FRIENDSHIP_MULTIPLIER = 5;
 static const bool DEFAULT_PREVENT_FRIENDSHIP_LOSS = true;
 static const bool DEFAULT_AUTO_PET = false;
@@ -89,7 +86,6 @@ void from_json(const json& json_object, AnimalFriendsConfig& config)
 }
 
 static YYTKInterface* g_ModuleInterface = nullptr;
-static bool load_on_start = true;
 static AnimalFriendsConfig config = {};
 static bool once_per_day = true;
 static int num_player_animals = 0;
@@ -231,12 +227,6 @@ void AutoPetAnimal(RValue animal, int& xp_out)
 
 void HandleAri(CInstance* self)
 {
-	MMAPI::RegisterInstanceContext(
-		MMAPI::Instance::Internal::INSTANCE_OBJ_ARI,
-		MMAPI::Internal::global_instance->GetRefMember("__ari")->ToInstance(),
-		self
-	);
-
 	if (!once_per_day || !(config.auto_pet || config.auto_feed))
 		return;
 
@@ -305,19 +295,6 @@ void HandleFarmBell(CInstance* self)
 	}
 }
 
-void ObjectCallback(IN FWCodeEvent& CodeEvent)
-{
-	auto& [self, other, code, argc, argv] = CodeEvent.Arguments();
-
-	if (!self || !self->m_Object || MMAPI::Game::IsPaused())
-		return;
-
-	if (MMAPI::Instance::NameContains(self, "obj_ari"))
-		HandleAri(self);
-	else if (MMAPI::Instance::NameContains(self, "obj_farm_bell"))
-		HandleFarmBell(self);
-}
-
 void OnAnimalHeartPointsChanged(MMAPI::Animal::HeartPointsChangedContext& ctx)
 {
 	double amount = ctx.GetAmount();
@@ -358,99 +335,15 @@ void OnAnimalPet(CInstance* animal)
 	}
 }
 
-RValue& GmlScriptSetupMainScreenCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
+void OnSetupMainScreen()
 {
 	ResetStaticFields(true);
-	MMAPI::ClearScriptContexts();
-
-	if (load_on_start)
-	{
-		CInstance* global_instance = nullptr;
-		g_ModuleInterface->GetGlobalInstance(&global_instance);
-		MMAPI::Initialize(g_ModuleInterface, global_instance, g_ArSelfModule);
-		MMAPI::Animal::Hooks::OnHeartPointsChanged(OnAnimalHeartPointsChanged);
-		MMAPI::Animal::Hooks::OnPutDown(OnAnimalPutDown);
-		MMAPI::Animal::Hooks::OnPet(OnAnimalPet);
-		MMAPI::Game::Hooks::OnNewDay(OnNewDay);
-		LoadOrCreateConfigFile();
-		load_on_start = false;
-	}
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_SETUP_MAIN_SCREEN));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
 }
-
-RValue& GmlScriptGetWeatherCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_GET_WEATHER));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	MMAPI::RegisterScriptContext(MMAPI::Weather::Internal::GML_SCRIPT_GET_WEATHER, Self, Other);
-
-	return Result;
-}
-
-AurieStatus RegisterHook(const char* script_name, PVOID callback)
-{
-	CScript* script = nullptr;
-	AurieStatus status = g_ModuleInterface->GetNamedRoutinePointer(script_name, reinterpret_cast<PVOID*>(&script));
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[AnimalFriends %s] - Failed to get script (%s)!", VERSION, script_name);
-		return status;
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		script_name,
-		script->m_Functions->m_ScriptFunction,
-		callback,
-		nullptr
-	);
-
-	if (!AurieSuccess(status))
-		g_ModuleInterface->Print(CM_LIGHTRED, "[AnimalFriends %s] - Failed to hook script (%s)!", VERSION, script_name);
-
-	return status;
-}
-
-static const struct HookEntry { const char* script_name; PVOID callback; } HOOK_TABLE[] = {
-	{ GML_SCRIPT_SETUP_MAIN_SCREEN, reinterpret_cast<PVOID>(GmlScriptSetupMainScreenCallback) },
-	{ GML_SCRIPT_GET_WEATHER,       reinterpret_cast<PVOID>(GmlScriptGetWeatherCallback)      },
-};
 
 EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path& ModulePath) {
 	UNREFERENCED_PARAMETER(ModulePath);
 
-	AurieStatus status = AURIE_SUCCESS;
-
-	status = ObGetInterface(
+	AurieStatus status = ObGetInterface(
 		"YYTK_Main",
 		(AurieInterfaceBase*&)(g_ModuleInterface)
 	);
@@ -460,29 +353,19 @@ EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path&
 
 	g_ModuleInterface->Print(CM_LIGHTAQUA, "[AnimalFriends %s] - Plugin starting...", VERSION);
 
-	status = g_ModuleInterface->CreateCallback(
-		g_ArSelfModule,
-		EVENT_OBJECT_CALL,
-		ObjectCallback,
-		0
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[AnimalFriends %s] - Failed to hook EVENT_OBJECT_CALL!", VERSION);
-		g_ModuleInterface->Print(CM_LIGHTRED, "[AnimalFriends %s] - Exiting due to failure on start!", VERSION);
-		return status;
-	}
-
-	for (const auto& hook : HOOK_TABLE)
-	{
-		status = RegisterHook(hook.script_name, hook.callback);
-		if (!AurieSuccess(status))
-		{
-			g_ModuleInterface->Print(CM_LIGHTRED, "[AnimalFriends %s] - Exiting due to failure on start!", VERSION);
-			return status;
-		}
-	}
+	CInstance* global_instance = nullptr;
+	g_ModuleInterface->GetGlobalInstance(&global_instance);
+	MMAPI::Initialize(g_ModuleInterface, global_instance, g_ArSelfModule);
+	MMAPI::Animal::Enable();
+	MMAPI::Weather::Enable();
+	MMAPI::Instance::Hooks::OnObjectCall(MMAPI::Instance::Objects::Ari, HandleAri);
+	MMAPI::Instance::Hooks::OnObjectCall(MMAPI::Instance::Objects::FarmBell, HandleFarmBell);
+	MMAPI::Animal::Hooks::BeforeHeartPointsChange(OnAnimalHeartPointsChanged);
+	MMAPI::Animal::Hooks::AfterPutDown(OnAnimalPutDown);
+	MMAPI::Animal::Hooks::AfterPet(OnAnimalPet);
+	MMAPI::Game::Hooks::BeforeNewDay(OnNewDay);
+	MMAPI::Game::Hooks::BeforeSetupMainScreen(OnSetupMainScreen);
+	LoadOrCreateConfigFile();
 
 	g_ModuleInterface->Print(CM_LIGHTGREEN, "[AnimalFriends %s] - Plugin started!", VERSION);
 	return AURIE_SUCCESS;

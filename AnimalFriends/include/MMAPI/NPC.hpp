@@ -61,11 +61,11 @@ namespace MMAPI::NPC
 		inline constexpr const char* GML_SCRIPT_ADD_HEART_POINTS = "gml_Script_add_heart_points@Npc@Npc";
 		inline constexpr const char* GML_SCRIPT_NPC_RECEIVE_GIFT = "gml_Script_receive_gift@gml_Object_par_NPC_Create_0";
 
-		using OnHeartPointsChangedCallback = void(*)(MMAPI::NPC::HeartPointsChangedContext&);
-		using OnReceiveGiftCallback = void(*)(YYTK::CInstance* npc, int item_id);
+		using BeforeHeartPointsChangeCallback = void(*)(MMAPI::NPC::HeartPointsChangedContext&);
+		using BeforeReceiveGiftCallback = void(*)(YYTK::CInstance* npc, int item_id);
 
-		inline OnHeartPointsChangedCallback on_heart_points_changed_callback = nullptr;
-		inline OnReceiveGiftCallback on_receive_gift_callback = nullptr;
+		inline BeforeHeartPointsChangeCallback before_heart_points_change_callback = nullptr;
+		inline BeforeReceiveGiftCallback before_receive_gift_callback = nullptr;
 
 		inline bool TryGetNumericArgument(YYTK::RValue** Arguments, int ArgumentCount, int index, double& value)
 		{
@@ -95,10 +95,10 @@ namespace MMAPI::NPC
 		)
 		{
 			double amount = 0.0;
-			if (on_heart_points_changed_callback && TryGetNumericArgument(Arguments, ArgumentCount, 0, amount))
+			if (before_heart_points_change_callback && TryGetNumericArgument(Arguments, ArgumentCount, 0, amount))
 			{
 				MMAPI::NPC::HeartPointsChangedContext context{ amount };
-				on_heart_points_changed_callback(context);
+				before_heart_points_change_callback(context);
 				SetNumericArgument(Arguments, 0, context.m_amount);
 			}
 
@@ -113,7 +113,7 @@ namespace MMAPI::NPC
 			return Result;
 		}
 
-		inline Aurie::AurieStatus RegisterHeartPointsChangedHook(OnHeartPointsChangedCallback callback)
+		inline Aurie::AurieStatus RegisterHeartPointsChangedHook(BeforeHeartPointsChangeCallback callback)
 		{
 			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
 				GML_SCRIPT_ADD_HEART_POINTS,
@@ -123,7 +123,7 @@ namespace MMAPI::NPC
 			if (!Aurie::AurieSuccess(status))
 				return status;
 
-			on_heart_points_changed_callback = callback;
+			before_heart_points_change_callback = callback;
 			return Aurie::AURIE_SUCCESS;
 		}
 
@@ -138,8 +138,8 @@ namespace MMAPI::NPC
 			if (Self && Arguments && ArgumentCount == 1 && Arguments[0] && Arguments[0]->m_Kind == YYTK::VALUE_OBJECT)
 			{
 				int item_id = static_cast<int>(Arguments[0]->GetMember("item_id").ToInt64());
-				if (on_receive_gift_callback)
-					on_receive_gift_callback(Self, item_id);
+				if (before_receive_gift_callback)
+					before_receive_gift_callback(Self, item_id);
 			}
 
 			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
@@ -153,7 +153,7 @@ namespace MMAPI::NPC
 			return Result;
 		}
 
-		inline Aurie::AurieStatus RegisterReceiveGiftHook(OnReceiveGiftCallback callback)
+		inline Aurie::AurieStatus RegisterReceiveGiftHook(BeforeReceiveGiftCallback callback)
 		{
 			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
 				GML_SCRIPT_NPC_RECEIVE_GIFT,
@@ -163,7 +163,7 @@ namespace MMAPI::NPC
 			if (!Aurie::AurieSuccess(status))
 				return status;
 
-			on_receive_gift_callback = callback;
+			before_receive_gift_callback = callback;
 			return Aurie::AURIE_SUCCESS;
 		}
 
@@ -412,30 +412,28 @@ namespace MMAPI::NPC
 	namespace Hooks
 	{
 		/// Registers a callback that runs when an NPC's heart points change through the game's add heart points script.
-		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
 		/// @param callback A function called with a mutable heart point change context. Use ctx.SetAmount() to modify the amount applied.
 		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus OnHeartPointsChanged(Internal::OnHeartPointsChangedCallback callback)
+		inline Aurie::AurieStatus BeforeHeartPointsChange(Internal::BeforeHeartPointsChangeCallback callback)
 		{
 			if (!callback)
 				return Aurie::AURIE_INVALID_PARAMETER;
 
-			if (Internal::on_heart_points_changed_callback)
+			if (Internal::before_heart_points_change_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
 			return Internal::RegisterHeartPointsChangedHook(callback);
 		}
 
 		/// Registers a callback that runs when an NPC receives a gift.
-		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
 		/// @param callback A function called with the live NPC instance and received item ID.
 		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus OnReceiveGift(Internal::OnReceiveGiftCallback callback)
+		inline Aurie::AurieStatus BeforeReceiveGift(Internal::BeforeReceiveGiftCallback callback)
 		{
 			if (!callback)
 				return Aurie::AURIE_INVALID_PARAMETER;
 
-			if (Internal::on_receive_gift_callback)
+			if (Internal::before_receive_gift_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
 			return Internal::RegisterReceiveGiftHook(callback);

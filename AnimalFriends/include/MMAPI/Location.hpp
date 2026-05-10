@@ -266,11 +266,10 @@ namespace MMAPI::Location
 	/// @param y The Y coordinate within the target location to place Ari.
 	inline void TeleportAri(MMAPI::Location::Ids location, int x, int y)
 	{
-		const auto& refs = MMAPI::Internal::instance_reference_map;
-		if (!refs.contains(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI))
+		YYTK::CInstance* Self  = nullptr;
+		YYTK::CInstance* Other = nullptr;
+		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
 			return;
-		YYTK::CInstance* Self  = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[0];
-		YYTK::CInstance* Other = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[1];
 
 		YYTK::CScript* gml_script = nullptr;
 		MMAPI::Internal::module_interface->GetNamedRoutinePointer(Internal::GML_SCRIPT_TELEPORT_ARI_TO_ROOM, reinterpret_cast<PVOID*>(&gml_script));

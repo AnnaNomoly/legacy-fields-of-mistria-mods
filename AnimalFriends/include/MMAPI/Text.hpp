@@ -45,13 +45,13 @@ namespace MMAPI::Text
 		inline constexpr const char* GML_SCRIPT_CLOSE_TEXTBOX     = "gml_Script_begin_close@TextboxMenu@TextboxMenu";
 		inline constexpr const char* GML_SCRIPT_PLAY_TEXT         = "gml_Script_play_text@TextboxMenu@TextboxMenu";
 
-		using OnLocalizedStringCallback  = void(*)(MMAPI::Text::LocalizedStringContext&);
-		using OnPlayConversationCallback = void(*)(MMAPI::Text::PlayConversationContext&);
-		using OnPlayTextCallback         = void(*)(MMAPI::Text::PlayTextContext&);
+		using BeforeLocalizedStringCallback  = void(*)(MMAPI::Text::LocalizedStringContext&);
+		using BeforePlayConversationCallback = void(*)(MMAPI::Text::PlayConversationContext&);
+		using BeforePlayTextCallback         = void(*)(MMAPI::Text::PlayTextContext&);
 
-		inline OnLocalizedStringCallback  on_localized_string_callback  = nullptr;
-		inline OnPlayConversationCallback on_play_conversation_callback = nullptr;
-		inline OnPlayTextCallback         on_play_text_callback         = nullptr;
+		inline BeforeLocalizedStringCallback  before_localized_string_callback  = nullptr;
+		inline BeforePlayConversationCallback before_play_conversation_callback = nullptr;
+		inline BeforePlayTextCallback         before_play_text_callback         = nullptr;
 
 		inline YYTK::RValue& GmlScriptGetLocalizerCallback(
 			IN YYTK::CInstance* Self,
@@ -61,10 +61,12 @@ namespace MMAPI::Text
 			IN YYTK::RValue** Arguments
 		)
 		{
-			if (Arguments && ArgumentCount >= 1 && Arguments[0])
+			MMAPI::Internal::RegisterScriptContext(GML_SCRIPT_GET_LOCALIZER, Self, Other);
+
+			if (before_localized_string_callback && Arguments && ArgumentCount >= 1 && Arguments[0])
 			{
 				MMAPI::Text::LocalizedStringContext context{ Arguments[0]->ToString() };
-				on_localized_string_callback(context);
+				before_localized_string_callback(context);
 				*Arguments[0] = YYTK::RValue(context.m_key);
 			}
 
@@ -90,7 +92,7 @@ namespace MMAPI::Text
 			if (Arguments && ArgumentCount >= 2 && Arguments[1])
 			{
 				MMAPI::Text::PlayConversationContext context{ Arguments[1]->ToString() };
-				on_play_conversation_callback(context);
+				before_play_conversation_callback(context);
 
 				if (context.m_cancelled)
 					return Result;
@@ -109,7 +111,7 @@ namespace MMAPI::Text
 			return Result;
 		}
 
-		inline Aurie::AurieStatus RegisterLocalizedStringHook(OnLocalizedStringCallback callback)
+		inline Aurie::AurieStatus RegisterLocalizedStringHook(BeforeLocalizedStringCallback callback)
 		{
 			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
 				GML_SCRIPT_GET_LOCALIZER,
@@ -119,11 +121,11 @@ namespace MMAPI::Text
 			if (!Aurie::AurieSuccess(status))
 				return status;
 
-			on_localized_string_callback = callback;
+			before_localized_string_callback = callback;
 			return Aurie::AURIE_SUCCESS;
 		}
 
-		inline Aurie::AurieStatus RegisterPlayConversationHook(OnPlayConversationCallback callback)
+		inline Aurie::AurieStatus RegisterPlayConversationHook(BeforePlayConversationCallback callback)
 		{
 			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
 				GML_SCRIPT_PLAY_CONVERSATION,
@@ -133,7 +135,7 @@ namespace MMAPI::Text
 			if (!Aurie::AurieSuccess(status))
 				return status;
 
-			on_play_conversation_callback = callback;
+			before_play_conversation_callback = callback;
 			return Aurie::AURIE_SUCCESS;
 		}
 
@@ -148,7 +150,7 @@ namespace MMAPI::Text
 			if (Arguments && ArgumentCount >= 1 && Arguments[0])
 			{
 				MMAPI::Text::PlayTextContext context{ Arguments[0]->ToString() };
-				on_play_text_callback(context);
+				before_play_text_callback(context);
 
 				if (context.m_cancelled)
 					return Result;
@@ -164,7 +166,7 @@ namespace MMAPI::Text
 			return Result;
 		}
 
-		inline Aurie::AurieStatus RegisterPlayTextHook(OnPlayTextCallback callback)
+		inline Aurie::AurieStatus RegisterPlayTextHook(BeforePlayTextCallback callback)
 		{
 			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
 				GML_SCRIPT_PLAY_TEXT,
@@ -174,13 +176,23 @@ namespace MMAPI::Text
 			if (!Aurie::AurieSuccess(status))
 				return status;
 
-			on_play_text_callback = callback;
+			before_play_text_callback = callback;
 			return Aurie::AURIE_SUCCESS;
 		}
 	}
 
+	/// Activates Text utility functions that directly call game scripts.
+	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
+	inline Aurie::AurieStatus Enable()
+	{
+		return MMAPI::Internal::InstallScriptHook(
+			Internal::GML_SCRIPT_GET_LOCALIZER,
+			reinterpret_cast<PVOID>(Internal::GmlScriptGetLocalizerCallback)
+		);
+	}
+
 	/// Gets a localized string by localization key.
-	/// @attention Requires MMAPI::Text::Internal::GML_SCRIPT_GET_LOCALIZER to be registered via RegisterScriptContext.
+	/// @attention Requires MMAPI::Text::Enable() to have been called.
 	/// @param localization_key The localization key to resolve.
 	/// @return The localized string as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetLocalizedString(const std::string& localization_key)
@@ -233,15 +245,14 @@ namespace MMAPI::Text
 	namespace Hooks
 	{
 		/// Registers a callback that can modify a localization key before the game resolves the localized string.
-		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
 		/// @param callback A function called with a mutable localized string context.
 		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus OnLocalizedString(Internal::OnLocalizedStringCallback callback)
+		inline Aurie::AurieStatus BeforeLocalizedString(Internal::BeforeLocalizedStringCallback callback)
 		{
 			if (!callback)
 				return Aurie::AURIE_INVALID_PARAMETER;
 
-			if (Internal::on_localized_string_callback)
+			if (Internal::before_localized_string_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
 			return Internal::RegisterLocalizedStringHook(callback);
@@ -249,15 +260,14 @@ namespace MMAPI::Text
 
 		/// Registers a callback that runs before the game plays a conversation.
 		/// Use ctx.SetKey() to redirect the conversation, or ctx.Cancel() to prevent it from playing entirely.
-		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
 		/// @param callback A function called with a mutable conversation context before the game processes it.
 		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus OnPlayConversation(Internal::OnPlayConversationCallback callback)
+		inline Aurie::AurieStatus BeforePlayConversation(Internal::BeforePlayConversationCallback callback)
 		{
 			if (!callback)
 				return Aurie::AURIE_INVALID_PARAMETER;
 
-			if (Internal::on_play_conversation_callback)
+			if (Internal::before_play_conversation_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
 			return Internal::RegisterPlayConversationHook(callback);
@@ -265,15 +275,14 @@ namespace MMAPI::Text
 
 		/// Registers a callback that runs before the game plays a conversation text node.
 		/// Use ctx.SetKey() to redirect to a different text node, or ctx.Cancel() to prevent it from playing entirely.
-		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
 		/// @param callback A function called with a mutable text context before the game processes it.
 		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus OnPlayText(Internal::OnPlayTextCallback callback)
+		inline Aurie::AurieStatus BeforePlayText(Internal::BeforePlayTextCallback callback)
 		{
 			if (!callback)
 				return Aurie::AURIE_INVALID_PARAMETER;
 
-			if (Internal::on_play_text_callback)
+			if (Internal::before_play_text_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
 			return Internal::RegisterPlayTextHook(callback);

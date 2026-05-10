@@ -37,6 +37,38 @@ namespace MMAPI::Calendar
 		inline constexpr const char* GML_SCRIPT_GET_SEASON       = "gml_Script_season@Calendar@Calendar";
 		inline constexpr const char* GML_SCRIPT_GET_YEAR         = "gml_Script_year@Calendar@Calendar";
 
+		inline YYTK::RValue& UnifiedTimeContextCallback(IN YYTK::CInstance* Self, IN YYTK::CInstance* Other, OUT YYTK::RValue& Result, IN int ArgumentCount, IN YYTK::RValue** Arguments)
+		{
+			MMAPI::Internal::RegisterScriptContext(GML_SCRIPT_GET_UNIFIED_TIME, Self, Other);
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_GET_UNIFIED_TIME));
+			original(Self, Other, Result, ArgumentCount, Arguments);
+			return Result;
+		}
+
+		inline YYTK::RValue& DayContextCallback(IN YYTK::CInstance* Self, IN YYTK::CInstance* Other, OUT YYTK::RValue& Result, IN int ArgumentCount, IN YYTK::RValue** Arguments)
+		{
+			MMAPI::Internal::RegisterScriptContext(GML_SCRIPT_GET_DAY, Self, Other);
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_GET_DAY));
+			original(Self, Other, Result, ArgumentCount, Arguments);
+			return Result;
+		}
+
+		inline YYTK::RValue& SeasonContextCallback(IN YYTK::CInstance* Self, IN YYTK::CInstance* Other, OUT YYTK::RValue& Result, IN int ArgumentCount, IN YYTK::RValue** Arguments)
+		{
+			MMAPI::Internal::RegisterScriptContext(GML_SCRIPT_GET_SEASON, Self, Other);
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_GET_SEASON));
+			original(Self, Other, Result, ArgumentCount, Arguments);
+			return Result;
+		}
+
+		inline YYTK::RValue& YearContextCallback(IN YYTK::CInstance* Self, IN YYTK::CInstance* Other, OUT YYTK::RValue& Result, IN int ArgumentCount, IN YYTK::RValue** Arguments)
+		{
+			MMAPI::Internal::RegisterScriptContext(GML_SCRIPT_GET_YEAR, Self, Other);
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_GET_YEAR));
+			original(Self, Other, Result, ArgumentCount, Arguments);
+			return Result;
+		}
+
 		inline YYTK::RValue CallCalendarScript(const char* script_name)
 		{
 			const auto& refs = MMAPI::Internal::script_reference_map;
@@ -54,7 +86,7 @@ namespace MMAPI::Calendar
 		}
 
 		/// Gets the current 0-indexed calendar day from the Calendar script context.
-		/// @attention Requires MMAPI::Calendar::Internal::GML_SCRIPT_GET_DAY to be registered via RegisterScriptContext.
+		/// @attention Requires MMAPI::Calendar::Enable() to have been called.
 		/// @return The current 0-indexed calendar day as an RValue, or undefined if the required context is unavailable.
 		inline YYTK::RValue GetDay()
 		{
@@ -62,7 +94,7 @@ namespace MMAPI::Calendar
 		}
 
 		/// Gets the current 0-indexed calendar season from the Calendar script context.
-		/// @attention Requires MMAPI::Calendar::Internal::GML_SCRIPT_GET_SEASON to be registered via RegisterScriptContext.
+		/// @attention Requires MMAPI::Calendar::Enable() to have been called.
 		/// @return The current 0-indexed calendar season as an RValue, or undefined if the required context is unavailable.
 		inline YYTK::RValue GetSeason()
 		{
@@ -70,7 +102,7 @@ namespace MMAPI::Calendar
 		}
 
 		/// Gets the current 0-indexed calendar year from the Calendar script context.
-		/// @attention Requires MMAPI::Calendar::Internal::GML_SCRIPT_GET_YEAR to be registered via RegisterScriptContext.
+		/// @attention Requires MMAPI::Calendar::Enable() to have been called.
 		/// @return The current 0-indexed calendar year as an RValue, or undefined if the required context is unavailable.
 		inline YYTK::RValue GetYear()
 		{
@@ -78,8 +110,21 @@ namespace MMAPI::Calendar
 		}
 	}
 
+	/// Activates Calendar utility functions that directly call game scripts.
+	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
+	inline Aurie::AurieStatus Enable()
+	{
+		Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(Internal::GML_SCRIPT_GET_UNIFIED_TIME, reinterpret_cast<PVOID>(Internal::UnifiedTimeContextCallback));
+		if (!Aurie::AurieSuccess(status)) return status;
+		status = MMAPI::Internal::InstallScriptHook(Internal::GML_SCRIPT_GET_DAY, reinterpret_cast<PVOID>(Internal::DayContextCallback));
+		if (!Aurie::AurieSuccess(status)) return status;
+		status = MMAPI::Internal::InstallScriptHook(Internal::GML_SCRIPT_GET_SEASON, reinterpret_cast<PVOID>(Internal::SeasonContextCallback));
+		if (!Aurie::AurieSuccess(status)) return status;
+		return MMAPI::Internal::InstallScriptHook(Internal::GML_SCRIPT_GET_YEAR, reinterpret_cast<PVOID>(Internal::YearContextCallback));
+	}
+
 	/// Gets the current 1-indexed day of the month from the Calendar script context.
-	/// @attention Requires MMAPI::Calendar::Internal::GML_SCRIPT_GET_DAY to be registered via RegisterScriptContext.
+	/// @attention Requires MMAPI::Calendar::Enable() to have been called.
 	/// @return The current day of the month from 1 to 28 as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetDay()
 	{
@@ -91,7 +136,7 @@ namespace MMAPI::Calendar
 	}
 
 	/// Gets the current weekday from the Calendar script context.
-	/// @attention Requires MMAPI::Calendar::Internal::GML_SCRIPT_GET_DAY to be registered via RegisterScriptContext.
+	/// @attention Requires MMAPI::Calendar::Enable() to have been called.
 	/// @param weekday The current weekday.
 	/// @return True if the weekday was resolved, false if the required context is unavailable.
 	inline bool TryGetWeekday(MMAPI::Calendar::Weekdays& weekday)
@@ -110,7 +155,7 @@ namespace MMAPI::Calendar
 	}
 
 	/// Returns true if the current weekday matches weekday.
-	/// @attention Requires MMAPI::Calendar::Internal::GML_SCRIPT_GET_DAY to be registered via RegisterScriptContext.
+	/// @attention Requires MMAPI::Calendar::Enable() to have been called.
 	/// @param weekday The weekday to compare against.
 	inline bool IsWeekday(MMAPI::Calendar::Weekdays weekday)
 	{
@@ -122,7 +167,7 @@ namespace MMAPI::Calendar
 	}
 
 	/// Gets the current season from the Calendar script context.
-	/// @attention Requires MMAPI::Calendar::Internal::GML_SCRIPT_GET_SEASON to be registered via RegisterScriptContext.
+	/// @attention Requires MMAPI::Calendar::Enable() to have been called.
 	/// @param season The current season.
 	/// @return True if the season was resolved, false if the required context is unavailable.
 	inline bool TryGetSeason(MMAPI::Calendar::Seasons& season)
@@ -141,7 +186,7 @@ namespace MMAPI::Calendar
 	}
 
 	/// Returns true if the current season matches season.
-	/// @attention Requires MMAPI::Calendar::Internal::GML_SCRIPT_GET_SEASON to be registered via RegisterScriptContext.
+	/// @attention Requires MMAPI::Calendar::Enable() to have been called.
 	/// @param season The season to compare against.
 	inline bool IsSeason(MMAPI::Calendar::Seasons season)
 	{
@@ -153,7 +198,7 @@ namespace MMAPI::Calendar
 	}
 
 	/// Gets the current 1-indexed calendar year from the Calendar script context.
-	/// @attention Requires MMAPI::Calendar::Internal::GML_SCRIPT_GET_YEAR to be registered via RegisterScriptContext.
+	/// @attention Requires MMAPI::Calendar::Enable() to have been called.
 	/// @return The current calendar year as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetYear()
 	{
@@ -179,7 +224,7 @@ namespace MMAPI::Calendar
 	}
 
 	/// Gets the current unified game time from the Calendar script context.
-	/// @attention Requires MMAPI::Calendar::Internal::GML_SCRIPT_GET_UNIFIED_TIME to be registered via RegisterScriptContext.
+	/// @attention Requires MMAPI::Calendar::Enable() to have been called.
 	/// @return The current unified time as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetUnifiedTime()
 	{

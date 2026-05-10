@@ -11,10 +11,28 @@ namespace MMAPI::T2
 	namespace Internal
 	{
 		inline constexpr const char* GML_SCRIPT_T2_READ = "gml_Script_read@T2r@T2r";
+
+		inline YYTK::RValue& T2ReadContextCallback(IN YYTK::CInstance* Self, IN YYTK::CInstance* Other, OUT YYTK::RValue& Result, IN int ArgumentCount, IN YYTK::RValue** Arguments)
+		{
+			MMAPI::Internal::RegisterScriptContext(GML_SCRIPT_T2_READ, Self, Other);
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_T2_READ));
+			original(Self, Other, Result, ArgumentCount, Arguments);
+			return Result;
+		}
+	}
+
+	/// Activates T2 utility functions that directly call game scripts.
+	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
+	inline Aurie::AurieStatus Enable()
+	{
+		return MMAPI::Internal::InstallScriptHook(
+			Internal::GML_SCRIPT_T2_READ,
+			reinterpret_cast<PVOID>(Internal::T2ReadContextCallback)
+		);
 	}
 
 	/// Reads a value from the game's T2 database by key.
-	/// @attention Requires MMAPI::T2::Internal::GML_SCRIPT_T2_READ to be registered via RegisterScriptContext.
+	/// @attention Requires MMAPI::T2::Enable() to have been called.
 	/// @param key The T2 key to read.
 	/// @return The T2 value as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue Read(const std::string& key)

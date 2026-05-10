@@ -34,8 +34,8 @@ namespace MMAPI::Animal
 		inline constexpr const char* GML_SCRIPT_PUT_DOWN         = "gml_Script_put_down@gml_Object_obj_player_animal_Create_0";
 		inline constexpr const char* GML_SCRIPT_ON_PET           = "gml_Script_on_pet@gml_Object_obj_player_animal_Create_0";
 
-		using OnHeartPointsChangedCallback = void(*)(MMAPI::Animal::HeartPointsChangedContext&);
-		inline OnHeartPointsChangedCallback on_heart_points_changed_callback = nullptr;
+		using BeforeHeartPointsChangeCallback = void(*)(MMAPI::Animal::HeartPointsChangedContext&);
+		inline BeforeHeartPointsChangeCallback before_heart_points_change_callback = nullptr;
 
 		inline bool TryGetNumericArgument(YYTK::RValue** Arguments, int ArgumentCount, int index, double& value)
 		{
@@ -65,10 +65,10 @@ namespace MMAPI::Animal
 		)
 		{
 			double amount = 0.0;
-			if (on_heart_points_changed_callback && TryGetNumericArgument(Arguments, ArgumentCount, 0, amount))
+			if (before_heart_points_change_callback && TryGetNumericArgument(Arguments, ArgumentCount, 0, amount))
 			{
 				MMAPI::Animal::HeartPointsChangedContext context{ amount };
-				on_heart_points_changed_callback(context);
+				before_heart_points_change_callback(context);
 				SetNumericArgument(Arguments, 0, context.m_amount);
 			}
 
@@ -83,7 +83,7 @@ namespace MMAPI::Animal
 			return Result;
 		}
 
-		inline Aurie::AurieStatus RegisterHeartPointsChangedHook(OnHeartPointsChangedCallback callback)
+		inline Aurie::AurieStatus RegisterHeartPointsChangedHook(BeforeHeartPointsChangeCallback callback)
 		{
 			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
 				GML_SCRIPT_ADD_HEART_POINTS,
@@ -93,15 +93,15 @@ namespace MMAPI::Animal
 			if (!Aurie::AurieSuccess(status))
 				return status;
 
-			on_heart_points_changed_callback = callback;
+			before_heart_points_change_callback = callback;
 			return Aurie::AURIE_SUCCESS;
 		}
 
-		using OnPutDownCallback = void(*)(YYTK::CInstance* animal);
-		using OnPetCallback     = void(*)(YYTK::CInstance* animal);
+		using AfterPutDownCallback = void(*)(YYTK::CInstance* animal);
+		using AfterPetCallback     = void(*)(YYTK::CInstance* animal);
 
-		inline OnPutDownCallback on_put_down_callback = nullptr;
-		inline OnPetCallback     on_pet_callback      = nullptr;
+		inline AfterPutDownCallback after_put_down_callback = nullptr;
+		inline AfterPetCallback     after_pet_callback      = nullptr;
 
 		inline YYTK::RValue& GmlScriptPutDownCallback(
 			IN YYTK::CInstance* Self,
@@ -116,13 +116,13 @@ namespace MMAPI::Animal
 			);
 			original(Self, Other, Result, ArgumentCount, Arguments);
 
-			if (on_put_down_callback)
-				on_put_down_callback(Self);
+			if (after_put_down_callback)
+				after_put_down_callback(Self);
 
 			return Result;
 		}
 
-		inline YYTK::RValue& GmlScriptOnPetCallback(
+		inline YYTK::RValue& GmlScriptAfterPetCallback(
 			IN YYTK::CInstance* Self,
 			IN YYTK::CInstance* Other,
 			OUT YYTK::RValue& Result,
@@ -135,13 +135,13 @@ namespace MMAPI::Animal
 			);
 			original(Self, Other, Result, ArgumentCount, Arguments);
 
-			if (on_pet_callback)
-				on_pet_callback(Self);
+			if (after_pet_callback)
+				after_pet_callback(Self);
 
 			return Result;
 		}
 
-		inline Aurie::AurieStatus RegisterPutDownHook(OnPutDownCallback callback)
+		inline Aurie::AurieStatus RegisterPutDownHook(AfterPutDownCallback callback)
 		{
 			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
 				GML_SCRIPT_PUT_DOWN,
@@ -151,21 +151,21 @@ namespace MMAPI::Animal
 			if (!Aurie::AurieSuccess(status))
 				return status;
 
-			on_put_down_callback = callback;
+			after_put_down_callback = callback;
 			return Aurie::AURIE_SUCCESS;
 		}
 
-		inline Aurie::AurieStatus RegisterOnPetHook(OnPetCallback callback)
+		inline Aurie::AurieStatus RegisterAfterPetHook(AfterPetCallback callback)
 		{
 			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
 				GML_SCRIPT_ON_PET,
-				reinterpret_cast<PVOID>(GmlScriptOnPetCallback)
+				reinterpret_cast<PVOID>(GmlScriptAfterPetCallback)
 			);
 
 			if (!Aurie::AurieSuccess(status))
 				return status;
 
-			on_pet_callback = callback;
+			after_pet_callback = callback;
 			return Aurie::AURIE_SUCCESS;
 		}
 
@@ -192,11 +192,11 @@ namespace MMAPI::Animal
 		inline bool TryGetAriContext(YYTK::CInstance*& Self, YYTK::CInstance*& Other)
 		{
 			const auto& refs = MMAPI::Internal::instance_reference_map;
-			if (!refs.contains(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI))
+			if (!refs.contains(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI) || !MMAPI::Internal::global_instance)
 				return false;
 
-			Self = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[0];
-			Other = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[1];
+			Self  = MMAPI::Internal::global_instance->GetRefMember("__ari")->ToInstance();
+			Other = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[0];
 			return true;
 		}
 
@@ -220,8 +220,15 @@ namespace MMAPI::Animal
 		}
 	}
 
+	/// Activates Animal utility functions that directly call game scripts.
+	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
+	inline Aurie::AurieStatus Enable()
+	{
+		return MMAPI::Instance::Enable();
+	}
+
 	/// Returns the game's array-like collection of all player animals.
-	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
+	/// @attention Requires MMAPI::Animal::Enable() to have been called.
 	/// @return The animal collection as an RValue, or an empty RValue if the required context is unavailable.
 	inline YYTK::RValue GetAllAnimals()
 	{
@@ -239,7 +246,7 @@ namespace MMAPI::Animal
 	}
 
 	/// Returns the number of player animals.
-	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
+	/// @attention Requires MMAPI::Animal::Enable() to have been called.
 	/// @return The animal count, or 0 if the required context is unavailable.
 	inline int GetAnimalCount()
 	{
@@ -367,7 +374,7 @@ namespace MMAPI::Animal
 	}
 
 	/// Spawns shiny beads from an animal interaction.
-	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
+	/// @attention Requires MMAPI::Animal::Enable() to have been called.
 	/// @param animal The live animal instance to spawn beads from.
 	/// @param amount The number of beads to spawn. Clamped to [1, 999].
 	inline void SpawnShinyBeads(YYTK::CInstance* animal, int amount)
@@ -381,55 +388,52 @@ namespace MMAPI::Animal
 		if (amount > 999)
 			amount = 999;
 
-		YYTK::CInstance* ari = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[1];
+		YYTK::CInstance* ari = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[0];
 		Internal::SpawnShinyBeads(animal, ari, amount);
 	}
 
 	namespace Hooks
 	{
-		/// Registers a callback that runs when an animal's heart points change through the game's add heart points script.
-		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
-		/// @param callback A function called with a mutable heart point change context. Use ctx.SetAmount() to modify the amount applied.
+		/// Registers a callback that runs before the game applies a heart-point delta to an animal.
+		/// @param callback A function called with a mutable context. Use ctx.SetAmount() to modify the amount.
 		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus OnHeartPointsChanged(Internal::OnHeartPointsChangedCallback callback)
+		inline Aurie::AurieStatus BeforeHeartPointsChange(Internal::BeforeHeartPointsChangeCallback callback)
 		{
 			if (!callback)
 				return Aurie::AURIE_INVALID_PARAMETER;
 
-			if (Internal::on_heart_points_changed_callback)
+			if (Internal::before_heart_points_change_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
 			return Internal::RegisterHeartPointsChangedHook(callback);
 		}
 
-		/// Registers a callback that runs after an animal is put down by the player.
-		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
+		/// Registers a callback that runs after the player puts an animal down.
 		/// @param callback A function called with the live player animal instance.
 		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus OnPutDown(Internal::OnPutDownCallback callback)
+		inline Aurie::AurieStatus AfterPutDown(Internal::AfterPutDownCallback callback)
 		{
 			if (!callback)
 				return Aurie::AURIE_INVALID_PARAMETER;
 
-			if (Internal::on_put_down_callback)
+			if (Internal::after_put_down_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
 			return Internal::RegisterPutDownHook(callback);
 		}
 
 		/// Registers a callback that runs after the player pets an animal.
-		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
 		/// @param callback A function called with the live player animal instance.
 		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus OnPet(Internal::OnPetCallback callback)
+		inline Aurie::AurieStatus AfterPet(Internal::AfterPetCallback callback)
 		{
 			if (!callback)
 				return Aurie::AURIE_INVALID_PARAMETER;
 
-			if (Internal::on_pet_callback)
+			if (Internal::after_pet_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
-			return Internal::RegisterOnPetHook(callback);
+			return Internal::RegisterAfterPetHook(callback);
 		}
 	}
 }

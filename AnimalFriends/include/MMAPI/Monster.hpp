@@ -70,9 +70,9 @@ namespace MMAPI::Monster
 	{
 		inline constexpr const char* GML_SCRIPT_SPAWN_MONSTER = "gml_Script_spawn_monster";
 
-		using OnMonsterSpawnCallback = void(*)(MMAPI::Monster::SpawnMonsterContext&);
+		using BeforeMonsterSpawnCallback = void(*)(MMAPI::Monster::SpawnMonsterContext&);
 
-		inline OnMonsterSpawnCallback on_monster_spawn_callback = nullptr;
+		inline BeforeMonsterSpawnCallback before_monster_spawn_callback = nullptr;
 
 		inline YYTK::RValue& GmlScriptSpawnMonsterCallback(
 			IN YYTK::CInstance* Self,
@@ -85,7 +85,7 @@ namespace MMAPI::Monster
 			if (Arguments && ArgumentCount >= 3 && Arguments[2])
 			{
 				MMAPI::Monster::SpawnMonsterContext context{ Arguments[2]->ToInt64() };
-				on_monster_spawn_callback(context);
+				before_monster_spawn_callback(context);
 
 				if (context.m_cancelled)
 					return Result;
@@ -101,7 +101,7 @@ namespace MMAPI::Monster
 			return Result;
 		}
 
-		inline Aurie::AurieStatus RegisterMonsterSpawnHook(OnMonsterSpawnCallback callback)
+		inline Aurie::AurieStatus RegisterMonsterSpawnHook(BeforeMonsterSpawnCallback callback)
 		{
 			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
 				GML_SCRIPT_SPAWN_MONSTER,
@@ -111,7 +111,7 @@ namespace MMAPI::Monster
 			if (!Aurie::AurieSuccess(status))
 				return status;
 
-			on_monster_spawn_callback = callback;
+			before_monster_spawn_callback = callback;
 			return Aurie::AURIE_SUCCESS;
 		}
 	}
@@ -120,15 +120,14 @@ namespace MMAPI::Monster
 	{
 		/// Registers a callback that runs before the game spawns a monster.
 		/// Use ctx.SetMonster() to change which monster spawns, or ctx.Cancel() to prevent the spawn entirely.
-		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
 		/// @param callback A function called with a mutable spawn context before the game processes it.
 		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus OnMonsterSpawn(Internal::OnMonsterSpawnCallback callback)
+		inline Aurie::AurieStatus BeforeMonsterSpawn(Internal::BeforeMonsterSpawnCallback callback)
 		{
 			if (!callback)
 				return Aurie::AURIE_INVALID_PARAMETER;
 
-			if (Internal::on_monster_spawn_callback)
+			if (Internal::before_monster_spawn_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
 			return Internal::RegisterMonsterSpawnHook(callback);

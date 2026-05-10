@@ -112,12 +112,10 @@ namespace MMAPI::Recipe
 
 		if (show_popup)
 		{
-			const auto& refs = MMAPI::Internal::instance_reference_map;
-			if (!refs.contains(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI))
+			YYTK::CInstance* Self  = nullptr;
+			YYTK::CInstance* Other = nullptr;
+			if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
 				return true;
-
-			YYTK::CInstance* Self  = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[0];
-			YYTK::CInstance* Other = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[1];
 
 			YYTK::CScript* gml_script = nullptr;
 			MMAPI::Internal::module_interface->GetNamedRoutinePointer(Internal::GML_SCRIPT_UNLOCK_RECIPE, reinterpret_cast<PVOID*>(&gml_script));

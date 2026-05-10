@@ -68,29 +68,21 @@ namespace MMAPI
 			return status;
 		}
 
-	}
+		/// Captures the Self and Other instance context for a GML script the first time it is seen.
+		/// Used internally by MMAPI's per-module Enable() context-capture hooks.
+		inline void RegisterScriptContext(const char* script_name, YYTK::CInstance* Self, YYTK::CInstance* Other)
+		{
+			if (!script_reference_map.contains(script_name))
+				script_reference_map[script_name] = { Self, Other };
+		}
 
-	/// Captures the Self and Other instance context for a GML script the first time it is seen.
-	/// Call this from within the script's hook callback to make the context available to MMAPI functions that require it.
-	/// @param script_name The GML script name, used as the key (e.g. StatusEffect::Internal::GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE).
-	/// @param Self The Self instance from the hook callback.
-	/// @param Other The Other instance from the hook callback.
-	inline void RegisterScriptContext(const char* script_name, YYTK::CInstance* Self, YYTK::CInstance* Other)
-	{
-		if (!Internal::script_reference_map.contains(script_name))
-			Internal::script_reference_map[script_name] = { Self, Other };
-	}
-
-	/// Captures a pair of game object instance pointers the first time it is seen.
-	/// Use MMAPI::Instance::Internal::INSTANCE_OBJ_ARI for Ari. For that context, index 0 should be
-	/// MMAPI::Internal::global_instance->__ari as a CInstance*, and index 1 should be the live obj_ari ObjectCallback self.
-	/// @param instance_name A descriptive name identifying the object (e.g. Instance::Internal::INSTANCE_OBJ_ARI).
-	/// @param Self The primary instance pointer stored at index 0.
-	/// @param Other The secondary instance pointer stored at index 1.
-	inline void RegisterInstanceContext(const char* instance_name, YYTK::CInstance* Self, YYTK::CInstance* Other)
-	{
-		if (!Internal::instance_reference_map.contains(instance_name))
-			Internal::instance_reference_map[instance_name] = { Self, Other };
+		/// Captures a pair of game object instance pointers the first time it is seen.
+		/// Used internally by MMAPI::Instance::Enable()'s EVENT_OBJECT_CALL dispatcher.
+		inline void RegisterInstanceContext(const char* instance_name, YYTK::CInstance* Self, YYTK::CInstance* Other)
+		{
+			if (!instance_reference_map.contains(instance_name))
+				instance_reference_map[instance_name] = { Self, Other };
+		}
 	}
 
 	/// Clears all captured script and instance contexts.
@@ -101,22 +93,14 @@ namespace MMAPI
 		Internal::instance_reference_map.clear();
 	}
 
-	/// Initializes MMAPI. Call once from ModuleInitialize, after obtaining the YYTKInterface and global instance.
+	/// Initializes MMAPI. Call once from ModuleInitialize.
 	/// @param module_interface The YYTKInterface pointer received in ModuleInitialize.
 	/// @param global The GML global instance pointer obtained from GetGlobalInstance.
-	inline void Initialize(YYTK::YYTKInterface* module_interface, YYTK::CInstance* global)
+	/// @param module The Aurie module pointer received in ModuleInitialize.
+	inline void Initialize(YYTK::YYTKInterface* module_interface, YYTK::CInstance* global, Aurie::AurieModule* module)
 	{
 		MMAPI::Internal::module_interface = module_interface;
 		MMAPI::Internal::global_instance = global;
-	}
-
-	/// Initializes MMAPI. Call once from ModuleInitialize, after obtaining the YYTKInterface and global instance.
-	/// @param module_interface The YYTKInterface pointer received in ModuleInitialize.
-	/// @param global The GML global instance pointer obtained from GetGlobalInstance.
-	/// @param module The Aurie module pointer received in ModuleInitialize. Required for MMAPI-owned hooks.
-	inline void Initialize(YYTK::YYTKInterface* module_interface, YYTK::CInstance* global, Aurie::AurieModule* module)
-	{
-		Initialize(module_interface, global);
 		MMAPI::Internal::self_module = module;
 	}
 }

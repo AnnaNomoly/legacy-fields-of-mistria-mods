@@ -31,13 +31,13 @@ namespace MMAPI::Dungeon
 		inline constexpr const char* GML_SCRIPT_GO_TO_ROOM            = "gml_Script_goto_gm_room";
 		inline constexpr const char* GML_SCRIPT_ON_DUNGEON_ROOM_START = "gml_Script_on_room_start@DungeonRunner@DungeonRunner";
 
-		using OnSpawnLadderCallback      = void(*)(MMAPI::Dungeon::SpawnLadderContext&);
-		using OnGoToRoomCallback         = void(*)(MMAPI::Dungeon::GoToRoomContext&);
-		using OnDungeonRoomStartCallback = void(*)();
+		using BeforeSpawnLadderCallback      = void(*)(MMAPI::Dungeon::SpawnLadderContext&);
+		using AfterGoToRoomCallback         = void(*)(MMAPI::Dungeon::GoToRoomContext&);
+		using AfterDungeonRoomStartCallback = void(*)();
 
-		inline OnSpawnLadderCallback      on_spawn_ladder_callback       = nullptr;
-		inline OnGoToRoomCallback         on_go_to_room_callback         = nullptr;
-		inline OnDungeonRoomStartCallback on_dungeon_room_start_callback = nullptr;
+		inline BeforeSpawnLadderCallback      before_spawn_ladder_callback       = nullptr;
+		inline AfterGoToRoomCallback         after_go_to_room_callback         = nullptr;
+		inline AfterDungeonRoomStartCallback after_dungeon_room_start_callback = nullptr;
 
 		inline YYTK::RValue& GmlScriptSpawnLadderCallback(
 			IN YYTK::CInstance* Self,
@@ -48,7 +48,7 @@ namespace MMAPI::Dungeon
 		)
 		{
 			MMAPI::Dungeon::SpawnLadderContext context;
-			on_spawn_ladder_callback(context);
+			before_spawn_ladder_callback(context);
 
 			if (context.m_cancelled)
 				return Result;
@@ -81,12 +81,12 @@ namespace MMAPI::Dungeon
 			if (room_name_rv.m_Kind != YYTK::VALUE_UNDEFINED)
 				context.m_room_name = room_name_rv.ToString();
 
-			on_go_to_room_callback(context);
+			after_go_to_room_callback(context);
 
 			return Result;
 		}
 
-		inline YYTK::RValue& GmlScriptOnDungeonRoomStartCallback(
+		inline YYTK::RValue& GmlScriptAfterDungeonRoomStartCallback(
 			IN YYTK::CInstance* Self,
 			IN YYTK::CInstance* Other,
 			OUT YYTK::RValue& Result,
@@ -99,12 +99,12 @@ namespace MMAPI::Dungeon
 			);
 			original(Self, Other, Result, ArgumentCount, Arguments);
 
-			on_dungeon_room_start_callback();
+			after_dungeon_room_start_callback();
 
 			return Result;
 		}
 
-		inline Aurie::AurieStatus RegisterSpawnLadderHook(OnSpawnLadderCallback callback)
+		inline Aurie::AurieStatus RegisterSpawnLadderHook(BeforeSpawnLadderCallback callback)
 		{
 			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
 				GML_SCRIPT_SPAWN_LADDER,
@@ -114,11 +114,11 @@ namespace MMAPI::Dungeon
 			if (!Aurie::AurieSuccess(status))
 				return status;
 
-			on_spawn_ladder_callback = callback;
+			before_spawn_ladder_callback = callback;
 			return Aurie::AURIE_SUCCESS;
 		}
 
-		inline Aurie::AurieStatus RegisterGoToRoomHook(OnGoToRoomCallback callback)
+		inline Aurie::AurieStatus RegisterGoToRoomHook(AfterGoToRoomCallback callback)
 		{
 			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
 				GML_SCRIPT_GO_TO_ROOM,
@@ -128,21 +128,21 @@ namespace MMAPI::Dungeon
 			if (!Aurie::AurieSuccess(status))
 				return status;
 
-			on_go_to_room_callback = callback;
+			after_go_to_room_callback = callback;
 			return Aurie::AURIE_SUCCESS;
 		}
 
-		inline Aurie::AurieStatus RegisterDungeonRoomStartHook(OnDungeonRoomStartCallback callback)
+		inline Aurie::AurieStatus RegisterDungeonRoomStartHook(AfterDungeonRoomStartCallback callback)
 		{
 			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
 				GML_SCRIPT_ON_DUNGEON_ROOM_START,
-				reinterpret_cast<PVOID>(GmlScriptOnDungeonRoomStartCallback)
+				reinterpret_cast<PVOID>(GmlScriptAfterDungeonRoomStartCallback)
 			);
 
 			if (!Aurie::AurieSuccess(status))
 				return status;
 
-			on_dungeon_room_start_callback = callback;
+			after_dungeon_room_start_callback = callback;
 			return Aurie::AURIE_SUCCESS;
 		}
 	}
@@ -166,8 +166,15 @@ namespace MMAPI::Dungeon
 		gml_script->m_Functions->m_ScriptFunction(Self, Other, retval, 2, arguments);
 	}
 
+	/// Activates Dungeon utility functions that directly call game scripts.
+	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
+	inline Aurie::AurieStatus Enable()
+	{
+		return MMAPI::StatusEffect::Enable();
+	}
+
 	/// Transitions the player into the dungeon at the specified floor level.
-	/// @attention Requires MMAPI::StatusEffect::Internal::GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE to be registered via RegisterScriptContext.
+	/// @attention Requires MMAPI::Dungeon::Enable() to have been called.
 	/// @param dungeon_level The dungeon floor level to enter.
 	inline void EnterDungeon(double dungeon_level)
 	{
@@ -204,15 +211,14 @@ namespace MMAPI::Dungeon
 	{
 		/// Registers a callback that runs before the game spawns a dungeon ladder.
 		/// Call ctx.Cancel() to prevent the ladder from spawning.
-		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
 		/// @param callback A function called with a mutable spawn ladder context before the game processes it.
 		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus OnSpawnLadder(Internal::OnSpawnLadderCallback callback)
+		inline Aurie::AurieStatus BeforeSpawnLadder(Internal::BeforeSpawnLadderCallback callback)
 		{
 			if (!callback)
 				return Aurie::AURIE_INVALID_PARAMETER;
 
-			if (Internal::on_spawn_ladder_callback)
+			if (Internal::before_spawn_ladder_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
 			return Internal::RegisterSpawnLadderHook(callback);
@@ -220,30 +226,28 @@ namespace MMAPI::Dungeon
 
 		/// Registers a callback that runs after the game transitions to a new room.
 		/// Use ctx.GetRoomName() to read the name of the room that was entered.
-		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
 		/// @param callback A function called with the room transition context after the game processes it.
 		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus OnGoToRoom(Internal::OnGoToRoomCallback callback)
+		inline Aurie::AurieStatus AfterGoToRoom(Internal::AfterGoToRoomCallback callback)
 		{
 			if (!callback)
 				return Aurie::AURIE_INVALID_PARAMETER;
 
-			if (Internal::on_go_to_room_callback)
+			if (Internal::after_go_to_room_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
 			return Internal::RegisterGoToRoomHook(callback);
 		}
 
 		/// Registers a callback that runs after the game initializes a new dungeon room.
-		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
 		/// @param callback A function called after the game's dungeon room start script runs.
 		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus OnDungeonRoomStart(Internal::OnDungeonRoomStartCallback callback)
+		inline Aurie::AurieStatus AfterDungeonRoomStart(Internal::AfterDungeonRoomStartCallback callback)
 		{
 			if (!callback)
 				return Aurie::AURIE_INVALID_PARAMETER;
 
-			if (Internal::on_dungeon_room_start_callback)
+			if (Internal::after_dungeon_room_start_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
 			return Internal::RegisterDungeonRoomStartHook(callback);

@@ -92,9 +92,9 @@ namespace MMAPI::Damage
 	{
 		inline constexpr const char* GML_SCRIPT_DAMAGE = "gml_Script_damage@gml_Object_obj_damage_receiver_Create_0";
 
-		using OnDamageCallback = void(*)(MMAPI::Damage::Context&);
+		using BeforeDamageCallback = void(*)(MMAPI::Damage::Context&);
 
-		inline OnDamageCallback on_damage_callback = nullptr;
+		inline BeforeDamageCallback before_damage_callback = nullptr;
 
 		inline YYTK::RValue& GmlScriptDamageCallback(
 			IN YYTK::CInstance* Self,
@@ -107,7 +107,7 @@ namespace MMAPI::Damage
 			if (Arguments && ArgumentCount >= 1 && Arguments[0] && Arguments[0]->m_Kind == YYTK::VALUE_OBJECT)
 			{
 				MMAPI::Damage::Context context{ Arguments[0] };
-				on_damage_callback(context);
+				before_damage_callback(context);
 			}
 
 			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
@@ -121,7 +121,7 @@ namespace MMAPI::Damage
 			return Result;
 		}
 
-		inline Aurie::AurieStatus RegisterDamageHook(OnDamageCallback callback)
+		inline Aurie::AurieStatus RegisterDamageHook(BeforeDamageCallback callback)
 		{
 			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
 				GML_SCRIPT_DAMAGE,
@@ -131,7 +131,7 @@ namespace MMAPI::Damage
 			if (!Aurie::AurieSuccess(status))
 				return status;
 
-			on_damage_callback = callback;
+			before_damage_callback = callback;
 			return Aurie::AURIE_SUCCESS;
 		}
 	}
@@ -139,15 +139,14 @@ namespace MMAPI::Damage
 	namespace Hooks
 	{
 		/// Registers a callback that can modify a damage packet before the game applies it.
-		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
 		/// @param callback A function called with a mutable damage context.
 		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus OnDamage(Internal::OnDamageCallback callback)
+		inline Aurie::AurieStatus BeforeDamage(Internal::BeforeDamageCallback callback)
 		{
 			if (!callback)
 				return Aurie::AURIE_INVALID_PARAMETER;
 
-			if (Internal::on_damage_callback)
+			if (Internal::before_damage_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
 			return Internal::RegisterDamageHook(callback);

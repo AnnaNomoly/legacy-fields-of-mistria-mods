@@ -121,22 +121,22 @@ namespace MMAPI::Player
 		inline constexpr const char* GML_SCRIPT_HELD_ITEM              = "gml_Script_held_item@Ari@Ari";
 		inline constexpr const char* GML_SCRIPT_BARK_EMITTER_EMIT      = "gml_Script_emit@BarkEmitter@BarkEmitter";
 
-		using OnMoveSpeedCallback     = void(*)(MMAPI::Player::MoveSpeedContext&);
-		using OnHealthChangeCallback  = void(*)(MMAPI::Player::ModifyHealthChangeContext&);
-		using OnStaminaChangeCallback = void(*)(MMAPI::Player::ModifyStaminaChangeContext&);
-		using OnManaChangeCallback    = void(*)(MMAPI::Player::ModifyManaChangeContext&);
+		using AfterMoveSpeedCallback     = void(*)(MMAPI::Player::MoveSpeedContext&);
+		using BeforeHealthChangeCallback  = void(*)(MMAPI::Player::ModifyHealthChangeContext&);
+		using BeforeStaminaChangeCallback = void(*)(MMAPI::Player::ModifyStaminaChangeContext&);
+		using BeforeManaChangeCallback    = void(*)(MMAPI::Player::ModifyManaChangeContext&);
 
-		inline OnMoveSpeedCallback     on_move_speed_callback     = nullptr;
-		inline OnHealthChangeCallback  on_health_change_callback  = nullptr;
-		inline OnStaminaChangeCallback on_stamina_change_callback = nullptr;
-		inline OnManaChangeCallback    on_mana_change_callback    = nullptr;
+		inline AfterMoveSpeedCallback     after_move_speed_callback     = nullptr;
+		inline BeforeHealthChangeCallback  before_health_change_callback  = nullptr;
+		inline BeforeStaminaChangeCallback before_stamina_change_callback = nullptr;
+		inline BeforeManaChangeCallback    before_mana_change_callback    = nullptr;
 
 		inline YYTK::RValue GetStateId()
 		{
 			const auto& refs = MMAPI::Internal::instance_reference_map;
 			if (!refs.contains(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI))
 				return {};
-			YYTK::CInstance* Ari = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[1];
+			YYTK::CInstance* Ari = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[0];
 
 			YYTK::RValue ari = Ari->ToRValue();
 			YYTK::RValue fsm = ari.GetMember("fsm");
@@ -164,14 +164,14 @@ namespace MMAPI::Player
 			if (MMAPI::Engine::IsNumeric(Result))
 			{
 				MMAPI::Player::MoveSpeedContext context{ Result.ToDouble() };
-				on_move_speed_callback(context);
+				after_move_speed_callback(context);
 				Result = context.m_has_override ? context.m_override_value : context.m_result + context.m_modifier_sum;
 			}
 
 			return Result;
 		}
 
-		inline Aurie::AurieStatus RegisterMoveSpeedHook(OnMoveSpeedCallback callback)
+		inline Aurie::AurieStatus RegisterMoveSpeedHook(AfterMoveSpeedCallback callback)
 		{
 			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
 				GML_SCRIPT_GET_MOVE_SPEED,
@@ -181,7 +181,7 @@ namespace MMAPI::Player
 			if (!Aurie::AurieSuccess(status))
 				return status;
 
-			on_move_speed_callback = callback;
+			after_move_speed_callback = callback;
 			return Aurie::AURIE_SUCCESS;
 		}
 
@@ -196,7 +196,7 @@ namespace MMAPI::Player
 			if (Arguments && ArgumentCount >= 1 && Arguments[0] && MMAPI::Engine::IsNumeric(*Arguments[0]))
 			{
 				MMAPI::Player::ModifyHealthChangeContext context{ Arguments[0]->ToDouble() };
-				on_health_change_callback(context);
+				before_health_change_callback(context);
 				*Arguments[0] = context.m_amount;
 			}
 
@@ -222,7 +222,7 @@ namespace MMAPI::Player
 			if (Arguments && ArgumentCount >= 1 && Arguments[0] && MMAPI::Engine::IsNumeric(*Arguments[0]))
 			{
 				MMAPI::Player::ModifyStaminaChangeContext context{ Arguments[0]->ToDouble() };
-				on_stamina_change_callback(context);
+				before_stamina_change_callback(context);
 				*Arguments[0] = context.m_amount;
 			}
 
@@ -248,7 +248,7 @@ namespace MMAPI::Player
 			if (Arguments && ArgumentCount >= 1 && Arguments[0] && MMAPI::Engine::IsNumeric(*Arguments[0]))
 			{
 				MMAPI::Player::ModifyManaChangeContext context{ Arguments[0]->ToDouble() };
-				on_mana_change_callback(context);
+				before_mana_change_callback(context);
 				*Arguments[0] = context.m_amount;
 			}
 
@@ -263,7 +263,7 @@ namespace MMAPI::Player
 			return Result;
 		}
 
-		inline Aurie::AurieStatus RegisterHealthChangeHook(OnHealthChangeCallback callback)
+		inline Aurie::AurieStatus RegisterHealthChangeHook(BeforeHealthChangeCallback callback)
 		{
 			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
 				GML_SCRIPT_MODIFY_HEALTH,
@@ -273,11 +273,11 @@ namespace MMAPI::Player
 			if (!Aurie::AurieSuccess(status))
 				return status;
 
-			on_health_change_callback = callback;
+			before_health_change_callback = callback;
 			return Aurie::AURIE_SUCCESS;
 		}
 
-		inline Aurie::AurieStatus RegisterStaminaChangeHook(OnStaminaChangeCallback callback)
+		inline Aurie::AurieStatus RegisterStaminaChangeHook(BeforeStaminaChangeCallback callback)
 		{
 			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
 				GML_SCRIPT_MODIFY_STAMINA,
@@ -287,11 +287,11 @@ namespace MMAPI::Player
 			if (!Aurie::AurieSuccess(status))
 				return status;
 
-			on_stamina_change_callback = callback;
+			before_stamina_change_callback = callback;
 			return Aurie::AURIE_SUCCESS;
 		}
 
-		inline Aurie::AurieStatus RegisterManaChangeHook(OnManaChangeCallback callback)
+		inline Aurie::AurieStatus RegisterManaChangeHook(BeforeManaChangeCallback callback)
 		{
 			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
 				GML_SCRIPT_MODIFY_MANA,
@@ -301,7 +301,7 @@ namespace MMAPI::Player
 			if (!Aurie::AurieSuccess(status))
 				return status;
 
-			on_mana_change_callback = callback;
+			before_mana_change_callback = callback;
 			return Aurie::AURIE_SUCCESS;
 		}
 	}
@@ -339,11 +339,10 @@ namespace MMAPI::Player
 	/// @return The held item struct as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetHeldItem()
 	{
-		const auto& refs = MMAPI::Internal::instance_reference_map;
-		if (!refs.contains(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI))
+		YYTK::CInstance* Self  = nullptr;
+		YYTK::CInstance* Other = nullptr;
+		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
 			return {};
-		YYTK::CInstance* Self  = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[0];
-		YYTK::CInstance* Other = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[1];
 
 		YYTK::CScript* gml_script = nullptr;
 		MMAPI::Internal::module_interface->GetNamedRoutinePointer(Internal::GML_SCRIPT_HELD_ITEM, reinterpret_cast<PVOID*>(&gml_script));
@@ -404,7 +403,7 @@ namespace MMAPI::Player
 		const auto& refs = MMAPI::Internal::instance_reference_map;
 		if (!refs.contains(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI))
 			return std::nullopt;
-		YYTK::CInstance* Ari = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[1];
+		YYTK::CInstance* Ari = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[0];
 
 		YYTK::RValue x;
 		MMAPI::Internal::module_interface->GetBuiltin("x", Ari, NULL_INDEX, x);
@@ -420,11 +419,10 @@ namespace MMAPI::Player
 	/// @return Ari's current health as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetHealth()
 	{
-		const auto& refs = MMAPI::Internal::instance_reference_map;
-		if (!refs.contains(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI))
+		YYTK::CInstance* Self  = nullptr;
+		YYTK::CInstance* Other = nullptr;
+		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
 			return {};
-		YYTK::CInstance* Self  = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[0];
-		YYTK::CInstance* Other = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[1];
 
 		YYTK::CScript* gml_script = nullptr;
 		MMAPI::Internal::module_interface->GetNamedRoutinePointer(Internal::GML_SCRIPT_GET_HEALTH, reinterpret_cast<PVOID*>(&gml_script));
@@ -439,11 +437,10 @@ namespace MMAPI::Player
 	/// @param value The health value to set.
 	inline void SetHealth(int value)
 	{
-		const auto& refs = MMAPI::Internal::instance_reference_map;
-		if (!refs.contains(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI))
+		YYTK::CInstance* Self  = nullptr;
+		YYTK::CInstance* Other = nullptr;
+		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
 			return;
-		YYTK::CInstance* Self  = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[0];
-		YYTK::CInstance* Other = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[1];
 
 		YYTK::CScript* gml_script = nullptr;
 		MMAPI::Internal::module_interface->GetNamedRoutinePointer(Internal::GML_SCRIPT_SET_HEALTH, reinterpret_cast<PVOID*>(&gml_script));
@@ -459,11 +456,10 @@ namespace MMAPI::Player
 	/// @return Ari's current maximum health as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetMaxHealth()
 	{
-		const auto& refs = MMAPI::Internal::instance_reference_map;
-		if (!refs.contains(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI))
+		YYTK::CInstance* Self  = nullptr;
+		YYTK::CInstance* Other = nullptr;
+		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
 			return {};
-		YYTK::CInstance* Self  = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[0];
-		YYTK::CInstance* Other = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[1];
 
 		YYTK::CScript* gml_script = nullptr;
 		MMAPI::Internal::module_interface->GetNamedRoutinePointer(Internal::GML_SCRIPT_GET_MAX_HEALTH, reinterpret_cast<PVOID*>(&gml_script));
@@ -491,11 +487,10 @@ namespace MMAPI::Player
 	/// @param value The amount to add to Ari's current health. Negative values reduce health.
 	inline void ModifyHealth(int value)
 	{
-		const auto& refs = MMAPI::Internal::instance_reference_map;
-		if (!refs.contains(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI))
+		YYTK::CInstance* Self  = nullptr;
+		YYTK::CInstance* Other = nullptr;
+		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
 			return;
-		YYTK::CInstance* Self  = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[0];
-		YYTK::CInstance* Other = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[1];
 
 		YYTK::CScript* gml_script = nullptr;
 		MMAPI::Internal::module_interface->GetNamedRoutinePointer(Internal::GML_SCRIPT_MODIFY_HEALTH, reinterpret_cast<PVOID*>(&gml_script));
@@ -523,11 +518,10 @@ namespace MMAPI::Player
 	/// @param value The amount to add to Ari's current stamina. Negative values reduce stamina.
 	inline void ModifyStamina(int value)
 	{
-		const auto& refs = MMAPI::Internal::instance_reference_map;
-		if (!refs.contains(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI))
+		YYTK::CInstance* Self  = nullptr;
+		YYTK::CInstance* Other = nullptr;
+		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
 			return;
-		YYTK::CInstance* Self  = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[0];
-		YYTK::CInstance* Other = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[1];
 
 		YYTK::CScript* gml_script = nullptr;
 		MMAPI::Internal::module_interface->GetNamedRoutinePointer(Internal::GML_SCRIPT_MODIFY_STAMINA, reinterpret_cast<PVOID*>(&gml_script));
@@ -543,11 +537,10 @@ namespace MMAPI::Player
 	/// @return Ari's current stamina as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetStamina()
 	{
-		const auto& refs = MMAPI::Internal::instance_reference_map;
-		if (!refs.contains(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI))
+		YYTK::CInstance* Self  = nullptr;
+		YYTK::CInstance* Other = nullptr;
+		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
 			return {};
-		YYTK::CInstance* Self  = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[0];
-		YYTK::CInstance* Other = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[1];
 
 		YYTK::CScript* gml_script = nullptr;
 		MMAPI::Internal::module_interface->GetNamedRoutinePointer(Internal::GML_SCRIPT_GET_STAMINA, reinterpret_cast<PVOID*>(&gml_script));
@@ -562,11 +555,10 @@ namespace MMAPI::Player
 	/// @param value The amount to add to Ari's current gold. Negative values reduce gold.
 	inline void ModifyGold(int value)
 	{
-		const auto& refs = MMAPI::Internal::instance_reference_map;
-		if (!refs.contains(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI))
+		YYTK::CInstance* Self  = nullptr;
+		YYTK::CInstance* Other = nullptr;
+		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
 			return;
-		YYTK::CInstance* Self  = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[0];
-		YYTK::CInstance* Other = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[1];
 
 		YYTK::CScript* gml_script = nullptr;
 		MMAPI::Internal::module_interface->GetNamedRoutinePointer(Internal::GML_SCRIPT_MODIFY_GOLD, reinterpret_cast<PVOID*>(&gml_script));
@@ -582,11 +574,10 @@ namespace MMAPI::Player
 	/// @param value The amount to add to Ari's current renown. Negative values reduce renown.
 	inline void ModifyRenown(int value)
 	{
-		const auto& refs = MMAPI::Internal::instance_reference_map;
-		if (!refs.contains(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI))
+		YYTK::CInstance* Self  = nullptr;
+		YYTK::CInstance* Other = nullptr;
+		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
 			return;
-		YYTK::CInstance* Self  = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[0];
-		YYTK::CInstance* Other = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[1];
 
 		YYTK::CScript* gml_script = nullptr;
 		MMAPI::Internal::module_interface->GetNamedRoutinePointer(Internal::GML_SCRIPT_MODIFY_RENOWN, reinterpret_cast<PVOID*>(&gml_script));
@@ -602,11 +593,10 @@ namespace MMAPI::Player
 	/// @return Ari's current mana as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetMana()
 	{
-		const auto& refs = MMAPI::Internal::instance_reference_map;
-		if (!refs.contains(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI))
+		YYTK::CInstance* Self  = nullptr;
+		YYTK::CInstance* Other = nullptr;
+		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
 			return {};
-		YYTK::CInstance* Self  = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[0];
-		YYTK::CInstance* Other = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[1];
 
 		YYTK::CScript* gml_script = nullptr;
 		MMAPI::Internal::module_interface->GetNamedRoutinePointer(Internal::GML_SCRIPT_GET_MANA, reinterpret_cast<PVOID*>(&gml_script));
@@ -621,11 +611,10 @@ namespace MMAPI::Player
 	/// @param value The amount to add to Ari's current mana. Negative values reduce mana.
 	inline void ModifyMana(int value)
 	{
-		const auto& refs = MMAPI::Internal::instance_reference_map;
-		if (!refs.contains(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI))
+		YYTK::CInstance* Self  = nullptr;
+		YYTK::CInstance* Other = nullptr;
+		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
 			return;
-		YYTK::CInstance* Self  = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[0];
-		YYTK::CInstance* Other = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[1];
 
 		YYTK::CScript* gml_script = nullptr;
 		MMAPI::Internal::module_interface->GetNamedRoutinePointer(Internal::GML_SCRIPT_MODIFY_MANA, reinterpret_cast<PVOID*>(&gml_script));
@@ -641,11 +630,10 @@ namespace MMAPI::Player
 	/// @return Ari's current essence as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetEssence()
 	{
-		const auto& refs = MMAPI::Internal::instance_reference_map;
-		if (!refs.contains(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI))
+		YYTK::CInstance* Self  = nullptr;
+		YYTK::CInstance* Other = nullptr;
+		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
 			return {};
-		YYTK::CInstance* Self  = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[0];
-		YYTK::CInstance* Other = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[1];
 
 		YYTK::CScript* gml_script = nullptr;
 		MMAPI::Internal::module_interface->GetNamedRoutinePointer(Internal::GML_SCRIPT_GET_ESSENCE, reinterpret_cast<PVOID*>(&gml_script));
@@ -660,11 +648,10 @@ namespace MMAPI::Player
 	/// @param value The amount to add to Ari's current essence. Negative values reduce essence.
 	inline void ModifyEssence(int value)
 	{
-		const auto& refs = MMAPI::Internal::instance_reference_map;
-		if (!refs.contains(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI))
+		YYTK::CInstance* Self  = nullptr;
+		YYTK::CInstance* Other = nullptr;
+		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
 			return;
-		YYTK::CInstance* Self  = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[0];
-		YYTK::CInstance* Other = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[1];
 
 		YYTK::CScript* gml_script = nullptr;
 		MMAPI::Internal::module_interface->GetNamedRoutinePointer(Internal::GML_SCRIPT_MODIFY_ESSENCE, reinterpret_cast<PVOID*>(&gml_script));
@@ -680,11 +667,10 @@ namespace MMAPI::Player
 	/// @return Ari's current movement speed as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetMoveSpeed()
 	{
-		const auto& refs = MMAPI::Internal::instance_reference_map;
-		if (!refs.contains(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI))
+		YYTK::CInstance* Self  = nullptr;
+		YYTK::CInstance* Other = nullptr;
+		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
 			return {};
-		YYTK::CInstance* Self  = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[0];
-		YYTK::CInstance* Other = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[1];
 
 		YYTK::CScript* gml_script = nullptr;
 		MMAPI::Internal::module_interface->GetNamedRoutinePointer(Internal::GML_SCRIPT_GET_MOVE_SPEED, reinterpret_cast<PVOID*>(&gml_script));
@@ -699,11 +685,10 @@ namespace MMAPI::Player
 	/// @param spell The spell to cast.
 	inline void CastSpell(MMAPI::Spell::Ids spell)
 	{
-		const auto& refs = MMAPI::Internal::instance_reference_map;
-		if (!refs.contains(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI))
+		YYTK::CInstance* Self  = nullptr;
+		YYTK::CInstance* Other = nullptr;
+		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
 			return;
-		YYTK::CInstance* Self  = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[0];
-		YYTK::CInstance* Other = refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[1];
 
 		YYTK::CScript* gml_script = nullptr;
 		MMAPI::Internal::module_interface->GetNamedRoutinePointer(MMAPI::Spell::Internal::GML_SCRIPT_CAST_SPELL, reinterpret_cast<PVOID*>(&gml_script));
@@ -714,9 +699,18 @@ namespace MMAPI::Player
 		gml_script->m_Functions->m_ScriptFunction(Self, Other, result, 1, args);
 	}
 
+	/// Activates Player utility functions that directly call game scripts.
+	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
+	inline Aurie::AurieStatus Enable()
+	{
+		Aurie::AurieStatus status = MMAPI::Bark::Enable();
+		if (!Aurie::AurieSuccess(status))
+			return status;
+		return MMAPI::Instance::Enable();
+	}
+
 	/// Emits a bark (voiced dialogue bubble) from Ari via the BarkEmitter.
-	/// @attention Requires MMAPI::Bark::Internal::GML_SCRIPT_BARK_EMITTER to be registered via RegisterScriptContext.
-	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
+	/// @attention Requires MMAPI::Player::Enable() to have been called.
 	/// @param bark_icon The bark icon to display.
 	/// @param bark_type The numeric type of the bark (controls display style or trigger behavior).
 	inline void EmitBark(MMAPI::Bark::Icons bark_icon, int bark_type)
@@ -727,7 +721,7 @@ namespace MMAPI::Player
 		    !instance_refs.contains(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI))
 			return;
 		YYTK::CInstance* Self  = script_refs.at(MMAPI::Bark::Internal::GML_SCRIPT_BARK_EMITTER)[0];
-		YYTK::CInstance* Other = instance_refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[1];
+		YYTK::CInstance* Other = instance_refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[0];
 
 		YYTK::CScript* gml_script = nullptr;
 		MMAPI::Internal::module_interface->GetNamedRoutinePointer(Internal::GML_SCRIPT_BARK_EMITTER_EMIT, reinterpret_cast<PVOID*>(&gml_script));
@@ -744,15 +738,14 @@ namespace MMAPI::Player
 		/// Registers a callback that can modify Ari's movement speed after the game calculates it.
 		/// Use ctx.AddModifier(value) to add a signed offset, or ctx.SetOverride(value) to force a specific speed.
 		/// If multiple callbacks call SetOverride, the last registered callback wins.
-		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
 		/// @param callback A function called with a mutable move speed context after the game calculates it.
 		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus OnMoveSpeed(Internal::OnMoveSpeedCallback callback)
+		inline Aurie::AurieStatus AfterMoveSpeed(Internal::AfterMoveSpeedCallback callback)
 		{
 			if (!callback)
 				return Aurie::AURIE_INVALID_PARAMETER;
 
-			if (Internal::on_move_speed_callback)
+			if (Internal::after_move_speed_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
 			return Internal::RegisterMoveSpeedHook(callback);
@@ -760,15 +753,14 @@ namespace MMAPI::Player
 
 		/// Registers a callback that can modify the amount passed to the game's modify_health script.
 		/// Use ctx.SetAmount(value) to change the health delta before the game applies it.
-		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
 		/// @param callback A function called with a mutable health change context before the game processes it.
 		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus OnHealthChange(Internal::OnHealthChangeCallback callback)
+		inline Aurie::AurieStatus BeforeHealthChange(Internal::BeforeHealthChangeCallback callback)
 		{
 			if (!callback)
 				return Aurie::AURIE_INVALID_PARAMETER;
 
-			if (Internal::on_health_change_callback)
+			if (Internal::before_health_change_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
 			return Internal::RegisterHealthChangeHook(callback);
@@ -776,15 +768,14 @@ namespace MMAPI::Player
 
 		/// Registers a callback that can modify the amount passed to the game's modify_stamina script.
 		/// Use ctx.SetAmount(value) to change the stamina delta before the game applies it.
-		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
 		/// @param callback A function called with a mutable stamina change context before the game processes it.
 		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus OnStaminaChange(Internal::OnStaminaChangeCallback callback)
+		inline Aurie::AurieStatus BeforeStaminaChange(Internal::BeforeStaminaChangeCallback callback)
 		{
 			if (!callback)
 				return Aurie::AURIE_INVALID_PARAMETER;
 
-			if (Internal::on_stamina_change_callback)
+			if (Internal::before_stamina_change_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
 			return Internal::RegisterStaminaChangeHook(callback);
@@ -792,15 +783,14 @@ namespace MMAPI::Player
 
 		/// Registers a callback that can modify the amount passed to the game's modify_mana script.
 		/// Use ctx.SetAmount(value) to change the mana delta before the game applies it.
-		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
 		/// @param callback A function called with a mutable mana change context before the game processes it.
 		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus OnManaChange(Internal::OnManaChangeCallback callback)
+		inline Aurie::AurieStatus BeforeManaChange(Internal::BeforeManaChangeCallback callback)
 		{
 			if (!callback)
 				return Aurie::AURIE_INVALID_PARAMETER;
 
-			if (Internal::on_mana_change_callback)
+			if (Internal::before_mana_change_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
 			return Internal::RegisterManaChangeHook(callback);

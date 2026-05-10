@@ -27,9 +27,17 @@ namespace MMAPI::Item
 		inline constexpr const char* GML_SCRIPT_DROP_ITEM             = "gml_Script_drop_item";
 		inline constexpr const char* GML_SCRIPT_USE_ITEM              = "gml_Script_use_item";
 
-		using OnUseItemCallback = void(*)(MMAPI::Item::UseItemContext&);
+		using BeforeUseItemCallback = void(*)(MMAPI::Item::UseItemContext&);
 
-		inline OnUseItemCallback on_use_item_callback = nullptr;
+		inline BeforeUseItemCallback before_use_item_callback = nullptr;
+
+		inline YYTK::RValue& DropItemContextCallback(IN YYTK::CInstance* Self, IN YYTK::CInstance* Other, OUT YYTK::RValue& Result, IN int ArgumentCount, IN YYTK::RValue** Arguments)
+		{
+			MMAPI::Internal::RegisterScriptContext(GML_SCRIPT_DROP_ITEM, Self, Other);
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_DROP_ITEM));
+			original(Self, Other, Result, ArgumentCount, Arguments);
+			return Result;
+		}
 
 		inline YYTK::RValue GetItemData()
 		{
@@ -102,7 +110,7 @@ namespace MMAPI::Item
 			if (Arguments && ArgumentCount >= 1 && Arguments[0])
 			{
 				MMAPI::Item::UseItemContext context{ static_cast<int>(Arguments[0]->GetMember("item_id").ToInt64()) };
-				on_use_item_callback(context);
+				before_use_item_callback(context);
 
 				if (context.m_cancelled)
 					return Result;
@@ -116,7 +124,7 @@ namespace MMAPI::Item
 			return Result;
 		}
 
-		inline Aurie::AurieStatus RegisterUseItemHook(OnUseItemCallback callback)
+		inline Aurie::AurieStatus RegisterUseItemHook(BeforeUseItemCallback callback)
 		{
 			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
 				GML_SCRIPT_USE_ITEM,
@@ -125,7 +133,7 @@ namespace MMAPI::Item
 			if (!Aurie::AurieSuccess(status))
 				return status;
 
-			on_use_item_callback = callback;
+			before_use_item_callback = callback;
 			return Aurie::AURIE_SUCCESS;
 		}
 
@@ -434,8 +442,18 @@ namespace MMAPI::Item
 		return item_acquired->ToBoolean();
 	}
 
+	/// Activates Item utility functions that directly call game scripts.
+	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
+	inline Aurie::AurieStatus Enable()
+	{
+		return MMAPI::Internal::InstallScriptHook(
+			Internal::GML_SCRIPT_DROP_ITEM,
+			reinterpret_cast<PVOID>(Internal::DropItemContextCallback)
+		);
+	}
+
 	/// Drops an item into the current room at the given room coordinates.
-	/// @attention Requires MMAPI::Item::Internal::GML_SCRIPT_DROP_ITEM to be registered via RegisterScriptContext.
+	/// @attention Requires MMAPI::Item::Enable() to have been called.
 	/// @param item_id The item ID to drop.
 	/// @param x The room x coordinate.
 	/// @param y The room y coordinate.
@@ -476,15 +494,14 @@ namespace MMAPI::Item
 	{
 		/// Registers a callback that runs before the game processes an item use.
 		/// Call ctx.Cancel() to prevent the game from processing the item use.
-		/// @attention Requires MMAPI to be initialized with the AurieModule pointer via Initialize.
 		/// @param callback A function called with a mutable use context before the game processes it.
 		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus OnUseItem(Internal::OnUseItemCallback callback)
+		inline Aurie::AurieStatus BeforeUseItem(Internal::BeforeUseItemCallback callback)
 		{
 			if (!callback)
 				return Aurie::AURIE_INVALID_PARAMETER;
 
-			if (Internal::on_use_item_callback)
+			if (Internal::before_use_item_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
 			return Internal::RegisterUseItemHook(callback);

@@ -11,10 +11,28 @@ namespace MMAPI::Inventory
 		inline constexpr const char* GML_SCRIPT_DESERIALIZE_INVENTORY = "gml_Script_deserialize@anon@6096@__Inventory@Inventory";
 		inline constexpr const char* GML_SCRIPT_COUNT_ITEM            = "gml_Script_item_id_quantity@anon@4106@__Inventory@Inventory";
 		inline constexpr const char* GML_SCRIPT_REMOVE_ITEM           = "gml_Script_remove@anon@2021@__Inventory@Inventory";
+
+		inline YYTK::RValue& DeserializeInventoryContextCallback(IN YYTK::CInstance* Self, IN YYTK::CInstance* Other, OUT YYTK::RValue& Result, IN int ArgumentCount, IN YYTK::RValue** Arguments)
+		{
+			MMAPI::Internal::RegisterScriptContext(GML_SCRIPT_DESERIALIZE_INVENTORY, Self, Other);
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_DESERIALIZE_INVENTORY));
+			original(Self, Other, Result, ArgumentCount, Arguments);
+			return Result;
+		}
+	}
+
+	/// Activates Inventory utility functions that directly call game scripts.
+	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
+	inline Aurie::AurieStatus Enable()
+	{
+		return MMAPI::Internal::InstallScriptHook(
+			Internal::GML_SCRIPT_DESERIALIZE_INVENTORY,
+			reinterpret_cast<PVOID>(Internal::DeserializeInventoryContextCallback)
+		);
 	}
 
 	/// Counts how many of an item Ari currently has.
-	/// @attention Requires MMAPI::Inventory::Internal::GML_SCRIPT_DESERIALIZE_INVENTORY to be registered via RegisterScriptContext.
+	/// @attention Requires MMAPI::Inventory::Enable() to have been called.
 	/// @param item_id The item ID to count.
 	/// @return The count as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue CountItem(int item_id)
@@ -36,7 +54,7 @@ namespace MMAPI::Inventory
 	}
 
 	/// Removes a quantity of an item from Ari's inventory.
-	/// @attention Requires MMAPI::Inventory::Internal::GML_SCRIPT_DESERIALIZE_INVENTORY to be registered via RegisterScriptContext.
+	/// @attention Requires MMAPI::Inventory::Enable() to have been called.
 	/// @param item_id The item ID to remove.
 	/// @param quantity The quantity to remove.
 	inline void RemoveItem(int item_id, int quantity)

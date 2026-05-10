@@ -1,10 +1,41 @@
 #pragma once
 
+#include "Core.hpp"
+
+#include "YYToolkit/YYTK_Shared.hpp"
+
 namespace MMAPI::Bark
 {
 	namespace Internal
 	{
 		inline constexpr const char* GML_SCRIPT_BARK_EMITTER = "gml_Script_BarkEmitter";
+
+		inline YYTK::RValue& BarkEmitterContextCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			MMAPI::Internal::RegisterScriptContext(GML_SCRIPT_BARK_EMITTER, Self, Other);
+
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_BARK_EMITTER)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+			return Result;
+		}
+	}
+
+	/// Activates Bark utility functions that directly call game scripts.
+	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
+	inline Aurie::AurieStatus Enable()
+	{
+		return MMAPI::Internal::InstallScriptHook(
+			Internal::GML_SCRIPT_BARK_EMITTER,
+			reinterpret_cast<PVOID>(Internal::BarkEmitterContextCallback)
+		);
 	}
 
 	/// Source: bark_icons.json.__bark_id__
