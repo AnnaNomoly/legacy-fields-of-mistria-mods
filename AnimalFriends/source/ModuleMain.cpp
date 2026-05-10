@@ -1,6 +1,3 @@
-#include <iostream>
-#include <codecvt>
-#include <shlobj.h>
 #include <filesystem>
 #include <YYToolkit/YYTK_Shared.hpp>
 #include <MMAPI/MMAPI.hpp>
@@ -108,14 +105,6 @@ void handle_eptr(std::exception_ptr eptr)
 	catch (const std::exception& e) {
 		g_ModuleInterface->Print(CM_LIGHTRED, "[AnimalFriends %s] - Error: %s", VERSION, e.what());
 	}
-}
-
-std::string wstr_to_string(std::wstring wstr)
-{
-	std::vector<char> buf(wstr.size());
-	std::use_facet<std::ctype<wchar_t>>(std::locale{}).narrow(wstr.data(), wstr.data() + wstr.size(), '?', buf.data());
-
-	return std::string(buf.data(), buf.size());
 }
 
 void LogDefaultConfigValues()
