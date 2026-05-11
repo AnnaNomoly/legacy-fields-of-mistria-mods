@@ -126,9 +126,6 @@ namespace MMAPI::Location
 
 		inline YYTK::RValue GetLocationData(int location_id)
 		{
-			if (!MMAPI::Internal::global_instance)
-				return {};
-
 			YYTK::RValue locations = MMAPI::Internal::global_instance->GetMember("__locations");
 			size_t location_count = 0;
 			MMAPI::Internal::module_interface->GetArraySize(locations, location_count);
@@ -170,9 +167,6 @@ namespace MMAPI::Location
 		// Called from MMAPI's setup_main_screen pub/sub when valid Self/Other are available.
 		inline void BuildMaps(YYTK::CInstance* Self, YYTK::CInstance* Other)
 		{
-			if (!MMAPI::Internal::global_instance || !MMAPI::Internal::module_interface)
-				return;
-
 			location_id_to_internal_name_map.clear();
 			location_internal_name_to_id_map.clear();
 			gm_room_name_to_location_id_map.clear();
@@ -258,6 +252,10 @@ namespace MMAPI::Location
 	/// @return AURIE_SUCCESS if the hook is installed (or already was); otherwise the Aurie failure status.
 	inline Aurie::AurieStatus Enable()
 	{
+		Aurie::AurieStatus status = MMAPI::Instance::Enable();
+		if (!Aurie::AurieSuccess(status))
+			return status;
+
 		MMAPI::Internal::RegisterOnSetupMainScreenHandler(Internal::BuildMaps);
 
 		return MMAPI::Internal::InstallScriptHooks({
@@ -271,9 +269,6 @@ namespace MMAPI::Location
 	/// @return The location internal name as an RValue.
 	inline YYTK::RValue GetInternalName(MMAPI::Location::Ids location)
 	{
-		if (!MMAPI::Internal::global_instance)
-			return {};
-
 		YYTK::RValue location_ids = MMAPI::Internal::global_instance->GetMember("__location_id__");
 		size_t location_count = 0;
 		MMAPI::Internal::module_interface->GetArraySize(location_ids, location_count);
@@ -361,7 +356,7 @@ namespace MMAPI::Location
 	}
 
 	/// Teleports Ari to the given location at the specified coordinates.
-	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
+	/// @attention Requires MMAPI::Location::Enable() to have been called.
 	/// @param location The target location.
 	/// @param x The X coordinate within the target location to place Ari.
 	/// @param y The Y coordinate within the target location to place Ari.
@@ -397,10 +392,7 @@ namespace MMAPI::Location
 			if (Internal::after_go_to_room_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				Internal::GML_SCRIPT_GO_TO_ROOM,
-				reinterpret_cast<PVOID>(Internal::GmlScriptGoToRoomCallback)
-			);
+			Aurie::AurieStatus status = MMAPI::Location::Enable();
 			if (!Aurie::AurieSuccess(status))
 				return status;
 

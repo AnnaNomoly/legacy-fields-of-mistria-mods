@@ -37,45 +37,49 @@ namespace MMAPI::Calendar
 		inline constexpr const char* GML_SCRIPT_GET_SEASON       = "gml_Script_season@Calendar@Calendar";
 		inline constexpr const char* GML_SCRIPT_GET_YEAR         = "gml_Script_year@Calendar@Calendar";
 
+		// Live Calendar Self/Other, latched from the unified_time hook (fires every frame during gameplay).
+		// All four Calendar scripts are bound to the same Calendar singleton, so a single latch serves all of them.
+		// Used by TryGetCalendarContext for callers outside any hook frame.
+		inline YYTK::CInstance* calendar_self  = nullptr;
+		inline YYTK::CInstance* calendar_other = nullptr;
+
+		// Cleared from the setup_main_screen pub/sub when the player returns to the title menu.
+		// Registered by Calendar::Enable().
+		inline void ClearCalendarOnReturnToTitle(YYTK::CInstance* /*Self*/, YYTK::CInstance* /*Other*/)
+		{
+			calendar_self  = nullptr;
+			calendar_other = nullptr;
+		}
+
 		inline YYTK::RValue& UnifiedTimeContextCallback(IN YYTK::CInstance* Self, IN YYTK::CInstance* Other, OUT YYTK::RValue& Result, IN int ArgumentCount, IN YYTK::RValue** Arguments)
 		{
-			MMAPI::Internal::RegisterScriptContext(GML_SCRIPT_GET_UNIFIED_TIME, Self, Other);
+			// Refresh the latched pair every tick.
+			calendar_self  = Self;
+			calendar_other = Other;
+
 			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_GET_UNIFIED_TIME));
 			original(Self, Other, Result, ArgumentCount, Arguments);
 			return Result;
 		}
 
-		inline YYTK::RValue& DayContextCallback(IN YYTK::CInstance* Self, IN YYTK::CInstance* Other, OUT YYTK::RValue& Result, IN int ArgumentCount, IN YYTK::RValue** Arguments)
+		/// Resolves the Calendar's GML calling context, latched from the most recent unified_time tick.
+		/// Cleared automatically when the game returns to the title menu.
+		/// @return True if a Calendar unified_time call has been observed this session, false otherwise.
+		inline bool TryGetCalendarContext(YYTK::CInstance*& Self, YYTK::CInstance*& Other)
 		{
-			MMAPI::Internal::RegisterScriptContext(GML_SCRIPT_GET_DAY, Self, Other);
-			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_GET_DAY));
-			original(Self, Other, Result, ArgumentCount, Arguments);
-			return Result;
-		}
-
-		inline YYTK::RValue& SeasonContextCallback(IN YYTK::CInstance* Self, IN YYTK::CInstance* Other, OUT YYTK::RValue& Result, IN int ArgumentCount, IN YYTK::RValue** Arguments)
-		{
-			MMAPI::Internal::RegisterScriptContext(GML_SCRIPT_GET_SEASON, Self, Other);
-			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_GET_SEASON));
-			original(Self, Other, Result, ArgumentCount, Arguments);
-			return Result;
-		}
-
-		inline YYTK::RValue& YearContextCallback(IN YYTK::CInstance* Self, IN YYTK::CInstance* Other, OUT YYTK::RValue& Result, IN int ArgumentCount, IN YYTK::RValue** Arguments)
-		{
-			MMAPI::Internal::RegisterScriptContext(GML_SCRIPT_GET_YEAR, Self, Other);
-			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_GET_YEAR));
-			original(Self, Other, Result, ArgumentCount, Arguments);
-			return Result;
+			if (!calendar_self)
+				return false;
+			Self  = calendar_self;
+			Other = calendar_other;
+			return true;
 		}
 
 		inline YYTK::RValue CallCalendarScript(const char* script_name)
 		{
-			const auto& refs = MMAPI::Internal::script_reference_map;
-			if (!refs.contains(script_name))
+			YYTK::CInstance* Self  = nullptr;
+			YYTK::CInstance* Other = nullptr;
+			if (!TryGetCalendarContext(Self, Other))
 				return {};
-			YYTK::CInstance* Self  = refs.at(script_name)[0];
-			YYTK::CInstance* Other = refs.at(script_name)[1];
 
 			YYTK::CScript* gml_script = nullptr;
 			MMAPI::Internal::module_interface->GetNamedRoutinePointer(script_name, reinterpret_cast<PVOID*>(&gml_script));
@@ -101,15 +105,17 @@ namespace MMAPI::Calendar
 		}
 	}
 
-	/// Activates Calendar utility functions that directly call game scripts.
+	/// Activates Calendar utility functions. Installs the unified_time hook so the live Calendar Self/Other are latched
+	/// for TryGetCalendarContext (cleared on return-to-title via the setup_main_screen pub/sub). All Calendar scripts
+	/// share the same singleton context, so a single latch serves day/season/year as well.
 	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
 	inline Aurie::AurieStatus Enable()
 	{
+		MMAPI::Internal::RegisterOnSetupMainScreenHandler(Internal::ClearCalendarOnReturnToTitle);
+
 		return MMAPI::Internal::InstallScriptHooks({
-			{ Internal::GML_SCRIPT_GET_UNIFIED_TIME, reinterpret_cast<PVOID>(Internal::UnifiedTimeContextCallback) },
-			{ Internal::GML_SCRIPT_GET_DAY,          reinterpret_cast<PVOID>(Internal::DayContextCallback) },
-			{ Internal::GML_SCRIPT_GET_SEASON,       reinterpret_cast<PVOID>(Internal::SeasonContextCallback) },
-			{ Internal::GML_SCRIPT_GET_YEAR,         reinterpret_cast<PVOID>(Internal::YearContextCallback) },
+			{ MMAPI::Internal::GML_SCRIPT_SETUP_MAIN_SCREEN, reinterpret_cast<PVOID>(MMAPI::Internal::GmlScriptBeforeSetupMainScreenCallback) },
+			{ Internal::GML_SCRIPT_GET_UNIFIED_TIME,         reinterpret_cast<PVOID>(Internal::UnifiedTimeContextCallback) },
 		});
 	}
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core.hpp"
+#include "Dungeon.hpp"
 
 #include "YYToolkit/YYTK_Shared.hpp"
 
@@ -82,7 +83,7 @@ namespace MMAPI::Monster
 			IN YYTK::RValue** Arguments
 		)
 		{
-			if (Arguments && ArgumentCount >= 3 && Arguments[2])
+			if (before_monster_spawn_callback && Arguments && ArgumentCount >= 3 && Arguments[2])
 			{
 				MMAPI::Monster::SpawnMonsterContext context{ Arguments[2]->ToInt64() };
 				before_monster_spawn_callback(context);
@@ -116,6 +117,14 @@ namespace MMAPI::Monster
 		}
 	}
 
+	/// Activates Monster utility functions. Cascades to MMAPI::Dungeon::Enable so SpawnMonster can resolve
+	/// the live DungeonRunner via TryGetDungeonRunnerContext.
+	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
+	inline Aurie::AurieStatus Enable()
+	{
+		return MMAPI::Dungeon::Enable();
+	}
+
 	namespace Hooks
 	{
 		/// Registers a callback that runs before the game spawns a monster.
@@ -130,18 +139,27 @@ namespace MMAPI::Monster
 			if (Internal::before_monster_spawn_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
+			Aurie::AurieStatus status = MMAPI::Monster::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
 			return Internal::RegisterMonsterSpawnHook(callback);
 		}
 	}
 
 	/// Spawns a monster at the given room coordinates on the current dungeon floor.
-	/// @param Self The GML instance invoking the spawn (passed through to the script call).
-	/// @param Other The GML other instance context (passed through to the script call).
+	/// @attention Requires MMAPI::Monster::Enable() to have been called.
 	/// @param room_x The X position in room coordinates to spawn the monster at.
 	/// @param room_y The Y position in room coordinates to spawn the monster at.
 	/// @param monster The monster type to spawn.
-	inline void SpawnMonster(YYTK::CInstance* Self, YYTK::CInstance* Other, int room_x, int room_y, MMAPI::Monster::Ids monster)
+	/// @return True if the script was invoked, false if the required context is unavailable.
+	inline bool SpawnMonster(int room_x, int room_y, MMAPI::Monster::Ids monster)
 	{
+		YYTK::CInstance* Self  = nullptr;
+		YYTK::CInstance* Other = nullptr;
+		if (!MMAPI::Dungeon::Internal::TryGetDungeonRunnerContext(Self, Other))
+			return false;
+
 		YYTK::CScript* gml_script = nullptr;
 		MMAPI::Internal::module_interface->GetNamedRoutinePointer(Internal::GML_SCRIPT_SPAWN_MONSTER, reinterpret_cast<PVOID*>(&gml_script));
 
@@ -152,5 +170,6 @@ namespace MMAPI::Monster
 		YYTK::RValue* arguments[3] = { &x, &y, &monster_id };
 
 		gml_script->m_Functions->m_ScriptFunction(Self, Other, result, 3, arguments);
+		return true;
 	}
 }

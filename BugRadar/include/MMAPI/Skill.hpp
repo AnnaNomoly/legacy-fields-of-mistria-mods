@@ -26,8 +26,16 @@ namespace MMAPI::Skill
 		inline constexpr const char* GML_SCRIPT_GAIN_XP = "gml_Script_gain_xp@Ari@Ari";
 	}
 
+	/// Activates Skill utility functions. Cascades to MMAPI::Instance::Enable so GainExperience can resolve
+	/// Ari's calling context internally.
+	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
+	inline Aurie::AurieStatus Enable()
+	{
+		return MMAPI::Instance::Enable();
+	}
+
 	/// Adds experience to one of Ari's player skills.
-	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
+	/// @attention Requires MMAPI::Skill::Enable() to have been called.
 	/// @param skill The player skill to receive experience.
 	/// @param experience The amount of experience to add.
 	inline void GainExperience(MMAPI::Skill::Ids skill, double experience)

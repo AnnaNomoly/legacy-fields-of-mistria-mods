@@ -2,6 +2,7 @@
 
 #include "Core.hpp"
 #include "Engine.hpp"
+#include "Instance.hpp"
 #include "Text.hpp"
 
 #include <map>
@@ -31,14 +32,6 @@ namespace MMAPI::Item
 		using BeforeUseItemCallback = void(*)(MMAPI::Item::UseItemContext&);
 
 		inline BeforeUseItemCallback before_use_item_callback = nullptr;
-
-		inline YYTK::RValue& DropItemContextCallback(IN YYTK::CInstance* Self, IN YYTK::CInstance* Other, OUT YYTK::RValue& Result, IN int ArgumentCount, IN YYTK::RValue** Arguments)
-		{
-			MMAPI::Internal::RegisterScriptContext(GML_SCRIPT_DROP_ITEM, Self, Other);
-			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_DROP_ITEM));
-			original(Self, Other, Result, ArgumentCount, Arguments);
-			return Result;
-		}
 
 		inline YYTK::RValue GetItemData()
 		{
@@ -108,7 +101,7 @@ namespace MMAPI::Item
 			IN YYTK::RValue** Arguments
 		)
 		{
-			if (Arguments && ArgumentCount >= 1 && Arguments[0])
+			if (before_use_item_callback && Arguments && ArgumentCount >= 1 && Arguments[0])
 			{
 				MMAPI::Item::UseItemContext context{ static_cast<int>(Arguments[0]->GetMember("item_id").ToInt64()) };
 				before_use_item_callback(context);
@@ -261,9 +254,9 @@ namespace MMAPI::Item
 	}
 
 	/// Gets the localized display name for an item.
-	/// @attention Requires MMAPI::Text::Enable() to have been called.
+	/// @attention Requires MMAPI::Item::Enable() to have been called.
 	/// @param item_id The item ID to read.
-	/// @return The localized display name as an RValue string, or undefined if the item or localizer context is unavailable.
+	/// @return The localized display name as an RValue string, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetLocalizedName(int item_id)
 	{
 		YYTK::RValue name_key = GetLocalizationKey(item_id);
@@ -483,17 +476,18 @@ namespace MMAPI::Item
 		return item_acquired->ToBoolean();
 	}
 
-	/// Activates Item utility functions that directly call game scripts.
+	/// Activates Item utility functions. Cascades to MMAPI::Instance::Enable so Item::Drop can resolve Ari's
+	/// GML calling context, and to MMAPI::Text::Enable so Item::GetLocalizedName can resolve the Localizer.
 	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
 	inline Aurie::AurieStatus Enable()
 	{
-		return MMAPI::Internal::InstallScriptHook(
-			Internal::GML_SCRIPT_DROP_ITEM,
-			reinterpret_cast<PVOID>(Internal::DropItemContextCallback)
-		);
+		Aurie::AurieStatus status = MMAPI::Instance::Enable();
+		if (!Aurie::AurieSuccess(status))
+			return status;
+		return MMAPI::Text::Enable();
 	}
 
-	/// Drops an item into the current room at the given room coordinates.
+	/// Drops an item at the given room coordinates.
 	/// @attention Requires MMAPI::Item::Enable() to have been called.
 	/// @param item_id The item ID to drop.
 	/// @param x The room x coordinate.
@@ -503,11 +497,10 @@ namespace MMAPI::Item
 		if (item_id < 0)
 			return;
 
-		const auto& refs = MMAPI::Internal::script_reference_map;
-		if (!refs.contains(Internal::GML_SCRIPT_DROP_ITEM))
+		YYTK::CInstance* Self  = nullptr;
+		YYTK::CInstance* Other = nullptr;
+		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
 			return;
-		YYTK::CInstance* Self  = refs.at(Internal::GML_SCRIPT_DROP_ITEM)[0];
-		YYTK::CInstance* Other = refs.at(Internal::GML_SCRIPT_DROP_ITEM)[1];
 
 		YYTK::RValue item = Internal::DeserializeLiveItem(Self, Other);
 		if (item.m_Kind == YYTK::VALUE_UNDEFINED)
@@ -544,6 +537,10 @@ namespace MMAPI::Item
 
 			if (Internal::before_use_item_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			Aurie::AurieStatus status = MMAPI::Item::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
 
 			return Internal::RegisterUseItemHook(callback);
 		}

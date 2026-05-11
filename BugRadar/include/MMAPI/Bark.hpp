@@ -1,43 +1,12 @@
 #pragma once
 
 #include "Core.hpp"
+#include "Instance.hpp"
 
 #include "YYToolkit/YYTK_Shared.hpp"
 
 namespace MMAPI::Bark
 {
-	namespace Internal
-	{
-		inline constexpr const char* GML_SCRIPT_BARK_EMITTER = "gml_Script_BarkEmitter";
-
-		inline YYTK::RValue& BarkEmitterContextCallback(
-			IN YYTK::CInstance* Self,
-			IN YYTK::CInstance* Other,
-			OUT YYTK::RValue& Result,
-			IN int ArgumentCount,
-			IN YYTK::RValue** Arguments
-		)
-		{
-			MMAPI::Internal::RegisterScriptContext(GML_SCRIPT_BARK_EMITTER, Self, Other);
-
-			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
-				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_BARK_EMITTER)
-			);
-			original(Self, Other, Result, ArgumentCount, Arguments);
-			return Result;
-		}
-	}
-
-	/// Activates Bark utility functions that directly call game scripts.
-	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
-	inline Aurie::AurieStatus Enable()
-	{
-		return MMAPI::Internal::InstallScriptHook(
-			Internal::GML_SCRIPT_BARK_EMITTER,
-			reinterpret_cast<PVOID>(Internal::BarkEmitterContextCallback)
-		);
-	}
-
 	/// Source: bark_icons.json.__bark_id__
 	enum class Icons : int
 	{
@@ -145,4 +114,98 @@ namespace MMAPI::Bark
 		Woodcrafting       = 101,
 		Yum                = 102
 	};
+
+	namespace Internal
+	{
+		inline constexpr const char* GML_SCRIPT_BARK_EMITTER      = "gml_Script_BarkEmitter";
+		inline constexpr const char* GML_SCRIPT_BARK_EMITTER_EMIT = "gml_Script_emit@BarkEmitter@BarkEmitter";
+
+		// Live BarkEmitter Self, latched on the first BarkEmitter call (the free constructor-style script).
+		// BarkEmitter is a singleton created early in the game session; the latched Self stays valid until return-to-title.
+		inline YYTK::CInstance* bark_emitter_self = nullptr;
+
+		// Cleared from the setup_main_screen pub/sub when the player returns to the title menu.
+		// Registered by Bark::Enable().
+		inline void ClearBarkEmitterOnReturnToTitle(YYTK::CInstance* /*Self*/, YYTK::CInstance* /*Other*/)
+		{
+			bark_emitter_self = nullptr;
+		}
+
+		inline YYTK::RValue& BarkEmitterContextCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			// Refresh on every fire so we always have the freshest BarkEmitter Self.
+			bark_emitter_self = Self;
+
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_BARK_EMITTER)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+			return Result;
+		}
+
+		/// Resolves the calling context for `emit@BarkEmitter@BarkEmitter` — Self from the latched BarkEmitter,
+		/// Other from the obj_ari instance (so the bark appears over Ari).
+		/// @return True if both pointers were resolved, false otherwise.
+		inline bool TryGetBarkEmitterContext(YYTK::CInstance*& Self, YYTK::CInstance*& Other)
+		{
+			if (!bark_emitter_self)
+				return false;
+
+			YYTK::CInstance* ari_struct   = nullptr;
+			YYTK::CInstance* ari_instance = nullptr;
+			if (!MMAPI::Instance::Internal::TryGetAriContext(ari_struct, ari_instance))
+				return false;
+
+			Self  = bark_emitter_self;
+			Other = ari_instance;
+			return true;
+		}
+	}
+
+	/// Activates Bark utility functions. Installs the BarkEmitter hook so the live BarkEmitter Self is latched
+	/// for TryGetBarkEmitterContext (cleared on return-to-title via the setup_main_screen pub/sub).
+	/// Cascades to MMAPI::Instance::Enable so the obj_ari instance is available.
+	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
+	inline Aurie::AurieStatus Enable()
+	{
+		Aurie::AurieStatus status = MMAPI::Instance::Enable();
+		if (!Aurie::AurieSuccess(status))
+			return status;
+
+		MMAPI::Internal::RegisterOnSetupMainScreenHandler(Internal::ClearBarkEmitterOnReturnToTitle);
+
+		return MMAPI::Internal::InstallScriptHooks({
+			{ MMAPI::Internal::GML_SCRIPT_SETUP_MAIN_SCREEN, reinterpret_cast<PVOID>(MMAPI::Internal::GmlScriptBeforeSetupMainScreenCallback) },
+			{ Internal::GML_SCRIPT_BARK_EMITTER,             reinterpret_cast<PVOID>(Internal::BarkEmitterContextCallback) },
+		});
+	}
+
+	/// Emits a bark (voiced dialogue bubble) over Ari with the given icon.
+	/// @attention Requires MMAPI::Bark::Enable() to have been called.
+	/// @param icon The bark icon to display.
+	/// @param bark_type An engine-specific bark type code; defaults to 0.
+	/// @return True if the bark was emitted, false if the required context is unavailable.
+	inline bool Emit(MMAPI::Bark::Icons icon, int bark_type = 0)
+	{
+		YYTK::CInstance* Self  = nullptr;
+		YYTK::CInstance* Other = nullptr;
+		if (!Internal::TryGetBarkEmitterContext(Self, Other))
+			return false;
+
+		YYTK::CScript* gml_script = nullptr;
+		MMAPI::Internal::module_interface->GetNamedRoutinePointer(Internal::GML_SCRIPT_BARK_EMITTER_EMIT, reinterpret_cast<PVOID*>(&gml_script));
+
+		YYTK::RValue bark_id    = static_cast<int>(icon);
+		YYTK::RValue bark_type_value = bark_type;
+		YYTK::RValue result;
+		YYTK::RValue* args[2] = { &bark_id, &bark_type_value };
+		gml_script->m_Functions->m_ScriptFunction(Self, Other, result, 2, args);
+		return true;
+	}
 }

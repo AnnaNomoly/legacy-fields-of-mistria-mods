@@ -13,9 +13,6 @@ namespace MMAPI::Cosmetic
 	{
 		inline YYTK::RValue GetCosmeticUnlocks()
 		{
-			if (!MMAPI::Internal::global_instance)
-				return {};
-
 			YYTK::RValue ari = MMAPI::Internal::global_instance->GetMember("__ari");
 			if (ari.m_Kind == YYTK::VALUE_UNDEFINED)
 				return {};

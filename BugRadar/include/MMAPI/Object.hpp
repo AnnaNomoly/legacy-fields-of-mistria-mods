@@ -119,9 +119,6 @@ namespace MMAPI::Object
 	/// @return The object category ID as an RValue, or undefined if the category is not found.
 	inline YYTK::RValue GetCategoryIdFromInternalName(const std::string& internal_name)
 	{
-		if (!MMAPI::Internal::global_instance)
-			return {};
-
 		YYTK::RValue object_categories = MMAPI::Internal::global_instance->GetMember("__object_category__");
 		size_t category_count = 0;
 		MMAPI::Internal::module_interface->GetArraySize(object_categories, category_count);

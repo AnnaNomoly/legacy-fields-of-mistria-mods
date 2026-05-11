@@ -172,12 +172,17 @@ namespace MMAPI::Dungeon
 
 	/// Spawns a dungeon ladder at the given room coordinates.
 	/// Coordinates are converted from room pixels to the internal ladder grid before being passed to the game.
-	/// @param Self The GML instance invoking the spawn (passed through to the script call). Typically the live DungeonRunner.
-	/// @param Other The GML other instance context (passed through to the script call).
+	/// @attention Requires MMAPI::Dungeon::Enable() to have been called.
 	/// @param x_coord The X position in the dungeon room.
 	/// @param y_coord The Y position in the dungeon room.
-	inline void SpawnLadder(YYTK::CInstance* Self, YYTK::CInstance* Other, int64_t x_coord, int64_t y_coord)
+	/// @return True if the script was invoked, false if the required context is unavailable.
+	inline bool SpawnLadder(int64_t x_coord, int64_t y_coord)
 	{
+		YYTK::CInstance* Self  = nullptr;
+		YYTK::CInstance* Other = nullptr;
+		if (!Internal::TryGetDungeonRunnerContext(Self, Other))
+			return false;
+
 		YYTK::CScript* gml_script = nullptr;
 		MMAPI::Internal::module_interface->GetNamedRoutinePointer(Internal::GML_SCRIPT_SPAWN_LADDER, reinterpret_cast<PVOID*>(&gml_script));
 
@@ -187,10 +192,11 @@ namespace MMAPI::Dungeon
 		YYTK::RValue* arguments[2] = { &x, &y };
 
 		gml_script->m_Functions->m_ScriptFunction(Self, Other, retval, 2, arguments);
+		return true;
 	}
 
 	/// Transitions the player into the dungeon at the specified floor level.
-	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
+	/// @attention Requires MMAPI::Dungeon::Enable() to have been called.
 	/// @param dungeon_level The dungeon floor level to enter.
 	inline void EnterDungeon(double dungeon_level)
 	{
@@ -235,6 +241,10 @@ namespace MMAPI::Dungeon
 			if (Internal::before_spawn_ladder_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
+			Aurie::AurieStatus status = MMAPI::Dungeon::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
 			return Internal::RegisterSpawnLadderHook(callback);
 		}
 
@@ -250,6 +260,10 @@ namespace MMAPI::Dungeon
 
 			if (Internal::after_dungeon_room_start_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			Aurie::AurieStatus status = MMAPI::Dungeon::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
 
 			return Internal::RegisterDungeonRoomStartHook(callback);
 		}

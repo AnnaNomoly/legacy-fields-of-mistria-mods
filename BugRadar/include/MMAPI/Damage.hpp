@@ -104,7 +104,7 @@ namespace MMAPI::Damage
 			IN YYTK::RValue** Arguments
 		)
 		{
-			if (Arguments && ArgumentCount >= 1 && Arguments[0] && Arguments[0]->m_Kind == YYTK::VALUE_OBJECT)
+			if (before_damage_callback && Arguments && ArgumentCount >= 1 && Arguments[0] && Arguments[0]->m_Kind == YYTK::VALUE_OBJECT)
 			{
 				MMAPI::Damage::Context context{ Arguments[0] };
 				before_damage_callback(context);
@@ -136,6 +136,13 @@ namespace MMAPI::Damage
 		}
 	}
 
+	/// Activates Damage utility functions.
+	/// @return AURIE_SUCCESS.
+	inline Aurie::AurieStatus Enable()
+	{
+		return Aurie::AURIE_SUCCESS;
+	}
+
 	namespace Hooks
 	{
 		/// Registers a callback that can modify a damage packet before the game applies it.
@@ -148,6 +155,10 @@ namespace MMAPI::Damage
 
 			if (Internal::before_damage_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			Aurie::AurieStatus status = MMAPI::Damage::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
 
 			return Internal::RegisterDamageHook(callback);
 		}

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core.hpp"
+#include "Instance.hpp"
 
 #include <string>
 
@@ -65,6 +66,31 @@ namespace MMAPI::Text
 		inline BeforePlayConversationCallback before_play_conversation_callback = nullptr;
 		inline BeforePlayTextCallback         before_play_text_callback         = nullptr;
 
+		// Live Localizer Self/Other, latched from the get_localizer hook.
+		// Used by TryGetLocalizerContext for callers outside any hook frame.
+		inline YYTK::CInstance* localizer_self  = nullptr;
+		inline YYTK::CInstance* localizer_other = nullptr;
+
+		// Cleared from the setup_main_screen pub/sub when the player returns to the title menu.
+		// Registered by Text::Enable().
+		inline void ClearLocalizerOnReturnToTitle(YYTK::CInstance* /*Self*/, YYTK::CInstance* /*Other*/)
+		{
+			localizer_self  = nullptr;
+			localizer_other = nullptr;
+		}
+
+		/// Resolves the Localizer's GML calling context, latched from the most recent get_localizer call.
+		/// Cleared automatically when the game returns to the title menu.
+		/// @return True if a Localizer call has been observed this session, false otherwise.
+		inline bool TryGetLocalizerContext(YYTK::CInstance*& Self, YYTK::CInstance*& Other)
+		{
+			if (!localizer_self)
+				return false;
+			Self  = localizer_self;
+			Other = localizer_other;
+			return true;
+		}
+
 		inline YYTK::RValue& GmlScriptGetLocalizerCallback(
 			IN YYTK::CInstance* Self,
 			IN YYTK::CInstance* Other,
@@ -73,7 +99,9 @@ namespace MMAPI::Text
 			IN YYTK::RValue** Arguments
 		)
 		{
-			MMAPI::Internal::RegisterScriptContext(GML_SCRIPT_GET_LOCALIZER, Self, Other);
+			// Refresh on every fire.
+			localizer_self  = Self;
+			localizer_other = Other;
 
 			if (before_localized_string_callback && Arguments && ArgumentCount >= 1 && Arguments[0])
 			{
@@ -112,7 +140,7 @@ namespace MMAPI::Text
 			IN YYTK::RValue** Arguments
 		)
 		{
-			if (Arguments && ArgumentCount >= 2 && Arguments[1])
+			if (before_play_conversation_callback && Arguments && ArgumentCount >= 2 && Arguments[1])
 			{
 				MMAPI::Text::PlayConversationContext context{ Arguments[1]->ToString() };
 				before_play_conversation_callback(context);
@@ -162,6 +190,31 @@ namespace MMAPI::Text
 			return Aurie::AURIE_SUCCESS;
 		}
 
+		// Live TextboxMenu Self/Other, latched from the play_text hook (fires whenever a textbox displays).
+		// Used by TryGetTextboxMenuContext for callers outside any hook frame (e.g. CloseTextbox from arbitrary code paths).
+		inline YYTK::CInstance* textbox_menu_self  = nullptr;
+		inline YYTK::CInstance* textbox_menu_other = nullptr;
+
+		// Cleared from the setup_main_screen pub/sub when the player returns to the title menu.
+		// Registered by Text::Enable().
+		inline void ClearTextboxMenuOnReturnToTitle(YYTK::CInstance* /*Self*/, YYTK::CInstance* /*Other*/)
+		{
+			textbox_menu_self  = nullptr;
+			textbox_menu_other = nullptr;
+		}
+
+		/// Resolves the TextboxMenu's GML calling context, latched from the most recent play_text call.
+		/// Cleared automatically when the game returns to the title menu.
+		/// @return True if a play_text call has been observed this session, false otherwise.
+		inline bool TryGetTextboxMenuContext(YYTK::CInstance*& Self, YYTK::CInstance*& Other)
+		{
+			if (!textbox_menu_self)
+				return false;
+			Self  = textbox_menu_self;
+			Other = textbox_menu_other;
+			return true;
+		}
+
 		inline YYTK::RValue& GmlScriptPlayTextCallback(
 			IN YYTK::CInstance* Self,
 			IN YYTK::CInstance* Other,
@@ -170,7 +223,11 @@ namespace MMAPI::Text
 			IN YYTK::RValue** Arguments
 		)
 		{
-			if (Arguments && ArgumentCount >= 1 && Arguments[0])
+			// Refresh on every fire — Self is the live TextboxMenu instance.
+			textbox_menu_self  = Self;
+			textbox_menu_other = Other;
+
+			if (before_play_text_callback && Arguments && ArgumentCount >= 1 && Arguments[0])
 			{
 				MMAPI::Text::PlayTextContext context{ Arguments[0]->ToString() };
 				before_play_text_callback(context);
@@ -204,14 +261,25 @@ namespace MMAPI::Text
 		}
 	}
 
-	/// Activates Text utility functions that directly call game scripts.
+	/// Activates Text utility functions. Installs the get_localizer and play_text hooks so the Localizer and
+	/// TextboxMenu Self/Other pairs are latched for TryGetLocalizerContext / TryGetTextboxMenuContext (both
+	/// cleared on return-to-title via the setup_main_screen pub/sub). Cascades to MMAPI::Instance::Enable so
+	/// PlayConversation can resolve Ari's calling context.
 	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
 	inline Aurie::AurieStatus Enable()
 	{
-		return MMAPI::Internal::InstallScriptHook(
-			Internal::GML_SCRIPT_GET_LOCALIZER,
-			reinterpret_cast<PVOID>(Internal::GmlScriptGetLocalizerCallback)
-		);
+		Aurie::AurieStatus status = MMAPI::Instance::Enable();
+		if (!Aurie::AurieSuccess(status))
+			return status;
+
+		MMAPI::Internal::RegisterOnSetupMainScreenHandler(Internal::ClearLocalizerOnReturnToTitle);
+		MMAPI::Internal::RegisterOnSetupMainScreenHandler(Internal::ClearTextboxMenuOnReturnToTitle);
+
+		return MMAPI::Internal::InstallScriptHooks({
+			{ MMAPI::Internal::GML_SCRIPT_SETUP_MAIN_SCREEN, reinterpret_cast<PVOID>(MMAPI::Internal::GmlScriptBeforeSetupMainScreenCallback) },
+			{ Internal::GML_SCRIPT_GET_LOCALIZER,            reinterpret_cast<PVOID>(Internal::GmlScriptGetLocalizerCallback) },
+			{ Internal::GML_SCRIPT_PLAY_TEXT,                reinterpret_cast<PVOID>(Internal::GmlScriptPlayTextCallback) },
+		});
 	}
 
 	/// Gets a localized string by localization key.
@@ -220,11 +288,10 @@ namespace MMAPI::Text
 	/// @return The localized string as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetLocalizedString(const std::string& localization_key)
 	{
-		const auto& refs = MMAPI::Internal::script_reference_map;
-		if (!refs.contains(Internal::GML_SCRIPT_GET_LOCALIZER))
+		YYTK::CInstance* Self  = nullptr;
+		YYTK::CInstance* Other = nullptr;
+		if (!Internal::TryGetLocalizerContext(Self, Other))
 			return {};
-		YYTK::CInstance* Self  = refs.at(Internal::GML_SCRIPT_GET_LOCALIZER)[0];
-		YYTK::CInstance* Other = refs.at(Internal::GML_SCRIPT_GET_LOCALIZER)[1];
 
 		YYTK::CScript* gml_script = nullptr;
 		MMAPI::Internal::module_interface->GetNamedRoutinePointer(Internal::GML_SCRIPT_GET_LOCALIZER, reinterpret_cast<PVOID*>(&gml_script));
@@ -237,32 +304,45 @@ namespace MMAPI::Text
 	}
 
 	/// Plays a conversation by localization key.
-	/// @param Self The GML instance invoking the conversation.
-	/// @param Other The GML other instance context.
+	/// @attention Requires MMAPI::Text::Enable() to have been called.
 	/// @param conversation_key The conversation localization key to play.
-	inline void PlayConversation(YYTK::CInstance* Self, YYTK::CInstance* Other, const std::string& conversation_key)
+	/// @return True if the conversation was played, false if the required context is unavailable.
+	inline bool PlayConversation(const std::string& conversation_key)
 	{
+		YYTK::CInstance* Self  = nullptr;
+		YYTK::CInstance* Other = nullptr;
+		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
+			return false;
+
 		YYTK::CScript* gml_script = nullptr;
 		MMAPI::Internal::module_interface->GetNamedRoutinePointer(Internal::GML_SCRIPT_PLAY_CONVERSATION, reinterpret_cast<PVOID*>(&gml_script));
 
-		YYTK::RValue mode = 2;
+		YYTK::RValue mode = 0;
 		YYTK::RValue conversation = conversation_key.c_str();
 		YYTK::RValue undefined;
 		YYTK::RValue result;
 		YYTK::RValue* args[4] = { &mode, &conversation, &undefined, &undefined };
+		// The play_conversation script ignores Other; pass Self for both to match the in-game calling convention.
 		gml_script->m_Functions->m_ScriptFunction(Self, Self, result, 4, args);
+		return true;
 	}
 
 	/// Begins closing the current textbox.
-	/// @param Self The GML instance invoking the close.
-	/// @param Other The GML other instance context.
-	inline void CloseTextbox(YYTK::CInstance* Self, YYTK::CInstance* Other)
+	/// @attention Requires MMAPI::Text::Enable() to have been called.
+	/// @return True if the close was issued, false if the required context is unavailable.
+	inline bool CloseTextbox()
 	{
+		YYTK::CInstance* Self  = nullptr;
+		YYTK::CInstance* Other = nullptr;
+		if (!Internal::TryGetTextboxMenuContext(Self, Other))
+			return false;
+
 		YYTK::CScript* gml_script = nullptr;
 		MMAPI::Internal::module_interface->GetNamedRoutinePointer(Internal::GML_SCRIPT_CLOSE_TEXTBOX, reinterpret_cast<PVOID*>(&gml_script));
 
 		YYTK::RValue result;
 		gml_script->m_Functions->m_ScriptFunction(Self, Other, result, 0, nullptr);
+		return true;
 	}
 
 	namespace Hooks
@@ -277,6 +357,10 @@ namespace MMAPI::Text
 
 			if (Internal::before_localized_string_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			Aurie::AurieStatus status = MMAPI::Text::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
 
 			return Internal::RegisterLocalizedStringHook(callback);
 		}
@@ -293,11 +377,7 @@ namespace MMAPI::Text
 			if (Internal::after_localized_string_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				Internal::GML_SCRIPT_GET_LOCALIZER,
-				reinterpret_cast<PVOID>(Internal::GmlScriptGetLocalizerCallback)
-			);
-
+			Aurie::AurieStatus status = MMAPI::Text::Enable();
 			if (!Aurie::AurieSuccess(status))
 				return status;
 
@@ -317,6 +397,10 @@ namespace MMAPI::Text
 			if (Internal::before_play_conversation_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
+			Aurie::AurieStatus status = MMAPI::Text::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
 			return Internal::RegisterPlayConversationHook(callback);
 		}
 
@@ -331,6 +415,10 @@ namespace MMAPI::Text
 
 			if (Internal::before_play_text_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			Aurie::AurieStatus status = MMAPI::Text::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
 
 			return Internal::RegisterPlayTextHook(callback);
 		}

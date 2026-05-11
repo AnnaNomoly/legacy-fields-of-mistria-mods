@@ -13,9 +13,36 @@ namespace MMAPI::Weather
 		using BeforeGetWeatherCallback = void(*)();
 		inline BeforeGetWeatherCallback before_get_weather_callback = nullptr;
 
+		// Live WeatherManager Self/Other, latched from the get_weather hook.
+		// Used by TryGetWeatherManagerContext for callers outside any hook frame.
+		inline YYTK::CInstance* weather_manager_self  = nullptr;
+		inline YYTK::CInstance* weather_manager_other = nullptr;
+
+		// Cleared from the setup_main_screen pub/sub when the player returns to the title menu.
+		// Registered by Weather::Enable().
+		inline void ClearWeatherManagerOnReturnToTitle(YYTK::CInstance* /*Self*/, YYTK::CInstance* /*Other*/)
+		{
+			weather_manager_self  = nullptr;
+			weather_manager_other = nullptr;
+		}
+
+		/// Resolves the WeatherManager's GML calling context, latched from the most recent get_weather call.
+		/// Cleared automatically when the game returns to the title menu.
+		/// @return True if a get_weather call has been observed this session, false otherwise.
+		inline bool TryGetWeatherManagerContext(YYTK::CInstance*& Self, YYTK::CInstance*& Other)
+		{
+			if (!weather_manager_self)
+				return false;
+			Self  = weather_manager_self;
+			Other = weather_manager_other;
+			return true;
+		}
+
 		inline YYTK::RValue& GetWeatherContextCallback(IN YYTK::CInstance* Self, IN YYTK::CInstance* Other, OUT YYTK::RValue& Result, IN int ArgumentCount, IN YYTK::RValue** Arguments)
 		{
-			MMAPI::Internal::RegisterScriptContext(GML_SCRIPT_GET_WEATHER, Self, Other);
+			// Refresh on every fire.
+			weather_manager_self  = Self;
+			weather_manager_other = Other;
 
 			if (before_get_weather_callback)
 				before_get_weather_callback();
@@ -26,14 +53,17 @@ namespace MMAPI::Weather
 		}
 	}
 
-	/// Activates Weather utility functions that directly call game scripts.
+	/// Activates Weather utility functions. Installs the get_weather hook so the live WeatherManager Self/Other are latched
+	/// for TryGetWeatherManagerContext (cleared on return-to-title via the setup_main_screen pub/sub).
 	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
 	inline Aurie::AurieStatus Enable()
 	{
-		return MMAPI::Internal::InstallScriptHook(
-			Internal::GML_SCRIPT_GET_WEATHER,
-			reinterpret_cast<PVOID>(Internal::GetWeatherContextCallback)
-		);
+		MMAPI::Internal::RegisterOnSetupMainScreenHandler(Internal::ClearWeatherManagerOnReturnToTitle);
+
+		return MMAPI::Internal::InstallScriptHooks({
+			{ MMAPI::Internal::GML_SCRIPT_SETUP_MAIN_SCREEN, reinterpret_cast<PVOID>(MMAPI::Internal::GmlScriptBeforeSetupMainScreenCallback) },
+			{ Internal::GML_SCRIPT_GET_WEATHER,              reinterpret_cast<PVOID>(Internal::GetWeatherContextCallback) },
+		});
 	}
 
 	/// Source: globalInstance.__weather__
@@ -51,11 +81,10 @@ namespace MMAPI::Weather
 	/// @return True if the context and script were available; otherwise false.
 	inline bool TryGetWeather(MMAPI::Weather::Ids& weather)
 	{
-		const auto& refs = MMAPI::Internal::script_reference_map;
-		if (!refs.contains(Internal::GML_SCRIPT_GET_WEATHER))
+		YYTK::CInstance* Self  = nullptr;
+		YYTK::CInstance* Other = nullptr;
+		if (!Internal::TryGetWeatherManagerContext(Self, Other))
 			return false;
-		YYTK::CInstance* Self  = refs.at(Internal::GML_SCRIPT_GET_WEATHER)[0];
-		YYTK::CInstance* Other = refs.at(Internal::GML_SCRIPT_GET_WEATHER)[1];
 
 		YYTK::CScript* gml_script = nullptr;
 		MMAPI::Internal::module_interface->GetNamedRoutinePointer(Internal::GML_SCRIPT_GET_WEATHER, reinterpret_cast<PVOID*>(&gml_script));
@@ -110,11 +139,7 @@ namespace MMAPI::Weather
 			if (Internal::before_get_weather_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				Internal::GML_SCRIPT_GET_WEATHER,
-				reinterpret_cast<PVOID>(Internal::GetWeatherContextCallback)
-			);
-
+			Aurie::AurieStatus status = MMAPI::Weather::Enable();
 			if (!Aurie::AurieSuccess(status))
 				return status;
 

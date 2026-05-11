@@ -169,9 +169,6 @@ namespace MMAPI::NPC
 
 		inline YYTK::RValue GetIdFromInternalName(const std::string& internal_name)
 		{
-			if (!MMAPI::Internal::global_instance)
-				return {};
-
 			YYTK::RValue npc_ids = MMAPI::Internal::global_instance->GetMember("__npc_id__");
 			size_t npc_count = 0;
 			MMAPI::Internal::module_interface->GetArraySize(npc_ids, npc_count);
@@ -190,17 +187,11 @@ namespace MMAPI::NPC
 
 		inline YYTK::RValue GetNpcDatabase()
 		{
-			if (!MMAPI::Internal::global_instance)
-				return {};
-
 			return *MMAPI::Internal::global_instance->GetRefMember("__npc_database");
 		}
 
 		inline YYTK::RValue GetNpcPrototypes()
 		{
-			if (!MMAPI::Internal::global_instance)
-				return {};
-
 			return *MMAPI::Internal::global_instance->GetRefMember("__npc_prototypes");
 		}
 
@@ -409,6 +400,13 @@ namespace MMAPI::NPC
 		SetHeartPoints(npc, GetHeartPoints(npc) + amount);
 	}
 
+	/// Activates NPC utility functions.
+	/// @return AURIE_SUCCESS.
+	inline Aurie::AurieStatus Enable()
+	{
+		return Aurie::AURIE_SUCCESS;
+	}
+
 	namespace Hooks
 	{
 		/// Registers a callback that runs when an NPC's heart points change through the game's add heart points script.
@@ -421,6 +419,10 @@ namespace MMAPI::NPC
 
 			if (Internal::before_heart_points_change_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			Aurie::AurieStatus status = MMAPI::NPC::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
 
 			return Internal::RegisterHeartPointsChangedHook(callback);
 		}
@@ -435,6 +437,10 @@ namespace MMAPI::NPC
 
 			if (Internal::before_receive_gift_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			Aurie::AurieStatus status = MMAPI::NPC::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
 
 			return Internal::RegisterReceiveGiftHook(callback);
 		}

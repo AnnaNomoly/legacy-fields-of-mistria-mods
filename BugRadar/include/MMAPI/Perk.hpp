@@ -180,8 +180,16 @@ namespace MMAPI::Perk
 		inline constexpr const char* GML_SCRIPT_PERK_ACTIVE = "gml_Script_perk_active@Ari@Ari";
 	}
 
+	/// Activates Perk utility functions. Cascades to MMAPI::Instance::Enable so IsActive can resolve Ari's
+	/// calling context internally.
+	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
+	inline Aurie::AurieStatus Enable()
+	{
+		return MMAPI::Instance::Enable();
+	}
+
 	/// Returns true if Ari has the given perk active.
-	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
+	/// @attention Requires MMAPI::Perk::Enable() to have been called.
 	/// @param perk The perk to check.
 	inline bool IsActive(MMAPI::Perk::Ids perk)
 	{

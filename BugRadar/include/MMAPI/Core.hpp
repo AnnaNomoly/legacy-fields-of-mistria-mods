@@ -30,9 +30,6 @@ namespace MMAPI
 		// The Aurie module using MMAPI. Required for MMAPI-owned hooks.
 		inline Aurie::AurieModule* self_module = nullptr;
 
-		// Persisted Self/Other pairs captured from GML script hook callbacks, keyed by GML script name.
-		inline std::map<std::string, std::vector<YYTK::CInstance*>> script_reference_map;
-
 		// Persisted game object instance pairs, keyed by a descriptive instance name.
 		// Used for objects like obj_ari whose context is captured from an object callback rather than a script hook.
 		inline std::map<std::string, std::vector<YYTK::CInstance*>> instance_reference_map;
@@ -55,9 +52,6 @@ namespace MMAPI
 
 		inline Aurie::AurieStatus InstallScriptHook(const char* script_name, PVOID callback)
 		{
-			if (!self_module || !module_interface)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
 			if (owned_script_hook_installed_map[script_name])
 				return Aurie::AURIE_SUCCESS;
 
@@ -97,14 +91,6 @@ namespace MMAPI
 			return Aurie::AURIE_SUCCESS;
 		}
 
-		/// Captures the Self and Other instance context for a GML script the first time it is seen.
-		/// Used internally by MMAPI's per-module Enable() context-capture hooks.
-		inline void RegisterScriptContext(const char* script_name, YYTK::CInstance* Self, YYTK::CInstance* Other)
-		{
-			if (!script_reference_map.contains(script_name))
-				script_reference_map[script_name] = { Self, Other };
-		}
-
 		/// Captures a pair of game object instance pointers the first time it is seen.
 		/// Used internally by MMAPI::Instance::Enable()'s EVENT_OBJECT_CALL dispatcher.
 		inline void RegisterInstanceContext(const char* instance_name, YYTK::CInstance* Self, YYTK::CInstance* Other)
@@ -112,20 +98,9 @@ namespace MMAPI
 			if (!instance_reference_map.contains(instance_name))
 				instance_reference_map[instance_name] = { Self, Other };
 		}
-	}
 
-	/// Clears all captured script and instance contexts.
-	/// Call this from within the setup_main_screen hook callback to reset state when returning to the title screen.
-	inline void ClearScriptContexts()
-	{
-		Internal::script_reference_map.clear();
-		Internal::instance_reference_map.clear();
-	}
-
-	namespace Internal
-	{
 		// MMAPI-wide setup_main_screen hook. Owned by Core because its primary job is core infrastructure:
-		// clearing script/instance contexts on return-to-title and dispatching the internal handler pub/sub list.
+		// clearing the instance reference map on return-to-title and dispatching the internal handler pub/sub list.
 		// `MMAPI::Game::Hooks::BeforeSetupMainScreen` is a thin user-facing wrapper that registers a callback here.
 		inline constexpr const char* GML_SCRIPT_SETUP_MAIN_SCREEN = "gml_Script_setup_main_screen@TitleMenu@TitleMenu";
 
@@ -140,7 +115,7 @@ namespace MMAPI
 			IN YYTK::RValue** Arguments
 		)
 		{
-			MMAPI::ClearScriptContexts();
+			instance_reference_map.clear();
 
 			for (auto handler : on_setup_main_screen_internal_handlers)
 				handler(Self, Other);

@@ -210,7 +210,7 @@ namespace MMAPI::Spell
 	}
 
 	/// Returns true if Ari can currently cast the given spell.
-	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
+	/// @attention Requires MMAPI::Spell::Enable() to have been called.
 	/// @param spell The spell to check.
 	inline bool CanCast(MMAPI::Spell::Ids spell)
 	{
@@ -230,7 +230,7 @@ namespace MMAPI::Spell
 	}
 
 	/// Casts the given spell as Ari.
-	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
+	/// @attention Requires MMAPI::Spell::Enable() to have been called.
 	/// @param spell The spell to cast.
 	inline void Cast(MMAPI::Spell::Ids spell)
 	{
@@ -262,6 +262,10 @@ namespace MMAPI::Spell
 			if (Internal::after_can_cast_spell_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
+			Aurie::AurieStatus status = MMAPI::Spell::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
 			return Internal::RegisterCanCastSpellHook(callback);
 		}
 
@@ -276,6 +280,10 @@ namespace MMAPI::Spell
 
 			if (Internal::before_spell_cast_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			Aurie::AurieStatus status = MMAPI::Spell::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
 
 			return Internal::RegisterSpellCastHook(callback);
 		}

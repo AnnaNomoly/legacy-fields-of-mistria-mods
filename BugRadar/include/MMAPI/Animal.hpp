@@ -257,9 +257,6 @@ namespace MMAPI::Animal
 	/// @return The XP value as an RValue, or undefined if unavailable.
 	inline YYTK::RValue GetXpValue(MMAPI::Animal::XpValues xp_value)
 	{
-		if (!MMAPI::Internal::global_instance)
-			return {};
-
 		const char* xp_value_key = Internal::ToGameKey(xp_value);
 		if (!xp_value_key)
 			return {};
@@ -394,6 +391,10 @@ namespace MMAPI::Animal
 			if (Internal::before_heart_points_change_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
+			Aurie::AurieStatus status = MMAPI::Animal::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
 			return Internal::RegisterHeartPointsChangedHook(callback);
 		}
 
@@ -408,6 +409,10 @@ namespace MMAPI::Animal
 			if (Internal::after_put_down_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
+			Aurie::AurieStatus status = MMAPI::Animal::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
 			return Internal::RegisterPutDownHook(callback);
 		}
 
@@ -421,6 +426,10 @@ namespace MMAPI::Animal
 
 			if (Internal::after_pet_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			Aurie::AurieStatus status = MMAPI::Animal::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
 
 			return Internal::RegisterAfterPetHook(callback);
 		}

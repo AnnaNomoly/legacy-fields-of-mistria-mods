@@ -118,8 +118,6 @@ namespace MMAPI::Player
 		inline constexpr const char* GML_SCRIPT_MODIFY_ESSENCE         = "gml_Script_modify_essence@Ari@Ari";
 		inline constexpr const char* GML_SCRIPT_GET_MOVE_SPEED         = "gml_Script_get_move_speed@Ari@Ari";
 		inline constexpr const char* GML_SCRIPT_HELD_ITEM              = "gml_Script_held_item@Ari@Ari";
-		inline constexpr const char* GML_SCRIPT_BARK_EMITTER_EMIT      = "gml_Script_emit@BarkEmitter@BarkEmitter";
-
 		using AfterMoveSpeedCallback     = void(*)(MMAPI::Player::MoveSpeedContext&);
 		using BeforeHealthChangeCallback  = void(*)(MMAPI::Player::ModifyHealthChangeContext&);
 		using BeforeStaminaChangeCallback = void(*)(MMAPI::Player::ModifyStaminaChangeContext&);
@@ -160,7 +158,7 @@ namespace MMAPI::Player
 
 			original(Self, Other, Result, ArgumentCount, Arguments);
 
-			if (MMAPI::Engine::IsNumeric(Result))
+			if (after_move_speed_callback && MMAPI::Engine::IsNumeric(Result))
 			{
 				MMAPI::Player::MoveSpeedContext context{ Result.ToDouble() };
 				after_move_speed_callback(context);
@@ -192,7 +190,7 @@ namespace MMAPI::Player
 			IN YYTK::RValue** Arguments
 		)
 		{
-			if (Arguments && ArgumentCount >= 1 && Arguments[0] && MMAPI::Engine::IsNumeric(*Arguments[0]))
+			if (before_health_change_callback && Arguments && ArgumentCount >= 1 && Arguments[0] && MMAPI::Engine::IsNumeric(*Arguments[0]))
 			{
 				MMAPI::Player::ModifyHealthChangeContext context{ Arguments[0]->ToDouble() };
 				before_health_change_callback(context);
@@ -218,7 +216,7 @@ namespace MMAPI::Player
 			IN YYTK::RValue** Arguments
 		)
 		{
-			if (Arguments && ArgumentCount >= 1 && Arguments[0] && MMAPI::Engine::IsNumeric(*Arguments[0]))
+			if (before_stamina_change_callback && Arguments && ArgumentCount >= 1 && Arguments[0] && MMAPI::Engine::IsNumeric(*Arguments[0]))
 			{
 				MMAPI::Player::ModifyStaminaChangeContext context{ Arguments[0]->ToDouble() };
 				before_stamina_change_callback(context);
@@ -244,7 +242,7 @@ namespace MMAPI::Player
 			IN YYTK::RValue** Arguments
 		)
 		{
-			if (Arguments && ArgumentCount >= 1 && Arguments[0] && MMAPI::Engine::IsNumeric(*Arguments[0]))
+			if (before_mana_change_callback && Arguments && ArgumentCount >= 1 && Arguments[0] && MMAPI::Engine::IsNumeric(*Arguments[0]))
 			{
 				MMAPI::Player::ModifyManaChangeContext context{ Arguments[0]->ToDouble() };
 				before_mana_change_callback(context);
@@ -334,7 +332,7 @@ namespace MMAPI::Player
 	}
 
 	/// Returns Ari's currently held item.
-	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
+	/// @attention Requires MMAPI::Player::Enable() to have been called.
 	/// @return The held item struct as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetHeldItem()
 	{
@@ -352,7 +350,7 @@ namespace MMAPI::Player
 	}
 
 	/// Returns the item_id of Ari's currently held item.
-	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
+	/// @attention Requires MMAPI::Player::Enable() to have been called.
 	/// @return The held item ID as an RValue, or undefined if no item or context is available.
 	inline YYTK::RValue GetHeldItemId()
 	{
@@ -364,7 +362,7 @@ namespace MMAPI::Player
 	}
 
 	/// Gets Ari's current player state.
-	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
+	/// @attention Requires MMAPI::Player::Enable() to have been called.
 	/// @param state Ari's current player state.
 	/// @return True if the player state was resolved, false if the required context is unavailable.
 	inline bool TryGetState(MMAPI::Player::States& state)
@@ -383,7 +381,7 @@ namespace MMAPI::Player
 	}
 
 	/// Returns true if Ari is currently in the given player state.
-	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
+	/// @attention Requires MMAPI::Player::Enable() to have been called.
 	/// @param state The player state to check.
 	inline bool IsInState(MMAPI::Player::States state)
 	{
@@ -395,7 +393,7 @@ namespace MMAPI::Player
 	}
 
 	/// Gets Ari's current room position from the live obj_ari instance.
-	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
+	/// @attention Requires MMAPI::Player::Enable() to have been called.
 	/// @return Ari's current x/y position, or std::nullopt if the required context is unavailable.
 	inline std::optional<MMAPI::Player::Position> GetPosition()
 	{
@@ -414,7 +412,7 @@ namespace MMAPI::Player
 	}
 
 	/// Returns Ari's current health.
-	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
+	/// @attention Requires MMAPI::Player::Enable() to have been called.
 	/// @return Ari's current health as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetHealth()
 	{
@@ -432,7 +430,7 @@ namespace MMAPI::Player
 	}
 
 	/// Sets Ari's current health to the given value.
-	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
+	/// @attention Requires MMAPI::Player::Enable() to have been called.
 	/// @param value The health value to set.
 	inline void SetHealth(int value)
 	{
@@ -451,7 +449,7 @@ namespace MMAPI::Player
 	}
 
 	/// Returns Ari's current maximum health.
-	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
+	/// @attention Requires MMAPI::Player::Enable() to have been called.
 	/// @return Ari's current maximum health as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetMaxHealth()
 	{
@@ -470,7 +468,7 @@ namespace MMAPI::Player
 
 	/// Sets Ari's maximum health by writing directly to __ari.base_health.
 	/// If Ari's current health exceeds the new maximum, current health is clamped to it.
-	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
+	/// @attention Requires MMAPI::Player::Enable() to have been called.
 	/// @param value The new maximum health value.
 	inline void SetMaxHealth(int value)
 	{
@@ -482,7 +480,7 @@ namespace MMAPI::Player
 	}
 
 	/// Adjusts Ari's current health by the given signed amount.
-	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
+	/// @attention Requires MMAPI::Player::Enable() to have been called.
 	/// @param value The amount to add to Ari's current health. Negative values reduce health.
 	inline void ModifyHealth(int value)
 	{
@@ -513,7 +511,7 @@ namespace MMAPI::Player
 	}
 
 	/// Adjusts Ari's current stamina by the given signed amount.
-	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
+	/// @attention Requires MMAPI::Player::Enable() to have been called.
 	/// @param value The amount to add to Ari's current stamina. Negative values reduce stamina.
 	inline void ModifyStamina(int value)
 	{
@@ -532,7 +530,7 @@ namespace MMAPI::Player
 	}
 
 	/// Returns Ari's current stamina.
-	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
+	/// @attention Requires MMAPI::Player::Enable() to have been called.
 	/// @return Ari's current stamina as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetStamina()
 	{
@@ -550,7 +548,7 @@ namespace MMAPI::Player
 	}
 
 	/// Adjusts Ari's current gold by the given signed amount.
-	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
+	/// @attention Requires MMAPI::Player::Enable() to have been called.
 	/// @param value The amount to add to Ari's current gold. Negative values reduce gold.
 	inline void ModifyGold(int value)
 	{
@@ -569,7 +567,7 @@ namespace MMAPI::Player
 	}
 
 	/// Adjusts Ari's current renown by the given signed amount.
-	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
+	/// @attention Requires MMAPI::Player::Enable() to have been called.
 	/// @param value The amount to add to Ari's current renown. Negative values reduce renown.
 	inline void ModifyRenown(int value)
 	{
@@ -588,7 +586,7 @@ namespace MMAPI::Player
 	}
 
 	/// Returns Ari's current mana.
-	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
+	/// @attention Requires MMAPI::Player::Enable() to have been called.
 	/// @return Ari's current mana as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetMana()
 	{
@@ -606,7 +604,7 @@ namespace MMAPI::Player
 	}
 
 	/// Adjusts Ari's current mana by the given signed amount.
-	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
+	/// @attention Requires MMAPI::Player::Enable() to have been called.
 	/// @param value The amount to add to Ari's current mana. Negative values reduce mana.
 	inline void ModifyMana(int value)
 	{
@@ -625,7 +623,7 @@ namespace MMAPI::Player
 	}
 
 	/// Returns Ari's current essence.
-	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
+	/// @attention Requires MMAPI::Player::Enable() to have been called.
 	/// @return Ari's current essence as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetEssence()
 	{
@@ -643,7 +641,7 @@ namespace MMAPI::Player
 	}
 
 	/// Adjusts Ari's current essence by the given signed amount.
-	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
+	/// @attention Requires MMAPI::Player::Enable() to have been called.
 	/// @param value The amount to add to Ari's current essence. Negative values reduce essence.
 	inline void ModifyEssence(int value)
 	{
@@ -662,7 +660,7 @@ namespace MMAPI::Player
 	}
 
 	/// Returns Ari's current movement speed.
-	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
+	/// @attention Requires MMAPI::Player::Enable() to have been called.
 	/// @return Ari's current movement speed as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetMoveSpeed()
 	{
@@ -689,30 +687,6 @@ namespace MMAPI::Player
 		return MMAPI::Instance::Enable();
 	}
 
-	/// Emits a bark (voiced dialogue bubble) from Ari via the BarkEmitter.
-	/// @attention Requires MMAPI::Player::Enable() to have been called.
-	/// @param bark_icon The bark icon to display.
-	/// @param bark_type The numeric type of the bark (controls display style or trigger behavior).
-	inline void EmitBark(MMAPI::Bark::Icons bark_icon, int bark_type)
-	{
-		const auto& script_refs   = MMAPI::Internal::script_reference_map;
-		const auto& instance_refs = MMAPI::Internal::instance_reference_map;
-		if (!script_refs.contains(MMAPI::Bark::Internal::GML_SCRIPT_BARK_EMITTER) ||
-		    !instance_refs.contains(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI))
-			return;
-		YYTK::CInstance* Self  = script_refs.at(MMAPI::Bark::Internal::GML_SCRIPT_BARK_EMITTER)[0];
-		YYTK::CInstance* Other = instance_refs.at(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI)[0];
-
-		YYTK::CScript* gml_script = nullptr;
-		MMAPI::Internal::module_interface->GetNamedRoutinePointer(Internal::GML_SCRIPT_BARK_EMITTER_EMIT, reinterpret_cast<PVOID*>(&gml_script));
-
-		YYTK::RValue id   = static_cast<int>(bark_icon);
-		YYTK::RValue type = bark_type;
-		YYTK::RValue result;
-		YYTK::RValue* args[2] = { &id, &type };
-		gml_script->m_Functions->m_ScriptFunction(Self, Other, result, 2, args);
-	}
-
 	namespace Hooks
 	{
 		/// Registers a callback that can modify Ari's movement speed after the game calculates it.
@@ -727,6 +701,10 @@ namespace MMAPI::Player
 
 			if (Internal::after_move_speed_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			Aurie::AurieStatus status = MMAPI::Player::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
 
 			return Internal::RegisterMoveSpeedHook(callback);
 		}
@@ -743,6 +721,10 @@ namespace MMAPI::Player
 			if (Internal::before_health_change_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
+			Aurie::AurieStatus status = MMAPI::Player::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
 			return Internal::RegisterHealthChangeHook(callback);
 		}
 
@@ -758,6 +740,10 @@ namespace MMAPI::Player
 			if (Internal::before_stamina_change_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
+			Aurie::AurieStatus status = MMAPI::Player::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
 			return Internal::RegisterStaminaChangeHook(callback);
 		}
 
@@ -772,6 +758,10 @@ namespace MMAPI::Player
 
 			if (Internal::before_mana_change_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			Aurie::AurieStatus status = MMAPI::Player::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
 
 			return Internal::RegisterManaChangeHook(callback);
 		}

@@ -153,7 +153,8 @@ namespace MMAPI::Game
 
 			original(Self, Other, Result, ArgumentCount, Arguments);
 
-			after_end_day_callback();
+			if (after_end_day_callback)
+				after_end_day_callback();
 
 			return Result;
 		}
@@ -180,7 +181,8 @@ namespace MMAPI::Game
 			IN YYTK::RValue** Arguments
 		)
 		{
-			before_new_day_callback();
+			if (before_new_day_callback)
+				before_new_day_callback();
 
 			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
 				Aurie::MmGetHookTrampoline(
@@ -221,7 +223,8 @@ namespace MMAPI::Game
 			);
 			original(Self, Other, Result, ArgumentCount, Arguments);
 
-			after_load_game_callback();
+			if (after_load_game_callback)
+				after_load_game_callback();
 
 			return Result;
 		}
@@ -248,11 +251,14 @@ namespace MMAPI::Game
 			IN YYTK::RValue** Arguments
 		)
 		{
-			MMAPI::Game::SaveGameContext context;
-			before_save_game_callback(context);
+			if (before_save_game_callback)
+			{
+				MMAPI::Game::SaveGameContext context;
+				before_save_game_callback(context);
 
-			if (context.m_cancelled)
-				return Result;
+				if (context.m_cancelled)
+					return Result;
+			}
 
 			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
 				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_SAVE_GAME)
@@ -284,7 +290,7 @@ namespace MMAPI::Game
 			IN YYTK::RValue** Arguments
 		)
 		{
-			if (Arguments && ArgumentCount >= 1 && Arguments[0])
+			if (before_play_audio_callback && Arguments && ArgumentCount >= 1 && Arguments[0])
 			{
 				MMAPI::Game::PlayAudioContext context{ Arguments[0]->ToString() };
 				before_play_audio_callback(context);
@@ -330,7 +336,8 @@ namespace MMAPI::Game
 			);
 			original(Self, Other, Result, ArgumentCount, Arguments);
 
-			after_draw_gui_callback();
+			if (after_draw_gui_callback)
+				after_draw_gui_callback();
 
 			return Result;
 		}
@@ -362,9 +369,12 @@ namespace MMAPI::Game
 			);
 			original(Self, Other, Result, ArgumentCount, Arguments);
 
-			MMAPI::Game::HudShouldShowContext context{ Result.ToBoolean() };
-			after_hud_should_show_callback(context);
-			Result = context.m_result;
+			if (after_hud_should_show_callback)
+			{
+				MMAPI::Game::HudShouldShowContext context{ Result.ToBoolean() };
+				after_hud_should_show_callback(context);
+				Result = context.m_result;
+			}
 
 			return Result;
 		}
@@ -395,7 +405,8 @@ namespace MMAPI::Game
 				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_CRAFTING_MENU_OPEN)
 			);
 			original(Self, Other, Result, ArgumentCount, Arguments);
-			after_crafting_menu_open_callback();
+			if (after_crafting_menu_open_callback)
+				after_crafting_menu_open_callback();
 			return Result;
 		}
 
@@ -422,7 +433,8 @@ namespace MMAPI::Game
 				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_CRAFTING_MENU_CLOSE)
 			);
 			original(Self, Other, Result, ArgumentCount, Arguments);
-			after_crafting_menu_close_callback();
+			if (after_crafting_menu_close_callback)
+				after_crafting_menu_close_callback();
 			return Result;
 		}
 
@@ -449,7 +461,8 @@ namespace MMAPI::Game
 				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_JOURNAL_MENU_OPEN)
 			);
 			original(Self, Other, Result, ArgumentCount, Arguments);
-			after_journal_menu_open_callback();
+			if (after_journal_menu_open_callback)
+				after_journal_menu_open_callback();
 			return Result;
 		}
 
@@ -476,7 +489,8 @@ namespace MMAPI::Game
 				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_JOURNAL_MENU_CLOSE)
 			);
 			original(Self, Other, Result, ArgumentCount, Arguments);
-			after_journal_menu_close_callback();
+			if (after_journal_menu_close_callback)
+				after_journal_menu_close_callback();
 			return Result;
 		}
 
@@ -503,7 +517,8 @@ namespace MMAPI::Game
 				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_STORE_MENU_OPEN)
 			);
 			original(Self, Other, Result, ArgumentCount, Arguments);
-			after_store_menu_open_callback();
+			if (after_store_menu_open_callback)
+				after_store_menu_open_callback();
 			return Result;
 		}
 
@@ -530,7 +545,8 @@ namespace MMAPI::Game
 				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_STORE_MENU_CLOSE)
 			);
 			original(Self, Other, Result, ArgumentCount, Arguments);
-			after_store_menu_close_callback();
+			if (after_store_menu_close_callback)
+				after_store_menu_close_callback();
 			return Result;
 		}
 
@@ -550,9 +566,6 @@ namespace MMAPI::Game
 	/// Returns true if the game is currently paused.
 	inline bool IsPaused()
 	{
-		if (!MMAPI::Internal::global_instance)
-			return false;
-
 		YYTK::RValue pause_status = MMAPI::Internal::global_instance->GetMember("__pause_status");
 		return pause_status.ToInt64() > 0;
 	}
@@ -579,9 +592,6 @@ namespace MMAPI::Game
 	/// @return The current GM room name, or an empty string if it cannot be read.
 	inline std::string GetCurrentRoomName()
 	{
-		if (!MMAPI::Internal::module_interface)
-			return "";
-
 		YYTK::RValue room_id;
 		Aurie::AurieStatus status = MMAPI::Internal::module_interface->GetBuiltin("room", nullptr, NULL_INDEX, room_id);
 		if (!Aurie::AurieSuccess(status))
@@ -613,9 +623,6 @@ namespace MMAPI::Game
 	/// @return The XP value as an RValue, or undefined if unavailable.
 	inline YYTK::RValue GetXpValue(MMAPI::Game::XpValues xp_value)
 	{
-		if (!MMAPI::Internal::global_instance)
-			return {};
-
 		const char* xp_value_key = Internal::ToGameKey(xp_value);
 		if (!xp_value_key)
 			return {};
@@ -666,7 +673,7 @@ namespace MMAPI::Game
 
 	/// Sells the current shipping bin contents.
 	/// @attention Requires MMAPI::Game::Enable() to have been called.
-	/// @return The sale result as an RValue, or undefined if obj_ari has not been registered.
+	/// @return The sale result as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue SellShippingBinItems()
 	{
 		YYTK::CInstance* Self  = nullptr;
@@ -695,6 +702,10 @@ namespace MMAPI::Game
 			if (Internal::after_end_day_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
+			Aurie::AurieStatus status = MMAPI::Game::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
 			return Internal::RegisterEndDayHook(callback);
 		}
 
@@ -709,6 +720,10 @@ namespace MMAPI::Game
 			if (Internal::before_new_day_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
+			Aurie::AurieStatus status = MMAPI::Game::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
 			return Internal::RegisterNewDayHook(callback);
 		}
 
@@ -722,6 +737,10 @@ namespace MMAPI::Game
 
 			if (Internal::after_load_game_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			Aurie::AurieStatus status = MMAPI::Game::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
 
 			return Internal::RegisterLoadGameHook(callback);
 		}
@@ -738,6 +757,10 @@ namespace MMAPI::Game
 			if (Internal::before_save_game_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
+			Aurie::AurieStatus status = MMAPI::Game::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
 			return Internal::RegisterSaveGameHook(callback);
 		}
 
@@ -753,6 +776,10 @@ namespace MMAPI::Game
 			if (Internal::before_play_audio_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
+			Aurie::AurieStatus status = MMAPI::Game::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
 			return Internal::RegisterPlayAudioHook(callback);
 		}
 
@@ -766,6 +793,10 @@ namespace MMAPI::Game
 
 			if (Internal::after_draw_gui_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			Aurie::AurieStatus status = MMAPI::Game::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
 
 			return Internal::RegisterDrawGuiHook(callback);
 		}
@@ -782,6 +813,10 @@ namespace MMAPI::Game
 			if (Internal::after_hud_should_show_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
+			Aurie::AurieStatus status = MMAPI::Game::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
 			return Internal::RegisterHudShouldShowHook(callback);
 		}
 
@@ -795,6 +830,10 @@ namespace MMAPI::Game
 
 			if (Internal::after_crafting_menu_open_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			Aurie::AurieStatus status = MMAPI::Game::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
 
 			return Internal::RegisterCraftingMenuOpenHook(callback);
 		}
@@ -810,6 +849,10 @@ namespace MMAPI::Game
 			if (Internal::after_crafting_menu_close_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
+			Aurie::AurieStatus status = MMAPI::Game::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
 			return Internal::RegisterCraftingMenuCloseHook(callback);
 		}
 
@@ -823,6 +866,10 @@ namespace MMAPI::Game
 
 			if (Internal::after_journal_menu_open_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			Aurie::AurieStatus status = MMAPI::Game::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
 
 			return Internal::RegisterJournalMenuOpenHook(callback);
 		}
@@ -838,6 +885,10 @@ namespace MMAPI::Game
 			if (Internal::after_journal_menu_close_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
+			Aurie::AurieStatus status = MMAPI::Game::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
 			return Internal::RegisterJournalMenuCloseHook(callback);
 		}
 
@@ -851,6 +902,10 @@ namespace MMAPI::Game
 
 			if (Internal::after_store_menu_open_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			Aurie::AurieStatus status = MMAPI::Game::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
 
 			return Internal::RegisterStoreMenuOpenHook(callback);
 		}
@@ -866,13 +921,17 @@ namespace MMAPI::Game
 			if (Internal::after_store_menu_close_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
 
+			Aurie::AurieStatus status = MMAPI::Game::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
 			return Internal::RegisterStoreMenuCloseHook(callback);
 		}
 
 		/// Registers a callback that runs before the title menu's setup_main_screen script.
-		/// MMAPI automatically clears its captured script and instance contexts before the callback fires,
-		/// so mods returning to the title screen do not need to call ClearScriptContexts manually.
-		/// @param callback A function called before the title menu setup script runs (after MMAPI clears its contexts).
+		/// MMAPI automatically clears its instance reference map and fires module-local "return-to-title"
+		/// handlers before this callback runs, so mods do not need to reset captured state manually.
+		/// @param callback A function called before the title menu setup script runs (after MMAPI's auto-clears).
 		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
 		inline Aurie::AurieStatus BeforeSetupMainScreen(MMAPI::Internal::BeforeSetupMainScreenCallback callback)
 		{
@@ -881,6 +940,10 @@ namespace MMAPI::Game
 
 			if (MMAPI::Internal::before_setup_main_screen_callback)
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			Aurie::AurieStatus status = MMAPI::Game::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
 
 			return MMAPI::Internal::RegisterBeforeSetupMainScreenHook(callback);
 		}

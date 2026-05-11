@@ -17,9 +17,6 @@ namespace MMAPI::Recipe
 
 		inline YYTK::RValue GetRecipeUnlocks()
 		{
-			if (!MMAPI::Internal::global_instance)
-				return {};
-
 			YYTK::RValue ari = MMAPI::Internal::global_instance->GetMember("__ari");
 			if (ari.m_Kind == YYTK::VALUE_UNDEFINED)
 				return {};
@@ -93,8 +90,8 @@ namespace MMAPI::Recipe
 	}
 
 	/// Unlocks a cooking recipe by item ID.
-	/// @attention When show_popup is true, requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via
-	/// RegisterInstanceContext; if it is not, the recipe is still unlocked but the popup is skipped.
+	/// @attention When show_popup is true, requires MMAPI::Recipe::Enable() to have been called; if the required
+	/// context is unavailable, the recipe is still unlocked but the popup is skipped.
 	/// @param item_id The item ID for the recipe to unlock.
 	/// @param show_popup When true, displays the game's recipe unlocked popup if the recipe was newly unlocked.
 	/// @return True if the recipe was newly unlocked; otherwise false.

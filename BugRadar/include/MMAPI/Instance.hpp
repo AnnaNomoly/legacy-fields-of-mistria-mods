@@ -147,17 +147,13 @@ namespace MMAPI::Instance
 
 		inline bool IsGamePaused()
 		{
-			if (!MMAPI::Internal::global_instance)
-				return false;
 			return MMAPI::Internal::global_instance->GetRefMember("__pause_status")->m_i64 > 0;
 		}
 
 		/// Resolves Ari's GML calling context: Self = the global __ari struct, Other = the live obj_ari instance.
-		/// @return True if both pointers were resolved, false if Instance::Enable() hasn't captured a tick yet or global_instance is null.
+		/// @return True if both pointers were resolved, false if Instance::Enable() hasn't captured a tick yet.
 		inline bool TryGetAriContext(YYTK::CInstance*& Self, YYTK::CInstance*& Other)
 		{
-			if (!MMAPI::Internal::global_instance)
-				return false;
 			const auto& refs = MMAPI::Internal::instance_reference_map;
 			if (!refs.contains(INSTANCE_OBJ_ARI))
 				return false;
@@ -197,9 +193,6 @@ namespace MMAPI::Instance
 		if (Internal::object_dispatcher_installed)
 			return Aurie::AURIE_SUCCESS;
 
-		if (!MMAPI::Internal::self_module || !MMAPI::Internal::module_interface)
-			return Aurie::AURIE_INVALID_PARAMETER;
-
 		Aurie::AurieStatus status = MMAPI::Internal::module_interface->CreateCallback(
 			MMAPI::Internal::self_module,
 			YYTK::EVENT_OBJECT_CALL,
@@ -228,6 +221,10 @@ namespace MMAPI::Instance
 
 			if (Internal::object_call_callbacks.contains(object_name))
 				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			Aurie::AurieStatus status = MMAPI::Instance::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
 
 			Internal::object_call_callbacks[object_name] = callback;
 			return Aurie::AURIE_SUCCESS;

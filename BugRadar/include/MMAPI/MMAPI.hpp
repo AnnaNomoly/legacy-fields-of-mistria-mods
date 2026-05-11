@@ -33,5 +33,7 @@
 #include "StatusEffect.hpp"
 #include "T2.hpp"
 #include "Text.hpp"
+#include "ToolbarMenu.hpp"
 #include "Tutorial.hpp"
+#include "VitalsMenu.hpp"
 #include "Weather.hpp"
