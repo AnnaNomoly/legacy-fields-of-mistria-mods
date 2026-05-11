@@ -37,6 +37,17 @@ namespace MMAPI::Tutorial
 		WaterSpriteStatue    = 25
 	};
 
+	/// Total number of enumerators in Ids. Iterating [0, IdCount) covers every Ids value.
+	inline constexpr int IdCount = 26;
+
+	/// Invokes fn with every Ids value, in ascending order.
+	template <typename Fn>
+	inline void ForEachId(Fn fn)
+	{
+		for (int i = 0; i < IdCount; ++i)
+			fn(static_cast<Ids>(i));
+	}
+
 	namespace Internal
 	{
 		inline constexpr const char* GML_SCRIPT_SPAWN_TUTORIAL = "gml_Script_spawn_tutorial";

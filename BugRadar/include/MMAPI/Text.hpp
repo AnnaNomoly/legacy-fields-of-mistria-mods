@@ -66,7 +66,8 @@ namespace MMAPI::Text
 		inline BeforePlayConversationCallback before_play_conversation_callback = nullptr;
 		inline BeforePlayTextCallback         before_play_text_callback         = nullptr;
 
-		// Live Localizer Self/Other, latched from the get_localizer hook.
+		// Live Localizer Self/Other, latched from the get_localizer hook
+		// or pulled from globalInstance.__localizer on first request.
 		// Used by TryGetLocalizerContext for callers outside any hook frame.
 		inline YYTK::CInstance* localizer_self  = nullptr;
 		inline YYTK::CInstance* localizer_other = nullptr;
@@ -79,13 +80,37 @@ namespace MMAPI::Text
 			localizer_other = nullptr;
 		}
 
-		/// Resolves the Localizer's GML calling context, latched from the most recent get_localizer call.
-		/// Cleared automatically when the game returns to the title menu.
-		/// @return True if a Localizer call has been observed this session, false otherwise.
+		/// Reads globalInstance.__localizer and converts it to a CInstance pointer.
+		/// @return The Localizer instance pointer if available, nullptr otherwise.
+		inline YYTK::CInstance* TryGetLocalizerFromGlobal()
+		{
+			if (!MMAPI::Internal::global_instance)
+				return nullptr;
+
+			YYTK::RValue* localizer_rv = MMAPI::Internal::global_instance->GetRefMember("__localizer");
+			if (!localizer_rv)
+				return nullptr;
+
+			return localizer_rv->ToInstance();
+		}
+
+		/// Resolves the Localizer's GML calling context. Prefers the value latched from the most recent
+		/// get_localizer hook fire; falls back to globalInstance.__localizer so callers running before the
+		/// game's first localized-string call still resolve correctly. Cleared on return-to-title; the next
+		/// call after that will re-latch from globalInstance.
+		/// @return True if a Localizer instance was resolved, false if neither source was available.
 		inline bool TryGetLocalizerContext(YYTK::CInstance*& Self, YYTK::CInstance*& Other)
 		{
 			if (!localizer_self)
-				return false;
+			{
+				YYTK::CInstance* localizer = TryGetLocalizerFromGlobal();
+				if (!localizer)
+					return false;
+
+				localizer_self  = localizer;
+				localizer_other = localizer;
+			}
+
 			Self  = localizer_self;
 			Other = localizer_other;
 			return true;

@@ -62,6 +62,24 @@ namespace MMAPI::Damage
 			MMAPI::Engine::StructVariableSet(*damage_data, "critical", critical);
 		}
 
+		/// Returns true if the damage packet applies knockback.
+		bool GetKnockback() const
+		{
+			if (!damage_data || !MMAPI::Engine::StructVariableExists(*damage_data, "knockback"))
+				return false;
+
+			return damage_data->GetMember("knockback").ToBoolean();
+		}
+
+		/// Sets whether the damage packet applies knockback.
+		void SetKnockback(bool knockback)
+		{
+			if (!damage_data)
+				return;
+
+			MMAPI::Engine::StructVariableSet(*damage_data, "knockback", knockback);
+		}
+
 		/// Gets the target value from the damage packet.
 		YYTK::RValue GetTarget() const
 		{

@@ -15,10 +15,14 @@ namespace MMAPI::Item
 {
 	struct UseItemContext
 	{
-		int  m_item_id   = -1;
-		bool m_cancelled = false;
+		int               m_item_id   = -1;
+		YYTK::CInstance*  m_self      = nullptr;
+		YYTK::CInstance*  m_other     = nullptr;
+		bool              m_cancelled = false;
 
 		int GetItemId() const { return m_item_id; }
+		YYTK::CInstance* GetSelf() const { return m_self; }
+		YYTK::CInstance* GetOther() const { return m_other; }
 		void Cancel() { m_cancelled = true; }
 		bool IsCancelled() const { return m_cancelled; }
 	};
@@ -103,7 +107,11 @@ namespace MMAPI::Item
 		{
 			if (before_use_item_callback && Arguments && ArgumentCount >= 1 && Arguments[0])
 			{
-				MMAPI::Item::UseItemContext context{ static_cast<int>(Arguments[0]->GetMember("item_id").ToInt64()) };
+				MMAPI::Item::UseItemContext context{
+					static_cast<int>(Arguments[0]->GetMember("item_id").ToInt64()),
+					Self,
+					Other
+				};
 				before_use_item_callback(context);
 
 				if (context.m_cancelled)

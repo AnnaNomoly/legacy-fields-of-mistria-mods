@@ -75,6 +75,17 @@ namespace MMAPI::Weather
 		Special         = 3
 	};
 
+	/// Total number of enumerators in Ids. Iterating [0, IdCount) covers every Ids value.
+	inline constexpr int IdCount = 4;
+
+	/// Invokes fn with every Ids value, in ascending order.
+	template <typename Fn>
+	inline void ForEachId(Fn fn)
+	{
+		for (int i = 0; i < IdCount; ++i)
+			fn(static_cast<Ids>(i));
+	}
+
 	/// Gets the current weather from the game's WeatherManager.
 	/// @attention Requires MMAPI::Weather::Enable() to have been called.
 	/// @param weather Receives the current weather when the call succeeds.

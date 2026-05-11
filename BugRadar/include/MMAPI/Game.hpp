@@ -27,6 +27,17 @@ namespace MMAPI::Game
 		WaterDirt        = 10
 	};
 
+	/// Total number of enumerators in XpValues. Iterating [0, XpValueCount) covers every XpValues value.
+	inline constexpr int XpValueCount = 11;
+
+	/// Invokes fn with every XpValues value, in ascending order.
+	template <typename Fn>
+	inline void ForEachXpValue(Fn fn)
+	{
+		for (int i = 0; i < XpValueCount; ++i)
+			fn(static_cast<XpValues>(i));
+	}
+
 	struct SaveGameContext
 	{
 		bool m_cancelled = false;
@@ -635,16 +646,9 @@ namespace MMAPI::Game
 	}
 
 	/// Displays a localized notification popup.
-	/// @param Self The GML instance invoking the notification (passed through to the script call).
-	/// @param Other The GML other instance context (passed through to the script call).
 	/// @param ignore_cooldown When true, bypasses the 5-second per-key cooldown and always displays the notification.
 	/// @param notification_key Localization string key for the notification text.
-	inline void CreateNotification(
-		YYTK::CInstance* Self,
-		YYTK::CInstance* Other,
-		bool ignore_cooldown,
-		const std::string& notification_key
-	)
+	inline void CreateNotification(bool ignore_cooldown, const std::string& notification_key)
 	{
 		uint64_t now = MMAPI::Internal::GetCurrentSystemTime();
 		if (!ignore_cooldown && now <= Internal::notification_last_display_time[notification_key] + 5000)
@@ -659,7 +663,7 @@ namespace MMAPI::Game
 		YYTK::RValue result;
 		YYTK::RValue notification_rv(notification_key);
 		YYTK::RValue* notification_ptr = &notification_rv;
-		gml_script->m_Functions->m_ScriptFunction(Self, Other, result, 1, { &notification_ptr });
+		gml_script->m_Functions->m_ScriptFunction(nullptr, nullptr, result, 1, { &notification_ptr });
 
 		Internal::notification_last_display_time[notification_key] = now;
 	}

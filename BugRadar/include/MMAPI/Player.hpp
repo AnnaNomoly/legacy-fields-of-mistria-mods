@@ -41,6 +41,17 @@ namespace MMAPI::Player
 		MountJump      = 23
 	};
 
+	/// Total number of enumerators in States. Iterating [0, StateCount) covers every States value.
+	inline constexpr int StateCount = 24;
+
+	/// Invokes fn with every States value, in ascending order.
+	template <typename Fn>
+	inline void ForEachState(Fn fn)
+	{
+		for (int i = 0; i < StateCount; ++i)
+			fn(static_cast<States>(i));
+	}
+
 	struct Position
 	{
 		double x = 0.0;
@@ -301,6 +312,15 @@ namespace MMAPI::Player
 			before_mana_change_callback = callback;
 			return Aurie::AURIE_SUCCESS;
 		}
+	}
+
+	/// Returns Ari's current facing direction in degrees, read from globalInstance.__ari.dir.
+	/// Values are GameMaker direction degrees: 0 = right, 90 = up, 180 = left, 270 = down.
+	/// @return Ari's facing direction in degrees.
+	inline double GetFacingDirection()
+	{
+		YYTK::RValue ari = MMAPI::Internal::global_instance->GetMember("__ari");
+		return ari.GetMember("dir").ToDouble();
 	}
 
 	/// Returns the number of invulnerability hits remaining for Ari.

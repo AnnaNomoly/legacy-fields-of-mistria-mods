@@ -21,6 +21,17 @@ namespace MMAPI::Skill
 		Woodcrafting  = 8
 	};
 
+	/// Total number of enumerators in Ids. Iterating [0, IdCount) covers every Ids value.
+	inline constexpr int IdCount = 9;
+
+	/// Invokes fn with every Ids value, in ascending order.
+	template <typename Fn>
+	inline void ForEachId(Fn fn)
+	{
+		for (int i = 0; i < IdCount; ++i)
+			fn(static_cast<Ids>(i));
+	}
+
 	namespace Internal
 	{
 		inline constexpr const char* GML_SCRIPT_GAIN_XP = "gml_Script_gain_xp@Ari@Ari";

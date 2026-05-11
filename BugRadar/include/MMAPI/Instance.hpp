@@ -210,7 +210,6 @@ namespace MMAPI::Instance
 	{
 		/// Registers a callback that runs once per object tick when the GML object name contains the given fragment.
 		/// Skips paused-game ticks automatically.
-		/// @attention Requires MMAPI::Instance::Enable() to have been called.
 		/// @param object_name The GML object name fragment to match (e.g. "obj_farm_bell").
 		/// @param callback A function called with the live instance on each tick.
 		/// @return AURIE_SUCCESS if the callback was registered; AURIE_OBJECT_ALREADY_EXISTS if a callback for this name is already registered; otherwise AURIE_INVALID_PARAMETER.
@@ -232,7 +231,6 @@ namespace MMAPI::Instance
 
 		/// Registers a callback that runs once per object tick for the given known game object.
 		/// Skips paused-game ticks automatically.
-		/// @attention Requires MMAPI::Instance::Enable() to have been called.
 		/// @param object The well-known game object to subscribe to.
 		/// @param callback A function called with the live instance on each tick.
 		/// @return AURIE_SUCCESS if the callback was registered; AURIE_OBJECT_ALREADY_EXISTS if a callback for this object is already registered; otherwise AURIE_INVALID_PARAMETER.

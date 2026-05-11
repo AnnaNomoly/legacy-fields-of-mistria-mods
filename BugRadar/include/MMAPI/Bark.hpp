@@ -7,7 +7,7 @@
 
 namespace MMAPI::Bark
 {
-	/// Source: bark_icons.json.__bark_id__
+	/// Source: globalInstance.__bark_id__
 	enum class Icons : int
 	{
 		Adeline            = 0,
@@ -114,6 +114,17 @@ namespace MMAPI::Bark
 		Woodcrafting       = 101,
 		Yum                = 102
 	};
+
+	/// Total number of enumerators in Icons. Iterating [0, IconCount) covers every Icons value.
+	inline constexpr int IconCount = 103;
+
+	/// Invokes fn with every Icons value, in ascending order.
+	template <typename Fn>
+	inline void ForEachIcon(Fn fn)
+	{
+		for (int i = 0; i < IconCount; ++i)
+			fn(static_cast<Icons>(i));
+	}
 
 	namespace Internal
 	{

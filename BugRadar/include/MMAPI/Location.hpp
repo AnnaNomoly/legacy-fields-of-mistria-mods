@@ -11,7 +11,7 @@
 
 namespace MMAPI::Location
 {
-	/// Source: locations.json.__location_id__
+	/// Source: globalInstance.__location_id__
 	enum class Ids : int
 	{
 		AbandonedMines          = 0,
@@ -94,6 +94,17 @@ namespace MMAPI::Location
 		WesternRuins            = 77
 	};
 
+	/// Total number of enumerators in Ids. Iterating [0, IdCount) covers every Ids value.
+	inline constexpr int IdCount = 78;
+
+	/// Invokes fn with every Ids value, in ascending order.
+	template <typename Fn>
+	inline void ForEachId(Fn fn)
+	{
+		for (int i = 0; i < IdCount; ++i)
+			fn(static_cast<Ids>(i));
+	}
+
 	struct GoToRoomContext
 	{
 		std::string m_room_name;
@@ -123,6 +134,22 @@ namespace MMAPI::Location
 
 		using AfterGoToRoomCallback = void(*)(MMAPI::Location::GoToRoomContext&);
 		inline AfterGoToRoomCallback after_go_to_room_callback = nullptr;
+
+		// Internal pub/sub list of handlers invoked from the goto_gm_room hook after the original runs,
+		// before the public AfterGoToRoom callback. Used by modules that need to react to room transitions
+		// (e.g. Dungeon's floor-number tracking) without occupying the single public hook slot.
+		// Handlers must be set before the room transition's end-of-step deferral so subsequent on_room_start
+		// hooks see consistent state.
+		using OnGoToRoomHandler = void(*)(const std::string& room_name);
+		inline std::vector<OnGoToRoomHandler> on_go_to_room_internal_handlers;
+
+		inline void RegisterOnGoToRoomHandler(OnGoToRoomHandler handler)
+		{
+			for (auto existing : on_go_to_room_internal_handlers)
+				if (existing == handler)
+					return;
+			on_go_to_room_internal_handlers.push_back(handler);
+		}
 
 		inline YYTK::RValue GetLocationData(int location_id)
 		{
@@ -234,6 +261,9 @@ namespace MMAPI::Location
 			{
 				gm_room_name_to_location_id_map[room_name] = location_internal_name_to_id_map[INTERNAL_NAME_DUNGEON];
 			}
+
+			for (auto handler : on_go_to_room_internal_handlers)
+				handler(room_name);
 
 			if (after_go_to_room_callback)
 			{

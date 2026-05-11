@@ -21,6 +21,17 @@ namespace MMAPI::Calendar
 		Sunday    = 6
 	};
 
+	/// Total number of enumerators in Weekdays. Iterating [0, WeekdayCount) covers every Weekdays value.
+	inline constexpr int WeekdayCount = 7;
+
+	/// Invokes fn with every Weekdays value, in ascending order.
+	template <typename Fn>
+	inline void ForEachWeekday(Fn fn)
+	{
+		for (int i = 0; i < WeekdayCount; ++i)
+			fn(static_cast<Weekdays>(i));
+	}
+
 	/// Source: globalInstance.__season__
 	enum class Seasons : int
 	{
@@ -29,6 +40,17 @@ namespace MMAPI::Calendar
 		Fall   = 2,
 		Winter = 3
 	};
+
+	/// Total number of enumerators in Seasons. Iterating [0, SeasonCount) covers every Seasons value.
+	inline constexpr int SeasonCount = 4;
+
+	/// Invokes fn with every Seasons value, in ascending order.
+	template <typename Fn>
+	inline void ForEachSeason(Fn fn)
+	{
+		for (int i = 0; i < SeasonCount; ++i)
+			fn(static_cast<Seasons>(i));
+	}
 
 	namespace Internal
 	{

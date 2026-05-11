@@ -949,7 +949,7 @@ void AfterBugSpawn(MMAPI::Bug::BugSpawnContext& ctx)
 	bug_name = localized_name_rv.m_Kind == VALUE_STRING ? localized_name_rv.ToString() : "";
 
 	if (config.display_notifications)
-		MMAPI::Game::CreateNotification(bug, bug, false, BUG_DETECTED_NOTIFICATION_KEY);
+		MMAPI::Game::CreateNotification(false, BUG_DETECTED_NOTIFICATION_KEY);
 
 	if (config.modify_bug_spawn_location)
 	{

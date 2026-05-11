@@ -19,6 +19,17 @@ namespace MMAPI::Animal
 		Pet       = 4
 	};
 
+	/// Total number of enumerators in XpValues. Iterating [0, XpValueCount) covers every XpValues value.
+	inline constexpr int XpValueCount = 5;
+
+	/// Invokes fn with every XpValues value, in ascending order.
+	template <typename Fn>
+	inline void ForEachXpValue(Fn fn)
+	{
+		for (int i = 0; i < XpValueCount; ++i)
+			fn(static_cast<XpValues>(i));
+	}
+
 	struct HeartPointsChangedContext
 	{
 		double m_amount = 0.0;
