@@ -16,7 +16,6 @@ namespace MMAPI::Dungeon
 		bool m_cancelled = false;
 
 		void Cancel() { m_cancelled = true; }
-		bool IsCancelled() const { return m_cancelled; }
 	};
 
 	struct DungeonRoomStartContext;
@@ -247,6 +246,7 @@ namespace MMAPI::Dungeon
 		return MMAPI::Internal::InstallScriptHooks({
 			{ MMAPI::Internal::GML_SCRIPT_SETUP_MAIN_SCREEN, reinterpret_cast<PVOID>(MMAPI::Internal::GmlScriptBeforeSetupMainScreenCallback) },
 			{ Internal::GML_SCRIPT_ON_DUNGEON_ROOM_START,    reinterpret_cast<PVOID>(Internal::GmlScriptAfterDungeonRoomStartCallback) },
+			{ Internal::GML_SCRIPT_SPAWN_LADDER,             reinterpret_cast<PVOID>(Internal::GmlScriptSpawnLadderCallback) },
 		});
 	}
 

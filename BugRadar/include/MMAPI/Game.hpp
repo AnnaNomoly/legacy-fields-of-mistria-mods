@@ -43,7 +43,6 @@ namespace MMAPI::Game
 		bool m_cancelled = false;
 
 		void Cancel() { m_cancelled = true; }
-		bool IsCancelled() const { return m_cancelled; }
 	};
 
 	struct PlayAudioContext
@@ -54,7 +53,6 @@ namespace MMAPI::Game
 		std::string_view GetAudioName() const { return m_audio_name; }
 		void SetAudioName(std::string name) { m_audio_name = std::move(name); }
 		void Cancel() { m_cancelled = true; }
-		bool IsCancelled() const { return m_cancelled; }
 	};
 
 	struct HudShouldShowContext
@@ -668,11 +666,31 @@ namespace MMAPI::Game
 		Internal::notification_last_display_time[notification_key] = now;
 	}
 
-	/// Activates Game utility functions that directly call game scripts.
+	/// Activates Game utility functions that directly call game scripts. Eagerly installs every Game
+	/// script hook used by Hooks::* registrars (end_day, on_new_day, load/save_game, scene audio play,
+	/// on_draw_gui, hud_should_show, crafting/journal/store menu open/close).
 	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
 	inline Aurie::AurieStatus Enable()
 	{
-		return MMAPI::Instance::Enable();
+		Aurie::AurieStatus status = MMAPI::Instance::Enable();
+		if (!Aurie::AurieSuccess(status))
+			return status;
+
+		return MMAPI::Internal::InstallScriptHooks({
+			{ Internal::GML_SCRIPT_END_DAY,                 reinterpret_cast<PVOID>(Internal::GmlScriptEndDayCallback) },
+			{ Internal::GML_SCRIPT_ARI_ON_NEW_DAY,          reinterpret_cast<PVOID>(Internal::GmlScriptAriBeforeNewDayCallback) },
+			{ Internal::GML_SCRIPT_LOAD_GAME,               reinterpret_cast<PVOID>(Internal::GmlScriptLoadGameCallback) },
+			{ Internal::GML_SCRIPT_SAVE_GAME,               reinterpret_cast<PVOID>(Internal::GmlScriptSaveGameCallback) },
+			{ Internal::GML_SCRIPT_SCENE_AUDIO_PLAYER_PLAY, reinterpret_cast<PVOID>(Internal::GmlScriptPlayAudioCallback) },
+			{ Internal::GML_SCRIPT_ON_DRAW_GUI,             reinterpret_cast<PVOID>(Internal::GmlScriptAfterDrawGuiCallback) },
+			{ Internal::GML_SCRIPT_HUD_SHOULD_SHOW,         reinterpret_cast<PVOID>(Internal::GmlScriptHudShouldShowCallback) },
+			{ Internal::GML_SCRIPT_CRAFTING_MENU_OPEN,      reinterpret_cast<PVOID>(Internal::GmlScriptCraftingMenuOpenCallback) },
+			{ Internal::GML_SCRIPT_CRAFTING_MENU_CLOSE,     reinterpret_cast<PVOID>(Internal::GmlScriptCraftingMenuCloseCallback) },
+			{ Internal::GML_SCRIPT_JOURNAL_MENU_OPEN,       reinterpret_cast<PVOID>(Internal::GmlScriptJournalMenuOpenCallback) },
+			{ Internal::GML_SCRIPT_JOURNAL_MENU_CLOSE,      reinterpret_cast<PVOID>(Internal::GmlScriptJournalMenuCloseCallback) },
+			{ Internal::GML_SCRIPT_STORE_MENU_OPEN,         reinterpret_cast<PVOID>(Internal::GmlScriptStoreMenuOpenCallback) },
+			{ Internal::GML_SCRIPT_STORE_MENU_CLOSE,        reinterpret_cast<PVOID>(Internal::GmlScriptStoreMenuCloseCallback) },
+		});
 	}
 
 	/// Sells the current shipping bin contents.

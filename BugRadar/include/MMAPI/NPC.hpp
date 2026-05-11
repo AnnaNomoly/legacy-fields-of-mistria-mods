@@ -67,16 +67,31 @@ namespace MMAPI::NPC
 		void SetAmount(double amount) { m_amount = amount; }
 	};
 
+	struct FindBlipNoiseContext
+	{
+		std::string m_audio_asset_name;
+
+		/// Returns the audio asset name the game's `find_npc_blip_noise` script resolved
+		/// (e.g. "SoundEffects/NPCs/Vocal/TextBlipPriestess").
+		std::string_view GetAudioAssetName() const { return m_audio_asset_name; }
+
+		/// Overrides the audio asset name the game will use for this NPC's text blip.
+		void SetAudioAssetName(std::string audio_asset_name) { m_audio_asset_name = std::move(audio_asset_name); }
+	};
+
 	namespace Internal
 	{
-		inline constexpr const char* GML_SCRIPT_ADD_HEART_POINTS = "gml_Script_add_heart_points@Npc@Npc";
-		inline constexpr const char* GML_SCRIPT_NPC_RECEIVE_GIFT = "gml_Script_receive_gift@gml_Object_par_NPC_Create_0";
+		inline constexpr const char* GML_SCRIPT_ADD_HEART_POINTS     = "gml_Script_add_heart_points@Npc@Npc";
+		inline constexpr const char* GML_SCRIPT_NPC_RECEIVE_GIFT     = "gml_Script_receive_gift@gml_Object_par_NPC_Create_0";
+		inline constexpr const char* GML_SCRIPT_FIND_NPC_BLIP_NOISE  = "gml_Script_find_npc_blip_noise";
 
 		using BeforeHeartPointsChangeCallback = void(*)(MMAPI::NPC::HeartPointsChangedContext&);
-		using BeforeReceiveGiftCallback = void(*)(YYTK::CInstance* npc, int item_id);
+		using BeforeReceiveGiftCallback       = void(*)(YYTK::CInstance* npc, int item_id);
+		using AfterFindBlipNoiseCallback      = void(*)(MMAPI::NPC::FindBlipNoiseContext&);
 
 		inline BeforeHeartPointsChangeCallback before_heart_points_change_callback = nullptr;
-		inline BeforeReceiveGiftCallback before_receive_gift_callback = nullptr;
+		inline BeforeReceiveGiftCallback       before_receive_gift_callback        = nullptr;
+		inline AfterFindBlipNoiseCallback      after_find_blip_noise_callback      = nullptr;
 
 		inline bool TryGetNumericArgument(YYTK::RValue** Arguments, int ArgumentCount, int index, double& value)
 		{
@@ -162,6 +177,43 @@ namespace MMAPI::NPC
 
 			original(Self, Other, Result, ArgumentCount, Arguments);
 			return Result;
+		}
+
+		inline YYTK::RValue& GmlScriptAfterFindNpcBlipNoiseCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_FIND_NPC_BLIP_NOISE)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			if (after_find_blip_noise_callback && Result.m_Kind == YYTK::VALUE_STRING)
+			{
+				MMAPI::NPC::FindBlipNoiseContext context{ Result.ToString() };
+				after_find_blip_noise_callback(context);
+				Result = YYTK::RValue(context.m_audio_asset_name);
+			}
+
+			return Result;
+		}
+
+		inline Aurie::AurieStatus RegisterFindBlipNoiseHook(AfterFindBlipNoiseCallback callback)
+		{
+			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
+				GML_SCRIPT_FIND_NPC_BLIP_NOISE,
+				reinterpret_cast<PVOID>(GmlScriptAfterFindNpcBlipNoiseCallback)
+			);
+
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			after_find_blip_noise_callback = callback;
+			return Aurie::AURIE_SUCCESS;
 		}
 
 		inline Aurie::AurieStatus RegisterReceiveGiftHook(BeforeReceiveGiftCallback callback)
@@ -454,6 +506,27 @@ namespace MMAPI::NPC
 				return status;
 
 			return Internal::RegisterReceiveGiftHook(callback);
+		}
+
+		/// Registers a callback that runs after the game's `find_npc_blip_noise` script.
+		/// Read `ctx.GetAudioAssetName()` to see the audio asset the game resolved for an NPC's
+		/// text-blip noise, and call `ctx.SetAudioAssetName(...)` to override it (e.g. retarget
+		/// a character to a different voice asset under specific conditions).
+		/// @param callback A function called with a mutable `MMAPI::NPC::FindBlipNoiseContext`.
+		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
+		inline Aurie::AurieStatus AfterFindBlipNoise(Internal::AfterFindBlipNoiseCallback callback)
+		{
+			if (!callback)
+				return Aurie::AURIE_INVALID_PARAMETER;
+
+			if (Internal::after_find_blip_noise_callback)
+				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			Aurie::AurieStatus status = MMAPI::NPC::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			return Internal::RegisterFindBlipNoiseHook(callback);
 		}
 	}
 }

@@ -2,7 +2,9 @@
 
 #include "Core.hpp"
 #include "Engine.hpp"
+#include "Infusion.hpp"
 #include "Instance.hpp"
+#include "Object.hpp"
 #include "Text.hpp"
 
 #include <map>
@@ -24,18 +26,174 @@ namespace MMAPI::Item
 		YYTK::CInstance* GetSelf() const { return m_self; }
 		YYTK::CInstance* GetOther() const { return m_other; }
 		void Cancel() { m_cancelled = true; }
-		bool IsCancelled() const { return m_cancelled; }
+	};
+
+	struct CreateItemPrototypesContext
+	{
+		YYTK::RValue m_item_prototypes;
+		size_t       m_count = 0;
+
+		/// Returns the item prototypes array the game's create_item_prototypes script produced.
+		/// Indexed by item_id; iterate with GetArrayEntry from the YYTK module interface.
+		YYTK::RValue GetItemPrototypes() const { return m_item_prototypes; }
+
+		/// Returns the number of entries in the item prototypes array.
+		size_t Count() const { return m_count; }
+	};
+
+	struct GetTreasureContext
+	{
+		int         m_object_id = -1;
+		std::string m_object_name;
+
+		/// Returns the object_id of the source that triggered the treasure roll, resolved from the
+		/// script's Self (preferred) or Other. Returns -1 if neither exposes an `object_id` member.
+		int GetObjectId() const { return m_object_id; }
+
+		/// Returns the internal object name resolved from object_id (e.g. "obj_dungeon_treasure_chest"),
+		/// or an empty view if object_id is -1 or the name could not be resolved.
+		std::string_view GetObjectName() const { return m_object_name; }
+	};
+
+	struct GiveItemContext
+	{
+		YYTK::RValue* m_item     = nullptr;
+		YYTK::RValue* m_quantity = nullptr;
+
+		/// Returns the item_id of the item being given, or -1 if Arguments[0] is null/not a struct
+		/// or lacks an `item_id` member.
+		int GetItemId() const;
+
+		/// Returns true if the item being given matches the given item_id.
+		bool IsItem(int item_id) const { return GetItemId() == item_id && item_id >= 0; }
+
+		/// Returns true if the item being given matches the given internal recipe key.
+		bool IsItem(const std::string& internal_name) const;
+
+		/// Sets the `infusion` member on the item struct.
+		/// @return True if the struct has an `infusion` member that was updated; false otherwise.
+		bool SetInfusion(MMAPI::Infusion::Ids infusion);
+
+		/// Returns the quantity being given, or 0 if Arguments[1] is null or non-numeric.
+		int GetQuantity() const;
+
+		/// Overrides the quantity being given.
+		void SetQuantity(int quantity);
+	};
+
+	struct DropItemContext
+	{
+		YYTK::CInstance* m_self  = nullptr;
+		YYTK::CInstance* m_other = nullptr;
+		YYTK::RValue*    m_arg0  = nullptr;
+
+		/// Returns true if the drop refers to the item with the given item_id. Transparently handles
+		/// all three Arguments[0] shapes the game uses: a struct with an `item_id` member, an array
+		/// of such structs (any entry matching counts), or a raw numeric item_id.
+		bool IsItem(int item_id) const
+		{
+			if (!m_arg0)
+				return false;
+
+			if (m_arg0->m_Kind == YYTK::VALUE_ARRAY)
+			{
+				size_t array_length = 0;
+				MMAPI::Internal::module_interface->GetArraySize(*m_arg0, array_length);
+				for (size_t i = 0; i < array_length; i++)
+				{
+					YYTK::RValue* entry = nullptr;
+					MMAPI::Internal::module_interface->GetArrayEntry(*m_arg0, i, entry);
+					if (!entry)
+						continue;
+					if (MMAPI::Engine::StructVariableExists(*entry, "item_id")
+						&& static_cast<int>(entry->GetMember("item_id").ToInt64()) == item_id)
+					{
+						return true;
+					}
+				}
+				return false;
+			}
+
+			if (m_arg0->m_Kind == YYTK::VALUE_OBJECT)
+			{
+				if (!MMAPI::Engine::StructVariableExists(*m_arg0, "item_id"))
+					return false;
+				return static_cast<int>(m_arg0->GetMember("item_id").ToInt64()) == item_id;
+			}
+
+			if (MMAPI::Engine::IsNumeric(*m_arg0))
+				return static_cast<int>(m_arg0->ToInt64()) == item_id;
+
+			return false;
+		}
+
+		/// Returns true if the drop refers to the item with the given internal recipe key
+		/// (e.g. "ore_stone"). Resolves the name to an item_id via Item::GetIdFromInternalName.
+		bool IsItem(const std::string& internal_name) const;
+
+		/// Replaces the drop with the given item_id. Only effective on the non-array path
+		/// (struct or raw numeric Arguments[0]). On the array path, mods should iterate and mutate
+		/// individual entries directly, or invoke ctx.Drop(...) to add new drops.
+		/// @return True if the item was substituted; false if Arguments[0] holds an array or the item lookup failed.
+		bool SetItem(int item_id);
+
+		/// Replaces the drop with the item identified by the given internal recipe key.
+		/// Only effective on the non-array path.
+		bool SetItem(const std::string& internal_name);
+
+		/// Drops an item at the given coordinates using the script's Self/Other from this hook fire.
+		/// Equivalent to MMAPI::Item::Drop, but reuses the latched Self/Other rather than the Ari context.
+		/// > Note: this re-invokes drop_item and will retrigger any registered BeforeDropItem callback.
+		/// > Callers are responsible for guarding against unbounded recursion.
+		void Drop(int item_id, double x, double y);
+
+		/// Drops an item by internal recipe key.
+		void Drop(const std::string& internal_name, double x, double y);
+	};
+
+	struct GetUiIconContext
+	{
+		YYTK::CInstance* m_self          = nullptr;
+		int              m_item_id       = -1;
+		YYTK::RValue     m_sprite_asset;
+
+		/// The live item instance the icon is being drawn for (the script's Self at hook time).
+		YYTK::CInstance* GetSelf() const { return m_self; }
+
+		/// The item_id read from the live item struct, or -1 if Self is null or the struct lacks an `item_id` member.
+		int GetItemId() const { return m_item_id; }
+
+		/// The sprite asset the game's get_ui_icon script produced.
+		YYTK::RValue GetSpriteAsset() const { return m_sprite_asset; }
+
+		/// Overrides the sprite asset the game will use to draw this item's UI icon.
+		/// Typically populated with `MMAPI::Engine::AssetGetIndex("spr_...")`.
+		void SetSpriteAsset(YYTK::RValue sprite_asset) { m_sprite_asset = sprite_asset; }
 	};
 
 	namespace Internal
 	{
-		inline constexpr const char* GML_SCRIPT_DESERIALIZE_LIVE_ITEM = "gml_Script_deserialize_live_item";
-		inline constexpr const char* GML_SCRIPT_DROP_ITEM             = "gml_Script_drop_item";
-		inline constexpr const char* GML_SCRIPT_USE_ITEM              = "gml_Script_use_item";
+		inline constexpr const char* GML_SCRIPT_DESERIALIZE_LIVE_ITEM         = "gml_Script_deserialize_live_item";
+		inline constexpr const char* GML_SCRIPT_DROP_ITEM                     = "gml_Script_drop_item";
+		inline constexpr const char* GML_SCRIPT_GIVE_ITEM                     = "gml_Script_give_item@Ari@Ari";
+		inline constexpr const char* GML_SCRIPT_USE_ITEM                      = "gml_Script_use_item";
+		inline constexpr const char* GML_SCRIPT_GET_UI_ICON                   = "gml_Script_get_ui_icon@anon@4244@LiveItem@LiveItem";
+		inline constexpr const char* GML_SCRIPT_CREATE_ITEM_PROTOTYPES        = "gml_Script_create_item_prototypes";
+		inline constexpr const char* GML_SCRIPT_GET_TREASURE_FROM_DISTRIBUTION = "gml_Script_get_treasure_from_distribution";
 
-		using BeforeUseItemCallback = void(*)(MMAPI::Item::UseItemContext&);
+		using BeforeUseItemCallback                = void(*)(MMAPI::Item::UseItemContext&);
+		using AfterGetUiIconCallback               = void(*)(MMAPI::Item::GetUiIconContext&);
+		using AfterCreateItemPrototypesCallback    = void(*)(MMAPI::Item::CreateItemPrototypesContext&);
+		using BeforeGetTreasureCallback            = void(*)(MMAPI::Item::GetTreasureContext&);
+		using BeforeDropItemCallback               = void(*)(MMAPI::Item::DropItemContext&);
+		using BeforeGiveItemCallback               = void(*)(MMAPI::Item::GiveItemContext&);
 
-		inline BeforeUseItemCallback before_use_item_callback = nullptr;
+		inline BeforeUseItemCallback                before_use_item_callback                = nullptr;
+		inline AfterGetUiIconCallback               after_get_ui_icon_callback              = nullptr;
+		inline AfterCreateItemPrototypesCallback    after_create_item_prototypes_callback   = nullptr;
+		inline BeforeGetTreasureCallback            before_get_treasure_callback            = nullptr;
+		inline BeforeDropItemCallback               before_drop_item_callback               = nullptr;
+		inline BeforeGiveItemCallback               before_give_item_callback               = nullptr;
 
 		inline YYTK::RValue GetItemData()
 		{
@@ -136,6 +294,223 @@ namespace MMAPI::Item
 				return status;
 
 			before_use_item_callback = callback;
+			return Aurie::AURIE_SUCCESS;
+		}
+
+		inline YYTK::RValue& GmlScriptAfterGetUiIconCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_GET_UI_ICON)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			if (after_get_ui_icon_callback)
+			{
+				int item_id = -1;
+				if (Self)
+				{
+					YYTK::RValue self_rv = Self->ToRValue();
+					if (MMAPI::Engine::StructVariableExists(self_rv, "item_id"))
+						item_id = static_cast<int>(self_rv.GetMember("item_id").ToInt64());
+				}
+
+				MMAPI::Item::GetUiIconContext context{ Self, item_id, Result };
+				after_get_ui_icon_callback(context);
+				Result = context.m_sprite_asset;
+			}
+
+			return Result;
+		}
+
+		inline Aurie::AurieStatus RegisterGetUiIconHook(AfterGetUiIconCallback callback)
+		{
+			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
+				GML_SCRIPT_GET_UI_ICON,
+				reinterpret_cast<PVOID>(GmlScriptAfterGetUiIconCallback)
+			);
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			after_get_ui_icon_callback = callback;
+			return Aurie::AURIE_SUCCESS;
+		}
+
+		inline YYTK::RValue& GmlScriptAfterCreateItemPrototypesCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_CREATE_ITEM_PROTOTYPES)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			if (after_create_item_prototypes_callback)
+			{
+				size_t array_length = 0;
+				MMAPI::Internal::module_interface->GetArraySize(Result, array_length);
+
+				MMAPI::Item::CreateItemPrototypesContext context{ Result, array_length };
+				after_create_item_prototypes_callback(context);
+			}
+
+			return Result;
+		}
+
+		inline Aurie::AurieStatus RegisterCreateItemPrototypesHook(AfterCreateItemPrototypesCallback callback)
+		{
+			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
+				GML_SCRIPT_CREATE_ITEM_PROTOTYPES,
+				reinterpret_cast<PVOID>(GmlScriptAfterCreateItemPrototypesCallback)
+			);
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			after_create_item_prototypes_callback = callback;
+			return Aurie::AURIE_SUCCESS;
+		}
+
+		inline YYTK::RValue& GmlScriptBeforeGetTreasureCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			if (before_get_treasure_callback)
+			{
+				// Resolve source: Self first, then Other. Both guarded for `object_id` member.
+				int object_id = -1;
+				if (Self)
+				{
+					YYTK::RValue self_rv = Self->ToRValue();
+					if (MMAPI::Engine::StructVariableExists(self_rv, "object_id"))
+						object_id = static_cast<int>(self_rv.GetMember("object_id").ToInt64());
+				}
+				if (object_id == -1 && Other)
+				{
+					YYTK::RValue other_rv = Other->ToRValue();
+					if (MMAPI::Engine::StructVariableExists(other_rv, "object_id"))
+						object_id = static_cast<int>(other_rv.GetMember("object_id").ToInt64());
+				}
+
+				std::string object_name;
+				if (object_id != -1)
+				{
+					YYTK::RValue name = MMAPI::Object::GetInternalName(object_id);
+					if (name.m_Kind == YYTK::VALUE_STRING)
+						object_name = name.ToString();
+				}
+
+				MMAPI::Item::GetTreasureContext context{ object_id, std::move(object_name) };
+				before_get_treasure_callback(context);
+			}
+
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_GET_TREASURE_FROM_DISTRIBUTION)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			return Result;
+		}
+
+		inline Aurie::AurieStatus RegisterGetTreasureHook(BeforeGetTreasureCallback callback)
+		{
+			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
+				GML_SCRIPT_GET_TREASURE_FROM_DISTRIBUTION,
+				reinterpret_cast<PVOID>(GmlScriptBeforeGetTreasureCallback)
+			);
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			before_get_treasure_callback = callback;
+			return Aurie::AURIE_SUCCESS;
+		}
+
+		inline YYTK::RValue& GmlScriptBeforeDropItemCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			if (before_drop_item_callback)
+			{
+				MMAPI::Item::DropItemContext context{
+					Self,
+					Other,
+					(Arguments && ArgumentCount >= 1) ? Arguments[0] : nullptr
+				};
+				before_drop_item_callback(context);
+			}
+
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_DROP_ITEM)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			return Result;
+		}
+
+		inline Aurie::AurieStatus RegisterDropItemHook(BeforeDropItemCallback callback)
+		{
+			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
+				GML_SCRIPT_DROP_ITEM,
+				reinterpret_cast<PVOID>(GmlScriptBeforeDropItemCallback)
+			);
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			before_drop_item_callback = callback;
+			return Aurie::AURIE_SUCCESS;
+		}
+
+		inline YYTK::RValue& GmlScriptBeforeGiveItemCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			if (before_give_item_callback)
+			{
+				MMAPI::Item::GiveItemContext context{
+					(Arguments && ArgumentCount >= 1) ? Arguments[0] : nullptr,
+					(Arguments && ArgumentCount >= 2) ? Arguments[1] : nullptr
+				};
+				before_give_item_callback(context);
+			}
+
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_GIVE_ITEM)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			return Result;
+		}
+
+		inline Aurie::AurieStatus RegisterGiveItemHook(BeforeGiveItemCallback callback)
+		{
+			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
+				GML_SCRIPT_GIVE_ITEM,
+				reinterpret_cast<PVOID>(GmlScriptBeforeGiveItemCallback)
+			);
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			before_give_item_callback = callback;
 			return Aurie::AURIE_SUCCESS;
 		}
 
@@ -486,13 +861,27 @@ namespace MMAPI::Item
 
 	/// Activates Item utility functions. Cascades to MMAPI::Instance::Enable so Item::Drop can resolve Ari's
 	/// GML calling context, and to MMAPI::Text::Enable so Item::GetLocalizedName can resolve the Localizer.
+	/// Eagerly installs every Item script hook used by Hooks::* registrars (use_item, drop_item, give_item,
+	/// get_ui_icon, create_item_prototypes, get_treasure_from_distribution).
 	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
 	inline Aurie::AurieStatus Enable()
 	{
 		Aurie::AurieStatus status = MMAPI::Instance::Enable();
 		if (!Aurie::AurieSuccess(status))
 			return status;
-		return MMAPI::Text::Enable();
+
+		status = MMAPI::Text::Enable();
+		if (!Aurie::AurieSuccess(status))
+			return status;
+
+		return MMAPI::Internal::InstallScriptHooks({
+			{ Internal::GML_SCRIPT_USE_ITEM,                       reinterpret_cast<PVOID>(Internal::GmlScriptUseItemCallback) },
+			{ Internal::GML_SCRIPT_DROP_ITEM,                      reinterpret_cast<PVOID>(Internal::GmlScriptBeforeDropItemCallback) },
+			{ Internal::GML_SCRIPT_GIVE_ITEM,                      reinterpret_cast<PVOID>(Internal::GmlScriptBeforeGiveItemCallback) },
+			{ Internal::GML_SCRIPT_GET_UI_ICON,                    reinterpret_cast<PVOID>(Internal::GmlScriptAfterGetUiIconCallback) },
+			{ Internal::GML_SCRIPT_CREATE_ITEM_PROTOTYPES,         reinterpret_cast<PVOID>(Internal::GmlScriptAfterCreateItemPrototypesCallback) },
+			{ Internal::GML_SCRIPT_GET_TREASURE_FROM_DISTRIBUTION, reinterpret_cast<PVOID>(Internal::GmlScriptBeforeGetTreasureCallback) },
+		});
 	}
 
 	/// Drops an item at the given room coordinates.
@@ -532,6 +921,130 @@ namespace MMAPI::Item
 		gml_script->m_Functions->m_ScriptFunction(Self, Other, result, 4, args);
 	}
 
+	inline bool DropItemContext::IsItem(const std::string& internal_name) const
+	{
+		YYTK::RValue id = MMAPI::Item::GetIdFromInternalName(internal_name);
+		if (!MMAPI::Engine::IsNumeric(id))
+			return false;
+		return IsItem(static_cast<int>(id.ToInt64()));
+	}
+
+	inline bool DropItemContext::SetItem(int item_id)
+	{
+		if (!m_arg0 || item_id < 0)
+			return false;
+		if (m_arg0->m_Kind == YYTK::VALUE_ARRAY)
+			return false;
+
+		if (m_arg0->m_Kind == YYTK::VALUE_OBJECT
+			&& MMAPI::Engine::StructVariableExists(*m_arg0, "item_id"))
+		{
+			YYTK::RValue item_data = Internal::GetItemData(item_id);
+			if (item_data.m_Kind == YYTK::VALUE_UNDEFINED)
+				return false;
+
+			*m_arg0->GetRefMember("prototype") = item_data;
+			*m_arg0->GetRefMember("item_id")   = item_id;
+			return true;
+		}
+
+		if (MMAPI::Engine::IsNumeric(*m_arg0))
+		{
+			*m_arg0 = item_id;
+			return true;
+		}
+
+		return false;
+	}
+
+	inline bool DropItemContext::SetItem(const std::string& internal_name)
+	{
+		YYTK::RValue id = MMAPI::Item::GetIdFromInternalName(internal_name);
+		if (!MMAPI::Engine::IsNumeric(id))
+			return false;
+		return SetItem(static_cast<int>(id.ToInt64()));
+	}
+
+	inline void DropItemContext::Drop(int item_id, double x, double y)
+	{
+		if (item_id < 0 || !m_self)
+			return;
+
+		YYTK::RValue item = Internal::DeserializeLiveItem(m_self, m_other);
+		if (item.m_Kind == YYTK::VALUE_UNDEFINED)
+			return;
+
+		YYTK::RValue item_data = Internal::GetItemData(item_id);
+		if (item_data.m_Kind == YYTK::VALUE_UNDEFINED)
+			return;
+
+		*item.GetRefMember("prototype") = item_data;
+		*item.GetRefMember("item_id")   = item_id;
+
+		YYTK::CScript* gml_script = nullptr;
+		MMAPI::Internal::module_interface->GetNamedRoutinePointer(
+			Internal::GML_SCRIPT_DROP_ITEM,
+			reinterpret_cast<PVOID*>(&gml_script)
+		);
+
+		YYTK::RValue x_value = x;
+		YYTK::RValue y_value = y;
+		YYTK::RValue undefined;
+		YYTK::RValue result;
+		YYTK::RValue* args[4] = { &item, &x_value, &y_value, &undefined };
+		gml_script->m_Functions->m_ScriptFunction(m_self, m_other, result, 4, args);
+	}
+
+	inline void DropItemContext::Drop(const std::string& internal_name, double x, double y)
+	{
+		YYTK::RValue id = MMAPI::Item::GetIdFromInternalName(internal_name);
+		if (!MMAPI::Engine::IsNumeric(id))
+			return;
+		Drop(static_cast<int>(id.ToInt64()), x, y);
+	}
+
+	inline int GiveItemContext::GetItemId() const
+	{
+		if (!m_item || m_item->m_Kind != YYTK::VALUE_OBJECT)
+			return -1;
+		if (!MMAPI::Engine::StructVariableExists(*m_item, "item_id"))
+			return -1;
+		return static_cast<int>(m_item->GetMember("item_id").ToInt64());
+	}
+
+	inline bool GiveItemContext::IsItem(const std::string& internal_name) const
+	{
+		YYTK::RValue id = MMAPI::Item::GetIdFromInternalName(internal_name);
+		if (!MMAPI::Engine::IsNumeric(id))
+			return false;
+		return IsItem(static_cast<int>(id.ToInt64()));
+	}
+
+	inline bool GiveItemContext::SetInfusion(MMAPI::Infusion::Ids infusion)
+	{
+		if (!m_item || m_item->m_Kind != YYTK::VALUE_OBJECT)
+			return false;
+		if (!MMAPI::Engine::StructVariableExists(*m_item, "infusion"))
+			return false;
+
+		MMAPI::Engine::StructVariableSet(*m_item, "infusion", static_cast<int>(infusion));
+		return true;
+	}
+
+	inline int GiveItemContext::GetQuantity() const
+	{
+		if (!m_quantity || !MMAPI::Engine::IsNumeric(*m_quantity))
+			return 0;
+		return static_cast<int>(m_quantity->ToInt64());
+	}
+
+	inline void GiveItemContext::SetQuantity(int quantity)
+	{
+		if (!m_quantity)
+			return;
+		*m_quantity = quantity;
+	}
+
 	namespace Hooks
 	{
 		/// Registers a callback that runs before the game processes an item use.
@@ -551,6 +1064,117 @@ namespace MMAPI::Item
 				return status;
 
 			return Internal::RegisterUseItemHook(callback);
+		}
+
+		/// Registers a callback that runs after the game's `get_ui_icon` script for a live item.
+		/// Read `ctx.GetItemId()` to identify the item (or -1 if Self/item_id is unavailable) and
+		/// `ctx.GetSpriteAsset()` to see the sprite asset the game computed; call `ctx.SetSpriteAsset(...)`
+		/// to override it with a custom sprite (typically `MMAPI::Engine::AssetGetIndex("spr_...")`).
+		/// @param callback A function called with a mutable `MMAPI::Item::GetUiIconContext`.
+		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
+		inline Aurie::AurieStatus AfterGetUiIcon(Internal::AfterGetUiIconCallback callback)
+		{
+			if (!callback)
+				return Aurie::AURIE_INVALID_PARAMETER;
+
+			if (Internal::after_get_ui_icon_callback)
+				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			Aurie::AurieStatus status = MMAPI::Item::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			return Internal::RegisterGetUiIconHook(callback);
+		}
+
+		/// Registers a callback that runs after the game's `create_item_prototypes` script.
+		/// Use `ctx.GetItemPrototypes()` to access the prototypes array (indexed by item_id) and
+		/// `ctx.Count()` for its length — useful for snapshotting the full prototype table when the
+		/// game finishes loading items.
+		/// @param callback A function called with a `MMAPI::Item::CreateItemPrototypesContext`.
+		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
+		inline Aurie::AurieStatus AfterCreateItemPrototypes(Internal::AfterCreateItemPrototypesCallback callback)
+		{
+			if (!callback)
+				return Aurie::AURIE_INVALID_PARAMETER;
+
+			if (Internal::after_create_item_prototypes_callback)
+				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			Aurie::AurieStatus status = MMAPI::Item::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			return Internal::RegisterCreateItemPrototypesHook(callback);
+		}
+
+		/// Registers a callback that runs before the game's `get_treasure_from_distribution` script.
+		/// The wrapper resolves the source object from Self (preferred) or Other, both guarded for an
+		/// `object_id` member. `ctx.GetObjectId()` returns the resolved id (or -1 if neither has one),
+		/// and `ctx.GetObjectName()` returns its internal name (resolved via Object::GetInternalName).
+		/// Use this to detect the originating chest/container and inject custom loot before the game's roll runs.
+		/// @param callback A function called with a `MMAPI::Item::GetTreasureContext`.
+		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
+		inline Aurie::AurieStatus BeforeGetTreasure(Internal::BeforeGetTreasureCallback callback)
+		{
+			if (!callback)
+				return Aurie::AURIE_INVALID_PARAMETER;
+
+			if (Internal::before_get_treasure_callback)
+				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			Aurie::AurieStatus status = MMAPI::Item::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			return Internal::RegisterGetTreasureHook(callback);
+		}
+
+		/// Registers a callback that runs before the game's `drop_item` script. The script's
+		/// Arguments[0] can be a single item struct, an array of item structs, or a raw numeric item_id —
+		/// the context's helpers handle all three shapes transparently.
+		/// Use `ctx.IsItem(id_or_name)` to recognize the drop, `ctx.SetItem(id_or_name)` to substitute it
+		/// (non-array path only), and `ctx.Drop(id_or_name, x, y)` to issue additional drops using the
+		/// hook's own Self/Other (warning: re-enters this hook — guard against recursion in your callback).
+		/// @param callback A function called with a mutable `MMAPI::Item::DropItemContext`.
+		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
+		inline Aurie::AurieStatus BeforeDropItem(Internal::BeforeDropItemCallback callback)
+		{
+			if (!callback)
+				return Aurie::AURIE_INVALID_PARAMETER;
+
+			if (Internal::before_drop_item_callback)
+				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			Aurie::AurieStatus status = MMAPI::Item::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			return Internal::RegisterDropItemHook(callback);
+		}
+
+		/// Registers a callback that runs before the game's `give_item@Ari@Ari` script. The script
+		/// awards an item struct (Arguments[0]) in a given quantity (Arguments[1]) to Ari. The
+		/// callback can identify the item, override its infusion, and change the quantity — the item
+		/// itself can't be swapped through this hook.
+		/// Use `ctx.GetItemId()`/`ctx.IsItem(id_or_name)` to inspect, `ctx.SetInfusion(...)` to override
+		/// the infusion (no-op if the struct has no `infusion` field), and
+		/// `ctx.GetQuantity()`/`ctx.SetQuantity(int)` for the count.
+		/// @param callback A function called with a mutable `MMAPI::Item::GiveItemContext`.
+		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
+		inline Aurie::AurieStatus BeforeGiveItem(Internal::BeforeGiveItemCallback callback)
+		{
+			if (!callback)
+				return Aurie::AURIE_INVALID_PARAMETER;
+
+			if (Internal::before_give_item_callback)
+				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			Aurie::AurieStatus status = MMAPI::Item::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			return Internal::RegisterGiveItemHook(callback);
 		}
 	}
 }

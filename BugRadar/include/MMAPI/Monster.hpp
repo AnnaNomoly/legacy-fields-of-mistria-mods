@@ -73,9 +73,6 @@ namespace MMAPI::Monster
 
 		/// Prevents the game's spawn_monster script from running.
 		void Cancel() { m_cancelled = true; }
-
-		/// Returns true if any callback has cancelled this spawn.
-		bool IsCancelled() const { return m_cancelled; }
 	};
 
 	namespace Internal
@@ -129,11 +126,19 @@ namespace MMAPI::Monster
 	}
 
 	/// Activates Monster utility functions. Cascades to MMAPI::Dungeon::Enable so SpawnMonster can resolve
-	/// the live DungeonRunner via TryGetDungeonRunnerContext.
+	/// the live DungeonRunner via TryGetDungeonRunnerContext. Eagerly installs the spawn_monster script hook
+	/// used by Hooks::BeforeMonsterSpawn.
 	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
 	inline Aurie::AurieStatus Enable()
 	{
-		return MMAPI::Dungeon::Enable();
+		Aurie::AurieStatus status = MMAPI::Dungeon::Enable();
+		if (!Aurie::AurieSuccess(status))
+			return status;
+
+		return MMAPI::Internal::InstallScriptHook(
+			Internal::GML_SCRIPT_SPAWN_MONSTER,
+			reinterpret_cast<PVOID>(Internal::GmlScriptSpawnMonsterCallback)
+		);
 	}
 
 	namespace Hooks

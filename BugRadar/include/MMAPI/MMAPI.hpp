@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core.hpp"
+#include "Anchor.hpp"
 #include "Animal.hpp"
 #include "Bark.hpp"
 #include "Bug.hpp"
@@ -8,6 +9,7 @@
 #include "Config.hpp"
 #include "Cosmetic.hpp"
 #include "Damage.hpp"
+#include "Display.hpp"
 #include "Dungeon.hpp"
 #include "Engine.hpp"
 #include "Equipment.hpp"

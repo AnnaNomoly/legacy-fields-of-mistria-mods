@@ -80,7 +80,7 @@ namespace MMAPI::Player
 		}
 	};
 
-	struct ModifyHealthChangeContext
+	struct BeforeHealthChangeContext
 	{
 		double m_amount = 0.0;
 
@@ -91,7 +91,16 @@ namespace MMAPI::Player
 		void SetAmount(double amount) { m_amount = amount; }
 	};
 
-	struct ModifyStaminaChangeContext
+	struct AfterHealthChangeContext
+	{
+		double m_amount = 0.0;
+
+		/// Returns the health change amount the game's modify_health script saw (post any
+		/// BeforeHealthChange mutations). Negative values are damage; positive values are healing.
+		double GetAmount() const { return m_amount; }
+	};
+
+	struct BeforeStaminaChangeContext
 	{
 		double m_amount = 0.0;
 
@@ -102,7 +111,7 @@ namespace MMAPI::Player
 		void SetAmount(double amount) { m_amount = amount; }
 	};
 
-	struct ModifyManaChangeContext
+	struct BeforeManaChangeContext
 	{
 		double m_amount = 0.0;
 
@@ -111,6 +120,24 @@ namespace MMAPI::Player
 
 		/// Overrides the mana change amount passed to the game.
 		void SetAmount(double amount) { m_amount = amount; }
+	};
+
+	struct FaceDirContext
+	{
+		double m_direction_degrees = 0.0;
+
+		/// Returns the direction the game's face_dir script was called with, in GameMaker degrees
+		/// (0 = right, 90 = up, 180 = left, 270 = down).
+		double GetDirectionDegrees() const { return m_direction_degrees; }
+	};
+
+	struct HeldItemContext
+	{
+		int m_item_id = -1;
+
+		/// Returns the item_id of Ari's currently held item, or -1 if the game's held_item script
+		/// returned an undefined Result (no item held) or the Result struct lacks an `item_id` member.
+		int GetItemId() const { return m_item_id; }
 	};
 
 	namespace Internal
@@ -129,15 +156,22 @@ namespace MMAPI::Player
 		inline constexpr const char* GML_SCRIPT_MODIFY_ESSENCE         = "gml_Script_modify_essence@Ari@Ari";
 		inline constexpr const char* GML_SCRIPT_GET_MOVE_SPEED         = "gml_Script_get_move_speed@Ari@Ari";
 		inline constexpr const char* GML_SCRIPT_HELD_ITEM              = "gml_Script_held_item@Ari@Ari";
+		inline constexpr const char* GML_SCRIPT_FACE_DIR               = "gml_Script_face_dir@gml_Object_obj_ari_Create_0";
 		using AfterMoveSpeedCallback     = void(*)(MMAPI::Player::MoveSpeedContext&);
-		using BeforeHealthChangeCallback  = void(*)(MMAPI::Player::ModifyHealthChangeContext&);
-		using BeforeStaminaChangeCallback = void(*)(MMAPI::Player::ModifyStaminaChangeContext&);
-		using BeforeManaChangeCallback    = void(*)(MMAPI::Player::ModifyManaChangeContext&);
+		using BeforeHealthChangeCallback  = void(*)(MMAPI::Player::BeforeHealthChangeContext&);
+		using AfterHealthChangeCallback   = void(*)(MMAPI::Player::AfterHealthChangeContext&);
+		using BeforeStaminaChangeCallback = void(*)(MMAPI::Player::BeforeStaminaChangeContext&);
+		using BeforeManaChangeCallback    = void(*)(MMAPI::Player::BeforeManaChangeContext&);
+		using BeforeFaceDirCallback       = void(*)(MMAPI::Player::FaceDirContext&);
+		using AfterHeldItemCallback       = void(*)(MMAPI::Player::HeldItemContext&);
 
 		inline AfterMoveSpeedCallback     after_move_speed_callback     = nullptr;
 		inline BeforeHealthChangeCallback  before_health_change_callback  = nullptr;
+		inline AfterHealthChangeCallback   after_health_change_callback   = nullptr;
 		inline BeforeStaminaChangeCallback before_stamina_change_callback = nullptr;
 		inline BeforeManaChangeCallback    before_mana_change_callback    = nullptr;
+		inline BeforeFaceDirCallback       before_face_dir_callback       = nullptr;
+		inline AfterHeldItemCallback       after_held_item_callback       = nullptr;
 
 		inline YYTK::RValue GetStateId()
 		{
@@ -203,7 +237,7 @@ namespace MMAPI::Player
 		{
 			if (before_health_change_callback && Arguments && ArgumentCount >= 1 && Arguments[0] && MMAPI::Engine::IsNumeric(*Arguments[0]))
 			{
-				MMAPI::Player::ModifyHealthChangeContext context{ Arguments[0]->ToDouble() };
+				MMAPI::Player::BeforeHealthChangeContext context{ Arguments[0]->ToDouble() };
 				before_health_change_callback(context);
 				*Arguments[0] = context.m_amount;
 			}
@@ -216,6 +250,13 @@ namespace MMAPI::Player
 			);
 
 			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			if (after_health_change_callback && Arguments && ArgumentCount >= 1 && Arguments[0] && MMAPI::Engine::IsNumeric(*Arguments[0]))
+			{
+				MMAPI::Player::AfterHealthChangeContext context{ Arguments[0]->ToDouble() };
+				after_health_change_callback(context);
+			}
+
 			return Result;
 		}
 
@@ -229,7 +270,7 @@ namespace MMAPI::Player
 		{
 			if (before_stamina_change_callback && Arguments && ArgumentCount >= 1 && Arguments[0] && MMAPI::Engine::IsNumeric(*Arguments[0]))
 			{
-				MMAPI::Player::ModifyStaminaChangeContext context{ Arguments[0]->ToDouble() };
+				MMAPI::Player::BeforeStaminaChangeContext context{ Arguments[0]->ToDouble() };
 				before_stamina_change_callback(context);
 				*Arguments[0] = context.m_amount;
 			}
@@ -255,7 +296,7 @@ namespace MMAPI::Player
 		{
 			if (before_mana_change_callback && Arguments && ArgumentCount >= 1 && Arguments[0] && MMAPI::Engine::IsNumeric(*Arguments[0]))
 			{
-				MMAPI::Player::ModifyManaChangeContext context{ Arguments[0]->ToDouble() };
+				MMAPI::Player::BeforeManaChangeContext context{ Arguments[0]->ToDouble() };
 				before_mana_change_callback(context);
 				*Arguments[0] = context.m_amount;
 			}
@@ -282,6 +323,20 @@ namespace MMAPI::Player
 				return status;
 
 			before_health_change_callback = callback;
+			return Aurie::AURIE_SUCCESS;
+		}
+
+		inline Aurie::AurieStatus RegisterAfterHealthChangeHook(AfterHealthChangeCallback callback)
+		{
+			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
+				GML_SCRIPT_MODIFY_HEALTH,
+				reinterpret_cast<PVOID>(GmlScriptModifyHealthCallback)
+			);
+
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			after_health_change_callback = callback;
 			return Aurie::AURIE_SUCCESS;
 		}
 
@@ -312,15 +367,85 @@ namespace MMAPI::Player
 			before_mana_change_callback = callback;
 			return Aurie::AURIE_SUCCESS;
 		}
-	}
 
-	/// Returns Ari's current facing direction in degrees, read from globalInstance.__ari.dir.
-	/// Values are GameMaker direction degrees: 0 = right, 90 = up, 180 = left, 270 = down.
-	/// @return Ari's facing direction in degrees.
-	inline double GetFacingDirection()
-	{
-		YYTK::RValue ari = MMAPI::Internal::global_instance->GetMember("__ari");
-		return ari.GetMember("dir").ToDouble();
+		inline YYTK::RValue& GmlScriptBeforeFaceDirCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			if (before_face_dir_callback && Arguments && ArgumentCount >= 1 && Arguments[0])
+			{
+				MMAPI::Player::FaceDirContext context{ Arguments[0]->ToDouble() };
+				before_face_dir_callback(context);
+			}
+
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_FACE_DIR)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			return Result;
+		}
+
+		inline Aurie::AurieStatus RegisterFaceDirHook(BeforeFaceDirCallback callback)
+		{
+			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
+				GML_SCRIPT_FACE_DIR,
+				reinterpret_cast<PVOID>(GmlScriptBeforeFaceDirCallback)
+			);
+
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			before_face_dir_callback = callback;
+			return Aurie::AURIE_SUCCESS;
+		}
+
+		inline YYTK::RValue& GmlScriptAfterHeldItemCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_HELD_ITEM)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			if (after_held_item_callback)
+			{
+				int item_id = -1;
+				if (Result.m_Kind != YYTK::VALUE_UNDEFINED
+				    && MMAPI::Engine::StructVariableExists(Result, "item_id"))
+				{
+					item_id = static_cast<int>(Result.GetMember("item_id").ToInt64());
+				}
+
+				MMAPI::Player::HeldItemContext context{ item_id };
+				after_held_item_callback(context);
+			}
+
+			return Result;
+		}
+
+		inline Aurie::AurieStatus RegisterHeldItemHook(AfterHeldItemCallback callback)
+		{
+			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
+				GML_SCRIPT_HELD_ITEM,
+				reinterpret_cast<PVOID>(GmlScriptAfterHeldItemCallback)
+			);
+
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			after_held_item_callback = callback;
+			return Aurie::AURIE_SUCCESS;
+		}
 	}
 
 	/// Returns the number of invulnerability hits remaining for Ari.
@@ -748,6 +873,26 @@ namespace MMAPI::Player
 			return Internal::RegisterHealthChangeHook(callback);
 		}
 
+		/// Registers a callback that runs after the game's modify_health script. Read `ctx.GetAmount()`
+		/// to inspect the final delta the game applied (post any BeforeHealthChange mutations) — pair
+		/// with set-bonus / threshold logic that should react only once the game has processed the change.
+		/// @param callback A function called with a `MMAPI::Player::AfterHealthChangeContext`.
+		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
+		inline Aurie::AurieStatus AfterHealthChange(Internal::AfterHealthChangeCallback callback)
+		{
+			if (!callback)
+				return Aurie::AURIE_INVALID_PARAMETER;
+
+			if (Internal::after_health_change_callback)
+				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			Aurie::AurieStatus status = MMAPI::Player::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			return Internal::RegisterAfterHealthChangeHook(callback);
+		}
+
 		/// Registers a callback that can modify the amount passed to the game's modify_stamina script.
 		/// Use ctx.SetAmount(value) to change the stamina delta before the game applies it.
 		/// @param callback A function called with a mutable stamina change context before the game processes it.
@@ -784,6 +929,47 @@ namespace MMAPI::Player
 				return status;
 
 			return Internal::RegisterManaChangeHook(callback);
+		}
+
+		/// Registers a callback that runs before the game's `face_dir@obj_ari` script — fired whenever
+		/// the game updates Ari's facing direction. Read `ctx.GetDirectionDegrees()` to inspect the
+		/// direction the game is about to apply (raw GameMaker degrees).
+		/// @param callback A function called with a `MMAPI::Player::FaceDirContext`.
+		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
+		inline Aurie::AurieStatus BeforeFaceDir(Internal::BeforeFaceDirCallback callback)
+		{
+			if (!callback)
+				return Aurie::AURIE_INVALID_PARAMETER;
+
+			if (Internal::before_face_dir_callback)
+				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			Aurie::AurieStatus status = MMAPI::Player::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			return Internal::RegisterFaceDirHook(callback);
+		}
+
+		/// Registers a callback that runs after the game's `held_item@Ari@Ari` script. The wrapper
+		/// resolves the held item's `item_id` from Result (guarded for undefined and missing `item_id`).
+		/// Read `ctx.GetItemId()` to react to changes in what Ari is holding — push-style counterpart
+		/// to the pull-style [`Player::GetHeldItem`](API-MMAPI-Player-GetHeldItem.md).
+		/// @param callback A function called with a `MMAPI::Player::HeldItemContext`.
+		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
+		inline Aurie::AurieStatus AfterHeldItem(Internal::AfterHeldItemCallback callback)
+		{
+			if (!callback)
+				return Aurie::AURIE_INVALID_PARAMETER;
+
+			if (Internal::after_held_item_callback)
+				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			Aurie::AurieStatus status = MMAPI::Player::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			return Internal::RegisterHeldItemHook(callback);
 		}
 	}
 

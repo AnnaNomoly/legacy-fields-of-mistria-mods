@@ -35,7 +35,6 @@ namespace MMAPI::Text
 		std::string_view GetKey() const { return m_key; }
 		void SetKey(std::string key) { m_key = std::move(key); }
 		void Cancel() { m_cancelled = true; }
-		bool IsCancelled() const { return m_cancelled; }
 	};
 
 	struct PlayTextContext
@@ -46,7 +45,6 @@ namespace MMAPI::Text
 		std::string_view GetKey() const { return m_key; }
 		void SetKey(std::string key) { m_key = std::move(key); }
 		void Cancel() { m_cancelled = true; }
-		bool IsCancelled() const { return m_cancelled; }
 	};
 
 	namespace Internal
@@ -303,6 +301,7 @@ namespace MMAPI::Text
 		return MMAPI::Internal::InstallScriptHooks({
 			{ MMAPI::Internal::GML_SCRIPT_SETUP_MAIN_SCREEN, reinterpret_cast<PVOID>(MMAPI::Internal::GmlScriptBeforeSetupMainScreenCallback) },
 			{ Internal::GML_SCRIPT_GET_LOCALIZER,            reinterpret_cast<PVOID>(Internal::GmlScriptGetLocalizerCallback) },
+			{ Internal::GML_SCRIPT_PLAY_CONVERSATION,        reinterpret_cast<PVOID>(Internal::GmlScriptPlayConversationCallback) },
 			{ Internal::GML_SCRIPT_PLAY_TEXT,                reinterpret_cast<PVOID>(Internal::GmlScriptPlayTextCallback) },
 		});
 	}

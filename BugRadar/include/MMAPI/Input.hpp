@@ -6,6 +6,137 @@
 
 namespace MMAPI::Input
 {
+	struct TakePressContext
+	{
+		int  m_input_id = 0;
+		bool m_result   = false;
+
+		/// Returns the input ID being checked (the first argument the game passed to take_press).
+		int GetInputId() const { return m_input_id; }
+
+		/// Returns whether the input was reported as pressed this frame, as computed by the game.
+		bool GetResult() const { return m_result; }
+
+		/// Overrides whether the game considers the input pressed. Set false to swallow the press.
+		void SetResult(bool pressed) { m_result = pressed; }
+	};
+
+	struct CheckValueContext
+	{
+		int m_input_id = 0;
+
+		/// Returns the input ID the game is about to check.
+		int GetInputId() const { return m_input_id; }
+
+		/// Overrides the input ID passed to the game's check_value script. Useful for input remapping
+		/// (e.g. swapping direction inputs to implement a confusion effect).
+		void SetInputId(int input_id) { m_input_id = input_id; }
+	};
+
+	namespace Internal
+	{
+		inline constexpr const char* GML_SCRIPT_TAKE_PRESS  = "gml_Script_take_press@Input@Input";
+		inline constexpr const char* GML_SCRIPT_CHECK_VALUE = "gml_Script_check_value@Input@Input";
+
+		using AfterTakePressCallback   = void(*)(MMAPI::Input::TakePressContext&);
+		using BeforeCheckValueCallback = void(*)(MMAPI::Input::CheckValueContext&);
+
+		inline AfterTakePressCallback   after_take_press_callback    = nullptr;
+		inline BeforeCheckValueCallback before_check_value_callback  = nullptr;
+
+		inline YYTK::RValue& GmlScriptAfterTakePressCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_TAKE_PRESS)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			if (after_take_press_callback && Arguments && ArgumentCount >= 1 && Arguments[0])
+			{
+				MMAPI::Input::TakePressContext context{
+					static_cast<int>(Arguments[0]->ToInt64()),
+					Result.ToBoolean()
+				};
+				after_take_press_callback(context);
+				Result = context.m_result;
+			}
+
+			return Result;
+		}
+
+		inline Aurie::AurieStatus RegisterTakePressHook(AfterTakePressCallback callback)
+		{
+			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
+				GML_SCRIPT_TAKE_PRESS,
+				reinterpret_cast<PVOID>(GmlScriptAfterTakePressCallback)
+			);
+
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			after_take_press_callback = callback;
+			return Aurie::AURIE_SUCCESS;
+		}
+
+		inline YYTK::RValue& GmlScriptBeforeCheckValueCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			if (before_check_value_callback && Arguments && ArgumentCount >= 1 && Arguments[0])
+			{
+				MMAPI::Input::CheckValueContext context{
+					static_cast<int>(Arguments[0]->ToInt64())
+				};
+				before_check_value_callback(context);
+				*Arguments[0] = context.m_input_id;
+			}
+
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_CHECK_VALUE)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			return Result;
+		}
+
+		inline Aurie::AurieStatus RegisterCheckValueHook(BeforeCheckValueCallback callback)
+		{
+			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
+				GML_SCRIPT_CHECK_VALUE,
+				reinterpret_cast<PVOID>(GmlScriptBeforeCheckValueCallback)
+			);
+
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			before_check_value_callback = callback;
+			return Aurie::AURIE_SUCCESS;
+		}
+	}
+
+	/// Activates Input hooks. Installs the take_press and check_value hooks so registered callbacks
+	/// can observe input-press results and remap inputs before the game evaluates them. Safe to call
+	/// before any Hooks::* registration — each callback no-ops until a user callback is bound.
+	/// The existing pull-style helpers (KeyboardCheckPressed, GamepadIsConnected, etc.) do not require Enable().
+	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
+	inline Aurie::AurieStatus Enable()
+	{
+		return MMAPI::Internal::InstallScriptHooks({
+			{ Internal::GML_SCRIPT_TAKE_PRESS,  reinterpret_cast<PVOID>(Internal::GmlScriptAfterTakePressCallback) },
+			{ Internal::GML_SCRIPT_CHECK_VALUE, reinterpret_cast<PVOID>(Internal::GmlScriptBeforeCheckValueCallback) },
+		});
+	}
+
 	/// Returns true if the keyboard key was pressed this frame.
 	/// @param key The GameMaker virtual key code to check.
 	inline bool KeyboardCheckPressed(int key)
@@ -41,5 +172,48 @@ namespace MMAPI::Input
 	{
 		YYTK::RValue pressed = MMAPI::Internal::module_interface->CallBuiltin("gamepad_button_check_pressed", { gamepad_slot, button });
 		return pressed.ToBoolean();
+	}
+
+	namespace Hooks
+	{
+		/// Registers a callback that runs after the game's `take_press` script.
+		/// Read `ctx.GetInputId()` to identify the input being checked, `ctx.GetResult()` to see whether
+		/// the game considered it pressed, and `ctx.SetResult(false)` to swallow the press.
+		/// @param callback A function called with a mutable `MMAPI::Input::TakePressContext`.
+		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
+		inline Aurie::AurieStatus AfterTakePress(Internal::AfterTakePressCallback callback)
+		{
+			if (!callback)
+				return Aurie::AURIE_INVALID_PARAMETER;
+
+			if (Internal::after_take_press_callback)
+				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			Aurie::AurieStatus status = MMAPI::Input::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			return Internal::RegisterTakePressHook(callback);
+		}
+
+		/// Registers a callback that runs before the game's `check_value` script.
+		/// Read `ctx.GetInputId()` to see which input the game is about to evaluate, and
+		/// `ctx.SetInputId(int)` to remap it (e.g. swap direction inputs to implement a confusion effect).
+		/// @param callback A function called with a mutable `MMAPI::Input::CheckValueContext`.
+		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
+		inline Aurie::AurieStatus BeforeCheckValue(Internal::BeforeCheckValueCallback callback)
+		{
+			if (!callback)
+				return Aurie::AURIE_INVALID_PARAMETER;
+
+			if (Internal::before_check_value_callback)
+				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			Aurie::AurieStatus status = MMAPI::Input::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			return Internal::RegisterCheckValueHook(callback);
+		}
 	}
 }

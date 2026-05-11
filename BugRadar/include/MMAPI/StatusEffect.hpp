@@ -60,7 +60,6 @@ namespace MMAPI::StatusEffect
 		int GetFinish() const { return m_finish; }
 		void SetFinish(int finish) { m_finish = finish; }
 		void Cancel() { m_cancelled = true; }
-		bool IsCancelled() const { return m_cancelled; }
 	};
 
 	struct CancelStatusEffectContext
@@ -70,7 +69,6 @@ namespace MMAPI::StatusEffect
 
 		MMAPI::StatusEffect::Ids GetStatusEffect() const { return static_cast<MMAPI::StatusEffect::Ids>(m_status_id); }
 		void Cancel() { m_cancelled = true; }
-		bool IsCancelled() const { return m_cancelled; }
 	};
 
 	namespace Internal
@@ -291,6 +289,8 @@ namespace MMAPI::StatusEffect
 		return MMAPI::Internal::InstallScriptHooks({
 			{ MMAPI::Internal::GML_SCRIPT_SETUP_MAIN_SCREEN,        reinterpret_cast<PVOID>(MMAPI::Internal::GmlScriptBeforeSetupMainScreenCallback) },
 			{ Internal::GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE,    reinterpret_cast<PVOID>(Internal::StatusEffectManagerUpdateContextCallback) },
+			{ Internal::GML_SCRIPT_REGISTER_STATUS_EFFECT,          reinterpret_cast<PVOID>(Internal::GmlScriptRegisterStatusEffectCallback) },
+			{ Internal::GML_SCRIPT_CANCEL_STATUS_EFFECT,            reinterpret_cast<PVOID>(Internal::GmlScriptCancelStatusEffectCallback) },
 		});
 	}
 

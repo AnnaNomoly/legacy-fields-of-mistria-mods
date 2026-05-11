@@ -44,7 +44,7 @@ namespace MMAPI::Spell
 		void SetResult(bool can_cast) { m_result = can_cast; }
 	};
 
-	struct CastSpellContext
+	struct BeforeSpellCastContext
 	{
 		int m_spell_id = 0;
 		bool m_cancelled = false;
@@ -54,9 +54,14 @@ namespace MMAPI::Spell
 
 		/// Prevents the game's cast_spell script from running.
 		void Cancel() { m_cancelled = true; }
+	};
 
-		/// Returns true if the callback has cancelled this spell cast.
-		bool IsCancelled() const { return m_cancelled; }
+	struct AfterSpellCastContext
+	{
+		int m_spell_id = 0;
+
+		/// Returns the spell that was cast.
+		MMAPI::Spell::Ids GetSpell() const { return static_cast<MMAPI::Spell::Ids>(m_spell_id); }
 	};
 
 	namespace Internal
@@ -65,10 +70,12 @@ namespace MMAPI::Spell
 		inline constexpr const char* GML_SCRIPT_CAST_SPELL      = "gml_Script_cast_spell";
 
 		using AfterCanCastSpellCallback = void(*)(MMAPI::Spell::CanCastSpellContext&);
-		using BeforeSpellCastCallback    = void(*)(MMAPI::Spell::CastSpellContext&);
+		using BeforeSpellCastCallback    = void(*)(MMAPI::Spell::BeforeSpellCastContext&);
+		using AfterSpellCastCallback     = void(*)(MMAPI::Spell::AfterSpellCastContext&);
 
 		inline AfterCanCastSpellCallback after_can_cast_spell_callback = nullptr;
 		inline BeforeSpellCastCallback    before_spell_cast_callback     = nullptr;
+		inline AfterSpellCastCallback     after_spell_cast_callback      = nullptr;
 
 		inline YYTK::RValue& GmlScriptCanCastSpellCallback(
 			IN YYTK::CInstance* Self,
@@ -103,7 +110,7 @@ namespace MMAPI::Spell
 		{
 			if (before_spell_cast_callback && Arguments && ArgumentCount >= 1 && Arguments[0])
 			{
-				MMAPI::Spell::CastSpellContext context{ Arguments[0]->ToInt64() };
+				MMAPI::Spell::BeforeSpellCastContext context{ Arguments[0]->ToInt64() };
 				before_spell_cast_callback(context);
 
 				if (context.m_cancelled)
@@ -114,6 +121,12 @@ namespace MMAPI::Spell
 				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_CAST_SPELL)
 			);
 			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			if (after_spell_cast_callback && Arguments && ArgumentCount >= 1 && Arguments[0])
+			{
+				MMAPI::Spell::AfterSpellCastContext context{ Arguments[0]->ToInt64() };
+				after_spell_cast_callback(context);
+			}
 
 			return Result;
 		}
@@ -143,6 +156,20 @@ namespace MMAPI::Spell
 				return status;
 
 			before_spell_cast_callback = callback;
+			return Aurie::AURIE_SUCCESS;
+		}
+
+		inline Aurie::AurieStatus RegisterAfterSpellCastHook(AfterSpellCastCallback callback)
+		{
+			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
+				GML_SCRIPT_CAST_SPELL,
+				reinterpret_cast<PVOID>(GmlScriptCastSpellCallback)
+			);
+
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			after_spell_cast_callback = callback;
 			return Aurie::AURIE_SUCCESS;
 		}
 
@@ -297,6 +324,26 @@ namespace MMAPI::Spell
 				return status;
 
 			return Internal::RegisterSpellCastHook(callback);
+		}
+
+		/// Registers a callback that runs after the game's cast_spell script executes.
+		/// Use `ctx.GetSpell()` to identify which spell was cast — pair with set-bonus/counter logic
+		/// that should fire only once the game has processed the cast.
+		/// @param callback A function called with the cast spell context after the game processes it.
+		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
+		inline Aurie::AurieStatus AfterSpellCast(Internal::AfterSpellCastCallback callback)
+		{
+			if (!callback)
+				return Aurie::AURIE_INVALID_PARAMETER;
+
+			if (Internal::after_spell_cast_callback)
+				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+
+			Aurie::AurieStatus status = MMAPI::Spell::Enable();
+			if (!Aurie::AurieSuccess(status))
+				return status;
+
+			return Internal::RegisterAfterSpellCastHook(callback);
 		}
 	}
 }
