@@ -104,12 +104,39 @@ namespace MMAPI::Instance
 		}
 	};
 
+	struct InteractContext
+	{
+		YYTK::CInstance* m_target    = nullptr;
+		bool             m_cancelled = false;
+
+		/// The instance the player is interacting with (the interact script's Arguments[0] resolved
+		/// to a CInstance*).
+		YYTK::CInstance* GetTarget() const { return m_target; }
+
+		/// Convenience: the object_id of the target, or -1 if it can't be resolved.
+		int GetObjectId() const;
+
+		/// Returns the GameMaker object name of the target (e.g. "obj_world_fountain"), or an
+		/// empty view if the instance, its object, or its name pointer is unavailable.
+		std::string_view GetObjectName() const
+		{
+			if (!m_target || !m_target->m_Object || !m_target->m_Object->m_Name)
+				return {};
+			return m_target->m_Object->m_Name;
+		}
+
+		/// Prevents the original interact from running. Use to fully override default interact
+		/// behavior with mod-specific handling (e.g. show a confirmation dialog or teleport).
+		void Cancel() { m_cancelled = true; }
+	};
+
 	namespace Internal
 	{
 		inline bool enabled = false;
 
 		inline constexpr const char* INSTANCE_OBJ_ARI               = "obj_ari";
 		inline constexpr const char* GML_SCRIPT_ATTEMPT_INTERACT    = "gml_Script_attempt_interact@gml_Object_par_interactable_Create_0";
+		inline constexpr const char* GML_SCRIPT_INTERACT            = "gml_Script_interact";
 
 		inline constexpr const char* ToObjectName(MMAPI::Instance::Objects obj)
 		{
@@ -238,7 +265,10 @@ namespace MMAPI::Instance
 		}
 
 		using BeforeAttemptInteractCallback = void(*)(MMAPI::Instance::AttemptInteractContext&);
+		using BeforeInteractCallback        = void(*)(MMAPI::Instance::InteractContext&);
+
 		inline BeforeAttemptInteractCallback before_attempt_interact_callback = nullptr;
+		inline BeforeInteractCallback        before_interact_callback         = nullptr;
 
 		inline YYTK::RValue& GmlScriptBeforeAttemptInteractCallback(
 			IN YYTK::CInstance* Self,
@@ -261,6 +291,41 @@ namespace MMAPI::Instance
 
 			return Result;
 		}
+
+		inline YYTK::RValue& GmlScriptBeforeInteractCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			if (before_interact_callback && Arguments && ArgumentCount >= 1 && Arguments[0])
+			{
+				MMAPI::Instance::InteractContext context;
+				context.m_target = Arguments[0]->ToInstance();
+				before_interact_callback(context);
+
+				if (context.m_cancelled)
+					return Result;
+			}
+
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_INTERACT)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			return Result;
+		}
+	}
+
+	inline int InteractContext::GetObjectId() const
+	{
+		if (!m_target) return -1;
+		YYTK::RValue target = m_target->ToRValue();
+		if (!MMAPI::Engine::StructVariableExists(target, "object_id")) return -1;
+		YYTK::RValue id = target.GetMember("object_id");
+		return MMAPI::Engine::IsNumeric(id) ? static_cast<int>(id.ToInt64()) : -1;
 	}
 
 	/// Activates the EVENT_OBJECT_CALL dispatcher used by Instance hooks and other modules' Enable(),
@@ -289,10 +354,10 @@ namespace MMAPI::Instance
 			Internal::object_dispatcher_installed = true;
 		}
 
-		MMAPI::Status status = MMAPI::Internal::InstallScriptHook(
-			Internal::GML_SCRIPT_ATTEMPT_INTERACT,
-			reinterpret_cast<PVOID>(Internal::GmlScriptBeforeAttemptInteractCallback)
-		);
+		MMAPI::Status status = MMAPI::Internal::InstallScriptHooks({
+			{ Internal::GML_SCRIPT_ATTEMPT_INTERACT, reinterpret_cast<PVOID>(Internal::GmlScriptBeforeAttemptInteractCallback) },
+			{ Internal::GML_SCRIPT_INTERACT,         reinterpret_cast<PVOID>(Internal::GmlScriptBeforeInteractCallback) },
+		});
 		if (!MMAPI::IsSuccess(status))
 			return status;
 
@@ -340,10 +405,11 @@ namespace MMAPI::Instance
 			return OnObjectCall(Internal::ToObjectName(object), callback);
 		}
 
-		/// Registers a callback that runs before the game's `attempt_interact` script (the script
-		/// fired when the player attempts to interact with an instance derived from `par_interactable`).
-		/// Use `ctx.GetSelf()` to read the interactable instance and `ctx.GetObjectName()` to read its
-		/// GameMaker object name (null-guarded — returns an empty view if the instance or object pointer is missing).
+		/// Registers a callback that runs before the game's `attempt_interact` script — fires
+		/// repeatedly while the player is *near* an interactable (the game uses it to decide
+		/// whether to show the interact prompt). Use this for proximity-driven side-effects
+		/// (e.g. swapping the interact-key localization). Do NOT use it to react to actual
+		/// interact presses; for that, use `BeforeInteract` below.
 		/// @param callback A function called with a `MMAPI::Instance::AttemptInteractContext`.
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeAttemptInteract(Internal::BeforeAttemptInteractCallback callback)
@@ -355,6 +421,31 @@ namespace MMAPI::Instance
 			return MMAPI::Internal::RegisterHook(
 				"Instance::BeforeAttemptInteract",
 				Internal::before_attempt_interact_callback,
+				callback
+			);
+		}
+
+		/// Registers a callback that runs before the game's `interact` script — fires exactly
+		/// once per interact-button press, on the object the player pressed against. Read
+		/// `ctx.GetTarget()` for the instance, `ctx.GetObjectId()` / `ctx.GetObjectName()` for
+		/// type filtering. Call `ctx.Cancel()` to fully override the game's interact handling
+		/// (e.g. show a confirmation dialog or teleport instead of the default behavior).
+		///
+		/// This is the right hook for "react to the player using my custom object". The sibling
+		/// `BeforeAttemptInteract` fires every frame the player is near an interactable, which
+		/// would auto-trigger any action-style logic on a per-frame basis.
+		///
+		/// @param callback A function called with a mutable `MMAPI::Instance::InteractContext`.
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforeInteract(Internal::BeforeInteractCallback callback)
+		{
+			MMAPI::Status status = MMAPI::Instance::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
+
+			return MMAPI::Internal::RegisterHook(
+				"Instance::BeforeInteract",
+				Internal::before_interact_callback,
 				callback
 			);
 		}

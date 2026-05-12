@@ -406,11 +406,10 @@ void OnBeforeGiveItem(MMAPI::Item::GiveItemContext& ctx)
 	}
 }
 
-void OnBeforeAttemptInteract(MMAPI::Instance::AttemptInteractContext& ctx)
+void OnBeforeInteract(MMAPI::Instance::InteractContext& ctx)
 {
-	YYTK::RValue object_id_rv = MMAPI::Object::GetObjectId(ctx.GetSelf());
-	if (!MMAPI::Engine::IsNumeric(object_id_rv)) return;
-	int object_id = static_cast<int>(object_id_rv.ToInt64());
+	int object_id = ctx.GetObjectId();
+	if (object_id < 0) return;
 
 	if (MMAPI::Object::IsInternalName(object_id, CUSTOM_OBJECT_NAME))
 	{
@@ -656,7 +655,7 @@ EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path&
 	MMAPI::Player::Hooks::BeforeStaminaChange(OnBeforeStaminaChange);
 	MMAPI::NPC::Hooks::BeforeHeartPointsChange(OnBeforeHeartPointsChange);
 	MMAPI::Item::Hooks::BeforeGiveItem(OnBeforeGiveItem);
-	MMAPI::Instance::Hooks::BeforeAttemptInteract(OnBeforeAttemptInteract);
+	MMAPI::Instance::Hooks::BeforeInteract(OnBeforeInteract);
 	MMAPI::Text::Hooks::BeforeLocalizedString(OnBeforeLocalizedString);
 	MMAPI::Text::Hooks::BeforePlayConversation(OnBeforePlayConversation);
 	MMAPI::Text::Hooks::BeforePlayText(OnBeforePlayText);
