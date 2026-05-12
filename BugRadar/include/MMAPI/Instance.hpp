@@ -169,6 +169,23 @@ namespace MMAPI::Instance
 		inline std::map<std::string, OnObjectCallCallback> object_call_callbacks;
 		inline bool object_dispatcher_installed = false;
 
+		// Internal per-object handlers. Multiple modules may subscribe to the same object name
+		// (e.g. Player subscribes to obj_ari for use-action edge detection while Telepop's user
+		// callback also runs for obj_ari). All internal handlers for a matching object fire
+		// before the public user callback, in registration order.
+		inline std::map<std::string, std::vector<OnObjectCallCallback>> internal_object_call_handlers;
+
+		inline void RegisterInternalOnObjectCall(const char* object_name, OnObjectCallCallback handler)
+		{
+			if (!object_name || !handler)
+				return;
+			auto& handlers = internal_object_call_handlers[object_name];
+			for (auto existing : handlers)
+				if (existing == handler)
+					return;
+			handlers.push_back(handler);
+		}
+
 		inline bool IsGamePaused()
 		{
 			return MMAPI::Internal::global_instance->GetRefMember("__pause_status")->m_i64 > 0;
@@ -197,6 +214,17 @@ namespace MMAPI::Instance
 			    !MMAPI::Internal::instance_reference_map.contains(INSTANCE_OBJ_ARI))
 			{
 				MMAPI::Internal::instance_reference_map[INSTANCE_OBJ_ARI] = { self };
+			}
+
+			// Fire all internal handlers whose object name matches, then the single user callback.
+			// Internal handlers don't short-circuit each other; the user callback runs at most once.
+			for (const auto& [registered_name, handlers] : internal_object_call_handlers)
+			{
+				if (IsNamed(self, registered_name))
+				{
+					for (auto handler : handlers)
+						handler(self);
+				}
 			}
 
 			for (const auto& [registered_name, callback] : object_call_callbacks)

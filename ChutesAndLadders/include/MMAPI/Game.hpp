@@ -42,11 +42,65 @@ namespace MMAPI::Game
 			fn(static_cast<XpValues>(i));
 	}
 
+	namespace Internal
+	{
+		// Extracts the stable per-save identifier from an absolute save file path. The identifier
+		// is the first segment between hyphens in the filename — for "game-543230633-autosave.sav"
+		// and "game-543230633-789877084.sav" this returns "543230633" in both cases, so a mod's
+		// per-save data file lines up across autosaves and manual saves of the same slot.
+		// Returns empty when the path is empty, malformed (missing hyphens), or contains
+		// "undefined" (the placeholder the game emits before a brand-new save commits to disk).
+		inline std::string ExtractSavePrefix(std::string_view save_path)
+		{
+			if (save_path.empty() || save_path.find("undefined") != std::string_view::npos)
+				return {};
+
+			std::size_t last_slash = save_path.find_last_of("/\\");
+			std::string_view name = (last_slash == std::string_view::npos)
+				? save_path
+				: save_path.substr(last_slash + 1);
+
+			std::size_t first = name.find_first_of("-");
+			std::size_t last  = name.find_last_of("-");
+			if (first == std::string_view::npos || last == std::string_view::npos || first >= last)
+				return {};
+			return std::string(name.substr(first + 1, last - first - 1));
+		}
+	}
+
 	struct SaveGameContext
 	{
-		bool m_cancelled = false;
+		std::string m_save_path;
+		bool        m_cancelled = false;
+
+		/// Returns the absolute path the game is about to save to (the script's Arguments[0]).
+		/// Empty if Arguments[0] was unavailable or not a string. Note that the game emits
+		/// save_game with a placeholder path containing "undefined" before a brand-new save has
+		/// actually committed to disk — prefer GetSavePrefix() over parsing this directly.
+		std::string_view GetSavePath() const { return m_save_path; }
+
+		/// Returns the stable per-save identifier extracted from the save path (the segment
+		/// between the first and last hyphens in the filename). Useful as the key for per-save
+		/// mod data files. Empty when the path is a placeholder ("undefined") or malformed —
+		/// callers can treat an empty result as "save isn't ready to be keyed yet".
+		std::string GetSavePrefix() const { return Internal::ExtractSavePrefix(m_save_path); }
 
 		void Cancel() { m_cancelled = true; }
+	};
+
+	struct LoadGameContext
+	{
+		std::string m_save_path;
+
+		/// Returns the absolute path of the save file the game just loaded, read from
+		/// `Arguments[0].save_path` (the load_game script's input struct). Empty if the
+		/// member was missing or not a string.
+		std::string_view GetSavePath() const { return m_save_path; }
+
+		/// Returns the stable per-save identifier extracted from the save path (the segment
+		/// between the first and last hyphens in the filename). Useful as the key for per-save
+		/// mod data files. Empty when the path is malformed.
+		std::string GetSavePrefix() const { return Internal::ExtractSavePrefix(m_save_path); }
 	};
 
 	struct PlayAudioContext
@@ -111,11 +165,11 @@ namespace MMAPI::Game
 		inline EndDayCallback after_end_day_callback = nullptr;
 		inline NewDayCallback before_new_day_callback = nullptr;
 
-		using LoadGameCallback    = void(*)();
+		using AfterLoadGameCallback   = void(*)(MMAPI::Game::LoadGameContext&);
 		using BeforeSaveGameCallback  = void(*)(MMAPI::Game::SaveGameContext&);
 		using BeforePlayAudioCallback = void(*)(MMAPI::Game::PlayAudioContext&);
 
-		inline LoadGameCallback    after_load_game_callback  = nullptr;
+		inline AfterLoadGameCallback   after_load_game_callback   = nullptr;
 		inline BeforeSaveGameCallback  before_save_game_callback  = nullptr;
 		inline BeforePlayAudioCallback before_play_audio_callback = nullptr;
 
@@ -228,7 +282,16 @@ namespace MMAPI::Game
 			original(Self, Other, Result, ArgumentCount, Arguments);
 
 			if (after_load_game_callback)
-				after_load_game_callback();
+			{
+				MMAPI::Game::LoadGameContext context;
+				if (Arguments && ArgumentCount >= 1 && Arguments[0])
+				{
+					YYTK::RValue* save_path_member = Arguments[0]->GetRefMember("save_path");
+					if (save_path_member && save_path_member->m_Kind == YYTK::VALUE_STRING)
+						context.m_save_path = save_path_member->ToString();
+				}
+				after_load_game_callback(context);
+			}
 
 			return Result;
 		}
@@ -244,6 +307,9 @@ namespace MMAPI::Game
 			if (before_save_game_callback)
 			{
 				MMAPI::Game::SaveGameContext context;
+				if (Arguments && ArgumentCount >= 1 && Arguments[0] && Arguments[0]->m_Kind == YYTK::VALUE_STRING)
+					context.m_save_path = Arguments[0]->ToString();
+
 				before_save_game_callback(context);
 
 				if (context.m_cancelled)
@@ -646,9 +712,10 @@ namespace MMAPI::Game
 		}
 
 		/// Registers a callback that runs after the game loads a save file.
-		/// @param callback A function called after the game's load_game script runs.
+		/// Read `ctx.GetSavePath()` to access the absolute path of the loaded save file.
+		/// @param callback A function called with a `MMAPI::Game::LoadGameContext` after the game's load_game script runs.
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
-		inline MMAPI::Status AfterLoadGame(Internal::LoadGameCallback callback)
+		inline MMAPI::Status AfterLoadGame(Internal::AfterLoadGameCallback callback)
 		{
 			MMAPI::Status status = MMAPI::Game::Enable();
 			if (!MMAPI::IsSuccess(status))
@@ -662,6 +729,7 @@ namespace MMAPI::Game
 		}
 
 		/// Registers a callback that runs before the game saves.
+		/// Read `ctx.GetSavePath()` to access the absolute path the game is about to save to.
 		/// Call ctx.Cancel() to prevent the game from saving.
 		/// @param callback A function called with a mutable save context before the game processes it.
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.

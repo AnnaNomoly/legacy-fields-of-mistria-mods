@@ -31,6 +31,28 @@ namespace MMAPI::Item
 		YYTK::CInstance* GetSelf() const { return m_self; }
 		YYTK::CInstance* GetOther() const { return m_other; }
 		void Cancel() { m_cancelled = true; }
+
+		/// Returns true when Ari is using the item from her inventory — i.e. a player-initiated
+		/// use. Identified by Self being a non-object instance (`m_Object == nullptr`) and Other
+		/// being `obj_ari`. Mods that should only react to player actions (most teleport / consume
+		/// behaviors) should gate on this.
+		bool IsAriUse() const
+		{
+			return m_self
+				&& !m_self->m_Object
+				&& MMAPI::Instance::IsNamed(m_other, "obj_ari");
+		}
+
+		/// Returns true when a world interactable (e.g. `obj_world_fountain`) is using the item
+		/// rather than Ari. Identified by Self having a named `m_Object` (the world interactable)
+		/// and Other being the global `Game` instance.
+		bool IsWorldUse() const
+		{
+			return m_self
+				&& m_self->m_Object
+				&& m_self->m_Object->m_Name
+				&& MMAPI::Instance::IsNamed(m_other, "Game");
+		}
 	};
 
 	struct CreateItemPrototypesContext

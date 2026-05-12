@@ -25,6 +25,7 @@
 #include "Location.hpp"
 #include "Mail.hpp"
 #include "Math.hpp"
+#include "ModSave.hpp"
 #include "Monster.hpp"
 #include "NPC.hpp"
 #include "Object.hpp"

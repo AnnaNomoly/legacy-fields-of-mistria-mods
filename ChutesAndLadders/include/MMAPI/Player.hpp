@@ -143,6 +143,22 @@ namespace MMAPI::Player
 		int GetItemId() const { return m_item_id; }
 	};
 
+	struct AfterUseActionContext
+	{
+		int               m_item_id = -1;
+		YYTK::CInstance*  m_self    = nullptr;
+
+		/// Returns the item_id of the item Ari was using when the action completed. Sourced from
+		/// the most recent non-undefined `held_item` callback, so it remains the consumed item
+		/// even though the game has already removed it from inventory by the time this fires.
+		/// -1 only if no held_item value has ever been observed this session (e.g. the action
+		/// somehow fired before the game's first held_item resolution).
+		int GetItemId() const { return m_item_id; }
+
+		/// Ari's obj_ari CInstance — useful for invoking follow-up scripts that need the obj_ari calling context.
+		YYTK::CInstance* GetSelf() const { return m_self; }
+	};
+
 	namespace Internal
 	{
 		inline bool enabled = false;
@@ -168,15 +184,28 @@ namespace MMAPI::Player
 		using BeforeStaminaChangeCallback = void(*)(MMAPI::Player::BeforeStaminaChangeContext&);
 		using BeforeManaChangeCallback    = void(*)(MMAPI::Player::BeforeManaChangeContext&);
 		using BeforeFaceDirCallback       = void(*)(MMAPI::Player::FaceDirContext&);
-		using AfterHeldItemCallback       = void(*)(MMAPI::Player::HeldItemContext&);
+		using AfterHeldItemCallback           = void(*)(MMAPI::Player::HeldItemContext&);
+		using AfterUseActionCompleteCallback  = void(*)(MMAPI::Player::AfterUseActionContext&);
 
-		inline AfterMoveSpeedCallback     after_move_speed_callback     = nullptr;
-		inline BeforeHealthChangeCallback  before_health_change_callback  = nullptr;
-		inline AfterHealthChangeCallback   after_health_change_callback   = nullptr;
-		inline BeforeStaminaChangeCallback before_stamina_change_callback = nullptr;
-		inline BeforeManaChangeCallback    before_mana_change_callback    = nullptr;
-		inline BeforeFaceDirCallback       before_face_dir_callback       = nullptr;
-		inline AfterHeldItemCallback       after_held_item_callback       = nullptr;
+		inline AfterMoveSpeedCallback         after_move_speed_callback             = nullptr;
+		inline BeforeHealthChangeCallback     before_health_change_callback         = nullptr;
+		inline AfterHealthChangeCallback      after_health_change_callback          = nullptr;
+		inline BeforeStaminaChangeCallback    before_stamina_change_callback        = nullptr;
+		inline BeforeManaChangeCallback       before_mana_change_callback           = nullptr;
+		inline BeforeFaceDirCallback          before_face_dir_callback              = nullptr;
+		inline AfterHeldItemCallback          after_held_item_callback              = nullptr;
+		inline AfterUseActionCompleteCallback after_use_action_complete_callback    = nullptr;
+
+		// Edge-detect state for the use-action-complete signal: true when the previous obj_ari tick
+		// observed (state == HoldToUse && state.did_action). Cleared on return to title.
+		inline bool was_in_use_action = false;
+
+		// Most recent non-undefined item_id observed from the held_item script. The script returns
+		// undefined when Ari has nothing held — including the brief window after consuming a
+		// consumable but before the next slot's item resolves. Tracking the last known value lets
+		// AfterUseActionComplete report the item that was being used even if the game has already
+		// removed it from inventory by the time `did_action` rises. Cleared on return to title.
+		inline int last_known_held_item_id = -1;
 
 		inline YYTK::RValue GetStateId()
 		{
@@ -338,20 +367,75 @@ namespace MMAPI::Player
 			);
 			original(Self, Other, Result, ArgumentCount, Arguments);
 
+			int item_id = -1;
+			if (Result.m_Kind != YYTK::VALUE_UNDEFINED
+			    && MMAPI::Engine::StructVariableExists(Result, "item_id"))
+			{
+				item_id = static_cast<int>(Result.GetMember("item_id").ToInt64());
+				// Persist the most recent non-undefined held item id so AfterUseActionComplete
+				// can report what was being used even after the game has consumed it. Updating
+				// only on defined results preserves the value across the consume-then-resolve gap.
+				last_known_held_item_id = item_id;
+			}
+
 			if (after_held_item_callback)
 			{
-				int item_id = -1;
-				if (Result.m_Kind != YYTK::VALUE_UNDEFINED
-				    && MMAPI::Engine::StructVariableExists(Result, "item_id"))
-				{
-					item_id = static_cast<int>(Result.GetMember("item_id").ToInt64());
-				}
-
 				MMAPI::Player::HeldItemContext context{ item_id };
 				after_held_item_callback(context);
 			}
 
 			return Result;
+		}
+
+		inline void ResetUseActionEdge(YYTK::CInstance* /*Self*/, YYTK::CInstance* /*Other*/)
+		{
+			was_in_use_action = false;
+			last_known_held_item_id = -1;
+		}
+
+		/// Internal Instance::OnObjectCall handler subscribed to obj_ari. Detects the rising edge
+		/// of `state == HoldToUse && state.did_action` in Ari's FSM and fires the public
+		/// after_use_action_complete_callback once per edge.
+		///
+		/// Edge tracking only advances on ticks where Ari is in `HoldToUse`. If the FSM briefly
+		/// flickers out of `HoldToUse` mid-use (or the fsm/state members momentarily fail to
+		/// resolve), the tracker freezes — preventing the post-flicker re-entry from being
+		/// misread as a new rising edge while `did_action` is still latched true.
+		inline void DetectUseActionComplete(YYTK::CInstance* Self)
+		{
+			if (!Self || !after_use_action_complete_callback)
+				return;
+
+			YYTK::RValue ari = Self->ToRValue();
+			if (!MMAPI::Engine::StructVariableExists(ari, "fsm"))
+				return;
+			YYTK::RValue state = ari.GetMember("fsm").GetMember("state");
+			if (!MMAPI::Engine::StructVariableExists(state, "state_id"))
+				return;
+
+			bool in_hold_to_use = state.GetMember("state_id").ToInt64()
+				== static_cast<int64_t>(MMAPI::Player::States::HoldToUse);
+			bool did_action_now = MMAPI::Engine::StructVariableExists(state, "did_action")
+				&& state.GetMember("did_action").ToBoolean();
+			bool in_use_action = in_hold_to_use && did_action_now;
+
+			if (in_use_action && !was_in_use_action)
+			{
+				// Read from last_known_held_item_id rather than re-querying the held_item script.
+				// At this moment, the game has likely already removed the item from inventory, so
+				// calling held_item directly would return undefined. The held_item hook callback
+				// keeps last_known_held_item_id pinned to the most recent valid value, which is
+				// the item that was being used.
+				MMAPI::Player::AfterUseActionContext context{ last_known_held_item_id, Self };
+				after_use_action_complete_callback(context);
+			}
+
+			// Only update the edge tracker while in HoldToUse. Outside that state, freezing the
+			// tracker preserves the last in-state observation across transients (FSM flicker, a
+			// missing fsm/state member for a tick), so re-entering HoldToUse with did_action
+			// still latched true is not misread as a fresh rising edge.
+			if (in_hold_to_use)
+				was_in_use_action = in_use_action;
 		}
 	}
 
@@ -790,6 +874,15 @@ namespace MMAPI::Player
 		if (!MMAPI::IsSuccess(status))
 			return status;
 
+		// Subscribe an internal obj_ari tick handler that edge-detects use-action completion
+		// for Hooks::AfterUseActionComplete. Plus a setup_main_screen handler to reset the edge
+		// state on return to title.
+		MMAPI::Instance::Internal::RegisterInternalOnObjectCall(
+			MMAPI::Instance::Internal::INSTANCE_OBJ_ARI,
+			Internal::DetectUseActionComplete
+		);
+		MMAPI::Internal::RegisterOnSetupMainScreenHandler(Internal::ResetUseActionEdge);
+
 		Internal::enabled = true;
 		return MMAPI::Status::Success;
 	}
@@ -916,6 +1009,34 @@ namespace MMAPI::Player
 			return MMAPI::Internal::RegisterHook(
 				"Player::AfterHeldItem",
 				Internal::after_held_item_callback,
+				callback
+			);
+		}
+
+		/// Registers a callback that fires once when Ari's use-item action completes — the rising
+		/// edge of `state == HoldToUse && state.did_action == true` in Ari's FSM. This is the right
+		/// signal for "the item-use animation has played to its consume point" (eating, drinking,
+		/// throwing, etc.). `Item::Hooks::BeforeUseItem` fires at the *start* of the use; this
+		/// fires at the *end*.
+		///
+		/// Edge-detected: fires at most once per use action, not every frame did_action stays true.
+		/// Edge state is reset on return to title.
+		///
+		/// Read `ctx.GetItemId()` for the item Ari was using (sourced from the most recent
+		/// non-undefined held_item observation — survives the consume-then-resolve gap), and
+		/// `ctx.GetSelf()` for the obj_ari instance.
+		///
+		/// @param callback A function called with a `MMAPI::Player::AfterUseActionContext` on each rising edge.
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterUseActionComplete(Internal::AfterUseActionCompleteCallback callback)
+		{
+			MMAPI::Status status = MMAPI::Player::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
+
+			return MMAPI::Internal::RegisterHook(
+				"Player::AfterUseActionComplete",
+				Internal::after_use_action_complete_callback,
 				callback
 			);
 		}

@@ -7,6 +7,7 @@
 #include "Log.hpp"
 #include "Status.hpp"
 
+#include <optional>
 #include <string>
 #include <unordered_map>
 
@@ -389,6 +390,22 @@ namespace MMAPI::Location
 			return {};
 
 		return *internal_name;
+	}
+
+	/// Resolves a Location::Ids from its game-internal name string. Useful for mods that persist
+	/// locations by name in mod-save files and need to restore them on game load.
+	/// @attention Requires MMAPI::Location::Enable() to have been called; the underlying lookup
+	///            map is populated by the setup_main_screen pub/sub on the first title-screen fire.
+	/// @param internal_name The game-internal location name (e.g. "town", "bathhouse").
+	/// @return The Location::Ids enum value, or std::nullopt if no location matches.
+	inline std::optional<MMAPI::Location::Ids> TryFromInternalName(const std::string& internal_name)
+	{
+		MMAPI_REQUIRE_ENABLED("Location", std::nullopt);
+
+		auto it = Internal::location_internal_name_to_id_map.find(internal_name);
+		if (it == Internal::location_internal_name_to_id_map.end())
+			return std::nullopt;
+		return static_cast<MMAPI::Location::Ids>(it->second);
 	}
 
 	/// Resolves a Location::Ids to its game-internal name string by wrapping the game's
