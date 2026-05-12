@@ -1,7 +1,8 @@
-#include <map>
-#include <fstream>
-#include <nlohmann/json.hpp>
-#include <YYToolkit/YYTK_Shared.hpp> // YYTK v4
+#include <filesystem>
+#include <random>
+#include <set>
+#include <YYToolkit/YYTK_Shared.hpp>
+#include <MMAPI/MMAPI.hpp>
 using namespace Aurie;
 using namespace YYTK;
 using json = nlohmann::json;
@@ -10,20 +11,35 @@ static const char* const MOD_NAME = "BugRadar";
 static const char* const VERSION = "1.0.2";
 static const char* const BUG_LIST_KEY = "bug_list";
 static const char* const MODIFY_BUG_SPAWN_LOCATION_KEY = "modify_bug_spawn_location";
-static const char* const DISPLAY_NOTIFICATIONS_JSON_KEY = "display_notifications";
+static const char* const DISPLAY_NOTIFICATIONS_KEY = "display_notifications";
 static const std::string BUG_NAME_PLACEHOLDER_TEXT = "<BUG>";
 static const char* const BUG_DETECTED_NOTIFICATION_KEY = "Notifications/Mods/Bug Radar/bug_detected";
-static const char* const GML_SCRIPT_CREATE_NOTIFICATION = "gml_Script_create_notification";
-static const char* const GML_SCRIPT_GET_WEATHER = "gml_Script_get_weather@WeatherManager@Weather";
-static const char* const GML_SCRIPT_TRY_LOCATION_ID_TO_STRING = "gml_Script_try_location_id_to_string";
-static const char* const GML_SCRIPT_SPAWN_BUG = "gml_Script_spawn_bug";
-static const char* const GML_SCRIPT_CREATE_BUG = "gml_Script_setup@gml_Object_obj_bug_Create_0";
-static const char* const GML_SCRIPT_GET_LOCALIZER = "gml_Script_get@Localizer@Localizer";
-static const char* const GML_SCRIPT_SETUP_MAIN_SCREEN = "gml_Script_setup_main_screen@TitleMenu@TitleMenu";
-static const char* const GML_SCRIPT_INVENTORY_SLOT_POP = "gml_Script_drain@InventorySlot@Inventory";
 static const std::vector<std::string> DEFAULT_BUG_LIST = {"Fairy Bee", "Flower Crown Beetle", "Snowball Beetle", "Speedy Snail", "Strobe Firefly"};
 static const bool DEFAULT_MODIFY_BUG_SPAWN_LOCATION = true;
 static const bool DEFAULT_DISPLAY_NOTIFICATIONS = true;
+
+struct BugRadarConfig
+{
+	std::vector<std::string> bug_list = DEFAULT_BUG_LIST;
+	bool modify_bug_spawn_location = DEFAULT_MODIFY_BUG_SPAWN_LOCATION;
+	bool display_notifications = DEFAULT_DISPLAY_NOTIFICATIONS;
+};
+
+void to_json(json& json_object, const BugRadarConfig& config)
+{
+	json_object = json{
+		{ BUG_LIST_KEY, config.bug_list },
+		{ MODIFY_BUG_SPAWN_LOCATION_KEY, config.modify_bug_spawn_location },
+		{ DISPLAY_NOTIFICATIONS_KEY, config.display_notifications }
+	};
+}
+
+void from_json(const json& json_object, BugRadarConfig& config)
+{
+	config.bug_list = MMAPI::Config::GetValue<std::vector<std::string>>(json_object, BUG_LIST_KEY, DEFAULT_BUG_LIST);
+	config.modify_bug_spawn_location = MMAPI::Config::GetValue<bool>(json_object, MODIFY_BUG_SPAWN_LOCATION_KEY, DEFAULT_MODIFY_BUG_SPAWN_LOCATION);
+	config.display_notifications = MMAPI::Config::GetValue<bool>(json_object, DISPLAY_NOTIFICATIONS_KEY, DEFAULT_DISPLAY_NOTIFICATIONS);
+}
 
 static const std::map<std::string, std::vector<std::vector<std::pair<int, int>>>> ROOM_BUG_SPAWN_BOUNDING_BOXES_MAP = {
 	{ "western_ruins", {
@@ -755,65 +771,11 @@ static const std::map<std::string, std::vector<std::vector<std::pair<int, int>>>
 };
 
 static YYTKInterface* g_ModuleInterface = nullptr;
-static bool load_on_start = true;
-static bool game_is_active = false;
-static bool localize_items = false;
-static bool processing_bug = false;
+static BugRadarConfig config = {};
+static bool localize_pending = false;
 static std::string bug_name = "";
-static std::string ari_current_location = "";
-static std::vector<std::string> bug_list = DEFAULT_BUG_LIST;
-static bool modify_bug_spawn_location = DEFAULT_MODIFY_BUG_SPAWN_LOCATION;
-static bool display_notifications = DEFAULT_DISPLAY_NOTIFICATIONS;
-static std::map<std::string, int> item_name_to_id_map = {};
-static std::map<int, std::string> item_id_to_name_map = {};
-static std::map<std::string, std::string> item_name_to_localized_name_map = {};
-static std::map<std::string, std::string> lowercase_localized_name_to_item_name_map = {};
+static std::set<int> tracked_bug_ids = {};
 static std::map<std::string, std::vector<std::pair<int, int>>> ROOM_BUG_SPAWN_BOUNDING_BOX_CENTER_MAP = {};
-
-int RValueAsInt(RValue value)
-{
-	if (value.m_Kind == VALUE_REAL)
-		return static_cast<int>(value.m_Real);
-	if (value.m_Kind == VALUE_INT64)
-		return static_cast<int>(value.m_i64);
-	if (value.m_Kind == VALUE_INT32)
-		return static_cast<int>(value.m_i32);
-}
-
-bool RValueAsBool(RValue value)
-{
-	if (value.m_Kind == VALUE_REAL && value.m_Real == 1)
-		return true;
-	if (value.m_Kind == VALUE_BOOL && value.m_Real == 1)
-		return true;
-	return false;
-}
-
-bool StructVariableExists(RValue the_struct, const char* variable_name)
-{
-	RValue struct_exists = g_ModuleInterface->CallBuiltin(
-		"struct_exists",
-		{ the_struct, variable_name }
-	);
-
-	return RValueAsBool(struct_exists);
-}
-
-RValue StructVariableGet(RValue the_struct, const char* variable_name)
-{
-	return g_ModuleInterface->CallBuiltin(
-		"struct_get",
-		{ the_struct, variable_name }
-	);
-}
-
-RValue StructVariableSet(RValue the_struct, const char* variable_name, RValue value)
-{
-	return g_ModuleInterface->CallBuiltin(
-		"struct_set",
-		{ the_struct, variable_name, value }
-	);
-}
 
 void PrintError(std::exception_ptr eptr)
 {
@@ -823,154 +785,53 @@ void PrintError(std::exception_ptr eptr)
 		}
 	}
 	catch (const std::exception& e) {
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Error: %s", MOD_NAME, VERSION, e.what());
+		MMAPI::Log::Error("Error: %s", e.what());
 	}
-}
-
-json CreateConfigJson(bool use_defaults)
-{
-	json config_json = {
-		{ BUG_LIST_KEY, use_defaults ? DEFAULT_BUG_LIST : bug_list },
-		{ MODIFY_BUG_SPAWN_LOCATION_KEY, use_defaults ? DEFAULT_MODIFY_BUG_SPAWN_LOCATION : modify_bug_spawn_location },
-		{ DISPLAY_NOTIFICATIONS_JSON_KEY, use_defaults ? DEFAULT_DISPLAY_NOTIFICATIONS : display_notifications }
-	};
-	return config_json;
 }
 
 void LogDefaultConfigValues()
 {
-	bug_list = DEFAULT_BUG_LIST;
-	modify_bug_spawn_location = DEFAULT_MODIFY_BUG_SPAWN_LOCATION;
-	display_notifications = DEFAULT_DISPLAY_NOTIFICATIONS;
-
-	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, BUG_LIST_KEY, "[\"Fairy Bee\", \"Flower Crown Beetle\", \"Snowball Beetle\", \"Speedy Snail\", \"Strobe Firefly\"]");
-	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, MODIFY_BUG_SPAWN_LOCATION_KEY, DEFAULT_MODIFY_BUG_SPAWN_LOCATION ? "true" : "false");
-	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, DISPLAY_NOTIFICATIONS_JSON_KEY, DEFAULT_DISPLAY_NOTIFICATIONS ? "true" : "false");
+	config = BugRadarConfig{};
+	MMAPI::Log::Warn("Using DEFAULT \"%s\" value!", BUG_LIST_KEY);
+	MMAPI::Log::Warn("Using DEFAULT \"%s\" value: %s!", MODIFY_BUG_SPAWN_LOCATION_KEY, config.modify_bug_spawn_location ? "true" : "false");
+	MMAPI::Log::Warn("Using DEFAULT \"%s\" value: %s!", DISPLAY_NOTIFICATIONS_KEY, config.display_notifications ? "true" : "false");
 }
 
-void CreateOrLoadConfigFile()
+void LoadOrCreateConfigFile()
 {
-	// Load config file.
 	std::exception_ptr eptr;
 	try
 	{
-		// Try to find the mod_data directory.
-		std::string current_dir = std::filesystem::current_path().string();
-		std::string mod_data_folder = current_dir + "\\mod_data";
-		if (!std::filesystem::exists(mod_data_folder))
-		{
-			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - The \"mod_data\" directory was not found. Creating directory: %s", MOD_NAME, VERSION, mod_data_folder.c_str());
-			std::filesystem::create_directory(mod_data_folder);
-		}
+		std::filesystem::path config_file = MMAPI::Config::GetConfigPath(MOD_NAME);
+		bool config_file_exists = std::filesystem::exists(config_file);
+		json json_object = MMAPI::Config::Load(config_file);
 
-		// Try to find the mod_data/BugRadar directory.
-		std::string bug_radar_folder = mod_data_folder + "\\BugRadar";
-		if (!std::filesystem::exists(bug_radar_folder))
-		{
-			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - The \"BugRadar\" directory was not found. Creating directory: %s", MOD_NAME, VERSION, bug_radar_folder.c_str());
-			std::filesystem::create_directory(bug_radar_folder);
-		}
+		if (!config_file_exists)
+			MMAPI::Log::Warn("Configuration file was not found. Creating file: %s", config_file.string().c_str());
 
-		// Try to find the mod_data/BugRadar/BugRadar.json config file.
-		bool update_config_file = false;
-		std::string config_file = bug_radar_folder + "\\" + "BugRadar.json";
-		std::ifstream in_stream(config_file);
-		if (in_stream.good())
+		if (json_object.empty())
 		{
-			try
+			if (config_file_exists)
 			{
-				json json_object = json::parse(in_stream);
-
-				// Check if the json_object is empty.
-				if (json_object.empty())
-				{
-					g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - No values found in mod configuration file: %s!", MOD_NAME, VERSION, config_file.c_str());
-					g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Add your desired values to the configuration file, otherwise defaults will be used.", MOD_NAME, VERSION);
-					LogDefaultConfigValues();
-				}
-				else
-				{
-					// Try loading the activation_button value.
-					if (json_object.contains(BUG_LIST_KEY))
-					{
-						bug_list = json_object[BUG_LIST_KEY];
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using CUSTOM \"%s\" value!", MOD_NAME, VERSION, BUG_LIST_KEY);
-					}
-					else
-					{
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, BUG_LIST_KEY, config_file.c_str());
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, BUG_LIST_KEY, "[\"Fairy Bee\", \"Flower Crown Beetle\", \"Snowball Beetle\", \"Speedy Snail\", \"Strobe Firefly\"]");
-					}
-
-					// Try loading the modify_bug_spawn_location value.
-					if (json_object.contains(MODIFY_BUG_SPAWN_LOCATION_KEY))
-					{
-						modify_bug_spawn_location = json_object[MODIFY_BUG_SPAWN_LOCATION_KEY];
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using CUSTOM \"%s\" value: %s!", MOD_NAME, VERSION, MODIFY_BUG_SPAWN_LOCATION_KEY, modify_bug_spawn_location ? "true" : "false");
-					}
-					else
-					{
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, MODIFY_BUG_SPAWN_LOCATION_KEY, config_file.c_str());
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, MODIFY_BUG_SPAWN_LOCATION_KEY, DEFAULT_MODIFY_BUG_SPAWN_LOCATION ? "true" : "false");
-					}
-
-					// Try loading the display_notifications value.
-					if (json_object.contains(DISPLAY_NOTIFICATIONS_JSON_KEY))
-					{
-						display_notifications = json_object[DISPLAY_NOTIFICATIONS_JSON_KEY];
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using CUSTOM \"%s\" value: %s!", MOD_NAME, VERSION, DISPLAY_NOTIFICATIONS_JSON_KEY, display_notifications ? "true" : "false");
-					}
-					else
-					{
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, DISPLAY_NOTIFICATIONS_JSON_KEY, config_file.c_str());
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, DISPLAY_NOTIFICATIONS_JSON_KEY, DEFAULT_DISPLAY_NOTIFICATIONS ? "true" : "false");
-					}
-				}
-
-				update_config_file = true;
+				MMAPI::Log::Error("No readable values found in mod configuration file: %s!", config_file.string().c_str());
+				MMAPI::Log::Warn("Defaults will be used and written back to the configuration file.");
 			}
-			catch (...)
-			{
-				eptr = std::current_exception();
-				PrintError(eptr);
-
-				g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to parse JSON from configuration file: %s", MOD_NAME, VERSION, config_file.c_str());
-				g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Make sure the file is valid JSON!", MOD_NAME, VERSION);
-				LogDefaultConfigValues();
-			}
-
-			in_stream.close();
-		}
-		else
-		{
-			in_stream.close();
-
-			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - The \"BugRadar.json\" file was not found. Creating file: %s", MOD_NAME, VERSION, config_file.c_str());
-
-			json default_config_json = CreateConfigJson(true);
-			std::ofstream out_stream(config_file);
-			out_stream << std::setw(4) << default_config_json << std::endl;
-			out_stream.close();
 
 			LogDefaultConfigValues();
+			MMAPI::Config::Save(config_file, config);
+			return;
 		}
 
-		if (update_config_file)
-		{
-			json config_json = CreateConfigJson(false);
-			std::ofstream out_stream(config_file);
-			out_stream << std::setw(4) << config_json << std::endl;
-			out_stream.close();
-		}
+		config = json_object.get<BugRadarConfig>();
+		MMAPI::Config::Save(config_file, config);
+		MMAPI::Log::Info("Loaded configuration file: %s", config_file.string().c_str());
 	}
 	catch (...)
 	{
 		eptr = std::current_exception();
-		PrintError(eptr);
-
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - An error occurred loading the mod configuration file.", MOD_NAME, VERSION);
-		LogDefaultConfigValues();
 	}
+
+	PrintError(eptr);
 }
 
 void CalculateBoundingBoxCenters()
@@ -985,16 +846,12 @@ void CalculateBoundingBoxCenters()
 				total_y += point.second;
 			}
 
-			int center_x = total_x / bounding_box.size();
-			int center_y = total_y / bounding_box.size();
+			int center_x = total_x / static_cast<int>(bounding_box.size());
+			int center_y = total_y / static_cast<int>(bounding_box.size());
 			std::pair<int, int> center = { center_x, center_y };
 			ROOM_BUG_SPAWN_BOUNDING_BOX_CENTER_MAP[room.first].push_back(center);
 		}
 	}
-}
-
-double CalculateDistance(int x1, int y1, int x2, int y2) {
-	return std::sqrt(std::pow(x2 - x1, 2) + std::pow(y2 - y1, 2));
 }
 
 std::tuple<int, int, int> GenerateRandomPointInClosestBoundingBox(int X, int Y, const std::string& room_name) {
@@ -1003,7 +860,7 @@ std::tuple<int, int, int> GenerateRandomPointInClosestBoundingBox(int X, int Y, 
 
 	for (size_t i = 0; i < ROOM_BUG_SPAWN_BOUNDING_BOX_CENTER_MAP[room_name].size(); ++i) {
 		const auto& center = ROOM_BUG_SPAWN_BOUNDING_BOX_CENTER_MAP[room_name][i];
-		double distance = CalculateDistance(X, Y, center.first, center.second);
+		double distance = MMAPI::Math::GetDistance(X, Y, center.first, center.second);
 
 		if (distance < min_distance) {
 			min_distance = distance;
@@ -1024,424 +881,107 @@ std::tuple<int, int, int> GenerateRandomPointInClosestBoundingBox(int X, int Y, 
 		max_y = max(max_y, point.second);
 	}
 
-	srand(static_cast<unsigned int>(time(0)));
-	int random_x = min_x + rand() % (max_x - min_x + 1);
-	int random_y = min_y + rand() % (max_y - min_y + 1);
+	static std::mt19937 rng{ std::random_device{}() };
+	std::uniform_int_distribution<int> x_dist(min_x, max_x);
+	std::uniform_int_distribution<int> y_dist(min_y, max_y);
+	int random_x = x_dist(rng);
+	int random_y = y_dist(rng);
 
-	return { random_x, random_y, closest_index + 1 };
+	return { random_x, random_y, static_cast<int>(closest_index + 1) };
 }
 
-void CreateNotification(std::string notification_localization_str, CInstance* Self, CInstance* Other)
+void NormalizeBugList()
 {
-	CScript* gml_script_create_notification = nullptr;
-	g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_CREATE_NOTIFICATION,
-		(PVOID*)&gml_script_create_notification
-	);
-
-	RValue result;
-	RValue notification = RValue(notification_localization_str);
-	RValue* notification_ptr = &notification;
-	gml_script_create_notification->m_Functions->m_ScriptFunction(
-		Self,
-		Other,
-		result,
-		1,
-		{ &notification_ptr }
-	);
+	std::vector<int> matching_ids = MMAPI::Item::FindIdsByName(config.bug_list);
+	tracked_bug_ids.insert(matching_ids.begin(), matching_ids.end());
 }
 
-RValue GetLocalizedString(CInstance* Self, CInstance* Other, std::string localization_key)
+void AfterBugSpawn(MMAPI::Bug::BugSpawnContext& ctx)
 {
-	CScript* gml_script_get_localizer = nullptr;
-	g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_GET_LOCALIZER,
-		(PVOID*)&gml_script_get_localizer
-	);
-
-	RValue result;
-	RValue input = RValue(localization_key);
-	RValue* input_ptr = &input;
-	gml_script_get_localizer->m_Functions->m_ScriptFunction(
-		Self,
-		Other,
-		result,
-		1,
-		{ &input_ptr }
-	);
-
-	return result;
-}
-
-void LoadAllItemData()
-{
-	CInstance* global_instance = nullptr;
-	g_ModuleInterface->GetGlobalInstance(&global_instance);
-
-	size_t array_length;
-	RValue item_data = global_instance->GetMember("__item_data");
-	g_ModuleInterface->GetArraySize(item_data, array_length);
-
-	for (size_t i = 0; i < array_length; i++)
-	{
-		RValue* item;
-		g_ModuleInterface->GetArrayEntry(item_data, i, item);
-
-		RValue name_key = item->GetMember("name_key"); // The item's localization key
-		if (name_key.m_Kind != VALUE_NULL && name_key.m_Kind != VALUE_UNDEFINED && name_key.m_Kind != VALUE_UNSET)
-		{
-			RValue item_id = item->GetMember("item_id");
-			RValue recipe_key = item->GetMember("recipe_key"); // The internal item name
-			item_name_to_id_map[recipe_key.ToString()] = RValueAsInt(item_id);
-			item_id_to_name_map[RValueAsInt(item_id)] = recipe_key.ToString();
-			item_name_to_localized_name_map[recipe_key.ToString()] = name_key.ToString();
-		}
-	}
-}
-
-void ObjectCallback(
-	IN FWCodeEvent& CodeEvent
-)
-{
-	auto& [self, other, code, argc, argv] = CodeEvent.Arguments();
-
-	if (!self)
+	int item_id = ctx.GetItemId();
+	if (!tracked_bug_ids.contains(item_id))
 		return;
 
-	if (!self->m_Object)
+	YYTK::CInstance* bug = ctx.GetBug();
+	if (!bug)
 		return;
 
-	if (!strstr(self->m_Object->m_Name, "obj_bug"))
-		return;
+	YYTK::RValue localized_name_rv = MMAPI::Item::GetLocalizedName(item_id);
+	bug_name = localized_name_rv.m_Kind == VALUE_STRING ? localized_name_rv.ToString() : "";
 
-	if (!StructVariableExists(self, "__bug_radar__processed_bug"))
+	if (config.display_notifications)
+		MMAPI::Game::CreateNotification(false, BUG_DETECTED_NOTIFICATION_KEY);
+
+	if (config.modify_bug_spawn_location)
 	{
-		bug_name = "";
+		MMAPI::Location::Ids current_location;
+		if (!MMAPI::Location::TryGetCurrentLocation(current_location))
+			return;
 
-		if (StructVariableExists(self, "item_id"))
+		YYTK::RValue location_name_rv = MMAPI::Location::GetInternalName(current_location);
+		if (location_name_rv.m_Kind != VALUE_STRING)
+			return;
+
+		std::string location_name = location_name_rv.ToString();
+		if (!ROOM_BUG_SPAWN_BOUNDING_BOXES_MAP.contains(location_name))
+			return;
+
+		YYTK::RValue x = MMAPI::Engine::InstanceVariableGet(bug, "x");
+		YYTK::RValue y = MMAPI::Engine::InstanceVariableGet(bug, "y");
+
+		auto [new_x, new_y, bbox_num] = GenerateRandomPointInClosestBoundingBox(
+			static_cast<int>(x.ToDouble()),
+			static_cast<int>(y.ToDouble()),
+			location_name
+		);
+
+		MMAPI::Engine::InstanceVariableSet(bug, "x", new_x);
+		MMAPI::Engine::InstanceVariableSet(bug, "y", new_y);
+
+		MMAPI::Log::Info("Modified bug (%s) to spawn at position (%d, %d) in Bounding Box (%d).",
+			bug_name.c_str(), new_x, new_y, bbox_num);
+	}
+}
+
+// Fires once per session on the first get_weather hook fire (signals "game is interactive").
+// We defer the actual bug-list normalization until the next localized-string lookup (in
+// AfterLocalizedString) because the Localizer may not yet be populated at this point.
+void AfterGameActive()
+{
+	localize_pending = true;
+}
+
+void AfterLocalizedString(MMAPI::Text::AfterLocalizedStringContext& ctx)
+{
+	if (localize_pending)
+	{
+		localize_pending = false;
+		NormalizeBugList();
+	}
+
+	if (ctx.GetKey() == BUG_DETECTED_NOTIFICATION_KEY && !bug_name.empty())
+	{
+		std::string resolved(ctx.GetResolved());
+		size_t placeholder_pos = resolved.find(BUG_NAME_PLACEHOLDER_TEXT);
+		if (placeholder_pos != std::string::npos)
 		{
-			RValue item_id = StructVariableGet(self, "item_id");
-			if (item_id.m_Kind != VALUE_UNSET && item_id.m_Kind != VALUE_UNDEFINED && item_id.m_Kind != VALUE_NULL)
-			{
-				std::string item_name = item_id_to_name_map[RValueAsInt(item_id)]; // internal item name
-
-				auto it = std::find(bug_list.begin(), bug_list.end(), item_name);
-				if (it != bug_list.end())
-				{
-					bug_name = item_name_to_localized_name_map[item_name];
-					if (display_notifications)
-						CreateNotification(BUG_DETECTED_NOTIFICATION_KEY, self, self);
-
-					if (modify_bug_spawn_location)
-					{
-						RValue x;
-						g_ModuleInterface->GetBuiltin("x", self, NULL_INDEX, x);
-
-						RValue y;
-						g_ModuleInterface->GetBuiltin("y", self, NULL_INDEX, y);
-
-
-						if (ROOM_BUG_SPAWN_BOUNDING_BOXES_MAP.contains(ari_current_location))
-						{
-							std::tuple<int64_t, int64_t, int64_t> tuple = GenerateRandomPointInClosestBoundingBox(x.ToInt64(), y.ToInt64(), ari_current_location);
-							RValue new_x = std::get<0>(tuple);
-							RValue new_y = std::get<1>(tuple);
-							int64_t bounding_box_number = std::get<2>(tuple);
-							g_ModuleInterface->SetBuiltin("x", self, NULL_INDEX, new_x);
-							g_ModuleInterface->SetBuiltin("y", self, NULL_INDEX, new_y);
-							g_ModuleInterface->Print(CM_GREEN, "[%s %s] - Modified bug (%s) to spawn at position (%d, %d) in Bounding Box (%d).", MOD_NAME, VERSION, bug_name.c_str(), new_x.ToInt64(), new_y.ToInt64(), bounding_box_number);
-						}
-					}
-				}
-
-				StructVariableSet(self, "__bug_radar__processed_bug", true);
-			}
+			resolved.replace(placeholder_pos, BUG_NAME_PLACEHOLDER_TEXT.length(), bug_name);
+			ctx.SetResolved(std::move(resolved));
 		}
 	}
 }
 
-RValue& GmlScriptGetWeatherCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
+void BeforeSetupMainScreen()
 {
-	game_is_active = true;
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_GET_WEATHER));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
-}
-
-RValue& GmlScriptTryLocationIdToStringCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_TRY_LOCATION_ID_TO_STRING));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	if (game_is_active)
-		if (Result.m_Kind == VALUE_STRING)
-			ari_current_location = Result.ToString();
-
-	return Result;
-}
-
-RValue& GmlScriptGetLocalizerCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	if (localize_items)
-	{
-		localize_items = false;
-
-		for (auto& pair : item_name_to_localized_name_map)
-		{
-			RValue localized_name = GetLocalizedString(Self, Other, pair.second);
-			std::string localized_name_str = localized_name.ToString();
-			pair.second = localized_name_str;
-
-			std::string lowercase_localized_name_str = localized_name.ToString();
-			std::transform(lowercase_localized_name_str.begin(), lowercase_localized_name_str.end(), lowercase_localized_name_str.begin(), [](unsigned char c) { return std::tolower(c); });
-			lowercase_localized_name_to_item_name_map[lowercase_localized_name_str] = pair.first;
-		}
-
-		// Convert the bug_list strings to lowercase.
-		for (size_t i = 0; i < bug_list.size(); i++)
-			std::transform(bug_list[i].begin(), bug_list[i].end(), bug_list[i].begin(), [](unsigned char c) { return std::tolower(c); });
-
-		// Change the bug_list names to internal names. Convert localized names to internal names. Filter out invalid names.
-		std::vector<std::string> bug_list_internal_names = {};
-		for (size_t i = 0; i < bug_list.size(); i++)
-		{
-			if (lowercase_localized_name_to_item_name_map.count(bug_list[i]) > 0)
-				bug_list_internal_names.push_back(lowercase_localized_name_to_item_name_map[bug_list[i]]);
-			else if (item_name_to_id_map.count(bug_list[i]) > 0)
-				bug_list_internal_names.push_back(bug_list[i]);
-		}
-		bug_list = bug_list_internal_names;
-	}
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_GET_LOCALIZER));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	if (ArgumentCount == 1 && Arguments[0]->m_Kind == VALUE_STRING)
-	{
-		std::string localization_key = Arguments[0]->ToString();
-		if (localization_key.compare(BUG_DETECTED_NOTIFICATION_KEY) == 0)
-		{
-			std::string result_str = Result.ToString();
-
-			// Replace the <BUG> placeholder text.
-			size_t bug_placeholder_index = result_str.find(BUG_NAME_PLACEHOLDER_TEXT);
-			if (bug_placeholder_index != std::string::npos)
-				result_str.replace(bug_placeholder_index, BUG_NAME_PLACEHOLDER_TEXT.length(), bug_name);
-
-			Result = RValue(result_str);
-			processing_bug = false;
-		}
-	}
-
-	return Result;
-}
-
-RValue& GmlScriptSetupMainScreenCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	if (load_on_start)
-	{
-		CreateOrLoadConfigFile();
-		LoadAllItemData();
-		CalculateBoundingBoxCenters();
-
-		load_on_start = false;
-		localize_items = true;
-	}
-	else
-	{
-		game_is_active = false;
-		processing_bug = false;
-		ari_current_location = "";
-		bug_name = "";
-	}
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_SETUP_MAIN_SCREEN));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
-}
-
-void CreateObjectCallback(AurieStatus& status)
-{
-	status = g_ModuleInterface->CreateCallback(
-		g_ArSelfModule,
-		EVENT_OBJECT_CALL,
-		ObjectCallback,
-		0
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook (EVENT_OBJECT_CALL)!", MOD_NAME, VERSION);
-	}
-}
-
-void CreateHookGmlScriptGetWeather(AurieStatus& status)
-{
-	CScript* gml_script_get_weather = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_GET_WEATHER,
-		(PVOID*)&gml_script_get_weather
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_WEATHER);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_GET_WEATHER,
-		gml_script_get_weather->m_Functions->m_ScriptFunction,
-		GmlScriptGetWeatherCallback,
-		nullptr
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_WEATHER);
-	}
-}
-
-void CreateHookGmlScriptTryLocationIdToString(AurieStatus& status)
-{
-	CScript* gml_script_try_location_id_to_string = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_TRY_LOCATION_ID_TO_STRING,
-		(PVOID*)&gml_script_try_location_id_to_string
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_TRY_LOCATION_ID_TO_STRING);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_TRY_LOCATION_ID_TO_STRING,
-		gml_script_try_location_id_to_string->m_Functions->m_ScriptFunction,
-		GmlScriptTryLocationIdToStringCallback,
-		nullptr
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_TRY_LOCATION_ID_TO_STRING);
-	}
-}
-
-void CreateHookGmlScriptGetLocalizer(AurieStatus& status)
-{
-	CScript* gml_script_get_localizer = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_GET_LOCALIZER,
-		(PVOID*)&gml_script_get_localizer
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_LOCALIZER);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_GET_LOCALIZER,
-		gml_script_get_localizer->m_Functions->m_ScriptFunction,
-		GmlScriptGetLocalizerCallback,
-		nullptr
-	);
-
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_LOCALIZER);
-	}
-}
-
-void CreateHookGmlScriptSetupMainScreen(AurieStatus& status)
-{
-	CScript* gml_script_setup_main_screen = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_SETUP_MAIN_SCREEN,
-		(PVOID*)&gml_script_setup_main_screen
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SETUP_MAIN_SCREEN);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_SETUP_MAIN_SCREEN,
-		gml_script_setup_main_screen->m_Functions->m_ScriptFunction,
-		GmlScriptSetupMainScreenCallback,
-		nullptr
-	);
-
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SETUP_MAIN_SCREEN);
-	}
+	localize_pending = false;
+	bug_name = "";
+	tracked_bug_ids.clear();
 }
 
 EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path& ModulePath) {
 	UNREFERENCED_PARAMETER(ModulePath);
 
-	AurieStatus status = AURIE_SUCCESS;
-
-	status = ObGetInterface(
+	AurieStatus status = ObGetInterface(
 		"YYTK_Main",
 		(AurieInterfaceBase*&)(g_ModuleInterface)
 	);
@@ -1451,41 +991,23 @@ EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path&
 
 	g_ModuleInterface->Print(CM_LIGHTAQUA, "[%s %s] - Plugin starting...", MOD_NAME, VERSION);
 
-	CreateObjectCallback(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
+	CInstance* global_instance = nullptr;
+	g_ModuleInterface->GetGlobalInstance(&global_instance);
+	MMAPI::Initialize(g_ModuleInterface, global_instance, g_ArSelfModule, MOD_NAME, VERSION);
 
-	CreateHookGmlScriptGetWeather(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
+	MMAPI::Bug::Enable();
+	MMAPI::Text::Enable();
+	MMAPI::Location::Enable();
+	MMAPI::Item::Enable();   // NormalizeBugList / AfterBugSpawn use Item utilities (GetItemData, GetInternalName, GetLocalizedName)
 
-	CreateHookGmlScriptTryLocationIdToString(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
+	MMAPI::Bug::Hooks::AfterBugSpawn(AfterBugSpawn);
+	MMAPI::Game::Hooks::AfterGameActive(AfterGameActive);
+	MMAPI::Text::Hooks::AfterLocalizedString(AfterLocalizedString);
+	MMAPI::Game::Hooks::BeforeSetupMainScreen(BeforeSetupMainScreen);
 
-	CreateHookGmlScriptGetLocalizer(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
+	LoadOrCreateConfigFile();
+	CalculateBoundingBoxCenters();
 
-	CreateHookGmlScriptSetupMainScreen(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Plugin started!", MOD_NAME, VERSION);
+	MMAPI::Log::Info("Plugin started!");
 	return AURIE_SUCCESS;
 }
