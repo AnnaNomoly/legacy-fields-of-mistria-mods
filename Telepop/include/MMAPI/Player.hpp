@@ -372,6 +372,7 @@ namespace MMAPI::Player
 			    && MMAPI::Engine::StructVariableExists(Result, "item_id"))
 			{
 				item_id = static_cast<int>(Result.GetMember("item_id").ToInt64());
+
 				// Persist the most recent non-undefined held item id so AfterUseActionComplete
 				// can report what was being used even after the game has consumed it. Updating
 				// only on defined results preserves the value across the consume-then-resolve gap.

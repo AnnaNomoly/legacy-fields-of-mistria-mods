@@ -86,9 +86,6 @@ namespace MMAPI::Log
 			return "?????";
 		}
 
-		// File-output variant: padded to 5 chars so columns line up. Console output uses the
-		// unpadded LevelTag because its [mod_name mod_version] prefix varies in length, defeating
-		// any alignment the level tag could provide.
 		constexpr const char* LevelTagPadded(Level level) noexcept
 		{
 			switch (level)
