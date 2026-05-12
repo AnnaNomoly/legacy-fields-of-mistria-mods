@@ -123,7 +123,7 @@ namespace MMAPI::Location
 
 		/// Replaces the target room with the GM room identified by the given name
 		/// (e.g. "rm_mines_tide_ritual_chamber"). Internally resolves via `asset_get_index`,
-		/// validates the result is a room asset (`asset_get_type` == `asset_room`, 3), then writes
+		/// validates the result is a room asset (`asset_get_type` == `MMAPI::Engine::AssetType::Room`), then writes
 		/// Arguments[0]. No-op when the name doesn't resolve to a valid room asset.
 		/// @return True if the room asset was resolved and the target was updated; false otherwise.
 		bool SetTargetRoom(const std::string& gm_room_name);
@@ -286,8 +286,7 @@ namespace MMAPI::Location
 				YYTK::RValue asset_type = MMAPI::Internal::module_interface->CallBuiltin(
 					"asset_get_type", { *Arguments[0] }
 				);
-				constexpr int64_t asset_room = 3;
-				if (asset_type.ToInt64() == asset_room)
+				if (asset_type.ToInt64() == static_cast<int64_t>(MMAPI::Engine::AssetType::Room))
 				{
 					YYTK::RValue room_name_rv = MMAPI::Internal::module_interface->CallBuiltin(
 						"room_get_name", { *Arguments[0] }
@@ -528,12 +527,11 @@ namespace MMAPI::Location
 		if (!MMAPI::Engine::IsNumeric(asset_index) || asset_index.ToInt64() < 0)
 			return false;
 
-		// Verify the resolved asset is a room (asset_get_type == asset_room, 3).
+		// Verify the resolved asset is a room.
 		YYTK::RValue asset_type = MMAPI::Internal::module_interface->CallBuiltin(
 			"asset_get_type", { asset_index }
 		);
-		constexpr int64_t asset_room = 3;
-		if (asset_type.ToInt64() != asset_room)
+		if (asset_type.ToInt64() != static_cast<int64_t>(MMAPI::Engine::AssetType::Room))
 			return false;
 
 		*m_arg0 = asset_index;

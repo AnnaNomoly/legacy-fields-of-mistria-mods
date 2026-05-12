@@ -102,8 +102,7 @@ namespace MMAPI::Display
 				YYTK::RValue asset_type = MMAPI::Internal::module_interface->CallBuiltin(
 					"asset_get_type", { *Arguments[0] }
 				);
-				constexpr int64_t asset_sprite = 1;
-				if (asset_type.ToInt64() == asset_sprite)
+				if (asset_type.ToInt64() == static_cast<int64_t>(MMAPI::Engine::AssetType::Sprite))
 				{
 					YYTK::RValue name = MMAPI::Internal::module_interface->CallBuiltin(
 						"sprite_get_name", { *Arguments[0] }
