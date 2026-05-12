@@ -2,6 +2,9 @@
 
 #include "Core.hpp"
 #include "Game.hpp"
+#include "Hook.hpp"
+#include "Log.hpp"
+#include "Status.hpp"
 
 #include "YYToolkit/YYTK_Shared.hpp"
 
@@ -21,6 +24,17 @@ namespace MMAPI::Calendar
 		Sunday    = 6
 	};
 
+	/// Total number of enumerators in Weekdays. Iterating [0, WeekdayCount) covers every Weekdays value.
+	inline constexpr int WeekdayCount = 7;
+
+	/// Invokes fn with every Weekdays value, in ascending order.
+	template <typename Fn>
+	inline void ForEachWeekday(Fn fn)
+	{
+		for (int i = 0; i < WeekdayCount; ++i)
+			fn(static_cast<Weekdays>(i));
+	}
+
 	/// Source: globalInstance.__season__
 	enum class Seasons : int
 	{
@@ -30,52 +44,118 @@ namespace MMAPI::Calendar
 		Winter = 3
 	};
 
+	/// Total number of enumerators in Seasons. Iterating [0, SeasonCount) covers every Seasons value.
+	inline constexpr int SeasonCount = 4;
+
+	/// Invokes fn with every Seasons value, in ascending order.
+	template <typename Fn>
+	inline void ForEachSeason(Fn fn)
+	{
+		for (int i = 0; i < SeasonCount; ++i)
+			fn(static_cast<Seasons>(i));
+	}
+
+	struct ClockUpdateContext
+	{
+		int64_t m_old_time = 0;
+
+		/// Returns the clock time (in seconds) captured before the game's update@Clock@Clock script ran.
+		/// Pair with MMAPI::Game::GetCurrentTimeInSeconds() inside an AfterClockUpdate callback to compute
+		/// the per-tick delta (e.g. how much the clock advanced this frame).
+		int64_t GetOldTime() const { return m_old_time; }
+	};
+
 	namespace Internal
 	{
+		inline bool enabled = false;
+
 		inline constexpr const char* GML_SCRIPT_GET_UNIFIED_TIME = "gml_Script_unified_time@Calendar@Calendar";
 		inline constexpr const char* GML_SCRIPT_GET_DAY          = "gml_Script_day@Calendar@Calendar";
 		inline constexpr const char* GML_SCRIPT_GET_SEASON       = "gml_Script_season@Calendar@Calendar";
 		inline constexpr const char* GML_SCRIPT_GET_YEAR         = "gml_Script_year@Calendar@Calendar";
+		inline constexpr const char* GML_SCRIPT_UPDATE_CLOCK     = "gml_Script_update@Clock@Clock";
+
+		// Live Calendar Self/Other, latched from the unified_time hook (fires every frame during gameplay).
+		// All four Calendar scripts are bound to the same Calendar singleton, so a single latch serves all of them.
+		// Used by TryGetCalendarContext for callers outside any hook frame.
+		inline YYTK::CInstance* calendar_self  = nullptr;
+		inline YYTK::CInstance* calendar_other = nullptr;
+
+		// Cleared from the setup_main_screen pub/sub when the player returns to the title menu.
+		// Registered by Calendar::Enable().
+		inline void ClearCalendarOnReturnToTitle(YYTK::CInstance* /*Self*/, YYTK::CInstance* /*Other*/)
+		{
+			calendar_self  = nullptr;
+			calendar_other = nullptr;
+		}
 
 		inline YYTK::RValue& UnifiedTimeContextCallback(IN YYTK::CInstance* Self, IN YYTK::CInstance* Other, OUT YYTK::RValue& Result, IN int ArgumentCount, IN YYTK::RValue** Arguments)
 		{
-			MMAPI::Internal::RegisterScriptContext(GML_SCRIPT_GET_UNIFIED_TIME, Self, Other);
+			// Refresh the latched pair every tick.
+			calendar_self  = Self;
+			calendar_other = Other;
+
 			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_GET_UNIFIED_TIME));
 			original(Self, Other, Result, ArgumentCount, Arguments);
 			return Result;
 		}
 
-		inline YYTK::RValue& DayContextCallback(IN YYTK::CInstance* Self, IN YYTK::CInstance* Other, OUT YYTK::RValue& Result, IN int ArgumentCount, IN YYTK::RValue** Arguments)
+		using BeforeClockUpdateCallback = void(*)();
+		using AfterClockUpdateCallback  = void(*)(MMAPI::Calendar::ClockUpdateContext&);
+
+		inline BeforeClockUpdateCallback before_clock_update_callback = nullptr;
+		inline AfterClockUpdateCallback  after_clock_update_callback  = nullptr;
+
+		inline YYTK::RValue& GmlScriptClockUpdateCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
 		{
-			MMAPI::Internal::RegisterScriptContext(GML_SCRIPT_GET_DAY, Self, Other);
-			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_GET_DAY));
+			if (before_clock_update_callback)
+				before_clock_update_callback();
+
+			// Capture old time after Before runs (so Before-side modifications are reflected)
+			// but before the original advances it. Read straight from globalInstance.__clock.time.
+			int64_t old_time = MMAPI::Internal::global_instance
+				->GetMember("__clock")
+				.GetMember("time")
+				.ToInt64();
+
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_UPDATE_CLOCK)
+			);
 			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			if (after_clock_update_callback)
+			{
+				MMAPI::Calendar::ClockUpdateContext context{ old_time };
+				after_clock_update_callback(context);
+			}
+
 			return Result;
 		}
 
-		inline YYTK::RValue& SeasonContextCallback(IN YYTK::CInstance* Self, IN YYTK::CInstance* Other, OUT YYTK::RValue& Result, IN int ArgumentCount, IN YYTK::RValue** Arguments)
+		/// Resolves the Calendar's GML calling context, latched from the most recent unified_time tick.
+		/// Cleared automatically when the game returns to the title menu.
+		/// @return True if a Calendar unified_time call has been observed this session, false otherwise.
+		inline bool TryGetCalendarContext(YYTK::CInstance*& Self, YYTK::CInstance*& Other)
 		{
-			MMAPI::Internal::RegisterScriptContext(GML_SCRIPT_GET_SEASON, Self, Other);
-			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_GET_SEASON));
-			original(Self, Other, Result, ArgumentCount, Arguments);
-			return Result;
-		}
-
-		inline YYTK::RValue& YearContextCallback(IN YYTK::CInstance* Self, IN YYTK::CInstance* Other, OUT YYTK::RValue& Result, IN int ArgumentCount, IN YYTK::RValue** Arguments)
-		{
-			MMAPI::Internal::RegisterScriptContext(GML_SCRIPT_GET_YEAR, Self, Other);
-			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_GET_YEAR));
-			original(Self, Other, Result, ArgumentCount, Arguments);
-			return Result;
+			if (!calendar_self)
+				return false;
+			Self  = calendar_self;
+			Other = calendar_other;
+			return true;
 		}
 
 		inline YYTK::RValue CallCalendarScript(const char* script_name)
 		{
-			const auto& refs = MMAPI::Internal::script_reference_map;
-			if (!refs.contains(script_name))
+			YYTK::CInstance* Self  = nullptr;
+			YYTK::CInstance* Other = nullptr;
+			if (!TryGetCalendarContext(Self, Other))
 				return {};
-			YYTK::CInstance* Self  = refs.at(script_name)[0];
-			YYTK::CInstance* Other = refs.at(script_name)[1];
 
 			YYTK::CScript* gml_script = nullptr;
 			MMAPI::Internal::module_interface->GetNamedRoutinePointer(script_name, reinterpret_cast<PVOID*>(&gml_script));
@@ -85,42 +165,46 @@ namespace MMAPI::Calendar
 			return result;
 		}
 
-		/// Gets the current 0-indexed calendar day from the Calendar script context.
-		/// @attention Requires MMAPI::Calendar::Enable() to have been called.
-		/// @return The current 0-indexed calendar day as an RValue, or undefined if the required context is unavailable.
 		inline YYTK::RValue GetDay()
 		{
 			return CallCalendarScript(GML_SCRIPT_GET_DAY);
 		}
 
-		/// Gets the current 0-indexed calendar season from the Calendar script context.
-		/// @attention Requires MMAPI::Calendar::Enable() to have been called.
-		/// @return The current 0-indexed calendar season as an RValue, or undefined if the required context is unavailable.
 		inline YYTK::RValue GetSeason()
 		{
 			return CallCalendarScript(GML_SCRIPT_GET_SEASON);
 		}
 
-		/// Gets the current 0-indexed calendar year from the Calendar script context.
-		/// @attention Requires MMAPI::Calendar::Enable() to have been called.
-		/// @return The current 0-indexed calendar year as an RValue, or undefined if the required context is unavailable.
 		inline YYTK::RValue GetYear()
 		{
 			return CallCalendarScript(GML_SCRIPT_GET_YEAR);
 		}
 	}
 
-	/// Activates Calendar utility functions that directly call game scripts.
-	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
-	inline Aurie::AurieStatus Enable()
+	/// Activates Calendar utility functions. Installs the unified_time hook so the live Calendar Self/Other are latched
+	/// for TryGetCalendarContext (cleared on return-to-title via the setup_main_screen pub/sub). All Calendar scripts
+	/// share the same singleton context, so a single latch serves day/season/year as well.
+	/// Also installs the Clock.update hook used by BeforeClockUpdate / AfterClockUpdate; the callbacks no-op until bound.
+	/// @return Status::Success if the hooks are installed (or already were); otherwise a failure status.
+	inline MMAPI::Status Enable()
 	{
-		Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(Internal::GML_SCRIPT_GET_UNIFIED_TIME, reinterpret_cast<PVOID>(Internal::UnifiedTimeContextCallback));
-		if (!Aurie::AurieSuccess(status)) return status;
-		status = MMAPI::Internal::InstallScriptHook(Internal::GML_SCRIPT_GET_DAY, reinterpret_cast<PVOID>(Internal::DayContextCallback));
-		if (!Aurie::AurieSuccess(status)) return status;
-		status = MMAPI::Internal::InstallScriptHook(Internal::GML_SCRIPT_GET_SEASON, reinterpret_cast<PVOID>(Internal::SeasonContextCallback));
-		if (!Aurie::AurieSuccess(status)) return status;
-		return MMAPI::Internal::InstallScriptHook(Internal::GML_SCRIPT_GET_YEAR, reinterpret_cast<PVOID>(Internal::YearContextCallback));
+		if (Internal::enabled)
+			return MMAPI::Status::Success;
+
+		MMAPI::Log::Debug("MMAPI::Calendar::Enable() called");
+
+		MMAPI::Internal::RegisterOnSetupMainScreenHandler(Internal::ClearCalendarOnReturnToTitle);
+
+		MMAPI::Status status = MMAPI::Internal::InstallScriptHooks({
+			{ MMAPI::Internal::GML_SCRIPT_SETUP_MAIN_SCREEN, reinterpret_cast<PVOID>(MMAPI::Internal::GmlScriptBeforeSetupMainScreenCallback) },
+			{ Internal::GML_SCRIPT_GET_UNIFIED_TIME,         reinterpret_cast<PVOID>(Internal::UnifiedTimeContextCallback) },
+			{ Internal::GML_SCRIPT_UPDATE_CLOCK,             reinterpret_cast<PVOID>(Internal::GmlScriptClockUpdateCallback) },
+		});
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		Internal::enabled = true;
+		return MMAPI::Status::Success;
 	}
 
 	/// Gets the current 1-indexed day of the month from the Calendar script context.
@@ -128,6 +212,8 @@ namespace MMAPI::Calendar
 	/// @return The current day of the month from 1 to 28 as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetDay()
 	{
+		MMAPI_REQUIRE_ENABLED("Calendar", {});
+
 		YYTK::RValue day = Internal::GetDay();
 		if (day.m_Kind == YYTK::VALUE_UNDEFINED)
 			return {};
@@ -172,6 +258,8 @@ namespace MMAPI::Calendar
 	/// @return True if the season was resolved, false if the required context is unavailable.
 	inline bool TryGetSeason(MMAPI::Calendar::Seasons& season)
 	{
+		MMAPI_REQUIRE_ENABLED("Calendar", false);
+
 		YYTK::RValue current_season = Internal::GetSeason();
 		if (current_season.m_Kind == YYTK::VALUE_UNDEFINED || current_season.m_Kind == YYTK::VALUE_UNSET)
 			return false;
@@ -202,6 +290,8 @@ namespace MMAPI::Calendar
 	/// @return The current calendar year as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetYear()
 	{
+		MMAPI_REQUIRE_ENABLED("Calendar", {});
+
 		YYTK::RValue year = Internal::GetYear();
 		if (year.m_Kind == YYTK::VALUE_UNDEFINED)
 			return {};
@@ -228,6 +318,48 @@ namespace MMAPI::Calendar
 	/// @return The current unified time as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetUnifiedTime()
 	{
+		MMAPI_REQUIRE_ENABLED("Calendar", {});
 		return Internal::CallCalendarScript(Internal::GML_SCRIPT_GET_UNIFIED_TIME);
+	}
+
+	namespace Hooks
+	{
+		/// Registers a callback that runs before the game's `update@Clock@Clock` script.
+		/// The callback takes no arguments and is intended for per-tick state preparation that must complete
+		/// before the game advances the clock. To inspect the pre-original time, read it via
+		/// `MMAPI::Game::GetCurrentTimeInSeconds()` (or directly via `globalInstance.__clock.time`).
+		/// @param callback A parameterless function called before each clock update.
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforeClockUpdate(Internal::BeforeClockUpdateCallback callback)
+		{
+			MMAPI::Status status = MMAPI::Calendar::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
+
+			return MMAPI::Internal::RegisterHook(
+				"Calendar::BeforeClockUpdate",
+				Internal::before_clock_update_callback,
+				callback
+			);
+		}
+
+		/// Registers a callback that runs after the game's `update@Clock@Clock` script.
+		/// The context exposes `ctx.GetOldTime()` — the clock time (seconds) captured between any
+		/// BeforeClockUpdate callback and the original script. Compare it to
+		/// `MMAPI::Game::GetCurrentTimeInSeconds()` to determine how much the clock advanced this tick.
+		/// @param callback A function called with a `MMAPI::Calendar::ClockUpdateContext`.
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterClockUpdate(Internal::AfterClockUpdateCallback callback)
+		{
+			MMAPI::Status status = MMAPI::Calendar::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
+
+			return MMAPI::Internal::RegisterHook(
+				"Calendar::AfterClockUpdate",
+				Internal::after_clock_update_callback,
+				callback
+			);
+		}
 	}
 }

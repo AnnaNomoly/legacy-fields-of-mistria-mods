@@ -1,12 +1,16 @@
 #pragma once
 
 #include "Core.hpp"
+#include "Dungeon.hpp"
+#include "Hook.hpp"
+#include "Log.hpp"
+#include "Status.hpp"
 
 #include "YYToolkit/YYTK_Shared.hpp"
 
 namespace MMAPI::Monster
 {
-	/// Source: __monster_id.json.__monster_id__
+	/// Source: globalInstance.__monster_id__
 	enum class Ids : int
 	{
 		Barrel            = 0,
@@ -48,6 +52,17 @@ namespace MMAPI::Monster
 		Tome              = 36
 	};
 
+	/// Total number of enumerators in Ids. Iterating [0, IdCount) covers every Ids value.
+	inline constexpr int IdCount = 37;
+
+	/// Invokes fn with every Ids value, in ascending order.
+	template <typename Fn>
+	inline void ForEachId(Fn fn)
+	{
+		for (int i = 0; i < IdCount; ++i)
+			fn(static_cast<Ids>(i));
+	}
+
 	struct SpawnMonsterContext
 	{
 		int m_monster_id = 0;
@@ -61,13 +76,12 @@ namespace MMAPI::Monster
 
 		/// Prevents the game's spawn_monster script from running.
 		void Cancel() { m_cancelled = true; }
-
-		/// Returns true if any callback has cancelled this spawn.
-		bool IsCancelled() const { return m_cancelled; }
 	};
 
 	namespace Internal
 	{
+		inline bool enabled = false;
+
 		inline constexpr const char* GML_SCRIPT_SPAWN_MONSTER = "gml_Script_spawn_monster";
 
 		using BeforeMonsterSpawnCallback = void(*)(MMAPI::Monster::SpawnMonsterContext&);
@@ -82,9 +96,9 @@ namespace MMAPI::Monster
 			IN YYTK::RValue** Arguments
 		)
 		{
-			if (Arguments && ArgumentCount >= 3 && Arguments[2])
+			if (before_monster_spawn_callback && Arguments && ArgumentCount >= 3 && Arguments[2])
 			{
-				MMAPI::Monster::SpawnMonsterContext context{ Arguments[2]->ToInt64() };
+				MMAPI::Monster::SpawnMonsterContext context{ static_cast<int>(Arguments[2]->ToInt64()) };
 				before_monster_spawn_callback(context);
 
 				if (context.m_cancelled)
@@ -100,20 +114,32 @@ namespace MMAPI::Monster
 
 			return Result;
 		}
+	}
 
-		inline Aurie::AurieStatus RegisterMonsterSpawnHook(BeforeMonsterSpawnCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_SPAWN_MONSTER,
-				reinterpret_cast<PVOID>(GmlScriptSpawnMonsterCallback)
-			);
+	/// Activates Monster utility functions. Cascades to MMAPI::Dungeon::Enable so SpawnMonster can resolve
+	/// the live DungeonRunner via TryGetDungeonRunnerContext. Eagerly installs the spawn_monster script hook
+	/// used by Hooks::BeforeMonsterSpawn.
+	/// @return Status::Success if the hooks are installed (or already were); otherwise a failure status.
+	inline MMAPI::Status Enable()
+	{
+		if (Internal::enabled)
+			return MMAPI::Status::Success;
 
-			if (!Aurie::AurieSuccess(status))
-				return status;
+		MMAPI::Log::Debug("MMAPI::Monster::Enable() called");
 
-			before_monster_spawn_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
+		MMAPI::Status status = MMAPI::Dungeon::Enable();
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		status = MMAPI::Internal::InstallScriptHook(
+			Internal::GML_SCRIPT_SPAWN_MONSTER,
+			reinterpret_cast<PVOID>(Internal::GmlScriptSpawnMonsterCallback)
+		);
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		Internal::enabled = true;
+		return MMAPI::Status::Success;
 	}
 
 	namespace Hooks
@@ -121,27 +147,36 @@ namespace MMAPI::Monster
 		/// Registers a callback that runs before the game spawns a monster.
 		/// Use ctx.SetMonster() to change which monster spawns, or ctx.Cancel() to prevent the spawn entirely.
 		/// @param callback A function called with a mutable spawn context before the game processes it.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus BeforeMonsterSpawn(Internal::BeforeMonsterSpawnCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforeMonsterSpawn(Internal::BeforeMonsterSpawnCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
+			MMAPI::Status status = MMAPI::Monster::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
 
-			if (Internal::before_monster_spawn_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			return Internal::RegisterMonsterSpawnHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Monster::BeforeMonsterSpawn",
+				Internal::before_monster_spawn_callback,
+				callback
+			);
 		}
 	}
 
 	/// Spawns a monster at the given room coordinates on the current dungeon floor.
-	/// @param Self The GML instance invoking the spawn (passed through to the script call).
-	/// @param Other The GML other instance context (passed through to the script call).
+	/// @attention Requires MMAPI::Monster::Enable() to have been called.
 	/// @param room_x The X position in room coordinates to spawn the monster at.
 	/// @param room_y The Y position in room coordinates to spawn the monster at.
 	/// @param monster The monster type to spawn.
-	inline void SpawnMonster(YYTK::CInstance* Self, YYTK::CInstance* Other, int room_x, int room_y, MMAPI::Monster::Ids monster)
+	/// @return True if the script was invoked, false if the required context is unavailable.
+	inline bool SpawnMonster(int room_x, int room_y, MMAPI::Monster::Ids monster)
 	{
+		MMAPI_REQUIRE_ENABLED("Monster", false);
+
+		YYTK::CInstance* Self  = nullptr;
+		YYTK::CInstance* Other = nullptr;
+		if (!MMAPI::Dungeon::Internal::TryGetDungeonRunnerContext(Self, Other))
+			return false;
+
 		YYTK::CScript* gml_script = nullptr;
 		MMAPI::Internal::module_interface->GetNamedRoutinePointer(Internal::GML_SCRIPT_SPAWN_MONSTER, reinterpret_cast<PVOID*>(&gml_script));
 
@@ -152,5 +187,6 @@ namespace MMAPI::Monster
 		YYTK::RValue* arguments[3] = { &x, &y, &monster_id };
 
 		gml_script->m_Functions->m_ScriptFunction(Self, Other, result, 3, arguments);
+		return true;
 	}
 }

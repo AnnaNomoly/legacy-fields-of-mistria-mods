@@ -2,6 +2,9 @@
 
 #include "Core.hpp"
 #include "Engine.hpp"
+#include "Hook.hpp"
+#include "Log.hpp"
+#include "Status.hpp"
 
 #include <string>
 
@@ -48,6 +51,17 @@ namespace MMAPI::NPC
 		Zorel     = 33
 	};
 
+	/// Total number of enumerators in Ids. Iterating [0, IdCount) covers every Ids value.
+	inline constexpr int IdCount = 34;
+
+	/// Invokes fn with every Ids value, in ascending order.
+	template <typename Fn>
+	inline void ForEachId(Fn fn)
+	{
+		for (int i = 0; i < IdCount; ++i)
+			fn(static_cast<Ids>(i));
+	}
+
 	struct HeartPointsChangedContext
 	{
 		double m_amount = 0.0;
@@ -56,16 +70,33 @@ namespace MMAPI::NPC
 		void SetAmount(double amount) { m_amount = amount; }
 	};
 
+	struct FindBlipNoiseContext
+	{
+		std::string m_audio_asset_name;
+
+		/// Returns the audio asset name the game's `find_npc_blip_noise` script resolved
+		/// (e.g. "SoundEffects/NPCs/Vocal/TextBlipPriestess").
+		std::string_view GetAudioAssetName() const { return m_audio_asset_name; }
+
+		/// Overrides the audio asset name the game will use for this NPC's text blip.
+		void SetAudioAssetName(std::string audio_asset_name) { m_audio_asset_name = std::move(audio_asset_name); }
+	};
+
 	namespace Internal
 	{
-		inline constexpr const char* GML_SCRIPT_ADD_HEART_POINTS = "gml_Script_add_heart_points@Npc@Npc";
-		inline constexpr const char* GML_SCRIPT_NPC_RECEIVE_GIFT = "gml_Script_receive_gift@gml_Object_par_NPC_Create_0";
+		inline bool enabled = false;
+
+		inline constexpr const char* GML_SCRIPT_ADD_HEART_POINTS     = "gml_Script_add_heart_points@Npc@Npc";
+		inline constexpr const char* GML_SCRIPT_NPC_RECEIVE_GIFT     = "gml_Script_receive_gift@gml_Object_par_NPC_Create_0";
+		inline constexpr const char* GML_SCRIPT_FIND_NPC_BLIP_NOISE  = "gml_Script_find_npc_blip_noise";
 
 		using BeforeHeartPointsChangeCallback = void(*)(MMAPI::NPC::HeartPointsChangedContext&);
-		using BeforeReceiveGiftCallback = void(*)(YYTK::CInstance* npc, int item_id);
+		using BeforeReceiveGiftCallback       = void(*)(YYTK::CInstance* npc, int item_id);
+		using AfterFindBlipNoiseCallback      = void(*)(MMAPI::NPC::FindBlipNoiseContext&);
 
 		inline BeforeHeartPointsChangeCallback before_heart_points_change_callback = nullptr;
-		inline BeforeReceiveGiftCallback before_receive_gift_callback = nullptr;
+		inline BeforeReceiveGiftCallback       before_receive_gift_callback        = nullptr;
+		inline AfterFindBlipNoiseCallback      after_find_blip_noise_callback      = nullptr;
 
 		inline bool TryGetNumericArgument(YYTK::RValue** Arguments, int ArgumentCount, int index, double& value)
 		{
@@ -113,20 +144,6 @@ namespace MMAPI::NPC
 			return Result;
 		}
 
-		inline Aurie::AurieStatus RegisterHeartPointsChangedHook(BeforeHeartPointsChangeCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_ADD_HEART_POINTS,
-				reinterpret_cast<PVOID>(GmlScriptAddHeartPointsCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			before_heart_points_change_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
-
 		inline YYTK::RValue& GmlScriptNpcReceiveGiftCallback(
 			IN YYTK::CInstance* Self,
 			IN YYTK::CInstance* Other,
@@ -153,25 +170,31 @@ namespace MMAPI::NPC
 			return Result;
 		}
 
-		inline Aurie::AurieStatus RegisterReceiveGiftHook(BeforeReceiveGiftCallback callback)
+		inline YYTK::RValue& GmlScriptAfterFindNpcBlipNoiseCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
 		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_NPC_RECEIVE_GIFT,
-				reinterpret_cast<PVOID>(GmlScriptNpcReceiveGiftCallback)
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_FIND_NPC_BLIP_NOISE)
 			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
 
-			if (!Aurie::AurieSuccess(status))
-				return status;
+			if (after_find_blip_noise_callback && Result.m_Kind == YYTK::VALUE_STRING)
+			{
+				MMAPI::NPC::FindBlipNoiseContext context{ Result.ToString() };
+				after_find_blip_noise_callback(context);
+				Result = YYTK::RValue(context.m_audio_asset_name);
+			}
 
-			before_receive_gift_callback = callback;
-			return Aurie::AURIE_SUCCESS;
+			return Result;
 		}
 
 		inline YYTK::RValue GetIdFromInternalName(const std::string& internal_name)
 		{
-			if (!MMAPI::Internal::global_instance)
-				return {};
-
 			YYTK::RValue npc_ids = MMAPI::Internal::global_instance->GetMember("__npc_id__");
 			size_t npc_count = 0;
 			MMAPI::Internal::module_interface->GetArraySize(npc_ids, npc_count);
@@ -190,17 +213,11 @@ namespace MMAPI::NPC
 
 		inline YYTK::RValue GetNpcDatabase()
 		{
-			if (!MMAPI::Internal::global_instance)
-				return {};
-
 			return *MMAPI::Internal::global_instance->GetRefMember("__npc_database");
 		}
 
 		inline YYTK::RValue GetNpcPrototypes()
 		{
-			if (!MMAPI::Internal::global_instance)
-				return {};
-
 			return *MMAPI::Internal::global_instance->GetRefMember("__npc_prototypes");
 		}
 
@@ -318,6 +335,7 @@ namespace MMAPI::NPC
 	/// @return The NPC data struct as an RValue, or undefined if the ID is out of bounds.
 	inline YYTK::RValue GetData(MMAPI::NPC::Ids npc)
 	{
+		MMAPI_REQUIRE_ENABLED("NPC", {});
 		return Internal::GetData(GetId(npc));
 	}
 
@@ -326,6 +344,7 @@ namespace MMAPI::NPC
 	/// @return The liked gift item ID buffer as an RValue, or undefined if the NPC is not found.
 	inline YYTK::RValue GetLikedGifts(MMAPI::NPC::Ids npc)
 	{
+		MMAPI_REQUIRE_ENABLED("NPC", {});
 		return Internal::GetGiftBuffer(GetId(npc), "liked_gifts");
 	}
 
@@ -334,6 +353,7 @@ namespace MMAPI::NPC
 	/// @return The loved gift item ID buffer as an RValue, or undefined if the NPC is not found.
 	inline YYTK::RValue GetLovedGifts(MMAPI::NPC::Ids npc)
 	{
+		MMAPI_REQUIRE_ENABLED("NPC", {});
 		return Internal::GetGiftBuffer(GetId(npc), "loved_gifts");
 	}
 
@@ -342,6 +362,7 @@ namespace MMAPI::NPC
 	/// @param item_id The item ID to check.
 	inline bool LikesGift(MMAPI::NPC::Ids npc, int item_id)
 	{
+		MMAPI_REQUIRE_ENABLED("NPC", false);
 		return Internal::GiftBufferContains(GetLikedGifts(npc), item_id);
 	}
 
@@ -350,6 +371,7 @@ namespace MMAPI::NPC
 	/// @param item_id The item ID to check.
 	inline bool LovesGift(MMAPI::NPC::Ids npc, int item_id)
 	{
+		MMAPI_REQUIRE_ENABLED("NPC", false);
 		return Internal::GiftBufferContains(GetLovedGifts(npc), item_id);
 	}
 
@@ -358,6 +380,8 @@ namespace MMAPI::NPC
 	/// @param item_id The item ID to check.
 	inline bool KnowsGiftPreference(YYTK::CInstance* npc, int item_id)
 	{
+		MMAPI_REQUIRE_ENABLED("NPC", false);
+
 		YYTK::RValue known_gift_preferences = Internal::GetKnownGiftPreferences(npc);
 		if (known_gift_preferences.m_Kind == YYTK::VALUE_UNDEFINED)
 			return false;
@@ -370,6 +394,8 @@ namespace MMAPI::NPC
 	/// @param item_id The item ID to mark as learned.
 	inline void LearnGiftPreference(YYTK::CInstance* npc, int item_id)
 	{
+		MMAPI_REQUIRE_ENABLED_VOID("NPC");
+
 		YYTK::RValue known_gift_preferences = Internal::GetKnownGiftPreferences(npc);
 		if (known_gift_preferences.m_Kind == YYTK::VALUE_UNDEFINED)
 			return;
@@ -382,6 +408,8 @@ namespace MMAPI::NPC
 	/// @return The NPC's heart points, or 0 if the NPC is not found.
 	inline int GetHeartPoints(MMAPI::NPC::Ids npc)
 	{
+		MMAPI_REQUIRE_ENABLED("NPC", 0);
+
 		YYTK::RValue npc_data = GetData(npc);
 		if (npc_data.m_Kind == YYTK::VALUE_UNDEFINED)
 			return 0;
@@ -394,6 +422,8 @@ namespace MMAPI::NPC
 	/// @param value The heart point value to assign.
 	inline void SetHeartPoints(MMAPI::NPC::Ids npc, int value)
 	{
+		MMAPI_REQUIRE_ENABLED_VOID("NPC");
+
 		YYTK::RValue npc_data = GetData(npc);
 		if (npc_data.m_Kind == YYTK::VALUE_UNDEFINED)
 			return;
@@ -409,34 +439,79 @@ namespace MMAPI::NPC
 		SetHeartPoints(npc, GetHeartPoints(npc) + amount);
 	}
 
+	/// Activates NPC utility functions. Eagerly installs every NPC script hook used by Hooks::* registrars
+	/// (add_heart_points, receive_gift, find_npc_blip_noise).
+	/// @return Status::Success if the hooks are installed (or already were); otherwise a failure status.
+	inline MMAPI::Status Enable()
+	{
+		if (Internal::enabled)
+			return MMAPI::Status::Success;
+
+		MMAPI::Log::Debug("MMAPI::NPC::Enable() called");
+
+		MMAPI::Status status = MMAPI::Internal::InstallScriptHooks({
+			{ Internal::GML_SCRIPT_ADD_HEART_POINTS,    reinterpret_cast<PVOID>(Internal::GmlScriptAddHeartPointsCallback) },
+			{ Internal::GML_SCRIPT_NPC_RECEIVE_GIFT,    reinterpret_cast<PVOID>(Internal::GmlScriptNpcReceiveGiftCallback) },
+			{ Internal::GML_SCRIPT_FIND_NPC_BLIP_NOISE, reinterpret_cast<PVOID>(Internal::GmlScriptAfterFindNpcBlipNoiseCallback) },
+		});
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		Internal::enabled = true;
+		return MMAPI::Status::Success;
+	}
+
 	namespace Hooks
 	{
 		/// Registers a callback that runs when an NPC's heart points change through the game's add heart points script.
 		/// @param callback A function called with a mutable heart point change context. Use ctx.SetAmount() to modify the amount applied.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus BeforeHeartPointsChange(Internal::BeforeHeartPointsChangeCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforeHeartPointsChange(Internal::BeforeHeartPointsChangeCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
+			MMAPI::Status status = MMAPI::NPC::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
 
-			if (Internal::before_heart_points_change_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			return Internal::RegisterHeartPointsChangedHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"NPC::BeforeHeartPointsChange",
+				Internal::before_heart_points_change_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that runs when an NPC receives a gift.
 		/// @param callback A function called with the live NPC instance and received item ID.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus BeforeReceiveGift(Internal::BeforeReceiveGiftCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforeReceiveGift(Internal::BeforeReceiveGiftCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
+			MMAPI::Status status = MMAPI::NPC::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
 
-			if (Internal::before_receive_gift_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+			return MMAPI::Internal::RegisterHook(
+				"NPC::BeforeReceiveGift",
+				Internal::before_receive_gift_callback,
+				callback
+			);
+		}
 
-			return Internal::RegisterReceiveGiftHook(callback);
+		/// Registers a callback that runs after the game's `find_npc_blip_noise` script.
+		/// Read `ctx.GetAudioAssetName()` to see the audio asset the game resolved for an NPC's
+		/// text-blip noise, and call `ctx.SetAudioAssetName(...)` to override it (e.g. retarget
+		/// a character to a different voice asset under specific conditions).
+		/// @param callback A function called with a mutable `MMAPI::NPC::FindBlipNoiseContext`.
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterFindBlipNoise(Internal::AfterFindBlipNoiseCallback callback)
+		{
+			MMAPI::Status status = MMAPI::NPC::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
+
+			return MMAPI::Internal::RegisterHook(
+				"NPC::AfterFindBlipNoise",
+				Internal::after_find_blip_noise_callback,
+				callback
+			);
 		}
 	}
 }

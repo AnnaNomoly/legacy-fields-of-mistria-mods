@@ -8,6 +8,15 @@
 
 namespace MMAPI::Engine
 {
+	namespace Internal
+	{
+		// GameMaker direction-in-degrees constants (0 = right, 90 = up, 180 = left, 270 = down).
+		inline constexpr double DIRECTION_DEGREES_RIGHT = 0.0;
+		inline constexpr double DIRECTION_DEGREES_UP    = 90.0;
+		inline constexpr double DIRECTION_DEGREES_LEFT  = 180.0;
+		inline constexpr double DIRECTION_DEGREES_DOWN  = 270.0;
+	}
+
 	/// Returns true if the RValue holds a numeric type (int32, int64, or real).
 	/// @param value The RValue to test.
 	/// @return True if the value is VALUE_INT32, VALUE_INT64, or VALUE_REAL.
@@ -97,17 +106,17 @@ namespace MMAPI::Engine
 	}
 
 	/// Returns the current width of the game window in pixels.
-	/// @return The window width as an RValue.
-	inline YYTK::RValue GetWindowWidth()
+	/// @return The window width in pixels.
+	inline double GetWindowWidth()
 	{
-		return MMAPI::Internal::module_interface->CallBuiltin("window_get_width", {});
+		return MMAPI::Internal::module_interface->CallBuiltin("window_get_width", {}).ToDouble();
 	}
 
 	/// Returns the current height of the game window in pixels.
-	/// @return The window height as an RValue.
-	inline YYTK::RValue GetWindowHeight()
+	/// @return The window height in pixels.
+	inline double GetWindowHeight()
 	{
-		return MMAPI::Internal::module_interface->CallBuiltin("window_get_height", {});
+		return MMAPI::Internal::module_interface->CallBuiltin("window_get_height", {}).ToDouble();
 	}
 
 	/// Gets a GML asset index by asset name.

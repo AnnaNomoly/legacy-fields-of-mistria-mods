@@ -2,8 +2,11 @@
 
 #include "Core.hpp"
 #include "Engine.hpp"
+#include "Hook.hpp"
 #include "Instance.hpp"
 #include "Item.hpp"
+#include "Log.hpp"
+#include "Status.hpp"
 
 #include <string>
 
@@ -11,15 +14,88 @@
 
 namespace MMAPI::Recipe
 {
+	struct GenerateInfusionsContext
+	{
+		int          m_item_id = -1;
+		YYTK::RValue m_infusions;
+
+		/// The item_id of the recipe whose infusions are being generated, resolved from the script's
+		/// Self. Returns -1 if Self is null or its `item_id` member is missing.
+		int GetItemId() const { return m_item_id; }
+
+		/// Returns the infusions array container the game's generate_infusions script produced
+		/// (the Result of the script). The container has `__count`, `__internal_size`, and `__buffer`
+		/// members typical of GameMaker dynamic arrays — mutate via the YYTK module interface if needed.
+		/// TODO: Reverse-engineer gml_Script_generate_infusions to confirm the exact Result shape and
+		///       per-entry layout, then tighten this accessor (typed entries, named getters, etc.).
+		YYTK::RValue GetInfusions() const { return m_infusions; }
+
+		/// Returns the current number of infusions in the array (live read from `__count`).
+		size_t Count() const
+		{
+			if (m_infusions.m_Kind != YYTK::VALUE_OBJECT)
+				return 0;
+			if (!MMAPI::Engine::StructVariableExists(m_infusions, "__count"))
+				return 0;
+			return static_cast<size_t>(m_infusions.GetMember("__count").ToInt64());
+		}
+
+		/// Clears the infusions array — replaces `__buffer` with an empty array and zeroes
+		/// `__count` / `__internal_size`. Use to suppress all infusions for a recipe.
+		void Clear()
+		{
+			if (m_infusions.m_Kind != YYTK::VALUE_OBJECT)
+				return;
+
+			YYTK::RValue empty_array = MMAPI::Internal::module_interface->CallBuiltin("array_create", { 0 });
+			*m_infusions.GetRefMember("__count")         = 0;
+			*m_infusions.GetRefMember("__internal_size") = 0;
+			*m_infusions.GetRefMember("__buffer")        = empty_array;
+		}
+	};
+
 	namespace Internal
 	{
-		inline constexpr const char* GML_SCRIPT_UNLOCK_RECIPE = "gml_Script_unlock_recipe@Ari@Ari";
+		inline bool enabled = false;
+
+		inline constexpr const char* GML_SCRIPT_UNLOCK_RECIPE      = "gml_Script_unlock_recipe@Ari@Ari";
+		inline constexpr const char* GML_SCRIPT_GENERATE_INFUSIONS = "gml_Script_generate_infusions@Recipe@Recipe";
+
+		using AfterGenerateInfusionsCallback = void(*)(MMAPI::Recipe::GenerateInfusionsContext&);
+		inline AfterGenerateInfusionsCallback after_generate_infusions_callback = nullptr;
+
+		inline YYTK::RValue& GmlScriptAfterGenerateInfusionsCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_GENERATE_INFUSIONS)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			if (after_generate_infusions_callback)
+			{
+				int item_id = -1;
+				if (Self)
+				{
+					YYTK::RValue self_rv = Self->ToRValue();
+					if (MMAPI::Engine::StructVariableExists(self_rv, "item_id"))
+						item_id = static_cast<int>(self_rv.GetMember("item_id").ToInt64());
+				}
+
+				MMAPI::Recipe::GenerateInfusionsContext context{ item_id, Result };
+				after_generate_infusions_callback(context);
+			}
+
+			return Result;
+		}
 
 		inline YYTK::RValue GetRecipeUnlocks()
 		{
-			if (!MMAPI::Internal::global_instance)
-				return {};
-
 			YYTK::RValue ari = MMAPI::Internal::global_instance->GetMember("__ari");
 			if (ari.m_Kind == YYTK::VALUE_UNDEFINED)
 				return {};
@@ -29,7 +105,7 @@ namespace MMAPI::Recipe
 
 		inline YYTK::RValue GetRecipeComponent(int item_id, size_t component_index)
 		{
-			YYTK::RValue item = MMAPI::Item::Internal::GetItemData(item_id);
+			YYTK::RValue item = MMAPI::Item::GetItemData(item_id);
 			if (item.m_Kind == YYTK::VALUE_UNDEFINED)
 				return {};
 
@@ -61,10 +137,42 @@ namespace MMAPI::Recipe
 		}
 	}
 
+	/// Activates Recipe utility functions that resolve Ari context. Eagerly installs the generate_infusions
+	/// script hook used by Hooks::AfterGenerateInfusions.
+	/// @return Status::Success if the hooks are installed (or already were); otherwise a failure status.
+	inline MMAPI::Status Enable()
+	{
+		if (Internal::enabled)
+			return MMAPI::Status::Success;
+
+		MMAPI::Log::Debug("MMAPI::Recipe::Enable() called");
+
+		MMAPI::Status status = MMAPI::Instance::Enable();
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		// Recipe::SetComponentCount/SetComponentDuration call Item::GetItemData, which requires Item::Enable().
+		status = MMAPI::Item::Enable();
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		status = MMAPI::Internal::InstallScriptHook(
+			Internal::GML_SCRIPT_GENERATE_INFUSIONS,
+			reinterpret_cast<PVOID>(Internal::GmlScriptAfterGenerateInfusionsCallback)
+		);
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		Internal::enabled = true;
+		return MMAPI::Status::Success;
+	}
+
 	/// Returns true if Ari has unlocked the recipe for the given item ID.
 	/// @param item_id The item ID for the recipe to check.
 	inline bool IsUnlocked(int item_id)
 	{
+		MMAPI_REQUIRE_ENABLED("Recipe", false);
+
 		if (item_id < 0)
 			return false;
 
@@ -86,13 +194,15 @@ namespace MMAPI::Recipe
 	}
 
 	/// Unlocks a cooking recipe by item ID.
-	/// @attention When show_popup is true, requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via
-	/// RegisterInstanceContext; if it is not, the recipe is still unlocked but the popup is skipped.
+	/// @attention When show_popup is true, requires MMAPI::Recipe::Enable() to have been called; if the required
+	/// context is unavailable, the recipe is still unlocked but the popup is skipped.
 	/// @param item_id The item ID for the recipe to unlock.
 	/// @param show_popup When true, displays the game's recipe unlocked popup if the recipe was newly unlocked.
 	/// @return True if the recipe was newly unlocked; otherwise false.
 	inline bool Unlock(int item_id, bool show_popup = true)
 	{
+		MMAPI_REQUIRE_ENABLED("Recipe", false);
+
 		if (item_id < 0)
 			return false;
 
@@ -135,6 +245,8 @@ namespace MMAPI::Recipe
 	/// @param count The new required component count.
 	inline void SetComponentCount(int item_id, size_t component_index, int count)
 	{
+		MMAPI_REQUIRE_ENABLED_VOID("Recipe");
+
 		YYTK::RValue component = Internal::GetRecipeComponent(item_id, component_index);
 		if (component.m_Kind == YYTK::VALUE_UNDEFINED)
 			return;
@@ -148,10 +260,35 @@ namespace MMAPI::Recipe
 	/// @param duration The new component duration value.
 	inline void SetComponentDuration(int item_id, size_t component_index, int duration)
 	{
+		MMAPI_REQUIRE_ENABLED_VOID("Recipe");
+
 		YYTK::RValue component = Internal::GetRecipeComponent(item_id, component_index);
 		if (component.m_Kind == YYTK::VALUE_UNDEFINED)
 			return;
 
 		MMAPI::Engine::StructVariableSet(component, "duration", duration);
+	}
+
+	namespace Hooks
+	{
+		/// Registers a callback that runs after the game's `generate_infusions@Recipe@Recipe` script.
+		/// The wrapper resolves the recipe's `item_id` from Self (null-guarded for the `item_id` member).
+		/// Use `ctx.GetItemId()` to identify the recipe, `ctx.GetInfusions()` to inspect the generated
+		/// infusions array, `ctx.Count()` for its size, and `ctx.Clear()` to suppress all infusions for
+		/// restricted items.
+		/// @param callback A function called with a `MMAPI::Recipe::GenerateInfusionsContext`.
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterGenerateInfusions(Internal::AfterGenerateInfusionsCallback callback)
+		{
+			MMAPI::Status status = MMAPI::Recipe::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
+
+			return MMAPI::Internal::RegisterHook(
+				"Recipe::AfterGenerateInfusions",
+				Internal::after_generate_infusions_callback,
+				callback
+			);
+		}
 	}
 }

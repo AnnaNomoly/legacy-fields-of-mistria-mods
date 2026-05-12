@@ -1,6 +1,10 @@
 #pragma once
 
+#include "Status.hpp"
 #include "Core.hpp"
+#include "Log.hpp"
+#include "Hook.hpp"
+#include "Anchor.hpp"
 #include "Animal.hpp"
 #include "Bark.hpp"
 #include "Bug.hpp"
@@ -8,6 +12,7 @@
 #include "Config.hpp"
 #include "Cosmetic.hpp"
 #include "Damage.hpp"
+#include "Display.hpp"
 #include "Dungeon.hpp"
 #include "Engine.hpp"
 #include "Equipment.hpp"
@@ -33,5 +38,7 @@
 #include "StatusEffect.hpp"
 #include "T2.hpp"
 #include "Text.hpp"
+#include "ToolbarMenu.hpp"
 #include "Tutorial.hpp"
+#include "VitalsMenu.hpp"
 #include "Weather.hpp"

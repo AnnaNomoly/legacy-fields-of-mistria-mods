@@ -1,14 +1,20 @@
 #pragma once
 
 #include "Core.hpp"
-#include "Game.hpp"
+#include "Engine.hpp"
+#include "Hook.hpp"
 #include "Instance.hpp"
+#include "Log.hpp"
+#include "Status.hpp"
+
+#include <string>
+#include <unordered_map>
 
 #include "YYToolkit/YYTK_Shared.hpp"
 
 namespace MMAPI::Location
 {
-	/// Source: locations.json.__location_id__
+	/// Source: globalInstance.__location_id__
 	enum class Ids : int
 	{
 		AbandonedMines          = 0,
@@ -91,16 +97,100 @@ namespace MMAPI::Location
 		WesternRuins            = 77
 	};
 
+	/// Total number of enumerators in Ids. Iterating [0, IdCount) covers every Ids value.
+	inline constexpr int IdCount = 78;
+
+	/// Invokes fn with every Ids value, in ascending order.
+	template <typename Fn>
+	inline void ForEachId(Fn fn)
+	{
+		for (int i = 0; i < IdCount; ++i)
+			fn(static_cast<Ids>(i));
+	}
+
+	struct AfterGoToRoomContext
+	{
+		std::string m_room_name;
+
+		std::string_view GetRoomName() const { return m_room_name; }
+	};
+
+	struct BeforeGoToRoomContext
+	{
+		YYTK::RValue*        m_arg0                          = nullptr;
+		bool                 m_original_destination_resolved = false;
+		MMAPI::Location::Ids m_original_destination          = static_cast<MMAPI::Location::Ids>(0);
+
+		/// Replaces the target room with the GM room identified by the given name
+		/// (e.g. "rm_mines_tide_ritual_chamber"). Internally resolves via `asset_get_index`,
+		/// validates the result is a room asset (`asset_get_type` == `asset_room`, 3), then writes
+		/// Arguments[0]. No-op when the name doesn't resolve to a valid room asset.
+		/// @return True if the room asset was resolved and the target was updated; false otherwise.
+		bool SetTargetRoom(const std::string& gm_room_name);
+
+		/// Returns the destination location the game's go_to_room script was originally called with,
+		/// snapshotted at hook entry. Subsequent SetTargetRoom mutations from this callback don't
+		/// affect this value.
+		/// @param destination Receives the resolved location.
+		/// @return True if Arguments[0] was a room asset that mapped to a known location at hook
+		///         entry; false for procedural dungeon rooms (pre-first-sight), unrecognized rooms,
+		///         or non-room values.
+		bool TryGetOriginalDestination(MMAPI::Location::Ids& destination) const
+		{
+			if (!m_original_destination_resolved)
+				return false;
+			destination = m_original_destination;
+			return true;
+		}
+	};
+
 	namespace Internal
 	{
-		inline constexpr const char* GML_SCRIPT_LOCATION_ID_TO_GM_ROOM = "gml_Script_location_id_to_gm_room";
-		inline constexpr const char* GML_SCRIPT_TELEPORT_ARI_TO_ROOM = "gml_Script_ari_teleport_to_room";
+		inline bool enabled = false;
+
+		inline constexpr const char* GML_SCRIPT_LOCATION_ID_TO_GM_ROOM    = "gml_Script_location_id_to_gm_room";
+		inline constexpr const char* GML_SCRIPT_GO_TO_ROOM                = "gml_Script_goto_gm_room";
+		inline constexpr const char* GML_SCRIPT_TELEPORT_ARI_TO_ROOM      = "gml_Script_ari_teleport_to_room";
+		inline constexpr const char* GML_SCRIPT_TRY_LOCATION_ID_TO_STRING = "gml_Script_try_location_id_to_string";
+
+		inline constexpr const char* INTERNAL_NAME_DUNGEON = "dungeon";
+		inline constexpr const char* GM_ROOM_PREFIX_MINES  = "rm_mines";
+
+		// Pre-built lookup maps; populated by BuildMaps() via the setup_main_screen pub/sub.
+		inline std::unordered_map<int, std::string>         location_id_to_internal_name_map;
+		inline std::unordered_map<std::string, int>         location_internal_name_to_id_map;
+		inline std::unordered_map<std::string, int>         gm_room_name_to_location_id_map;
+		inline std::unordered_map<int, std::string>         location_id_to_gm_room_name_map;
+
+		// Current GM room — updated from the goto_gm_room hook's Result.gm_room.
+		// The game defers `room` changes to end-of-step, so this is the only reliable
+		// signal of where the player will be on the next frame.
+		inline std::string current_gm_room_name;
+
+		using AfterGoToRoomCallback  = void(*)(MMAPI::Location::AfterGoToRoomContext&);
+		using BeforeGoToRoomCallback = void(*)(MMAPI::Location::BeforeGoToRoomContext&);
+
+		inline AfterGoToRoomCallback  after_go_to_room_callback  = nullptr;
+		inline BeforeGoToRoomCallback before_go_to_room_callback = nullptr;
+
+		// Internal pub/sub list of handlers invoked from the goto_gm_room hook after the original runs,
+		// before the public AfterGoToRoom callback. Used by modules that need to react to room transitions
+		// (e.g. Dungeon's floor-number tracking) without occupying the single public hook slot.
+		// Handlers must be set before the room transition's end-of-step deferral so subsequent on_room_start
+		// hooks see consistent state.
+		using OnGoToRoomHandler = void(*)(const std::string& room_name);
+		inline std::vector<OnGoToRoomHandler> on_go_to_room_internal_handlers;
+
+		inline void RegisterOnGoToRoomHandler(OnGoToRoomHandler handler)
+		{
+			for (auto existing : on_go_to_room_internal_handlers)
+				if (existing == handler)
+					return;
+			on_go_to_room_internal_handlers.push_back(handler);
+		}
 
 		inline YYTK::RValue GetLocationData(int location_id)
 		{
-			if (!MMAPI::Internal::global_instance)
-				return {};
-
 			YYTK::RValue locations = MMAPI::Internal::global_instance->GetMember("__locations");
 			size_t location_count = 0;
 			MMAPI::Internal::module_interface->GetArraySize(locations, location_count);
@@ -116,52 +206,169 @@ namespace MMAPI::Location
 			return *location;
 		}
 
-		inline YYTK::RValue GetRoomName(int location_id)
+		inline std::string LocationIdToGmRoomName(YYTK::CInstance* Self, YYTK::CInstance* Other, int location_id)
 		{
 			YYTK::CScript* gml_script = nullptr;
-			MMAPI::Internal::module_interface->GetNamedRoutinePointer(GML_SCRIPT_LOCATION_ID_TO_GM_ROOM, reinterpret_cast<PVOID*>(&gml_script));
-
-			YYTK::RValue location = location_id;
-			YYTK::RValue result;
-			YYTK::RValue* args[1] = { &location };
-			gml_script->m_Functions->m_ScriptFunction(nullptr, nullptr, result, 1, args);
-
-			if (result.m_Kind == YYTK::VALUE_UNDEFINED || result.m_Kind == YYTK::VALUE_UNSET)
+			MMAPI::Internal::module_interface->GetNamedRoutinePointer(
+				GML_SCRIPT_LOCATION_ID_TO_GM_ROOM,
+				reinterpret_cast<PVOID*>(&gml_script)
+			);
+			if (!gml_script)
 				return {};
 
-			return MMAPI::Internal::module_interface->CallBuiltin("room_get_name", { result });
+			YYTK::RValue result;
+			YYTK::RValue location = location_id;
+			YYTK::RValue* location_ptr = &location;
+			gml_script->m_Functions->m_ScriptFunction(Self, Other, result, 1, { &location_ptr });
+
+			YYTK::RValue room_name = MMAPI::Internal::module_interface->CallBuiltin("room_get_name", { result });
+			if (room_name.m_Kind == YYTK::VALUE_UNDEFINED || room_name.m_Kind == YYTK::VALUE_UNSET)
+				return {};
+
+			return room_name.ToString();
 		}
 
-		inline YYTK::RValue GetLocationIdForCurrentRoom()
+		// Pre-computes the location ↔ GM room lookup maps.
+		// Called from MMAPI's setup_main_screen pub/sub when valid Self/Other are available.
+		inline void BuildMaps(YYTK::CInstance* Self, YYTK::CInstance* Other)
 		{
-			std::string current_room_name = MMAPI::Game::GetCurrentRoomName();
-			if (current_room_name.empty() || !MMAPI::Internal::global_instance)
-				return {};
+			location_id_to_internal_name_map.clear();
+			location_internal_name_to_id_map.clear();
+			gm_room_name_to_location_id_map.clear();
+			location_id_to_gm_room_name_map.clear();
 
 			YYTK::RValue location_ids = MMAPI::Internal::global_instance->GetMember("__location_id__");
-			size_t location_count = 0;
-			MMAPI::Internal::module_interface->GetArraySize(location_ids, location_count);
+			size_t array_length = 0;
+			MMAPI::Internal::module_interface->GetArraySize(location_ids, array_length);
 
-			for (size_t i = 0; i < location_count; i++)
+			for (size_t i = 0; i < array_length; i++)
 			{
-				YYTK::RValue* location_internal_name = nullptr;
-				MMAPI::Internal::module_interface->GetArrayEntry(location_ids, i, location_internal_name);
-				if (!location_internal_name)
+				YYTK::RValue* element = nullptr;
+				MMAPI::Internal::module_interface->GetArrayEntry(location_ids, i, element);
+				if (!element)
 					continue;
 
-				YYTK::RValue room_name = GetRoomName(static_cast<int>(i));
-				if (room_name.m_Kind == YYTK::VALUE_UNDEFINED || room_name.m_Kind == YYTK::VALUE_UNSET)
-					continue;
-
-				if (room_name.ToString() == current_room_name)
-					return static_cast<int>(i);
+				std::string internal_name = element->ToString();
+				int id = static_cast<int>(i);
+				location_id_to_internal_name_map[id]            = internal_name;
+				location_internal_name_to_id_map[internal_name] = id;
 			}
 
-			if (current_room_name.contains("rm_mines"))
-				return static_cast<int>(MMAPI::Location::Ids::Dungeon);
+			for (const auto& [id, internal_name] : location_id_to_internal_name_map)
+			{
+				// DUNGEON is a procedural location — calling location_id_to_gm_room on it crashes the game.
+				if (internal_name == INTERNAL_NAME_DUNGEON)
+					continue;
 
-			return {};
+				std::string gm_room_name = LocationIdToGmRoomName(Self, Other, id);
+				if (gm_room_name.empty())
+					continue;
+
+				gm_room_name_to_location_id_map[gm_room_name] = id;
+				location_id_to_gm_room_name_map[id]           = gm_room_name;
+			}
 		}
+
+		inline YYTK::RValue& GmlScriptGoToRoomCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			if (before_go_to_room_callback && Arguments && ArgumentCount >= 1 && Arguments[0])
+			{
+				MMAPI::Location::BeforeGoToRoomContext context{ Arguments[0] };
+
+				// Snapshot the original destination as a Location enum at hook entry, so subsequent
+				// SetTargetRoom mutations don't shift TryGetOriginalDestination's answer.
+				YYTK::RValue asset_type = MMAPI::Internal::module_interface->CallBuiltin(
+					"asset_get_type", { *Arguments[0] }
+				);
+				constexpr int64_t asset_room = 3;
+				if (asset_type.ToInt64() == asset_room)
+				{
+					YYTK::RValue room_name_rv = MMAPI::Internal::module_interface->CallBuiltin(
+						"room_get_name", { *Arguments[0] }
+					);
+					if (room_name_rv.m_Kind == YYTK::VALUE_STRING)
+					{
+						auto it = gm_room_name_to_location_id_map.find(room_name_rv.ToString());
+						if (it != gm_room_name_to_location_id_map.end())
+						{
+							context.m_original_destination_resolved = true;
+							context.m_original_destination          = static_cast<MMAPI::Location::Ids>(it->second);
+						}
+					}
+				}
+
+				before_go_to_room_callback(context);
+			}
+
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_GO_TO_ROOM)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			YYTK::RValue gm_room = Result.GetMember("gm_room");
+			YYTK::RValue room_name_rv = MMAPI::Internal::module_interface->CallBuiltin("room_get_name", { gm_room });
+
+			std::string room_name;
+			if (room_name_rv.m_Kind != YYTK::VALUE_UNDEFINED && room_name_rv.m_Kind != YYTK::VALUE_UNSET)
+				room_name = room_name_rv.ToString();
+
+			current_gm_room_name = room_name;
+
+			// Procedurally-generated dungeon rooms aren't enumerated at startup, so map them to DUNGEON on first sight.
+			if (!room_name.empty()
+				&& !gm_room_name_to_location_id_map.contains(room_name)
+				&& room_name.find(GM_ROOM_PREFIX_MINES) != std::string::npos
+				&& location_internal_name_to_id_map.contains(INTERNAL_NAME_DUNGEON))
+			{
+				gm_room_name_to_location_id_map[room_name] = location_internal_name_to_id_map[INTERNAL_NAME_DUNGEON];
+			}
+
+			for (auto handler : on_go_to_room_internal_handlers)
+				handler(room_name);
+
+			if (after_go_to_room_callback)
+			{
+				MMAPI::Location::AfterGoToRoomContext context{ room_name };
+				after_go_to_room_callback(context);
+			}
+
+			return Result;
+		}
+	}
+
+	/// Activates Location utility functions that track the current location.
+	/// Installs an internal handler that builds GM-room ↔ location lookup maps at title-screen setup,
+	/// and a hook on `goto_gm_room` that tracks the player's current GM room. `TryGetCurrentLocation`
+	/// reads from those structures.
+	/// @return Status::Success if the hook is installed (or already was); otherwise a failure status.
+	inline MMAPI::Status Enable()
+	{
+		if (Internal::enabled)
+			return MMAPI::Status::Success;
+
+		MMAPI::Log::Debug("MMAPI::Location::Enable() called");
+
+		MMAPI::Status status = MMAPI::Instance::Enable();
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		MMAPI::Internal::RegisterOnSetupMainScreenHandler(Internal::BuildMaps);
+
+		status = MMAPI::Internal::InstallScriptHooks({
+			{ MMAPI::Internal::GML_SCRIPT_SETUP_MAIN_SCREEN, reinterpret_cast<PVOID>(MMAPI::Internal::GmlScriptBeforeSetupMainScreenCallback) },
+			{ Internal::GML_SCRIPT_GO_TO_ROOM,               reinterpret_cast<PVOID>(Internal::GmlScriptGoToRoomCallback) },
+		});
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		Internal::enabled = true;
+		return MMAPI::Status::Success;
 	}
 
 	/// Gets a location's internal name.
@@ -169,9 +376,6 @@ namespace MMAPI::Location
 	/// @return The location internal name as an RValue.
 	inline YYTK::RValue GetInternalName(MMAPI::Location::Ids location)
 	{
-		if (!MMAPI::Internal::global_instance)
-			return {};
-
 		YYTK::RValue location_ids = MMAPI::Internal::global_instance->GetMember("__location_id__");
 		size_t location_count = 0;
 		MMAPI::Internal::module_interface->GetArraySize(location_ids, location_count);
@@ -188,21 +392,48 @@ namespace MMAPI::Location
 		return *internal_name;
 	}
 
-	/// Gets the current location by matching the current GM room name against the game's location-to-room conversion.
+	/// Resolves a Location::Ids to its game-internal name string by wrapping the game's
+	/// `try_location_id_to_string` script. Uses nullptr Self/Other (no calling context required), so
+	/// this can be called any time after MMAPI::Initialize without requiring Enable().
+	/// @param location The location to resolve.
+	/// @return The internal location name (e.g. "town", "bathhouse"), or an empty string if the script
+	///         returned a non-string result (invalid ID or unresolved location).
+	inline std::string LocationIdToString(MMAPI::Location::Ids location)
+	{
+		YYTK::CScript* gml_script = nullptr;
+		MMAPI::Internal::module_interface->GetNamedRoutinePointer(
+			Internal::GML_SCRIPT_TRY_LOCATION_ID_TO_STRING,
+			reinterpret_cast<PVOID*>(&gml_script)
+		);
+		if (!gml_script)
+			return {};
+
+		YYTK::RValue location_id = static_cast<int>(location);
+		YYTK::RValue* location_ptr = &location_id;
+		YYTK::RValue result;
+		gml_script->m_Functions->m_ScriptFunction(nullptr, nullptr, result, 1, { &location_ptr });
+
+		if (result.m_Kind != YYTK::VALUE_STRING)
+			return {};
+		return result.ToString();
+	}
+
+	/// Gets the current location, resolved from the player's current GM room via pre-computed lookup maps.
+	/// @attention Requires MMAPI::Location::Enable() to have been called.
 	/// @param location The current location.
-	/// @return True if the current location was resolved, false if the current room cannot be matched to a location.
+	/// @return True if the current GM room maps to a known location; false if no GM-room transition has been observed yet.
 	inline bool TryGetCurrentLocation(MMAPI::Location::Ids& location)
 	{
-		YYTK::RValue location_id = Internal::GetLocationIdForCurrentRoom();
-		if (location_id.m_Kind == YYTK::VALUE_UNDEFINED || location_id.m_Kind == YYTK::VALUE_UNSET)
+		MMAPI_REQUIRE_ENABLED("Location", false);
+
+		if (Internal::current_gm_room_name.empty())
 			return false;
 
-		int current_location_id = static_cast<int>(location_id.ToInt64());
-		if (current_location_id < static_cast<int>(MMAPI::Location::Ids::AbandonedMines) ||
-		    current_location_id > static_cast<int>(MMAPI::Location::Ids::WesternRuins))
+		auto it = Internal::gm_room_name_to_location_id_map.find(Internal::current_gm_room_name);
+		if (it == Internal::gm_room_name_to_location_id_map.end())
 			return false;
 
-		location = static_cast<MMAPI::Location::Ids>(current_location_id);
+		location = static_cast<MMAPI::Location::Ids>(it->second);
 		return true;
 	}
 
@@ -260,12 +491,14 @@ namespace MMAPI::Location
 	}
 
 	/// Teleports Ari to the given location at the specified coordinates.
-	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
+	/// @attention Requires MMAPI::Location::Enable() to have been called.
 	/// @param location The target location.
 	/// @param x The X coordinate within the target location to place Ari.
 	/// @param y The Y coordinate within the target location to place Ari.
 	inline void TeleportAri(MMAPI::Location::Ids location, int x, int y)
 	{
+		MMAPI_REQUIRE_ENABLED_VOID("Location");
+
 		YYTK::CInstance* Self  = nullptr;
 		YYTK::CInstance* Other = nullptr;
 		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
@@ -280,5 +513,70 @@ namespace MMAPI::Location
 		YYTK::RValue result;
 		YYTK::RValue* args[3] = { &location_id, &rx, &ry };
 		gml_script->m_Functions->m_ScriptFunction(Self, Other, result, 3, args);
+	}
+
+	inline bool BeforeGoToRoomContext::SetTargetRoom(const std::string& gm_room_name)
+	{
+		if (!m_arg0)
+			return false;
+
+		YYTK::RValue asset_index = MMAPI::Internal::module_interface->CallBuiltin(
+			"asset_get_index", { gm_room_name.c_str() }
+		);
+
+		// asset_get_index returns -1 for unknown asset names.
+		if (!MMAPI::Engine::IsNumeric(asset_index) || asset_index.ToInt64() < 0)
+			return false;
+
+		// Verify the resolved asset is a room (asset_get_type == asset_room, 3).
+		YYTK::RValue asset_type = MMAPI::Internal::module_interface->CallBuiltin(
+			"asset_get_type", { asset_index }
+		);
+		constexpr int64_t asset_room = 3;
+		if (asset_type.ToInt64() != asset_room)
+			return false;
+
+		*m_arg0 = asset_index;
+		return true;
+	}
+
+	namespace Hooks
+	{
+		/// Registers a callback that runs before the game transitions to a new GM room.
+		/// Use `ctx.SetTargetRoom("rm_...")` to redirect the transition (the wrapper validates that
+		/// the named room exists and is a room asset before writing Arguments[0]), or
+		/// `ctx.TryGetOriginalDestination(out)` to read the game's originally-intended destination
+		/// as a `Location::Ids` enum (snapshotted at hook entry so SetTargetRoom doesn't shift it).
+		/// @param callback A function called with the mutable BeforeGoToRoom context before the game processes the transition.
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforeGoToRoom(Internal::BeforeGoToRoomCallback callback)
+		{
+			MMAPI::Status status = MMAPI::Location::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
+
+			return MMAPI::Internal::RegisterHook(
+				"Location::BeforeGoToRoom",
+				Internal::before_go_to_room_callback,
+				callback
+			);
+		}
+
+		/// Registers a callback that runs after the game transitions to a new GM room.
+		/// Use ctx.GetRoomName() to read the name of the room that was entered.
+		/// @param callback A function called with the room transition context after the game processes it.
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterGoToRoom(Internal::AfterGoToRoomCallback callback)
+		{
+			MMAPI::Status status = MMAPI::Location::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
+
+			return MMAPI::Internal::RegisterHook(
+				"Location::AfterGoToRoom",
+				Internal::after_go_to_room_callback,
+				callback
+			);
+		}
 	}
 }

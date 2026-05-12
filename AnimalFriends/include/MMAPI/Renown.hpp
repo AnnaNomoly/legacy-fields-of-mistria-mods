@@ -7,12 +7,9 @@
 namespace MMAPI::Renown
 {
 	/// Gets Ari's current renown points.
-	/// @return Ari's current renown points as an RValue, or undefined if MMAPI has not been initialized.
+	/// @return Ari's current renown points as an RValue.
 	inline YYTK::RValue GetPoints()
 	{
-		if (!MMAPI::Internal::global_instance)
-			return {};
-
 		YYTK::RValue ari = *MMAPI::Internal::global_instance->GetRefMember("__ari");
 		return ari.GetMember("renown");
 	}

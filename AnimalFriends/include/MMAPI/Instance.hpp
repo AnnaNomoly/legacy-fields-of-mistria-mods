@@ -1,6 +1,9 @@
 #pragma once
 
 #include "Core.hpp"
+#include "Hook.hpp"
+#include "Log.hpp"
+#include "Status.hpp"
 
 #include <map>
 #include <string>
@@ -83,9 +86,30 @@ namespace MMAPI::Instance
 		       std::string_view(instance->m_Object->m_Name) == object_name;
 	}
 
+	struct AttemptInteractContext
+	{
+		YYTK::CInstance* m_self = nullptr;
+
+		/// The interactable instance currently being interacted with (the script's Self at hook time).
+		YYTK::CInstance* GetSelf() const { return m_self; }
+
+		/// Returns the GameMaker object name of the interactable (e.g. "obj_dragonshrine",
+		/// "obj_dungeon_elevator"), or an empty view if the instance, its object, or its name pointer
+		/// is unavailable. The same guards MMAPI::Instance::IsNamed applies.
+		std::string_view GetObjectName() const
+		{
+			if (!m_self || !m_self->m_Object || !m_self->m_Object->m_Name)
+				return {};
+			return m_self->m_Object->m_Name;
+		}
+	};
+
 	namespace Internal
 	{
-		inline constexpr const char* INSTANCE_OBJ_ARI = "obj_ari";
+		inline bool enabled = false;
+
+		inline constexpr const char* INSTANCE_OBJ_ARI               = "obj_ari";
+		inline constexpr const char* GML_SCRIPT_ATTEMPT_INTERACT    = "gml_Script_attempt_interact@gml_Object_par_interactable_Create_0";
 
 		inline constexpr const char* ToObjectName(MMAPI::Instance::Objects obj)
 		{
@@ -147,17 +171,13 @@ namespace MMAPI::Instance
 
 		inline bool IsGamePaused()
 		{
-			if (!MMAPI::Internal::global_instance)
-				return false;
 			return MMAPI::Internal::global_instance->GetRefMember("__pause_status")->m_i64 > 0;
 		}
 
 		/// Resolves Ari's GML calling context: Self = the global __ari struct, Other = the live obj_ari instance.
-		/// @return True if both pointers were resolved, false if Instance::Enable() hasn't captured a tick yet or global_instance is null.
+		/// @return True if both pointers were resolved, false if Instance::Enable() hasn't captured a tick yet.
 		inline bool TryGetAriContext(YYTK::CInstance*& Self, YYTK::CInstance*& Other)
 		{
-			if (!MMAPI::Internal::global_instance)
-				return false;
 			const auto& refs = MMAPI::Internal::instance_reference_map;
 			if (!refs.contains(INSTANCE_OBJ_ARI))
 				return false;
@@ -188,60 +208,127 @@ namespace MMAPI::Instance
 				}
 			}
 		}
+
+		using BeforeAttemptInteractCallback = void(*)(MMAPI::Instance::AttemptInteractContext&);
+		inline BeforeAttemptInteractCallback before_attempt_interact_callback = nullptr;
+
+		inline YYTK::RValue& GmlScriptBeforeAttemptInteractCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			if (before_attempt_interact_callback)
+			{
+				MMAPI::Instance::AttemptInteractContext context{ Self };
+				before_attempt_interact_callback(context);
+			}
+
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_ATTEMPT_INTERACT)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			return Result;
+		}
 	}
 
-	/// Activates the EVENT_OBJECT_CALL dispatcher used by Instance hooks and other modules' Enable().
-	/// @return AURIE_SUCCESS if the dispatcher is installed (or already was); otherwise the Aurie failure status.
-	inline Aurie::AurieStatus Enable()
+	/// Activates the EVENT_OBJECT_CALL dispatcher used by Instance hooks and other modules' Enable(),
+	/// plus the par_interactable attempt_interact script hook so registered callbacks fire when the
+	/// player attempts to interact with an interactable object.
+	/// @return Status::Success if both are installed (or already were); otherwise a failure status.
+	inline MMAPI::Status Enable()
 	{
-		if (Internal::object_dispatcher_installed)
-			return Aurie::AURIE_SUCCESS;
+		if (Internal::enabled)
+			return MMAPI::Status::Success;
 
-		if (!MMAPI::Internal::self_module || !MMAPI::Internal::module_interface)
-			return Aurie::AURIE_INVALID_PARAMETER;
+		MMAPI::Log::Debug("MMAPI::Instance::Enable() called");
 
-		Aurie::AurieStatus status = MMAPI::Internal::module_interface->CreateCallback(
-			MMAPI::Internal::self_module,
-			YYTK::EVENT_OBJECT_CALL,
-			Internal::ObjectCallbackDispatcher,
-			0
-		);
+		if (!Internal::object_dispatcher_installed)
+		{
+			Aurie::AurieStatus status = MMAPI::Internal::module_interface->CreateCallback(
+				MMAPI::Internal::self_module,
+				YYTK::EVENT_OBJECT_CALL,
+				Internal::ObjectCallbackDispatcher,
+				0
+			);
 
-		if (Aurie::AurieSuccess(status))
+			if (!Aurie::AurieSuccess(status))
+				return MMAPI::Status::InstallFailed;
+
 			Internal::object_dispatcher_installed = true;
+		}
 
-		return status;
+		MMAPI::Status status = MMAPI::Internal::InstallScriptHook(
+			Internal::GML_SCRIPT_ATTEMPT_INTERACT,
+			reinterpret_cast<PVOID>(Internal::GmlScriptBeforeAttemptInteractCallback)
+		);
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		Internal::enabled = true;
+		return MMAPI::Status::Success;
 	}
 
 	namespace Hooks
 	{
 		/// Registers a callback that runs once per object tick when the GML object name contains the given fragment.
 		/// Skips paused-game ticks automatically.
-		/// @attention Requires MMAPI::Instance::Enable() to have been called.
 		/// @param object_name The GML object name fragment to match (e.g. "obj_farm_bell").
 		/// @param callback A function called with the live instance on each tick.
-		/// @return AURIE_SUCCESS if the callback was registered; AURIE_OBJECT_ALREADY_EXISTS if a callback for this name is already registered; otherwise AURIE_INVALID_PARAMETER.
-		inline Aurie::AurieStatus OnObjectCall(const char* object_name, MMAPI::Instance::OnObjectCallCallback callback)
+		/// @return Status::Success if the callback was registered; Status::AlreadyRegistered if a callback for this name is already registered; otherwise Status::InvalidParameter.
+		inline MMAPI::Status OnObjectCall(const char* object_name, MMAPI::Instance::OnObjectCallCallback callback)
 		{
 			if (!callback || !object_name)
-				return Aurie::AURIE_INVALID_PARAMETER;
+			{
+				MMAPI::Log::Warn("RegisterHook(Instance::OnObjectCall): null callback or object_name");
+				return MMAPI::Status::InvalidParameter;
+			}
 
 			if (Internal::object_call_callbacks.contains(object_name))
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
+			{
+				MMAPI::Log::Warn("RegisterHook(Instance::OnObjectCall): already registered for %s", object_name);
+				return MMAPI::Status::AlreadyRegistered;
+			}
+
+			MMAPI::Status status = MMAPI::Instance::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
 
 			Internal::object_call_callbacks[object_name] = callback;
-			return Aurie::AURIE_SUCCESS;
+			MMAPI::Log::Debug("Registered OnObjectCall for: %s", object_name);
+			return MMAPI::Status::Success;
 		}
 
 		/// Registers a callback that runs once per object tick for the given known game object.
 		/// Skips paused-game ticks automatically.
-		/// @attention Requires MMAPI::Instance::Enable() to have been called.
 		/// @param object The well-known game object to subscribe to.
 		/// @param callback A function called with the live instance on each tick.
-		/// @return AURIE_SUCCESS if the callback was registered; AURIE_OBJECT_ALREADY_EXISTS if a callback for this object is already registered; otherwise AURIE_INVALID_PARAMETER.
-		inline Aurie::AurieStatus OnObjectCall(MMAPI::Instance::Objects object, MMAPI::Instance::OnObjectCallCallback callback)
+		/// @return Status::Success if the callback was registered; Status::AlreadyRegistered if a callback for this object is already registered; otherwise Status::InvalidParameter.
+		inline MMAPI::Status OnObjectCall(MMAPI::Instance::Objects object, MMAPI::Instance::OnObjectCallCallback callback)
 		{
 			return OnObjectCall(Internal::ToObjectName(object), callback);
+		}
+
+		/// Registers a callback that runs before the game's `attempt_interact` script (the script
+		/// fired when the player attempts to interact with an instance derived from `par_interactable`).
+		/// Use `ctx.GetSelf()` to read the interactable instance and `ctx.GetObjectName()` to read its
+		/// GameMaker object name (null-guarded — returns an empty view if the instance or object pointer is missing).
+		/// @param callback A function called with a `MMAPI::Instance::AttemptInteractContext`.
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforeAttemptInteract(Internal::BeforeAttemptInteractCallback callback)
+		{
+			MMAPI::Status status = MMAPI::Instance::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
+
+			return MMAPI::Internal::RegisterHook(
+				"Instance::BeforeAttemptInteract",
+				Internal::before_attempt_interact_callback,
+				callback
+			);
 		}
 	}
 }

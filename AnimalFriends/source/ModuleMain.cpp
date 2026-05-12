@@ -230,31 +230,15 @@ void HandleAri(CInstance* self)
 	if (!once_per_day || !(config.auto_pet || config.auto_feed))
 		return;
 
-	RValue all_animals = MMAPI::Animal::GetAllAnimals();
-	if (all_animals.m_Kind != VALUE_OBJECT)
-	{
-		once_per_day = false;
-		return;
-	}
-
-	RValue buffer = *all_animals.GetRefMember("__buffer");
-	if (buffer.m_Kind != VALUE_ARRAY)
-	{
-		once_per_day = false;
-		return;
-	}
-
-	size_t size = 0;
-	g_ModuleInterface->GetArraySize(buffer, size);
-	num_player_animals = static_cast<int>(size);
+	num_player_animals = 0;
 	int ranching_xp_gained = 0;
 
-	for (size_t i = 0; i < size; i++)
+	MMAPI::Animal::ForEachAnimal([&](RValue& animal)
 	{
-		RValue entry = buffer[i];
-		if (config.auto_feed) AutoFeedAnimal(entry, ranching_xp_gained);
-		if (config.auto_pet)  AutoPetAnimal(entry, ranching_xp_gained);
-	}
+		++num_player_animals;
+		if (config.auto_feed) AutoFeedAnimal(animal, ranching_xp_gained);
+		if (config.auto_pet)  AutoPetAnimal(animal, ranching_xp_gained);
+	});
 
 	if (ranching_xp_gained > 0)
 	{
@@ -355,8 +339,9 @@ EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path&
 
 	CInstance* global_instance = nullptr;
 	g_ModuleInterface->GetGlobalInstance(&global_instance);
-	MMAPI::Initialize(g_ModuleInterface, global_instance, g_ArSelfModule);
+	MMAPI::Initialize(g_ModuleInterface, global_instance, g_ArSelfModule, "AnimalFriends", VERSION);
 	MMAPI::Animal::Enable();
+	MMAPI::Skill::Enable();
 	MMAPI::Weather::Enable();
 	MMAPI::Instance::Hooks::OnObjectCall(MMAPI::Instance::Objects::Ari, HandleAri);
 	MMAPI::Instance::Hooks::OnObjectCall(MMAPI::Instance::Objects::FarmBell, HandleFarmBell);

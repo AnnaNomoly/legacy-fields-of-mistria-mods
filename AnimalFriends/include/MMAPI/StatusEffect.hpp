@@ -3,6 +3,9 @@
 #include "Calendar.hpp"
 #include "Core.hpp"
 #include "Engine.hpp"
+#include "Hook.hpp"
+#include "Log.hpp"
+#include "Status.hpp"
 
 #include <string>
 
@@ -34,6 +37,17 @@ namespace MMAPI::StatusEffect
 		SacredLight     = 16
 	};
 
+	/// Total number of enumerators in Ids. Iterating [0, IdCount) covers every Ids value.
+	inline constexpr int IdCount = 17;
+
+	/// Invokes fn with every Ids value, in ascending order.
+	template <typename Fn>
+	inline void ForEachId(Fn fn)
+	{
+		for (int i = 0; i < IdCount; ++i)
+			fn(static_cast<Ids>(i));
+	}
+
 	struct RegisterStatusEffectContext
 	{
 		int    m_status_id = 0;
@@ -49,7 +63,6 @@ namespace MMAPI::StatusEffect
 		int GetFinish() const { return m_finish; }
 		void SetFinish(int finish) { m_finish = finish; }
 		void Cancel() { m_cancelled = true; }
-		bool IsCancelled() const { return m_cancelled; }
 	};
 
 	struct CancelStatusEffectContext
@@ -59,21 +72,51 @@ namespace MMAPI::StatusEffect
 
 		MMAPI::StatusEffect::Ids GetStatusEffect() const { return static_cast<MMAPI::StatusEffect::Ids>(m_status_id); }
 		void Cancel() { m_cancelled = true; }
-		bool IsCancelled() const { return m_cancelled; }
 	};
 
 	namespace Internal
 	{
+		inline bool enabled = false;
+
 		inline constexpr const char* GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE = "gml_Script_update@StatusEffectManager@StatusEffectManager";
 		inline constexpr const char* GML_SCRIPT_CANCEL_STATUS_EFFECT         = "gml_Script_cancel@StatusEffectManager@StatusEffectManager";
 		inline constexpr const char* GML_SCRIPT_REGISTER_STATUS_EFFECT       = "gml_Script_register@StatusEffectManager@StatusEffectManager";
 
+		// Live StatusEffectManager Self/Other, latched per-tick from the update hook.
+		// Used by TryGetStatusEffectManagerContext for callers outside any hook frame.
+		inline YYTK::CInstance* status_effect_manager_self  = nullptr;
+		inline YYTK::CInstance* status_effect_manager_other = nullptr;
+
+		// Cleared from the setup_main_screen pub/sub when the player returns to the title menu.
+		// Registered by StatusEffect::Enable().
+		inline void ClearStatusEffectManagerOnReturnToTitle(YYTK::CInstance* /*Self*/, YYTK::CInstance* /*Other*/)
+		{
+			status_effect_manager_self  = nullptr;
+			status_effect_manager_other = nullptr;
+		}
+
 		inline YYTK::RValue& StatusEffectManagerUpdateContextCallback(IN YYTK::CInstance* Self, IN YYTK::CInstance* Other, OUT YYTK::RValue& Result, IN int ArgumentCount, IN YYTK::RValue** Arguments)
 		{
-			MMAPI::Internal::RegisterScriptContext(GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE, Self, Other);
+			// Refresh the latched pair every tick; the manager is a long-lived singleton but the captured pointer
+			// is invalidated on return-to-title (see ClearStatusEffectManagerOnReturnToTitle).
+			status_effect_manager_self  = Self;
+			status_effect_manager_other = Other;
+
 			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE));
 			original(Self, Other, Result, ArgumentCount, Arguments);
 			return Result;
+		}
+
+		/// Resolves the StatusEffectManager's GML calling context, latched from the most recent update tick.
+		/// Cleared automatically when the game returns to the title menu.
+		/// @return True if a StatusEffectManager tick has been observed this session, false otherwise.
+		inline bool TryGetStatusEffectManagerContext(YYTK::CInstance*& Self, YYTK::CInstance*& Other)
+		{
+			if (!status_effect_manager_self)
+				return false;
+			Self  = status_effect_manager_self;
+			Other = status_effect_manager_other;
+			return true;
 		}
 
 		inline constexpr double FireSwordAmount   = 1.25;
@@ -103,11 +146,10 @@ namespace MMAPI::StatusEffect
 
 		inline void RegisterById(int status_effect_id, YYTK::RValue amount, int start, int finish)
 		{
-			const auto& refs = MMAPI::Internal::script_reference_map;
-			if (!refs.contains(GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE))
+			YYTK::CInstance* Self  = nullptr;
+			YYTK::CInstance* Other = nullptr;
+			if (!TryGetStatusEffectManagerContext(Self, Other))
 				return;
-			YYTK::CInstance* Self  = refs.at(GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE)[0];
-			YYTK::CInstance* Other = refs.at(GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE)[1];
 
 			YYTK::CScript* gml_script = nullptr;
 			MMAPI::Internal::module_interface->GetNamedRoutinePointer(GML_SCRIPT_REGISTER_STATUS_EFFECT, reinterpret_cast<PVOID*>(&gml_script));
@@ -122,11 +164,10 @@ namespace MMAPI::StatusEffect
 
 		inline void CancelById(int status_effect_id)
 		{
-			const auto& refs = MMAPI::Internal::script_reference_map;
-			if (!refs.contains(GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE))
+			YYTK::CInstance* Self  = nullptr;
+			YYTK::CInstance* Other = nullptr;
+			if (!TryGetStatusEffectManagerContext(Self, Other))
 				return;
-			YYTK::CInstance* Self  = refs.at(GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE)[0];
-			YYTK::CInstance* Other = refs.at(GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE)[1];
 
 			YYTK::CScript* gml_script = nullptr;
 			MMAPI::Internal::module_interface->GetNamedRoutinePointer(GML_SCRIPT_CANCEL_STATUS_EFFECT, reinterpret_cast<PVOID*>(&gml_script));
@@ -159,7 +200,7 @@ namespace MMAPI::StatusEffect
 			IN YYTK::RValue** Arguments
 		)
 		{
-			if (Arguments && ArgumentCount >= 4)
+			if (before_register_status_effect_callback && Arguments && ArgumentCount >= 4)
 			{
 				MMAPI::StatusEffect::RegisterStatusEffectContext context{
 					static_cast<int>(Arguments[0]->ToInt64()),
@@ -184,20 +225,6 @@ namespace MMAPI::StatusEffect
 			return Result;
 		}
 
-		inline Aurie::AurieStatus RegisterStatusEffectHook(BeforeRegisterStatusEffectCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_REGISTER_STATUS_EFFECT,
-				reinterpret_cast<PVOID>(GmlScriptRegisterStatusEffectCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			before_register_status_effect_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
-
 		inline YYTK::RValue& GmlScriptCancelStatusEffectCallback(
 			IN YYTK::CInstance* Self,
 			IN YYTK::CInstance* Other,
@@ -206,7 +233,7 @@ namespace MMAPI::StatusEffect
 			IN YYTK::RValue** Arguments
 		)
 		{
-			if (Arguments && ArgumentCount >= 1 && Arguments[0])
+			if (before_cancel_status_effect_callback && Arguments && ArgumentCount >= 1 && Arguments[0])
 			{
 				MMAPI::StatusEffect::CancelStatusEffectContext context{ static_cast<int>(Arguments[0]->ToInt64()) };
 				before_cancel_status_effect_callback(context);
@@ -222,34 +249,36 @@ namespace MMAPI::StatusEffect
 
 			return Result;
 		}
-
-		inline Aurie::AurieStatus RegisterCancelStatusEffectHook(BeforeCancelStatusEffectCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_CANCEL_STATUS_EFFECT,
-				reinterpret_cast<PVOID>(GmlScriptCancelStatusEffectCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			before_cancel_status_effect_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
 	}
 
 	/// Activates StatusEffect utility functions that directly call game scripts.
-	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
-	inline Aurie::AurieStatus Enable()
+	/// Installs the manager update hook so the live StatusEffectManager Self/Other are latched for
+	/// TryGetStatusEffectManagerContext (cleared on return-to-title via the setup_main_screen pub/sub).
+	/// @return Status::Success if the hooks are installed (or already were); otherwise a failure status.
+	inline MMAPI::Status Enable()
 	{
-		Aurie::AurieStatus status = MMAPI::Calendar::Enable();
-		if (!Aurie::AurieSuccess(status))
+		if (Internal::enabled)
+			return MMAPI::Status::Success;
+
+		MMAPI::Log::Debug("MMAPI::StatusEffect::Enable() called");
+
+		MMAPI::Status status = MMAPI::Calendar::Enable();
+		if (!MMAPI::IsSuccess(status))
 			return status;
 
-		return MMAPI::Internal::InstallScriptHook(
-			Internal::GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE,
-			reinterpret_cast<PVOID>(Internal::StatusEffectManagerUpdateContextCallback)
-		);
+		MMAPI::Internal::RegisterOnSetupMainScreenHandler(Internal::ClearStatusEffectManagerOnReturnToTitle);
+
+		status = MMAPI::Internal::InstallScriptHooks({
+			{ MMAPI::Internal::GML_SCRIPT_SETUP_MAIN_SCREEN,        reinterpret_cast<PVOID>(MMAPI::Internal::GmlScriptBeforeSetupMainScreenCallback) },
+			{ Internal::GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE,    reinterpret_cast<PVOID>(Internal::StatusEffectManagerUpdateContextCallback) },
+			{ Internal::GML_SCRIPT_REGISTER_STATUS_EFFECT,          reinterpret_cast<PVOID>(Internal::GmlScriptRegisterStatusEffectCallback) },
+			{ Internal::GML_SCRIPT_CANCEL_STATUS_EFFECT,            reinterpret_cast<PVOID>(Internal::GmlScriptCancelStatusEffectCallback) },
+		});
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		Internal::enabled = true;
+		return MMAPI::Status::Success;
 	}
 
 	/// Registers a persistent status effect on Ari.
@@ -258,7 +287,11 @@ namespace MMAPI::StatusEffect
 	/// @return True if the effect was registered, false if the required context is unavailable.
 	inline bool RegisterPersistent(MMAPI::StatusEffect::Ids status_effect)
 	{
-		if (!MMAPI::Internal::script_reference_map.contains(Internal::GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE))
+		MMAPI_REQUIRE_ENABLED("StatusEffect", false);
+
+		YYTK::CInstance* Self  = nullptr;
+		YYTK::CInstance* Other = nullptr;
+		if (!Internal::TryGetStatusEffectManagerContext(Self, Other))
 			return false;
 
 		Internal::RegisterById(static_cast<int>(status_effect), Internal::GetDefaultAmount(status_effect), 1, MMAPI::StatusEffect::InfiniteDuration);
@@ -272,7 +305,11 @@ namespace MMAPI::StatusEffect
 	/// @return True if the effect was registered, false if the required context is unavailable.
 	inline bool RegisterForDuration(MMAPI::StatusEffect::Ids status_effect, int duration)
 	{
-		if (!MMAPI::Internal::script_reference_map.contains(Internal::GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE))
+		MMAPI_REQUIRE_ENABLED("StatusEffect", false);
+
+		YYTK::CInstance* Self  = nullptr;
+		YYTK::CInstance* Other = nullptr;
+		if (!Internal::TryGetStatusEffectManagerContext(Self, Other))
 			return false;
 
 		YYTK::RValue unified_time = MMAPI::Calendar::GetUnifiedTime();
@@ -289,6 +326,7 @@ namespace MMAPI::StatusEffect
 	/// @param status_effect The status effect to cancel.
 	inline void Cancel(MMAPI::StatusEffect::Ids status_effect)
 	{
+		MMAPI_REQUIRE_ENABLED_VOID("StatusEffect");
 		Internal::CancelById(static_cast<int>(status_effect));
 	}
 
@@ -320,31 +358,35 @@ namespace MMAPI::StatusEffect
 		/// Registers a callback that runs before the game registers a status effect on Ari.
 		/// Use ctx.SetAmount() to modify the effect's magnitude, ctx.SetFinish() to adjust its end time, or ctx.Cancel() to prevent registration entirely.
 		/// @param callback A function called with a mutable register context before the game processes it.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus BeforeRegisterStatusEffect(Internal::BeforeRegisterStatusEffectCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforeRegisterStatusEffect(Internal::BeforeRegisterStatusEffectCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
+			MMAPI::Status status = MMAPI::StatusEffect::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
 
-			if (Internal::before_register_status_effect_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			return Internal::RegisterStatusEffectHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"StatusEffect::BeforeRegisterStatusEffect",
+				Internal::before_register_status_effect_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that runs before the game cancels a status effect on Ari.
 		/// Call ctx.Cancel() to prevent the status effect from being removed.
 		/// @param callback A function called with a mutable cancel context before the game processes it.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus BeforeCancelStatusEffect(Internal::BeforeCancelStatusEffectCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforeCancelStatusEffect(Internal::BeforeCancelStatusEffectCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
+			MMAPI::Status status = MMAPI::StatusEffect::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
 
-			if (Internal::before_cancel_status_effect_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			return Internal::RegisterCancelStatusEffectHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"StatusEffect::BeforeCancelStatusEffect",
+				Internal::before_cancel_status_effect_callback,
+				callback
+			);
 		}
 	}
 }

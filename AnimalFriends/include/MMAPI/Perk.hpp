@@ -2,6 +2,8 @@
 
 #include "Core.hpp"
 #include "Instance.hpp"
+#include "Log.hpp"
+#include "Status.hpp"
 
 #include "YYToolkit/YYTK_Shared.hpp"
 
@@ -175,16 +177,49 @@ namespace MMAPI::Perk
 		WorkingWithTheGrainTwo   = 162
 	};
 
+	/// Total number of enumerators in Ids. Iterating [0, IdCount) covers every Ids value.
+	inline constexpr int IdCount = 163;
+
+	/// Invokes fn with every Ids value, in ascending order.
+	template <typename Fn>
+	inline void ForEachId(Fn fn)
+	{
+		for (int i = 0; i < IdCount; ++i)
+			fn(static_cast<Ids>(i));
+	}
+
 	namespace Internal
 	{
+		inline bool enabled = false;
+
 		inline constexpr const char* GML_SCRIPT_PERK_ACTIVE = "gml_Script_perk_active@Ari@Ari";
 	}
 
+	/// Activates Perk utility functions. Cascades to MMAPI::Instance::Enable so IsActive can resolve Ari's
+	/// calling context internally.
+	/// @return Status::Success if the hooks are installed (or already were); otherwise a failure status.
+	inline MMAPI::Status Enable()
+	{
+		if (Internal::enabled)
+			return MMAPI::Status::Success;
+
+		MMAPI::Log::Debug("MMAPI::Perk::Enable() called");
+
+		MMAPI::Status status = MMAPI::Instance::Enable();
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		Internal::enabled = true;
+		return MMAPI::Status::Success;
+	}
+
 	/// Returns true if Ari has the given perk active.
-	/// @attention Requires MMAPI::Instance::Internal::INSTANCE_OBJ_ARI to be registered via RegisterInstanceContext.
+	/// @attention Requires MMAPI::Perk::Enable() to have been called.
 	/// @param perk The perk to check.
 	inline bool IsActive(MMAPI::Perk::Ids perk)
 	{
+		MMAPI_REQUIRE_ENABLED("Perk", false);
+
 		YYTK::CInstance* Self  = nullptr;
 		YYTK::CInstance* Other = nullptr;
 		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
