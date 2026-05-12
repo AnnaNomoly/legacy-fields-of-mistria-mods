@@ -1,6 +1,9 @@
 #pragma once
 
 #include "Core.hpp"
+#include "Hook.hpp"
+#include "Log.hpp"
+#include "Status.hpp"
 
 #include <string>
 
@@ -10,6 +13,8 @@ namespace MMAPI::T2
 {
 	namespace Internal
 	{
+		inline bool enabled = false;
+
 		inline constexpr const char* GML_SCRIPT_T2_READ = "gml_Script_read@T2r@T2r";
 
 		// Live T2r Self/Other, latched from the read hook.
@@ -51,15 +56,25 @@ namespace MMAPI::T2
 
 	/// Activates T2 utility functions. Installs the read hook so the live T2r Self/Other are latched for
 	/// TryGetT2Context (cleared on return-to-title via the setup_main_screen pub/sub).
-	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
-	inline Aurie::AurieStatus Enable()
+	/// @return Status::Success if the hooks are installed (or already were); otherwise a failure status.
+	inline MMAPI::Status Enable()
 	{
+		if (Internal::enabled)
+			return MMAPI::Status::Success;
+
+		MMAPI::Log::Debug("MMAPI::T2::Enable() called");
+
 		MMAPI::Internal::RegisterOnSetupMainScreenHandler(Internal::ClearT2OnReturnToTitle);
 
-		return MMAPI::Internal::InstallScriptHooks({
+		MMAPI::Status status = MMAPI::Internal::InstallScriptHooks({
 			{ MMAPI::Internal::GML_SCRIPT_SETUP_MAIN_SCREEN, reinterpret_cast<PVOID>(MMAPI::Internal::GmlScriptBeforeSetupMainScreenCallback) },
 			{ Internal::GML_SCRIPT_T2_READ,                  reinterpret_cast<PVOID>(Internal::T2ReadContextCallback) },
 		});
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		Internal::enabled = true;
+		return MMAPI::Status::Success;
 	}
 
 	/// Reads a value from the game's T2 database by key.
@@ -68,6 +83,8 @@ namespace MMAPI::T2
 	/// @return The T2 value as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue Read(const std::string& key)
 	{
+		MMAPI_REQUIRE_ENABLED("T2", {});
+
 		YYTK::CInstance* Self  = nullptr;
 		YYTK::CInstance* Other = nullptr;
 		if (!Internal::TryGetT2Context(Self, Other))

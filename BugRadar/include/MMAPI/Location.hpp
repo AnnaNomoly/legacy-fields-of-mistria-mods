@@ -2,7 +2,10 @@
 
 #include "Core.hpp"
 #include "Engine.hpp"
+#include "Hook.hpp"
 #include "Instance.hpp"
+#include "Log.hpp"
+#include "Status.hpp"
 
 #include <string>
 #include <unordered_map>
@@ -120,7 +123,7 @@ namespace MMAPI::Location
 
 		/// Replaces the target room with the GM room identified by the given name
 		/// (e.g. "rm_mines_tide_ritual_chamber"). Internally resolves via `asset_get_index`,
-		/// validates the result is a room asset (`asset_get_type` == `asset_room`, 3), then writes
+		/// validates the result is a room asset (`asset_get_type` == `MMAPI::Engine::AssetType::Room`), then writes
 		/// Arguments[0]. No-op when the name doesn't resolve to a valid room asset.
 		/// @return True if the room asset was resolved and the target was updated; false otherwise.
 		bool SetTargetRoom(const std::string& gm_room_name);
@@ -143,6 +146,8 @@ namespace MMAPI::Location
 
 	namespace Internal
 	{
+		inline bool enabled = false;
+
 		inline constexpr const char* GML_SCRIPT_LOCATION_ID_TO_GM_ROOM    = "gml_Script_location_id_to_gm_room";
 		inline constexpr const char* GML_SCRIPT_GO_TO_ROOM                = "gml_Script_goto_gm_room";
 		inline constexpr const char* GML_SCRIPT_TELEPORT_ARI_TO_ROOM      = "gml_Script_ari_teleport_to_room";
@@ -281,8 +286,7 @@ namespace MMAPI::Location
 				YYTK::RValue asset_type = MMAPI::Internal::module_interface->CallBuiltin(
 					"asset_get_type", { *Arguments[0] }
 				);
-				constexpr int64_t asset_room = 3;
-				if (asset_type.ToInt64() == asset_room)
+				if (asset_type.ToInt64() == static_cast<int64_t>(MMAPI::Engine::AssetType::Room))
 				{
 					YYTK::RValue room_name_rv = MMAPI::Internal::module_interface->CallBuiltin(
 						"room_get_name", { *Arguments[0] }
@@ -341,19 +345,29 @@ namespace MMAPI::Location
 	/// Installs an internal handler that builds GM-room ↔ location lookup maps at title-screen setup,
 	/// and a hook on `goto_gm_room` that tracks the player's current GM room. `TryGetCurrentLocation`
 	/// reads from those structures.
-	/// @return AURIE_SUCCESS if the hook is installed (or already was); otherwise the Aurie failure status.
-	inline Aurie::AurieStatus Enable()
+	/// @return Status::Success if the hook is installed (or already was); otherwise a failure status.
+	inline MMAPI::Status Enable()
 	{
-		Aurie::AurieStatus status = MMAPI::Instance::Enable();
-		if (!Aurie::AurieSuccess(status))
+		if (Internal::enabled)
+			return MMAPI::Status::Success;
+
+		MMAPI::Log::Debug("MMAPI::Location::Enable() called");
+
+		MMAPI::Status status = MMAPI::Instance::Enable();
+		if (!MMAPI::IsSuccess(status))
 			return status;
 
 		MMAPI::Internal::RegisterOnSetupMainScreenHandler(Internal::BuildMaps);
 
-		return MMAPI::Internal::InstallScriptHooks({
+		status = MMAPI::Internal::InstallScriptHooks({
 			{ MMAPI::Internal::GML_SCRIPT_SETUP_MAIN_SCREEN, reinterpret_cast<PVOID>(MMAPI::Internal::GmlScriptBeforeSetupMainScreenCallback) },
 			{ Internal::GML_SCRIPT_GO_TO_ROOM,               reinterpret_cast<PVOID>(Internal::GmlScriptGoToRoomCallback) },
 		});
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		Internal::enabled = true;
+		return MMAPI::Status::Success;
 	}
 
 	/// Gets a location's internal name.
@@ -409,6 +423,8 @@ namespace MMAPI::Location
 	/// @return True if the current GM room maps to a known location; false if no GM-room transition has been observed yet.
 	inline bool TryGetCurrentLocation(MMAPI::Location::Ids& location)
 	{
+		MMAPI_REQUIRE_ENABLED("Location", false);
+
 		if (Internal::current_gm_room_name.empty())
 			return false;
 
@@ -480,6 +496,8 @@ namespace MMAPI::Location
 	/// @param y The Y coordinate within the target location to place Ari.
 	inline void TeleportAri(MMAPI::Location::Ids location, int x, int y)
 	{
+		MMAPI_REQUIRE_ENABLED_VOID("Location");
+
 		YYTK::CInstance* Self  = nullptr;
 		YYTK::CInstance* Other = nullptr;
 		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
@@ -509,12 +527,11 @@ namespace MMAPI::Location
 		if (!MMAPI::Engine::IsNumeric(asset_index) || asset_index.ToInt64() < 0)
 			return false;
 
-		// Verify the resolved asset is a room (asset_get_type == asset_room, 3).
+		// Verify the resolved asset is a room.
 		YYTK::RValue asset_type = MMAPI::Internal::module_interface->CallBuiltin(
 			"asset_get_type", { asset_index }
 		);
-		constexpr int64_t asset_room = 3;
-		if (asset_type.ToInt64() != asset_room)
+		if (asset_type.ToInt64() != static_cast<int64_t>(MMAPI::Engine::AssetType::Room))
 			return false;
 
 		*m_arg0 = asset_index;
@@ -529,41 +546,35 @@ namespace MMAPI::Location
 		/// `ctx.TryGetOriginalDestination(out)` to read the game's originally-intended destination
 		/// as a `Location::Ids` enum (snapshotted at hook entry so SetTargetRoom doesn't shift it).
 		/// @param callback A function called with the mutable BeforeGoToRoom context before the game processes the transition.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus BeforeGoToRoom(Internal::BeforeGoToRoomCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforeGoToRoom(Internal::BeforeGoToRoomCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::before_go_to_room_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Location::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Location::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			Internal::before_go_to_room_callback = callback;
-			return Aurie::AURIE_SUCCESS;
+			return MMAPI::Internal::RegisterHook(
+				"Location::BeforeGoToRoom",
+				Internal::before_go_to_room_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that runs after the game transitions to a new GM room.
 		/// Use ctx.GetRoomName() to read the name of the room that was entered.
 		/// @param callback A function called with the room transition context after the game processes it.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus AfterGoToRoom(Internal::AfterGoToRoomCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterGoToRoom(Internal::AfterGoToRoomCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::after_go_to_room_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Location::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Location::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			Internal::after_go_to_room_callback = callback;
-			return Aurie::AURIE_SUCCESS;
+			return MMAPI::Internal::RegisterHook(
+				"Location::AfterGoToRoom",
+				Internal::after_go_to_room_callback,
+				callback
+			);
 		}
 	}
 }

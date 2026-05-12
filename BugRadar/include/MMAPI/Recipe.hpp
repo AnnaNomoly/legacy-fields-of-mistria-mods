@@ -2,8 +2,11 @@
 
 #include "Core.hpp"
 #include "Engine.hpp"
+#include "Hook.hpp"
 #include "Instance.hpp"
 #include "Item.hpp"
+#include "Log.hpp"
+#include "Status.hpp"
 
 #include <string>
 
@@ -53,6 +56,8 @@ namespace MMAPI::Recipe
 
 	namespace Internal
 	{
+		inline bool enabled = false;
+
 		inline constexpr const char* GML_SCRIPT_UNLOCK_RECIPE      = "gml_Script_unlock_recipe@Ari@Ari";
 		inline constexpr const char* GML_SCRIPT_GENERATE_INFUSIONS = "gml_Script_generate_infusions@Recipe@Recipe";
 
@@ -87,20 +92,6 @@ namespace MMAPI::Recipe
 			}
 
 			return Result;
-		}
-
-		inline Aurie::AurieStatus RegisterGenerateInfusionsHook(AfterGenerateInfusionsCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_GENERATE_INFUSIONS,
-				reinterpret_cast<PVOID>(GmlScriptAfterGenerateInfusionsCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			after_generate_infusions_callback = callback;
-			return Aurie::AURIE_SUCCESS;
 		}
 
 		inline YYTK::RValue GetRecipeUnlocks()
@@ -146,17 +137,42 @@ namespace MMAPI::Recipe
 		}
 	}
 
-	/// Activates Recipe utility functions that resolve Ari context.
-	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
-	inline Aurie::AurieStatus Enable()
+	/// Activates Recipe utility functions that resolve Ari context. Eagerly installs the generate_infusions
+	/// script hook used by Hooks::AfterGenerateInfusions.
+	/// @return Status::Success if the hooks are installed (or already were); otherwise a failure status.
+	inline MMAPI::Status Enable()
 	{
-		return MMAPI::Instance::Enable();
+		if (Internal::enabled)
+			return MMAPI::Status::Success;
+
+		MMAPI::Log::Debug("MMAPI::Recipe::Enable() called");
+
+		MMAPI::Status status = MMAPI::Instance::Enable();
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		// Recipe::SetComponentCount/SetComponentDuration call Item::GetItemData, which requires Item::Enable().
+		status = MMAPI::Item::Enable();
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		status = MMAPI::Internal::InstallScriptHook(
+			Internal::GML_SCRIPT_GENERATE_INFUSIONS,
+			reinterpret_cast<PVOID>(Internal::GmlScriptAfterGenerateInfusionsCallback)
+		);
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		Internal::enabled = true;
+		return MMAPI::Status::Success;
 	}
 
 	/// Returns true if Ari has unlocked the recipe for the given item ID.
 	/// @param item_id The item ID for the recipe to check.
 	inline bool IsUnlocked(int item_id)
 	{
+		MMAPI_REQUIRE_ENABLED("Recipe", false);
+
 		if (item_id < 0)
 			return false;
 
@@ -185,6 +201,8 @@ namespace MMAPI::Recipe
 	/// @return True if the recipe was newly unlocked; otherwise false.
 	inline bool Unlock(int item_id, bool show_popup = true)
 	{
+		MMAPI_REQUIRE_ENABLED("Recipe", false);
+
 		if (item_id < 0)
 			return false;
 
@@ -227,6 +245,8 @@ namespace MMAPI::Recipe
 	/// @param count The new required component count.
 	inline void SetComponentCount(int item_id, size_t component_index, int count)
 	{
+		MMAPI_REQUIRE_ENABLED_VOID("Recipe");
+
 		YYTK::RValue component = Internal::GetRecipeComponent(item_id, component_index);
 		if (component.m_Kind == YYTK::VALUE_UNDEFINED)
 			return;
@@ -240,6 +260,8 @@ namespace MMAPI::Recipe
 	/// @param duration The new component duration value.
 	inline void SetComponentDuration(int item_id, size_t component_index, int duration)
 	{
+		MMAPI_REQUIRE_ENABLED_VOID("Recipe");
+
 		YYTK::RValue component = Internal::GetRecipeComponent(item_id, component_index);
 		if (component.m_Kind == YYTK::VALUE_UNDEFINED)
 			return;
@@ -255,20 +277,18 @@ namespace MMAPI::Recipe
 		/// infusions array, `ctx.Count()` for its size, and `ctx.Clear()` to suppress all infusions for
 		/// restricted items.
 		/// @param callback A function called with a `MMAPI::Recipe::GenerateInfusionsContext`.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus AfterGenerateInfusions(Internal::AfterGenerateInfusionsCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterGenerateInfusions(Internal::AfterGenerateInfusionsCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::after_generate_infusions_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Recipe::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Recipe::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterGenerateInfusionsHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Recipe::AfterGenerateInfusions",
+				Internal::after_generate_infusions_callback,
+				callback
+			);
 		}
 	}
 }

@@ -2,6 +2,9 @@
 
 #include "Core.hpp"
 #include "Engine.hpp"
+#include "Hook.hpp"
+#include "Log.hpp"
+#include "Status.hpp"
 
 #include "YYToolkit/YYTK_Shared.hpp"
 
@@ -159,6 +162,8 @@ namespace MMAPI::Damage
 
 	namespace Internal
 	{
+		inline bool enabled = false;
+
 		inline constexpr const char* GML_SCRIPT_DAMAGE = "gml_Script_damage@gml_Object_obj_damage_receiver_Create_0";
 
 		using BeforeDamageCallback = void(*)(MMAPI::Damage::BeforeDamageContext&);
@@ -202,65 +207,45 @@ namespace MMAPI::Damage
 
 			return Result;
 		}
-
-		inline Aurie::AurieStatus RegisterDamageHook(BeforeDamageCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_DAMAGE,
-				reinterpret_cast<PVOID>(GmlScriptDamageCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			before_damage_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
-
-		inline Aurie::AurieStatus RegisterAfterDamageHook(AfterDamageCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_DAMAGE,
-				reinterpret_cast<PVOID>(GmlScriptDamageCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			after_damage_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
 	}
 
 	/// Activates Damage utility functions. Eagerly installs the damage script hook shared by
 	/// Hooks::BeforeDamage and Hooks::AfterDamage.
-	/// @return AURIE_SUCCESS if the hook is installed (or already was); otherwise the Aurie failure status.
-	inline Aurie::AurieStatus Enable()
+	/// @return Status::Success if the hook is installed (or already was); otherwise a failure status.
+	inline MMAPI::Status Enable()
 	{
-		return MMAPI::Internal::InstallScriptHook(
+		if (Internal::enabled)
+			return MMAPI::Status::Success;
+
+		MMAPI::Log::Debug("MMAPI::Damage::Enable() called");
+
+		MMAPI::Status status = MMAPI::Internal::InstallScriptHook(
 			Internal::GML_SCRIPT_DAMAGE,
 			reinterpret_cast<PVOID>(Internal::GmlScriptDamageCallback)
 		);
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		Internal::enabled = true;
+		return MMAPI::Status::Success;
 	}
 
 	namespace Hooks
 	{
 		/// Registers a callback that can modify a damage packet before the game applies it.
 		/// @param callback A function called with a mutable damage context.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus BeforeDamage(Internal::BeforeDamageCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforeDamage(Internal::BeforeDamageCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::before_damage_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Damage::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Damage::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterDamageHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Damage::BeforeDamage",
+				Internal::before_damage_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that runs after the game's damage script. The context's `GetResult()`
@@ -268,20 +253,18 @@ namespace MMAPI::Damage
 		/// target, `false` otherwise. Use this to gate downstream effects that should fire only when the
 		/// damage actually landed (counter-damage, lifesteal commits, etc.).
 		/// @param callback A function called with a `MMAPI::Damage::AfterDamageContext`.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus AfterDamage(Internal::AfterDamageCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterDamage(Internal::AfterDamageCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::after_damage_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Damage::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Damage::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterAfterDamageHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Damage::AfterDamage",
+				Internal::after_damage_callback,
+				callback
+			);
 		}
 	}
 }

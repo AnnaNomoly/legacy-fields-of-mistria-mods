@@ -1,6 +1,9 @@
 #pragma once
 
 #include "Core.hpp"
+#include "Hook.hpp"
+#include "Log.hpp"
+#include "Status.hpp"
 
 #include "YYToolkit/YYTK_Shared.hpp"
 
@@ -8,6 +11,8 @@ namespace MMAPI::Inventory
 {
 	namespace Internal
 	{
+		inline bool enabled = false;
+
 		inline constexpr const char* GML_SCRIPT_DESERIALIZE_INVENTORY = "gml_Script_deserialize@anon@6096@__Inventory@Inventory";
 		inline constexpr const char* GML_SCRIPT_COUNT_ITEM            = "gml_Script_item_id_quantity@anon@4106@__Inventory@Inventory";
 		inline constexpr const char* GML_SCRIPT_REMOVE_ITEM           = "gml_Script_remove@anon@2021@__Inventory@Inventory";
@@ -59,15 +64,25 @@ namespace MMAPI::Inventory
 
 	/// Activates Inventory utility functions. Installs the deserialize hook so the live Inventory Self/Other are latched
 	/// for TryGetInventoryContext (cleared on return-to-title via the setup_main_screen pub/sub).
-	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
-	inline Aurie::AurieStatus Enable()
+	/// @return Status::Success if the hooks are installed (or already were); otherwise a failure status.
+	inline MMAPI::Status Enable()
 	{
+		if (Internal::enabled)
+			return MMAPI::Status::Success;
+
+		MMAPI::Log::Debug("MMAPI::Inventory::Enable() called");
+
 		MMAPI::Internal::RegisterOnSetupMainScreenHandler(Internal::ClearInventoryOnReturnToTitle);
 
-		return MMAPI::Internal::InstallScriptHooks({
+		MMAPI::Status status = MMAPI::Internal::InstallScriptHooks({
 			{ MMAPI::Internal::GML_SCRIPT_SETUP_MAIN_SCREEN, reinterpret_cast<PVOID>(MMAPI::Internal::GmlScriptBeforeSetupMainScreenCallback) },
 			{ Internal::GML_SCRIPT_DESERIALIZE_INVENTORY,    reinterpret_cast<PVOID>(Internal::DeserializeInventoryContextCallback) },
 		});
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		Internal::enabled = true;
+		return MMAPI::Status::Success;
 	}
 
 	/// Counts how many of an item Ari currently has.
@@ -76,6 +91,8 @@ namespace MMAPI::Inventory
 	/// @return The count as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue CountItem(int item_id)
 	{
+		MMAPI_REQUIRE_ENABLED("Inventory", {});
+
 		YYTK::CInstance* Self  = nullptr;
 		YYTK::CInstance* Other = nullptr;
 		if (!Internal::TryGetInventoryContext(Self, Other))
@@ -97,6 +114,8 @@ namespace MMAPI::Inventory
 	/// @param quantity The quantity to remove.
 	inline void RemoveItem(int item_id, int quantity)
 	{
+		MMAPI_REQUIRE_ENABLED_VOID("Inventory");
+
 		YYTK::CInstance* Self  = nullptr;
 		YYTK::CInstance* Other = nullptr;
 		if (!Internal::TryGetInventoryContext(Self, Other))

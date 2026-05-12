@@ -1,4 +1,3 @@
-#include <algorithm>
 #include <filesystem>
 #include <random>
 #include <set>
@@ -786,16 +785,16 @@ void PrintError(std::exception_ptr eptr)
 		}
 	}
 	catch (const std::exception& e) {
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Error: %s", MOD_NAME, VERSION, e.what());
+		MMAPI::Log::Error("Error: %s", e.what());
 	}
 }
 
 void LogDefaultConfigValues()
 {
 	config = BugRadarConfig{};
-	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Using DEFAULT \"%s\" value!", MOD_NAME, VERSION, BUG_LIST_KEY);
-	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, MODIFY_BUG_SPAWN_LOCATION_KEY, config.modify_bug_spawn_location ? "true" : "false");
-	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, DISPLAY_NOTIFICATIONS_KEY, config.display_notifications ? "true" : "false");
+	MMAPI::Log::Warn("Using DEFAULT \"%s\" value!", BUG_LIST_KEY);
+	MMAPI::Log::Warn("Using DEFAULT \"%s\" value: %s!", MODIFY_BUG_SPAWN_LOCATION_KEY, config.modify_bug_spawn_location ? "true" : "false");
+	MMAPI::Log::Warn("Using DEFAULT \"%s\" value: %s!", DISPLAY_NOTIFICATIONS_KEY, config.display_notifications ? "true" : "false");
 }
 
 void LoadOrCreateConfigFile()
@@ -808,14 +807,14 @@ void LoadOrCreateConfigFile()
 		json json_object = MMAPI::Config::Load(config_file);
 
 		if (!config_file_exists)
-			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Configuration file was not found. Creating file: %s", MOD_NAME, VERSION, config_file.string().c_str());
+			MMAPI::Log::Warn("Configuration file was not found. Creating file: %s", config_file.string().c_str());
 
 		if (json_object.empty())
 		{
 			if (config_file_exists)
 			{
-				g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - No readable values found in mod configuration file: %s!", MOD_NAME, VERSION, config_file.string().c_str());
-				g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Defaults will be used and written back to the configuration file.", MOD_NAME, VERSION);
+				MMAPI::Log::Error("No readable values found in mod configuration file: %s!", config_file.string().c_str());
+				MMAPI::Log::Warn("Defaults will be used and written back to the configuration file.");
 			}
 
 			LogDefaultConfigValues();
@@ -825,7 +824,7 @@ void LoadOrCreateConfigFile()
 
 		config = json_object.get<BugRadarConfig>();
 		MMAPI::Config::Save(config_file, config);
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Loaded configuration file: %s", MOD_NAME, VERSION, config_file.string().c_str());
+		MMAPI::Log::Info("Loaded configuration file: %s", config_file.string().c_str());
 	}
 	catch (...)
 	{
@@ -847,8 +846,8 @@ void CalculateBoundingBoxCenters()
 				total_y += point.second;
 			}
 
-			int center_x = total_x / bounding_box.size();
-			int center_y = total_y / bounding_box.size();
+			int center_x = total_x / static_cast<int>(bounding_box.size());
+			int center_y = total_y / static_cast<int>(bounding_box.size());
 			std::pair<int, int> center = { center_x, center_y };
 			ROOM_BUG_SPAWN_BOUNDING_BOX_CENTER_MAP[room.first].push_back(center);
 		}
@@ -888,50 +887,13 @@ std::tuple<int, int, int> GenerateRandomPointInClosestBoundingBox(int X, int Y, 
 	int random_x = x_dist(rng);
 	int random_y = y_dist(rng);
 
-	return { random_x, random_y, closest_index + 1 };
-}
-
-static std::string ToLower(std::string s)
-{
-	std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return std::tolower(c); });
-	return s;
+	return { random_x, random_y, static_cast<int>(closest_index + 1) };
 }
 
 void NormalizeBugList()
 {
-	if (!MMAPI::Internal::global_instance)
-		return;
-
-	std::vector<std::string> normalized_config_entries;
-	normalized_config_entries.reserve(config.bug_list.size());
-	for (const auto& entry : config.bug_list)
-		normalized_config_entries.push_back(ToLower(entry));
-
-	YYTK::RValue item_data = MMAPI::Item::GetItemData();
-	size_t item_count = 0;
-	g_ModuleInterface->GetArraySize(item_data, item_count);
-
-	for (size_t i = 0; i < item_count; i++)
-	{
-		YYTK::RValue internal_name_rv = MMAPI::Item::GetInternalName(static_cast<int>(i));
-		if (internal_name_rv.m_Kind != VALUE_STRING)
-			continue;
-		std::string internal_name_lc = ToLower(internal_name_rv.ToString());
-
-		YYTK::RValue localized_name_rv = MMAPI::Item::GetLocalizedName(static_cast<int>(i));
-		std::string localized_name_lc;
-		if (localized_name_rv.m_Kind == VALUE_STRING)
-			localized_name_lc = ToLower(localized_name_rv.ToString());
-
-		for (const auto& entry : normalized_config_entries)
-		{
-			if (entry == internal_name_lc || (!localized_name_lc.empty() && entry == localized_name_lc))
-			{
-				tracked_bug_ids.insert(static_cast<int>(i));
-				break;
-			}
-		}
-	}
+	std::vector<int> matching_ids = MMAPI::Item::FindIdsByName(config.bug_list);
+	tracked_bug_ids.insert(matching_ids.begin(), matching_ids.end());
 }
 
 void AfterBugSpawn(MMAPI::Bug::BugSpawnContext& ctx)
@@ -976,15 +938,17 @@ void AfterBugSpawn(MMAPI::Bug::BugSpawnContext& ctx)
 		MMAPI::Engine::InstanceVariableSet(bug, "x", new_x);
 		MMAPI::Engine::InstanceVariableSet(bug, "y", new_y);
 
-		g_ModuleInterface->Print(CM_GREEN, "[%s %s] - Modified bug (%s) to spawn at position (%d, %d) in Bounding Box (%d).",
-			MOD_NAME, VERSION, bug_name.c_str(), new_x, new_y, bbox_num);
+		MMAPI::Log::Info("Modified bug (%s) to spawn at position (%d, %d) in Bounding Box (%d).",
+			bug_name.c_str(), new_x, new_y, bbox_num);
 	}
 }
 
-void BeforeGetWeather()
+// Fires once per session on the first get_weather hook fire (signals "game is interactive").
+// We defer the actual bug-list normalization until the next localized-string lookup (in
+// AfterLocalizedString) because the Localizer may not yet be populated at this point.
+void AfterGameActive()
 {
-	if (!localize_pending && tracked_bug_ids.empty())
-		localize_pending = true;
+	localize_pending = true;
 }
 
 void AfterLocalizedString(MMAPI::Text::AfterLocalizedStringContext& ctx)
@@ -1029,20 +993,21 @@ EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path&
 
 	CInstance* global_instance = nullptr;
 	g_ModuleInterface->GetGlobalInstance(&global_instance);
-	MMAPI::Initialize(g_ModuleInterface, global_instance, g_ArSelfModule);
+	MMAPI::Initialize(g_ModuleInterface, global_instance, g_ArSelfModule, MOD_NAME, VERSION);
 
 	MMAPI::Bug::Enable();
 	MMAPI::Text::Enable();
 	MMAPI::Location::Enable();
+	MMAPI::Item::Enable();   // NormalizeBugList / AfterBugSpawn use Item utilities (GetItemData, GetInternalName, GetLocalizedName)
 
 	MMAPI::Bug::Hooks::AfterBugSpawn(AfterBugSpawn);
-	MMAPI::Weather::Hooks::BeforeGetWeather(BeforeGetWeather);
+	MMAPI::Game::Hooks::AfterGameActive(AfterGameActive);
 	MMAPI::Text::Hooks::AfterLocalizedString(AfterLocalizedString);
 	MMAPI::Game::Hooks::BeforeSetupMainScreen(BeforeSetupMainScreen);
 
 	LoadOrCreateConfigFile();
 	CalculateBoundingBoxCenters();
 
-	g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Plugin started!", MOD_NAME, VERSION);
+	MMAPI::Log::Info("Plugin started!");
 	return AURIE_SUCCESS;
 }

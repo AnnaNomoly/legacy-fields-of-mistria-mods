@@ -2,6 +2,9 @@
 
 #include "Core.hpp"
 #include "Engine.hpp"
+#include "Hook.hpp"
+#include "Log.hpp"
+#include "Status.hpp"
 
 #include <string>
 
@@ -45,6 +48,8 @@ namespace MMAPI::Display
 
 	namespace Internal
 	{
+		inline bool enabled = false;
+
 		inline constexpr const char* GML_SCRIPT_DISPLAY_RESIZE           = "gml_Script_resize_amount@Display@Display";
 		inline constexpr const char* GML_SCRIPT_VERTIGO_DRAW_WITH_COLOR  = "gml_Script_vertigo_draw_with_color";
 		inline constexpr const char* GML_SCRIPT_PLAY_HEAL_VFX            = "gml_Script_play_heal_vfx";
@@ -82,20 +87,6 @@ namespace MMAPI::Display
 			return Result;
 		}
 
-		inline Aurie::AurieStatus RegisterDisplayResizeHook(AfterDisplayResizeCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_DISPLAY_RESIZE,
-				reinterpret_cast<PVOID>(GmlScriptAfterDisplayResizeCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			after_display_resize_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
-
 		inline YYTK::RValue& GmlScriptBeforeVertigoDrawWithColorCallback(
 			IN YYTK::CInstance* Self,
 			IN YYTK::CInstance* Other,
@@ -111,8 +102,7 @@ namespace MMAPI::Display
 				YYTK::RValue asset_type = MMAPI::Internal::module_interface->CallBuiltin(
 					"asset_get_type", { *Arguments[0] }
 				);
-				constexpr int64_t asset_sprite = 1;
-				if (asset_type.ToInt64() == asset_sprite)
+				if (asset_type.ToInt64() == static_cast<int64_t>(MMAPI::Engine::AssetType::Sprite))
 				{
 					YYTK::RValue name = MMAPI::Internal::module_interface->CallBuiltin(
 						"sprite_get_name", { *Arguments[0] }
@@ -132,20 +122,6 @@ namespace MMAPI::Display
 			original(Self, Other, Result, ArgumentCount, Arguments);
 
 			return Result;
-		}
-
-		inline Aurie::AurieStatus RegisterVertigoDrawWithColorHook(BeforeVertigoDrawWithColorCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_VERTIGO_DRAW_WITH_COLOR,
-				reinterpret_cast<PVOID>(GmlScriptBeforeVertigoDrawWithColorCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			before_vertigo_draw_with_color_callback = callback;
-			return Aurie::AURIE_SUCCESS;
 		}
 
 		inline YYTK::RValue& GmlScriptBeforePlayHealVfxCallback(
@@ -172,34 +148,30 @@ namespace MMAPI::Display
 
 			return Result;
 		}
-
-		inline Aurie::AurieStatus RegisterPlayHealVfxHook(BeforePlayHealVfxCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_PLAY_HEAL_VFX,
-				reinterpret_cast<PVOID>(GmlScriptBeforePlayHealVfxCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			before_play_heal_vfx_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
 	}
 
 	/// Activates Display hooks. Installs the `resize_amount@Display@Display`,
 	/// `vertigo_draw_with_color`, and `play_heal_vfx` script hooks so registered callbacks fire on
 	/// display resize, screen-space sprite draws, and heal visual effects respectively. Safe to call
 	/// before any Hooks::* registration — each callback no-ops until a user callback is bound.
-	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
-	inline Aurie::AurieStatus Enable()
+	/// @return Status::Success if the hooks are installed (or already were); otherwise a failure status.
+	inline MMAPI::Status Enable()
 	{
-		return MMAPI::Internal::InstallScriptHooks({
+		if (Internal::enabled)
+			return MMAPI::Status::Success;
+
+		MMAPI::Log::Debug("MMAPI::Display::Enable() called");
+
+		MMAPI::Status status = MMAPI::Internal::InstallScriptHooks({
 			{ Internal::GML_SCRIPT_DISPLAY_RESIZE,          reinterpret_cast<PVOID>(Internal::GmlScriptAfterDisplayResizeCallback) },
 			{ Internal::GML_SCRIPT_VERTIGO_DRAW_WITH_COLOR, reinterpret_cast<PVOID>(Internal::GmlScriptBeforeVertigoDrawWithColorCallback) },
 			{ Internal::GML_SCRIPT_PLAY_HEAL_VFX,           reinterpret_cast<PVOID>(Internal::GmlScriptBeforePlayHealVfxCallback) },
 		});
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		Internal::enabled = true;
+		return MMAPI::Status::Success;
 	}
 
 	namespace Hooks
@@ -207,20 +179,18 @@ namespace MMAPI::Display
 		/// Registers a callback that runs after the game's `resize_amount@Display@Display` script.
 		/// Use `ctx.GetWindowWidth()` / `ctx.GetWindowHeight()` to read the post-resize dimensions.
 		/// @param callback A function called with a `MMAPI::Display::DisplayResizeContext`.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus AfterDisplayResize(Internal::AfterDisplayResizeCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterDisplayResize(Internal::AfterDisplayResizeCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::after_display_resize_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Display::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Display::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterDisplayResizeHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Display::AfterDisplayResize",
+				Internal::after_display_resize_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that runs before the game's `vertigo_draw_with_color` script —
@@ -230,40 +200,36 @@ namespace MMAPI::Display
 		/// For world-space sprite overrides (items dropped in the game world, etc.), use
 		/// [`Item::Hooks::AfterGetUiIcon`](API-MMAPI-Item-Hooks-AfterGetUiIcon.md) instead.
 		/// @param callback A function called with a mutable `MMAPI::Display::VertigoDrawWithColorContext`.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus BeforeVertigoDrawWithColor(Internal::BeforeVertigoDrawWithColorCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforeVertigoDrawWithColor(Internal::BeforeVertigoDrawWithColorCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::before_vertigo_draw_with_color_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Display::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Display::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterVertigoDrawWithColorHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Display::BeforeVertigoDrawWithColor",
+				Internal::before_vertigo_draw_with_color_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that runs before the game's `play_heal_vfx` script. Call `ctx.Cancel()`
 		/// to short-circuit the heal visual effect this fire (e.g. when a mod-controlled time-stop is
 		/// active and the vfx shouldn't play).
 		/// @param callback A function called with a mutable `MMAPI::Display::PlayHealVfxContext`.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus BeforePlayHealVfx(Internal::BeforePlayHealVfxCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforePlayHealVfx(Internal::BeforePlayHealVfxCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::before_play_heal_vfx_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Display::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Display::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterPlayHealVfxHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Display::BeforePlayHealVfx",
+				Internal::before_play_heal_vfx_callback,
+				callback
+			);
 		}
 	}
 }

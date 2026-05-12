@@ -1,6 +1,9 @@
 #pragma once
 
+#include "Status.hpp"
 #include "Core.hpp"
+#include "Log.hpp"
+#include "Hook.hpp"
 #include "Anchor.hpp"
 #include "Animal.hpp"
 #include "Bark.hpp"

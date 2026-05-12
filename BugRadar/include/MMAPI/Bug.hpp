@@ -1,7 +1,10 @@
 #pragma once
 
 #include "Core.hpp"
+#include "Hook.hpp"
 #include "Instance.hpp"
+#include "Log.hpp"
+#include "Status.hpp"
 
 #include "YYToolkit/YYTK_Shared.hpp"
 
@@ -18,6 +21,8 @@ namespace MMAPI::Bug
 
 	namespace Internal
 	{
+		inline bool enabled = false;
+
 		inline constexpr const char* GML_SCRIPT_SPAWN_BUG  = "gml_Script_spawn_bug";
 		inline constexpr const char* GML_SCRIPT_CREATE_BUG = "gml_Script_setup@gml_Object_obj_bug_Create_0";
 
@@ -67,17 +72,27 @@ namespace MMAPI::Bug
 
 	/// Activates Bug utility functions. Cascades to MMAPI::Instance::Enable so Spawn / SpawnCustom can
 	/// resolve Ari's calling context internally.
-	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
-	inline Aurie::AurieStatus Enable()
+	/// @return Status::Success if the hooks are installed (or already were); otherwise a failure status.
+	inline MMAPI::Status Enable()
 	{
-		Aurie::AurieStatus status = MMAPI::Instance::Enable();
-		if (!Aurie::AurieSuccess(status))
+		if (Internal::enabled)
+			return MMAPI::Status::Success;
+
+		MMAPI::Log::Debug("MMAPI::Bug::Enable() called");
+
+		MMAPI::Status status = MMAPI::Instance::Enable();
+		if (!MMAPI::IsSuccess(status))
 			return status;
 
-		return MMAPI::Internal::InstallScriptHook(
+		status = MMAPI::Internal::InstallScriptHook(
 			Internal::GML_SCRIPT_CREATE_BUG,
 			reinterpret_cast<PVOID>(Internal::GmlScriptCreateBugCallback)
 		);
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		Internal::enabled = true;
+		return MMAPI::Status::Success;
 	}
 
 	/// Spawns a bug at the given room coordinates.
@@ -87,6 +102,8 @@ namespace MMAPI::Bug
 	/// @return The spawned bug as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue Spawn(int x_coord, int y_coord)
 	{
+		MMAPI_REQUIRE_ENABLED("Bug", {});
+
 		YYTK::CInstance* Self  = nullptr;
 		YYTK::CInstance* Other = nullptr;
 		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
@@ -127,21 +144,18 @@ namespace MMAPI::Bug
 		/// Registers a callback that runs after a bug's setup script finishes (i.e. the bug has just spawned).
 		/// The callback receives the live bug instance and its item ID, and can read or modify the bug's properties (e.g. position) before the next tick.
 		/// @param callback A function called with a `MMAPI::Bug::BugSpawnContext`.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus AfterBugSpawn(Internal::AfterBugSpawnCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterBugSpawn(Internal::AfterBugSpawnCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::after_bug_spawn_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Bug::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Bug::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			Internal::after_bug_spawn_callback = callback;
-			return Aurie::AURIE_SUCCESS;
+			return MMAPI::Internal::RegisterHook(
+				"Bug::AfterBugSpawn",
+				Internal::after_bug_spawn_callback,
+				callback
+			);
 		}
 	}
 }

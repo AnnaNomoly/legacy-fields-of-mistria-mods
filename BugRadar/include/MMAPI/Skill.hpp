@@ -2,6 +2,8 @@
 
 #include "Core.hpp"
 #include "Instance.hpp"
+#include "Log.hpp"
+#include "Status.hpp"
 
 #include "YYToolkit/YYTK_Shared.hpp"
 
@@ -34,15 +36,27 @@ namespace MMAPI::Skill
 
 	namespace Internal
 	{
+		inline bool enabled = false;
+
 		inline constexpr const char* GML_SCRIPT_GAIN_XP = "gml_Script_gain_xp@Ari@Ari";
 	}
 
 	/// Activates Skill utility functions. Cascades to MMAPI::Instance::Enable so GainExperience can resolve
 	/// Ari's calling context internally.
-	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
-	inline Aurie::AurieStatus Enable()
+	/// @return Status::Success if the hooks are installed (or already were); otherwise a failure status.
+	inline MMAPI::Status Enable()
 	{
-		return MMAPI::Instance::Enable();
+		if (Internal::enabled)
+			return MMAPI::Status::Success;
+
+		MMAPI::Log::Debug("MMAPI::Skill::Enable() called");
+
+		MMAPI::Status status = MMAPI::Instance::Enable();
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		Internal::enabled = true;
+		return MMAPI::Status::Success;
 	}
 
 	/// Adds experience to one of Ari's player skills.
@@ -51,6 +65,8 @@ namespace MMAPI::Skill
 	/// @param experience The amount of experience to add.
 	inline void GainExperience(MMAPI::Skill::Ids skill, double experience)
 	{
+		MMAPI_REQUIRE_ENABLED_VOID("Skill");
+
 		YYTK::CInstance* Self  = nullptr;
 		YYTK::CInstance* Other = nullptr;
 		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))

@@ -2,7 +2,10 @@
 
 #include "Core.hpp"
 #include "Engine.hpp"
+#include "Hook.hpp"
 #include "Instance.hpp"
+#include "Log.hpp"
+#include "Status.hpp"
 
 #include "YYToolkit/YYTK_Shared.hpp"
 
@@ -66,6 +69,8 @@ namespace MMAPI::Spell
 
 	namespace Internal
 	{
+		inline bool enabled = false;
+
 		inline constexpr const char* GML_SCRIPT_CAN_CAST_SPELL = "gml_Script_can_cast_spell";
 		inline constexpr const char* GML_SCRIPT_CAST_SPELL      = "gml_Script_cast_spell";
 
@@ -92,7 +97,7 @@ namespace MMAPI::Spell
 
 			if (after_can_cast_spell_callback && Arguments && ArgumentCount >= 1 && Arguments[0])
 			{
-				MMAPI::Spell::CanCastSpellContext context{ Arguments[0]->ToInt64(), Result.ToBoolean() };
+				MMAPI::Spell::CanCastSpellContext context{ static_cast<int>(Arguments[0]->ToInt64()), Result.ToBoolean() };
 				after_can_cast_spell_callback(context);
 				Result = context.m_result;
 			}
@@ -110,7 +115,7 @@ namespace MMAPI::Spell
 		{
 			if (before_spell_cast_callback && Arguments && ArgumentCount >= 1 && Arguments[0])
 			{
-				MMAPI::Spell::BeforeSpellCastContext context{ Arguments[0]->ToInt64() };
+				MMAPI::Spell::BeforeSpellCastContext context{ static_cast<int>(Arguments[0]->ToInt64()) };
 				before_spell_cast_callback(context);
 
 				if (context.m_cancelled)
@@ -124,53 +129,11 @@ namespace MMAPI::Spell
 
 			if (after_spell_cast_callback && Arguments && ArgumentCount >= 1 && Arguments[0])
 			{
-				MMAPI::Spell::AfterSpellCastContext context{ Arguments[0]->ToInt64() };
+				MMAPI::Spell::AfterSpellCastContext context{ static_cast<int>(Arguments[0]->ToInt64()) };
 				after_spell_cast_callback(context);
 			}
 
 			return Result;
-		}
-
-		inline Aurie::AurieStatus RegisterCanCastSpellHook(AfterCanCastSpellCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_CAN_CAST_SPELL,
-				reinterpret_cast<PVOID>(GmlScriptCanCastSpellCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			after_can_cast_spell_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
-
-		inline Aurie::AurieStatus RegisterSpellCastHook(BeforeSpellCastCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_CAST_SPELL,
-				reinterpret_cast<PVOID>(GmlScriptCastSpellCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			before_spell_cast_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
-
-		inline Aurie::AurieStatus RegisterAfterSpellCastHook(AfterSpellCastCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_CAST_SPELL,
-				reinterpret_cast<PVOID>(GmlScriptCastSpellCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			after_spell_cast_callback = callback;
-			return Aurie::AURIE_SUCCESS;
 		}
 
 		inline YYTK::RValue GetSpellData()
@@ -234,17 +197,27 @@ namespace MMAPI::Spell
 
 	/// Activates Spell utility functions and installs the can_cast_spell / cast_spell hook callbacks.
 	/// Safe to call before any Hooks::* registration — the callbacks no-op until a user callback is bound.
-	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
-	inline Aurie::AurieStatus Enable()
+	/// @return Status::Success if the hooks are installed (or already were); otherwise a failure status.
+	inline MMAPI::Status Enable()
 	{
-		Aurie::AurieStatus status = MMAPI::Instance::Enable();
-		if (!Aurie::AurieSuccess(status))
+		if (Internal::enabled)
+			return MMAPI::Status::Success;
+
+		MMAPI::Log::Debug("MMAPI::Spell::Enable() called");
+
+		MMAPI::Status status = MMAPI::Instance::Enable();
+		if (!MMAPI::IsSuccess(status))
 			return status;
 
-		return MMAPI::Internal::InstallScriptHooks({
+		status = MMAPI::Internal::InstallScriptHooks({
 			{ Internal::GML_SCRIPT_CAN_CAST_SPELL, reinterpret_cast<PVOID>(Internal::GmlScriptCanCastSpellCallback) },
 			{ Internal::GML_SCRIPT_CAST_SPELL,     reinterpret_cast<PVOID>(Internal::GmlScriptCastSpellCallback) },
 		});
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		Internal::enabled = true;
+		return MMAPI::Status::Success;
 	}
 
 	/// Returns true if Ari can currently cast the given spell.
@@ -252,6 +225,8 @@ namespace MMAPI::Spell
 	/// @param spell The spell to check.
 	inline bool CanCast(MMAPI::Spell::Ids spell)
 	{
+		MMAPI_REQUIRE_ENABLED("Spell", false);
+
 		YYTK::CInstance* Self  = nullptr;
 		YYTK::CInstance* Other = nullptr;
 		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
@@ -272,6 +247,8 @@ namespace MMAPI::Spell
 	/// @param spell The spell to cast.
 	inline void Cast(MMAPI::Spell::Ids spell)
 	{
+		MMAPI_REQUIRE_ENABLED_VOID("Spell");
+
 		YYTK::CInstance* Self  = nullptr;
 		YYTK::CInstance* Other = nullptr;
 		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
@@ -291,59 +268,53 @@ namespace MMAPI::Spell
 		/// Registers a callback that can override the game's can_cast_spell result after it runs.
 		/// Use ctx.SetResult(bool) to allow or block casting the spell.
 		/// @param callback A function called with the can-cast context after the game evaluates it.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus AfterCanCastSpell(Internal::AfterCanCastSpellCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterCanCastSpell(Internal::AfterCanCastSpellCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::after_can_cast_spell_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Spell::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Spell::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterCanCastSpellHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Spell::AfterCanCastSpell",
+				Internal::after_can_cast_spell_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that runs before the game's cast_spell script executes.
 		/// Call ctx.Cancel() to prevent the game from processing the spell cast.
 		/// @param callback A function called with the cast spell context before the game processes it.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus BeforeSpellCast(Internal::BeforeSpellCastCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforeSpellCast(Internal::BeforeSpellCastCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::before_spell_cast_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Spell::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Spell::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterSpellCastHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Spell::BeforeSpellCast",
+				Internal::before_spell_cast_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that runs after the game's cast_spell script executes.
 		/// Use `ctx.GetSpell()` to identify which spell was cast — pair with set-bonus/counter logic
 		/// that should fire only once the game has processed the cast.
 		/// @param callback A function called with the cast spell context after the game processes it.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus AfterSpellCast(Internal::AfterSpellCastCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterSpellCast(Internal::AfterSpellCastCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::after_spell_cast_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Spell::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Spell::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterAfterSpellCastHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Spell::AfterSpellCast",
+				Internal::after_spell_cast_callback,
+				callback
+			);
 		}
 	}
 }

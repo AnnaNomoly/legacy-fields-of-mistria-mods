@@ -1,6 +1,9 @@
 #pragma once
 
 #include "Core.hpp"
+#include "Hook.hpp"
+#include "Log.hpp"
+#include "Status.hpp"
 
 #include "YYToolkit/YYTK_Shared.hpp"
 
@@ -8,6 +11,8 @@ namespace MMAPI::Anchor
 {
 	namespace Internal
 	{
+		inline bool enabled = false;
+
 		inline constexpr const char* GML_SCRIPT_ON_BEGIN_STEP = "gml_Script_on_begin_step@Anchor@Anchor";
 
 		using BeforeBeginStepCallback = void(*)();
@@ -34,32 +39,28 @@ namespace MMAPI::Anchor
 
 			return Result;
 		}
-
-		inline Aurie::AurieStatus RegisterBeforeBeginStepHook(BeforeBeginStepCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_ON_BEGIN_STEP,
-				reinterpret_cast<PVOID>(GmlScriptBeforeBeginStepCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			before_begin_step_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
 	}
 
 	/// Activates Anchor hooks. Installs the Anchor on_begin_step hook so registered callbacks
 	/// run before the game's per-frame physics tick. Safe to call before any Hooks::* registration —
 	/// the callback no-ops until a user callback is bound.
-	/// @return AURIE_SUCCESS if the hook is installed (or already was); otherwise the Aurie failure status.
-	inline Aurie::AurieStatus Enable()
+	/// @return Status::Success if the hook is installed (or already was); otherwise a failure status.
+	inline MMAPI::Status Enable()
 	{
-		return MMAPI::Internal::InstallScriptHook(
+		if (Internal::enabled)
+			return MMAPI::Status::Success;
+
+		MMAPI::Log::Debug("MMAPI::Anchor::Enable() called");
+
+		MMAPI::Status status = MMAPI::Internal::InstallScriptHook(
 			Internal::GML_SCRIPT_ON_BEGIN_STEP,
 			reinterpret_cast<PVOID>(Internal::GmlScriptBeforeBeginStepCallback)
 		);
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		Internal::enabled = true;
+		return MMAPI::Status::Success;
 	}
 
 	namespace Hooks
@@ -69,20 +70,18 @@ namespace MMAPI::Anchor
 		/// The callback receives no context; use it for per-frame state updates (e.g. applying sprite
 		/// overrides to tracked instances).
 		/// @param callback A parameterless function called every frame before the game's begin-step.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus BeforeBeginStep(Internal::BeforeBeginStepCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforeBeginStep(Internal::BeforeBeginStepCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::before_begin_step_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Anchor::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Anchor::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterBeforeBeginStepHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Anchor::BeforeBeginStep",
+				Internal::before_begin_step_callback,
+				callback
+			);
 		}
 	}
 }

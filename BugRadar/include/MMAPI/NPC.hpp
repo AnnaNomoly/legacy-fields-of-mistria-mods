@@ -2,6 +2,9 @@
 
 #include "Core.hpp"
 #include "Engine.hpp"
+#include "Hook.hpp"
+#include "Log.hpp"
+#include "Status.hpp"
 
 #include <string>
 
@@ -81,6 +84,8 @@ namespace MMAPI::NPC
 
 	namespace Internal
 	{
+		inline bool enabled = false;
+
 		inline constexpr const char* GML_SCRIPT_ADD_HEART_POINTS     = "gml_Script_add_heart_points@Npc@Npc";
 		inline constexpr const char* GML_SCRIPT_NPC_RECEIVE_GIFT     = "gml_Script_receive_gift@gml_Object_par_NPC_Create_0";
 		inline constexpr const char* GML_SCRIPT_FIND_NPC_BLIP_NOISE  = "gml_Script_find_npc_blip_noise";
@@ -139,20 +144,6 @@ namespace MMAPI::NPC
 			return Result;
 		}
 
-		inline Aurie::AurieStatus RegisterHeartPointsChangedHook(BeforeHeartPointsChangeCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_ADD_HEART_POINTS,
-				reinterpret_cast<PVOID>(GmlScriptAddHeartPointsCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			before_heart_points_change_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
-
 		inline YYTK::RValue& GmlScriptNpcReceiveGiftCallback(
 			IN YYTK::CInstance* Self,
 			IN YYTK::CInstance* Other,
@@ -200,34 +191,6 @@ namespace MMAPI::NPC
 			}
 
 			return Result;
-		}
-
-		inline Aurie::AurieStatus RegisterFindBlipNoiseHook(AfterFindBlipNoiseCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_FIND_NPC_BLIP_NOISE,
-				reinterpret_cast<PVOID>(GmlScriptAfterFindNpcBlipNoiseCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			after_find_blip_noise_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
-
-		inline Aurie::AurieStatus RegisterReceiveGiftHook(BeforeReceiveGiftCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_NPC_RECEIVE_GIFT,
-				reinterpret_cast<PVOID>(GmlScriptNpcReceiveGiftCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			before_receive_gift_callback = callback;
-			return Aurie::AURIE_SUCCESS;
 		}
 
 		inline YYTK::RValue GetIdFromInternalName(const std::string& internal_name)
@@ -372,6 +335,7 @@ namespace MMAPI::NPC
 	/// @return The NPC data struct as an RValue, or undefined if the ID is out of bounds.
 	inline YYTK::RValue GetData(MMAPI::NPC::Ids npc)
 	{
+		MMAPI_REQUIRE_ENABLED("NPC", {});
 		return Internal::GetData(GetId(npc));
 	}
 
@@ -380,6 +344,7 @@ namespace MMAPI::NPC
 	/// @return The liked gift item ID buffer as an RValue, or undefined if the NPC is not found.
 	inline YYTK::RValue GetLikedGifts(MMAPI::NPC::Ids npc)
 	{
+		MMAPI_REQUIRE_ENABLED("NPC", {});
 		return Internal::GetGiftBuffer(GetId(npc), "liked_gifts");
 	}
 
@@ -388,6 +353,7 @@ namespace MMAPI::NPC
 	/// @return The loved gift item ID buffer as an RValue, or undefined if the NPC is not found.
 	inline YYTK::RValue GetLovedGifts(MMAPI::NPC::Ids npc)
 	{
+		MMAPI_REQUIRE_ENABLED("NPC", {});
 		return Internal::GetGiftBuffer(GetId(npc), "loved_gifts");
 	}
 
@@ -396,6 +362,7 @@ namespace MMAPI::NPC
 	/// @param item_id The item ID to check.
 	inline bool LikesGift(MMAPI::NPC::Ids npc, int item_id)
 	{
+		MMAPI_REQUIRE_ENABLED("NPC", false);
 		return Internal::GiftBufferContains(GetLikedGifts(npc), item_id);
 	}
 
@@ -404,6 +371,7 @@ namespace MMAPI::NPC
 	/// @param item_id The item ID to check.
 	inline bool LovesGift(MMAPI::NPC::Ids npc, int item_id)
 	{
+		MMAPI_REQUIRE_ENABLED("NPC", false);
 		return Internal::GiftBufferContains(GetLovedGifts(npc), item_id);
 	}
 
@@ -412,6 +380,8 @@ namespace MMAPI::NPC
 	/// @param item_id The item ID to check.
 	inline bool KnowsGiftPreference(YYTK::CInstance* npc, int item_id)
 	{
+		MMAPI_REQUIRE_ENABLED("NPC", false);
+
 		YYTK::RValue known_gift_preferences = Internal::GetKnownGiftPreferences(npc);
 		if (known_gift_preferences.m_Kind == YYTK::VALUE_UNDEFINED)
 			return false;
@@ -424,6 +394,8 @@ namespace MMAPI::NPC
 	/// @param item_id The item ID to mark as learned.
 	inline void LearnGiftPreference(YYTK::CInstance* npc, int item_id)
 	{
+		MMAPI_REQUIRE_ENABLED_VOID("NPC");
+
 		YYTK::RValue known_gift_preferences = Internal::GetKnownGiftPreferences(npc);
 		if (known_gift_preferences.m_Kind == YYTK::VALUE_UNDEFINED)
 			return;
@@ -436,6 +408,8 @@ namespace MMAPI::NPC
 	/// @return The NPC's heart points, or 0 if the NPC is not found.
 	inline int GetHeartPoints(MMAPI::NPC::Ids npc)
 	{
+		MMAPI_REQUIRE_ENABLED("NPC", 0);
+
 		YYTK::RValue npc_data = GetData(npc);
 		if (npc_data.m_Kind == YYTK::VALUE_UNDEFINED)
 			return 0;
@@ -448,6 +422,8 @@ namespace MMAPI::NPC
 	/// @param value The heart point value to assign.
 	inline void SetHeartPoints(MMAPI::NPC::Ids npc, int value)
 	{
+		MMAPI_REQUIRE_ENABLED_VOID("NPC");
+
 		YYTK::RValue npc_data = GetData(npc);
 		if (npc_data.m_Kind == YYTK::VALUE_UNDEFINED)
 			return;
@@ -463,49 +439,60 @@ namespace MMAPI::NPC
 		SetHeartPoints(npc, GetHeartPoints(npc) + amount);
 	}
 
-	/// Activates NPC utility functions.
-	/// @return AURIE_SUCCESS.
-	inline Aurie::AurieStatus Enable()
+	/// Activates NPC utility functions. Eagerly installs every NPC script hook used by Hooks::* registrars
+	/// (add_heart_points, receive_gift, find_npc_blip_noise).
+	/// @return Status::Success if the hooks are installed (or already were); otherwise a failure status.
+	inline MMAPI::Status Enable()
 	{
-		return Aurie::AURIE_SUCCESS;
+		if (Internal::enabled)
+			return MMAPI::Status::Success;
+
+		MMAPI::Log::Debug("MMAPI::NPC::Enable() called");
+
+		MMAPI::Status status = MMAPI::Internal::InstallScriptHooks({
+			{ Internal::GML_SCRIPT_ADD_HEART_POINTS,    reinterpret_cast<PVOID>(Internal::GmlScriptAddHeartPointsCallback) },
+			{ Internal::GML_SCRIPT_NPC_RECEIVE_GIFT,    reinterpret_cast<PVOID>(Internal::GmlScriptNpcReceiveGiftCallback) },
+			{ Internal::GML_SCRIPT_FIND_NPC_BLIP_NOISE, reinterpret_cast<PVOID>(Internal::GmlScriptAfterFindNpcBlipNoiseCallback) },
+		});
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		Internal::enabled = true;
+		return MMAPI::Status::Success;
 	}
 
 	namespace Hooks
 	{
 		/// Registers a callback that runs when an NPC's heart points change through the game's add heart points script.
 		/// @param callback A function called with a mutable heart point change context. Use ctx.SetAmount() to modify the amount applied.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus BeforeHeartPointsChange(Internal::BeforeHeartPointsChangeCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforeHeartPointsChange(Internal::BeforeHeartPointsChangeCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::before_heart_points_change_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::NPC::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::NPC::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterHeartPointsChangedHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"NPC::BeforeHeartPointsChange",
+				Internal::before_heart_points_change_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that runs when an NPC receives a gift.
 		/// @param callback A function called with the live NPC instance and received item ID.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus BeforeReceiveGift(Internal::BeforeReceiveGiftCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforeReceiveGift(Internal::BeforeReceiveGiftCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::before_receive_gift_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::NPC::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::NPC::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterReceiveGiftHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"NPC::BeforeReceiveGift",
+				Internal::before_receive_gift_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that runs after the game's `find_npc_blip_noise` script.
@@ -513,20 +500,18 @@ namespace MMAPI::NPC
 		/// text-blip noise, and call `ctx.SetAudioAssetName(...)` to override it (e.g. retarget
 		/// a character to a different voice asset under specific conditions).
 		/// @param callback A function called with a mutable `MMAPI::NPC::FindBlipNoiseContext`.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus AfterFindBlipNoise(Internal::AfterFindBlipNoiseCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterFindBlipNoise(Internal::AfterFindBlipNoiseCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::after_find_blip_noise_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::NPC::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::NPC::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterFindBlipNoiseHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"NPC::AfterFindBlipNoise",
+				Internal::after_find_blip_noise_callback,
+				callback
+			);
 		}
 	}
 }

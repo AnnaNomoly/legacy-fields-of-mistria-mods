@@ -2,11 +2,16 @@
 
 #include "Core.hpp"
 #include "Engine.hpp"
+#include "Hook.hpp"
 #include "Infusion.hpp"
 #include "Instance.hpp"
+#include "Log.hpp"
 #include "Object.hpp"
+#include "Status.hpp"
 #include "Text.hpp"
 
+#include <algorithm>
+#include <cctype>
 #include <map>
 #include <string>
 #include <vector>
@@ -173,6 +178,8 @@ namespace MMAPI::Item
 
 	namespace Internal
 	{
+		inline bool enabled = false;
+
 		inline constexpr const char* GML_SCRIPT_DESERIALIZE_LIVE_ITEM         = "gml_Script_deserialize_live_item";
 		inline constexpr const char* GML_SCRIPT_DROP_ITEM                     = "gml_Script_drop_item";
 		inline constexpr const char* GML_SCRIPT_GIVE_ITEM                     = "gml_Script_give_item@Ari@Ari";
@@ -194,6 +201,44 @@ namespace MMAPI::Item
 		inline BeforeGetTreasureCallback            before_get_treasure_callback            = nullptr;
 		inline BeforeDropItemCallback               before_drop_item_callback               = nullptr;
 		inline BeforeGiveItemCallback               before_give_item_callback               = nullptr;
+
+		// Item prototype cache, populated by GmlScriptAfterCreateItemPrototypesCallback when the game's
+		// create_item_prototypes script runs once at startup. The prototype struct is what `LiveItem.prototype`
+		// expects — distinct from `globalInstance.__item_data` which is the item-definition table.
+		//
+		// IMPORTANT: the game runs create_item_prototypes very early during startup. The hook must already be
+		// installed by then or this cache stays empty. Item::Enable() installs the hook eagerly; mods must call
+		// MMAPI::Initialize + Item::Enable from ModuleInitialize (which is the only path that runs early enough).
+		inline std::map<int, YYTK::RValue> item_id_to_prototype_map;
+
+		/// Returns the cached item prototype for the given item_id, or undefined if the cache is empty
+		/// (Item::Enable was not called before the game's create_item_prototypes script ran) or item_id
+		/// is not in the cache. Logs a one-shot Warn when the cache is empty, and per-call Warn when an
+		/// item_id is missing from a populated cache.
+		inline YYTK::RValue GetPrototype(int item_id)
+		{
+			if (item_id_to_prototype_map.empty())
+			{
+				static bool warned_empty_cache = false;
+				if (!warned_empty_cache)
+				{
+					MMAPI::Log::Warn(
+						"Item prototype cache is empty! Was Item::Enable() called before the game's "
+						"create_item_prototypes script ran? Be sure to call it from ModuleInitialize."
+					);
+					warned_empty_cache = true;
+				}
+				return {};
+			}
+
+			auto it = item_id_to_prototype_map.find(item_id);
+			if (it == item_id_to_prototype_map.end())
+			{
+				MMAPI::Log::Warn("Item prototype not found for item_id=%d", item_id);
+				return {};
+			}
+			return it->second;
+		}
 
 		inline YYTK::RValue GetItemData()
 		{
@@ -284,19 +329,6 @@ namespace MMAPI::Item
 			return Result;
 		}
 
-		inline Aurie::AurieStatus RegisterUseItemHook(BeforeUseItemCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_USE_ITEM,
-				reinterpret_cast<PVOID>(GmlScriptUseItemCallback)
-			);
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			before_use_item_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
-
 		inline YYTK::RValue& GmlScriptAfterGetUiIconCallback(
 			IN YYTK::CInstance* Self,
 			IN YYTK::CInstance* Other,
@@ -328,19 +360,6 @@ namespace MMAPI::Item
 			return Result;
 		}
 
-		inline Aurie::AurieStatus RegisterGetUiIconHook(AfterGetUiIconCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_GET_UI_ICON,
-				reinterpret_cast<PVOID>(GmlScriptAfterGetUiIconCallback)
-			);
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			after_get_ui_icon_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
-
 		inline YYTK::RValue& GmlScriptAfterCreateItemPrototypesCallback(
 			IN YYTK::CInstance* Self,
 			IN YYTK::CInstance* Other,
@@ -354,29 +373,29 @@ namespace MMAPI::Item
 			);
 			original(Self, Other, Result, ArgumentCount, Arguments);
 
+			size_t array_length = 0;
+			MMAPI::Internal::module_interface->GetArraySize(Result, array_length);
+
+			// Always cache the prototypes, regardless of whether a user callback is registered.
+			// Used by Item::Drop / DropItemContext::Drop / DropItemContext::SetItem to populate the
+			// `prototype` member of a deserialized live item before drop_item runs.
+			item_id_to_prototype_map.clear();
+			for (size_t i = 0; i < array_length; ++i)
+			{
+				YYTK::RValue* entry = nullptr;
+				MMAPI::Internal::module_interface->GetArrayEntry(Result, i, entry);
+				if (entry)
+					item_id_to_prototype_map[static_cast<int>(i)] = *entry;
+			}
+			MMAPI::Log::Debug("Cached %zu item prototypes", array_length);
+
 			if (after_create_item_prototypes_callback)
 			{
-				size_t array_length = 0;
-				MMAPI::Internal::module_interface->GetArraySize(Result, array_length);
-
 				MMAPI::Item::CreateItemPrototypesContext context{ Result, array_length };
 				after_create_item_prototypes_callback(context);
 			}
 
 			return Result;
-		}
-
-		inline Aurie::AurieStatus RegisterCreateItemPrototypesHook(AfterCreateItemPrototypesCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_CREATE_ITEM_PROTOTYPES,
-				reinterpret_cast<PVOID>(GmlScriptAfterCreateItemPrototypesCallback)
-			);
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			after_create_item_prototypes_callback = callback;
-			return Aurie::AURIE_SUCCESS;
 		}
 
 		inline YYTK::RValue& GmlScriptBeforeGetTreasureCallback(
@@ -424,19 +443,6 @@ namespace MMAPI::Item
 			return Result;
 		}
 
-		inline Aurie::AurieStatus RegisterGetTreasureHook(BeforeGetTreasureCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_GET_TREASURE_FROM_DISTRIBUTION,
-				reinterpret_cast<PVOID>(GmlScriptBeforeGetTreasureCallback)
-			);
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			before_get_treasure_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
-
 		inline YYTK::RValue& GmlScriptBeforeDropItemCallback(
 			IN YYTK::CInstance* Self,
 			IN YYTK::CInstance* Other,
@@ -463,19 +469,6 @@ namespace MMAPI::Item
 			return Result;
 		}
 
-		inline Aurie::AurieStatus RegisterDropItemHook(BeforeDropItemCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_DROP_ITEM,
-				reinterpret_cast<PVOID>(GmlScriptBeforeDropItemCallback)
-			);
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			before_drop_item_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
-
 		inline YYTK::RValue& GmlScriptBeforeGiveItemCallback(
 			IN YYTK::CInstance* Self,
 			IN YYTK::CInstance* Other,
@@ -499,19 +492,6 @@ namespace MMAPI::Item
 			original(Self, Other, Result, ArgumentCount, Arguments);
 
 			return Result;
-		}
-
-		inline Aurie::AurieStatus RegisterGiveItemHook(BeforeGiveItemCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_GIVE_ITEM,
-				reinterpret_cast<PVOID>(GmlScriptBeforeGiveItemCallback)
-			);
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			before_give_item_callback = callback;
-			return Aurie::AURIE_SUCCESS;
 		}
 
 	}
@@ -642,6 +622,8 @@ namespace MMAPI::Item
 	/// @return The localized display name as an RValue string, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetLocalizedName(int item_id)
 	{
+		MMAPI_REQUIRE_ENABLED("Item", {});
+
 		YYTK::RValue name_key = GetLocalizationKey(item_id);
 		if (name_key.m_Kind != YYTK::VALUE_STRING)
 			return {};
@@ -722,6 +704,69 @@ namespace MMAPI::Item
 		}
 
 		return item_ids;
+	}
+
+	/// Invokes fn with every item_id in `globalInstance.__item_data`, in id order.
+	/// @attention Requires MMAPI::Item::Enable() to have been called.
+	template <typename Fn>
+	inline void ForEachItem(Fn fn)
+	{
+		MMAPI_REQUIRE_ENABLED_VOID("Item");
+
+		YYTK::RValue item_data = Internal::GetItemData();
+
+		size_t item_count = 0;
+		MMAPI::Internal::module_interface->GetArraySize(item_data, item_count);
+
+		for (size_t i = 0; i < item_count; ++i)
+			fn(static_cast<int>(i));
+	}
+
+	/// Finds every item whose internal recipe key OR localized display name case-insensitively
+	/// matches any entry in `names`. Common pattern for resolving user-supplied item lists from
+	/// config files (where users might write either internal keys like "ore_stone" or display
+	/// names like "Stone").
+	/// @attention Requires MMAPI::Item::Enable() to have been called.
+	/// @param names The set of names to match against. Compared case-insensitively.
+	/// @return All matching item_ids (no duplicates — a single item that matches multiple names
+	///         appears once).
+	inline std::vector<int> FindIdsByName(const std::vector<std::string>& names)
+	{
+		MMAPI_REQUIRE_ENABLED("Item", {});
+
+		auto to_lower = [](std::string s)
+		{
+			std::transform(s.begin(), s.end(), s.begin(),
+				[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+			return s;
+		};
+
+		std::vector<std::string> needles;
+		needles.reserve(names.size());
+		for (const auto& n : names)
+			needles.push_back(to_lower(n));
+
+		std::vector<int> matching_ids;
+		ForEachItem([&](int item_id)
+		{
+			YYTK::RValue internal_rv = GetInternalName(item_id);
+			std::string internal_lc = (internal_rv.m_Kind == YYTK::VALUE_STRING) ? to_lower(internal_rv.ToString()) : "";
+
+			YYTK::RValue localized_rv = GetLocalizedName(item_id);
+			std::string localized_lc = (localized_rv.m_Kind == YYTK::VALUE_STRING) ? to_lower(localized_rv.ToString()) : "";
+
+			for (const auto& needle : needles)
+			{
+				if ((!internal_lc.empty() && needle == internal_lc) ||
+					(!localized_lc.empty() && needle == localized_lc))
+				{
+					matching_ids.push_back(item_id);
+					break;
+				}
+			}
+		});
+
+		return matching_ids;
 	}
 
 	/// Gets the stamina modifier for an item.
@@ -863,18 +908,23 @@ namespace MMAPI::Item
 	/// GML calling context, and to MMAPI::Text::Enable so Item::GetLocalizedName can resolve the Localizer.
 	/// Eagerly installs every Item script hook used by Hooks::* registrars (use_item, drop_item, give_item,
 	/// get_ui_icon, create_item_prototypes, get_treasure_from_distribution).
-	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
-	inline Aurie::AurieStatus Enable()
+	/// @return Status::Success if the hooks are installed (or already were); otherwise a failure status.
+	inline MMAPI::Status Enable()
 	{
-		Aurie::AurieStatus status = MMAPI::Instance::Enable();
-		if (!Aurie::AurieSuccess(status))
+		if (Internal::enabled)
+			return MMAPI::Status::Success;
+
+		MMAPI::Log::Debug("MMAPI::Item::Enable() called");
+
+		MMAPI::Status status = MMAPI::Instance::Enable();
+		if (!MMAPI::IsSuccess(status))
 			return status;
 
 		status = MMAPI::Text::Enable();
-		if (!Aurie::AurieSuccess(status))
+		if (!MMAPI::IsSuccess(status))
 			return status;
 
-		return MMAPI::Internal::InstallScriptHooks({
+		status = MMAPI::Internal::InstallScriptHooks({
 			{ Internal::GML_SCRIPT_USE_ITEM,                       reinterpret_cast<PVOID>(Internal::GmlScriptUseItemCallback) },
 			{ Internal::GML_SCRIPT_DROP_ITEM,                      reinterpret_cast<PVOID>(Internal::GmlScriptBeforeDropItemCallback) },
 			{ Internal::GML_SCRIPT_GIVE_ITEM,                      reinterpret_cast<PVOID>(Internal::GmlScriptBeforeGiveItemCallback) },
@@ -882,6 +932,11 @@ namespace MMAPI::Item
 			{ Internal::GML_SCRIPT_CREATE_ITEM_PROTOTYPES,         reinterpret_cast<PVOID>(Internal::GmlScriptAfterCreateItemPrototypesCallback) },
 			{ Internal::GML_SCRIPT_GET_TREASURE_FROM_DISTRIBUTION, reinterpret_cast<PVOID>(Internal::GmlScriptBeforeGetTreasureCallback) },
 		});
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		Internal::enabled = true;
+		return MMAPI::Status::Success;
 	}
 
 	/// Drops an item at the given room coordinates.
@@ -891,6 +946,8 @@ namespace MMAPI::Item
 	/// @param y The room y coordinate.
 	inline void Drop(int item_id, double x, double y)
 	{
+		MMAPI_REQUIRE_ENABLED_VOID("Item");
+
 		if (item_id < 0)
 			return;
 
@@ -903,11 +960,11 @@ namespace MMAPI::Item
 		if (item.m_Kind == YYTK::VALUE_UNDEFINED)
 			return;
 
-		YYTK::RValue item_data = Internal::GetItemData(item_id);
-		if (item_data.m_Kind == YYTK::VALUE_UNDEFINED)
+		YYTK::RValue prototype = Internal::GetPrototype(item_id);
+		if (prototype.m_Kind == YYTK::VALUE_UNDEFINED)
 			return;
 
-		*item.GetRefMember("prototype") = item_data;
+		*item.GetRefMember("prototype") = prototype;
 		*item.GetRefMember("item_id") = item_id;
 
 		YYTK::CScript* gml_script = nullptr;
@@ -939,11 +996,11 @@ namespace MMAPI::Item
 		if (m_arg0->m_Kind == YYTK::VALUE_OBJECT
 			&& MMAPI::Engine::StructVariableExists(*m_arg0, "item_id"))
 		{
-			YYTK::RValue item_data = Internal::GetItemData(item_id);
-			if (item_data.m_Kind == YYTK::VALUE_UNDEFINED)
+			YYTK::RValue prototype = Internal::GetPrototype(item_id);
+			if (prototype.m_Kind == YYTK::VALUE_UNDEFINED)
 				return false;
 
-			*m_arg0->GetRefMember("prototype") = item_data;
+			*m_arg0->GetRefMember("prototype") = prototype;
 			*m_arg0->GetRefMember("item_id")   = item_id;
 			return true;
 		}
@@ -974,11 +1031,11 @@ namespace MMAPI::Item
 		if (item.m_Kind == YYTK::VALUE_UNDEFINED)
 			return;
 
-		YYTK::RValue item_data = Internal::GetItemData(item_id);
-		if (item_data.m_Kind == YYTK::VALUE_UNDEFINED)
+		YYTK::RValue prototype = Internal::GetPrototype(item_id);
+		if (prototype.m_Kind == YYTK::VALUE_UNDEFINED)
 			return;
 
-		*item.GetRefMember("prototype") = item_data;
+		*item.GetRefMember("prototype") = prototype;
 		*item.GetRefMember("item_id")   = item_id;
 
 		YYTK::CScript* gml_script = nullptr;
@@ -1050,20 +1107,18 @@ namespace MMAPI::Item
 		/// Registers a callback that runs before the game processes an item use.
 		/// Call ctx.Cancel() to prevent the game from processing the item use.
 		/// @param callback A function called with a mutable use context before the game processes it.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus BeforeUseItem(Internal::BeforeUseItemCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforeUseItem(Internal::BeforeUseItemCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::before_use_item_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Item::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Item::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterUseItemHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Item::BeforeUseItem",
+				Internal::before_use_item_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that runs after the game's `get_ui_icon` script for a live item.
@@ -1071,20 +1126,18 @@ namespace MMAPI::Item
 		/// `ctx.GetSpriteAsset()` to see the sprite asset the game computed; call `ctx.SetSpriteAsset(...)`
 		/// to override it with a custom sprite (typically `MMAPI::Engine::AssetGetIndex("spr_...")`).
 		/// @param callback A function called with a mutable `MMAPI::Item::GetUiIconContext`.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus AfterGetUiIcon(Internal::AfterGetUiIconCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterGetUiIcon(Internal::AfterGetUiIconCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::after_get_ui_icon_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Item::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Item::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterGetUiIconHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Item::AfterGetUiIcon",
+				Internal::after_get_ui_icon_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that runs after the game's `create_item_prototypes` script.
@@ -1092,20 +1145,18 @@ namespace MMAPI::Item
 		/// `ctx.Count()` for its length — useful for snapshotting the full prototype table when the
 		/// game finishes loading items.
 		/// @param callback A function called with a `MMAPI::Item::CreateItemPrototypesContext`.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus AfterCreateItemPrototypes(Internal::AfterCreateItemPrototypesCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterCreateItemPrototypes(Internal::AfterCreateItemPrototypesCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::after_create_item_prototypes_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Item::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Item::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterCreateItemPrototypesHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Item::AfterCreateItemPrototypes",
+				Internal::after_create_item_prototypes_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that runs before the game's `get_treasure_from_distribution` script.
@@ -1114,20 +1165,18 @@ namespace MMAPI::Item
 		/// and `ctx.GetObjectName()` returns its internal name (resolved via Object::GetInternalName).
 		/// Use this to detect the originating chest/container and inject custom loot before the game's roll runs.
 		/// @param callback A function called with a `MMAPI::Item::GetTreasureContext`.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus BeforeGetTreasure(Internal::BeforeGetTreasureCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforeGetTreasure(Internal::BeforeGetTreasureCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::before_get_treasure_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Item::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Item::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterGetTreasureHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Item::BeforeGetTreasure",
+				Internal::before_get_treasure_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that runs before the game's `drop_item` script. The script's
@@ -1137,20 +1186,18 @@ namespace MMAPI::Item
 		/// (non-array path only), and `ctx.Drop(id_or_name, x, y)` to issue additional drops using the
 		/// hook's own Self/Other (warning: re-enters this hook — guard against recursion in your callback).
 		/// @param callback A function called with a mutable `MMAPI::Item::DropItemContext`.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus BeforeDropItem(Internal::BeforeDropItemCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforeDropItem(Internal::BeforeDropItemCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::before_drop_item_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Item::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Item::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterDropItemHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Item::BeforeDropItem",
+				Internal::before_drop_item_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that runs before the game's `give_item@Ari@Ari` script. The script
@@ -1161,20 +1208,18 @@ namespace MMAPI::Item
 		/// the infusion (no-op if the struct has no `infusion` field), and
 		/// `ctx.GetQuantity()`/`ctx.SetQuantity(int)` for the count.
 		/// @param callback A function called with a mutable `MMAPI::Item::GiveItemContext`.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus BeforeGiveItem(Internal::BeforeGiveItemCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforeGiveItem(Internal::BeforeGiveItemCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::before_give_item_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Item::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Item::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterGiveItemHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Item::BeforeGiveItem",
+				Internal::before_give_item_callback,
+				callback
+			);
 		}
 	}
 }

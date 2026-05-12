@@ -1,7 +1,11 @@
 #pragma once
 
 #include "Core.hpp"
+#include "Hook.hpp"
 #include "Instance.hpp"
+#include "Weather.hpp"
+#include "Log.hpp"
+#include "Status.hpp"
 
 #include <string>
 #include <unordered_map>
@@ -65,6 +69,8 @@ namespace MMAPI::Game
 
 	namespace Internal
 	{
+		inline bool enabled = false;
+
 		inline std::unordered_map<std::string, uint64_t> notification_last_display_time;
 		inline constexpr const char* GML_SCRIPT_CREATE_NOTIFICATION     = "gml_Script_create_notification";
 		inline constexpr const char* GML_SCRIPT_SELL_SHIPPING_BIN_ITEMS = "gml_Script_sell_shipping_bin_items";
@@ -168,20 +174,6 @@ namespace MMAPI::Game
 			return Result;
 		}
 
-		inline Aurie::AurieStatus RegisterEndDayHook(EndDayCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_END_DAY,
-				reinterpret_cast<PVOID>(GmlScriptEndDayCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			after_end_day_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
-
 		inline YYTK::RValue& GmlScriptAriBeforeNewDayCallback(
 			IN YYTK::CInstance* Self,
 			IN YYTK::CInstance* Other,
@@ -205,20 +197,6 @@ namespace MMAPI::Game
 			return Result;
 		}
 
-		inline Aurie::AurieStatus RegisterNewDayHook(NewDayCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_ARI_ON_NEW_DAY,
-				reinterpret_cast<PVOID>(GmlScriptAriBeforeNewDayCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			before_new_day_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
-
 		inline YYTK::RValue& GmlScriptLoadGameCallback(
 			IN YYTK::CInstance* Self,
 			IN YYTK::CInstance* Other,
@@ -236,20 +214,6 @@ namespace MMAPI::Game
 				after_load_game_callback();
 
 			return Result;
-		}
-
-		inline Aurie::AurieStatus RegisterLoadGameHook(LoadGameCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_LOAD_GAME,
-				reinterpret_cast<PVOID>(GmlScriptLoadGameCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			after_load_game_callback = callback;
-			return Aurie::AURIE_SUCCESS;
 		}
 
 		inline YYTK::RValue& GmlScriptSaveGameCallback(
@@ -275,20 +239,6 @@ namespace MMAPI::Game
 			original(Self, Other, Result, ArgumentCount, Arguments);
 
 			return Result;
-		}
-
-		inline Aurie::AurieStatus RegisterSaveGameHook(BeforeSaveGameCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_SAVE_GAME,
-				reinterpret_cast<PVOID>(GmlScriptSaveGameCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			before_save_game_callback = callback;
-			return Aurie::AURIE_SUCCESS;
 		}
 
 		inline YYTK::RValue& GmlScriptPlayAudioCallback(
@@ -318,20 +268,6 @@ namespace MMAPI::Game
 			return Result;
 		}
 
-		inline Aurie::AurieStatus RegisterPlayAudioHook(BeforePlayAudioCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_SCENE_AUDIO_PLAYER_PLAY,
-				reinterpret_cast<PVOID>(GmlScriptPlayAudioCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			before_play_audio_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
-
 		inline YYTK::RValue& GmlScriptAfterDrawGuiCallback(
 			IN YYTK::CInstance* Self,
 			IN YYTK::CInstance* Other,
@@ -349,20 +285,6 @@ namespace MMAPI::Game
 				after_draw_gui_callback();
 
 			return Result;
-		}
-
-		inline Aurie::AurieStatus RegisterDrawGuiHook(AfterDrawGuiCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_ON_DRAW_GUI,
-				reinterpret_cast<PVOID>(GmlScriptAfterDrawGuiCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			after_draw_gui_callback = callback;
-			return Aurie::AURIE_SUCCESS;
 		}
 
 		inline YYTK::RValue& GmlScriptHudShouldShowCallback(
@@ -388,20 +310,6 @@ namespace MMAPI::Game
 			return Result;
 		}
 
-		inline Aurie::AurieStatus RegisterHudShouldShowHook(AfterHudShouldShowCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_HUD_SHOULD_SHOW,
-				reinterpret_cast<PVOID>(GmlScriptHudShouldShowCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			after_hud_should_show_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
-
 		inline YYTK::RValue& GmlScriptCraftingMenuOpenCallback(
 			IN YYTK::CInstance* Self,
 			IN YYTK::CInstance* Other,
@@ -417,17 +325,6 @@ namespace MMAPI::Game
 			if (after_crafting_menu_open_callback)
 				after_crafting_menu_open_callback();
 			return Result;
-		}
-
-		inline Aurie::AurieStatus RegisterCraftingMenuOpenHook(AfterCraftingMenuOpenCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_CRAFTING_MENU_OPEN, reinterpret_cast<PVOID>(GmlScriptCraftingMenuOpenCallback)
-			);
-			if (!Aurie::AurieSuccess(status))
-				return status;
-			after_crafting_menu_open_callback = callback;
-			return Aurie::AURIE_SUCCESS;
 		}
 
 		inline YYTK::RValue& GmlScriptCraftingMenuCloseCallback(
@@ -447,17 +344,6 @@ namespace MMAPI::Game
 			return Result;
 		}
 
-		inline Aurie::AurieStatus RegisterCraftingMenuCloseHook(AfterCraftingMenuCloseCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_CRAFTING_MENU_CLOSE, reinterpret_cast<PVOID>(GmlScriptCraftingMenuCloseCallback)
-			);
-			if (!Aurie::AurieSuccess(status))
-				return status;
-			after_crafting_menu_close_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
-
 		inline YYTK::RValue& GmlScriptJournalMenuOpenCallback(
 			IN YYTK::CInstance* Self,
 			IN YYTK::CInstance* Other,
@@ -473,17 +359,6 @@ namespace MMAPI::Game
 			if (after_journal_menu_open_callback)
 				after_journal_menu_open_callback();
 			return Result;
-		}
-
-		inline Aurie::AurieStatus RegisterJournalMenuOpenHook(AfterJournalMenuOpenCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_JOURNAL_MENU_OPEN, reinterpret_cast<PVOID>(GmlScriptJournalMenuOpenCallback)
-			);
-			if (!Aurie::AurieSuccess(status))
-				return status;
-			after_journal_menu_open_callback = callback;
-			return Aurie::AURIE_SUCCESS;
 		}
 
 		inline YYTK::RValue& GmlScriptJournalMenuCloseCallback(
@@ -503,17 +378,6 @@ namespace MMAPI::Game
 			return Result;
 		}
 
-		inline Aurie::AurieStatus RegisterJournalMenuCloseHook(AfterJournalMenuCloseCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_JOURNAL_MENU_CLOSE, reinterpret_cast<PVOID>(GmlScriptJournalMenuCloseCallback)
-			);
-			if (!Aurie::AurieSuccess(status))
-				return status;
-			after_journal_menu_close_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
-
 		inline YYTK::RValue& GmlScriptStoreMenuOpenCallback(
 			IN YYTK::CInstance* Self,
 			IN YYTK::CInstance* Other,
@@ -531,17 +395,6 @@ namespace MMAPI::Game
 			return Result;
 		}
 
-		inline Aurie::AurieStatus RegisterStoreMenuOpenHook(AfterStoreMenuOpenCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_STORE_MENU_OPEN, reinterpret_cast<PVOID>(GmlScriptStoreMenuOpenCallback)
-			);
-			if (!Aurie::AurieSuccess(status))
-				return status;
-			after_store_menu_open_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
-
 		inline YYTK::RValue& GmlScriptStoreMenuCloseCallback(
 			IN YYTK::CInstance* Self,
 			IN YYTK::CInstance* Other,
@@ -557,17 +410,6 @@ namespace MMAPI::Game
 			if (after_store_menu_close_callback)
 				after_store_menu_close_callback();
 			return Result;
-		}
-
-		inline Aurie::AurieStatus RegisterStoreMenuCloseHook(AfterStoreMenuCloseCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_STORE_MENU_CLOSE, reinterpret_cast<PVOID>(GmlScriptStoreMenuCloseCallback)
-			);
-			if (!Aurie::AurieSuccess(status))
-				return status;
-			after_store_menu_close_callback = callback;
-			return Aurie::AURIE_SUCCESS;
 		}
 
 	}
@@ -669,14 +511,25 @@ namespace MMAPI::Game
 	/// Activates Game utility functions that directly call game scripts. Eagerly installs every Game
 	/// script hook used by Hooks::* registrars (end_day, on_new_day, load/save_game, scene audio play,
 	/// on_draw_gui, hud_should_show, crafting/journal/store menu open/close).
-	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
-	inline Aurie::AurieStatus Enable()
+	/// @return Status::Success if the hooks are installed (or already were); otherwise a failure status.
+	inline MMAPI::Status Enable()
 	{
-		Aurie::AurieStatus status = MMAPI::Instance::Enable();
-		if (!Aurie::AurieSuccess(status))
+		if (Internal::enabled)
+			return MMAPI::Status::Success;
+
+		MMAPI::Log::Debug("MMAPI::Game::Enable() called");
+
+		MMAPI::Status status = MMAPI::Instance::Enable();
+		if (!MMAPI::IsSuccess(status))
 			return status;
 
-		return MMAPI::Internal::InstallScriptHooks({
+		// Game::Hooks::AfterGameActive is implemented via Weather's get_weather wrapper —
+		// the user-facing registrar lives on Game, but the underlying signal lives in Weather.
+		status = MMAPI::Weather::Enable();
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		status = MMAPI::Internal::InstallScriptHooks({
 			{ Internal::GML_SCRIPT_END_DAY,                 reinterpret_cast<PVOID>(Internal::GmlScriptEndDayCallback) },
 			{ Internal::GML_SCRIPT_ARI_ON_NEW_DAY,          reinterpret_cast<PVOID>(Internal::GmlScriptAriBeforeNewDayCallback) },
 			{ Internal::GML_SCRIPT_LOAD_GAME,               reinterpret_cast<PVOID>(Internal::GmlScriptLoadGameCallback) },
@@ -691,6 +544,11 @@ namespace MMAPI::Game
 			{ Internal::GML_SCRIPT_STORE_MENU_OPEN,         reinterpret_cast<PVOID>(Internal::GmlScriptStoreMenuOpenCallback) },
 			{ Internal::GML_SCRIPT_STORE_MENU_CLOSE,        reinterpret_cast<PVOID>(Internal::GmlScriptStoreMenuCloseCallback) },
 		});
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		Internal::enabled = true;
+		return MMAPI::Status::Success;
 	}
 
 	/// Sells the current shipping bin contents.
@@ -698,6 +556,8 @@ namespace MMAPI::Game
 	/// @return The sale result as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue SellShippingBinItems()
 	{
+		MMAPI_REQUIRE_ENABLED("Game", {});
+
 		YYTK::CInstance* Self  = nullptr;
 		YYTK::CInstance* Other = nullptr;
 		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
@@ -715,259 +575,255 @@ namespace MMAPI::Game
 	{
 		/// Registers a callback that runs after the game ends the current day.
 		/// @param callback A function called after the game's end day script runs.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus AfterEndDay(Internal::EndDayCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterEndDay(Internal::EndDayCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::after_end_day_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Game::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Game::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterEndDayHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Game::AfterEndDay",
+				Internal::after_end_day_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that runs before the game starts a new day for Ari.
 		/// @param callback A function called before Ari's on new day script runs.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus BeforeNewDay(Internal::NewDayCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforeNewDay(Internal::NewDayCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::before_new_day_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Game::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Game::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterNewDayHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Game::BeforeNewDay",
+				Internal::before_new_day_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that runs after the game loads a save file.
 		/// @param callback A function called after the game's load_game script runs.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus AfterLoadGame(Internal::LoadGameCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterLoadGame(Internal::LoadGameCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::after_load_game_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Game::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Game::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterLoadGameHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Game::AfterLoadGame",
+				Internal::after_load_game_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that runs before the game saves.
 		/// Call ctx.Cancel() to prevent the game from saving.
 		/// @param callback A function called with a mutable save context before the game processes it.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus BeforeSaveGame(Internal::BeforeSaveGameCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforeSaveGame(Internal::BeforeSaveGameCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::before_save_game_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Game::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Game::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterSaveGameHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Game::BeforeSaveGame",
+				Internal::before_save_game_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that runs before the game plays an audio track.
 		/// Use ctx.SetAudioName() to redirect to a different audio asset, or ctx.Cancel() to prevent playback.
 		/// @param callback A function called with a mutable audio context before the game processes it.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus BeforePlayAudio(Internal::BeforePlayAudioCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforePlayAudio(Internal::BeforePlayAudioCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::before_play_audio_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Game::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Game::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterPlayAudioHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Game::BeforePlayAudio",
+				Internal::before_play_audio_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that runs after each GUI draw step.
 		/// @param callback A function called after the game's draw GUI script runs.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus AfterDrawGui(Internal::AfterDrawGuiCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterDrawGui(Internal::AfterDrawGuiCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::after_draw_gui_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Game::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Game::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterDrawGuiHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Game::AfterDrawGui",
+				Internal::after_draw_gui_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that runs after the game evaluates whether the HUD should be shown.
 		/// Use ctx.SetResult(false) to hide the HUD.
 		/// @param callback A function called with a mutable HUD visibility context after the game evaluates it.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus AfterHudShouldShow(Internal::AfterHudShouldShowCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterHudShouldShow(Internal::AfterHudShouldShowCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::after_hud_should_show_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Game::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Game::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterHudShouldShowHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Game::AfterHudShouldShow",
+				Internal::after_hud_should_show_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that runs after the crafting menu opens.
 		/// @param callback A function called after the crafting menu's initialize script runs.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus AfterCraftingMenuOpen(Internal::AfterCraftingMenuOpenCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterCraftingMenuOpen(Internal::AfterCraftingMenuOpenCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::after_crafting_menu_open_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Game::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Game::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterCraftingMenuOpenHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Game::AfterCraftingMenuOpen",
+				Internal::after_crafting_menu_open_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that runs after the crafting menu closes.
 		/// @param callback A function called after the crafting menu's close script runs.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus AfterCraftingMenuClose(Internal::AfterCraftingMenuCloseCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterCraftingMenuClose(Internal::AfterCraftingMenuCloseCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::after_crafting_menu_close_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Game::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Game::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterCraftingMenuCloseHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Game::AfterCraftingMenuClose",
+				Internal::after_crafting_menu_close_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that runs after the journal menu opens.
 		/// @param callback A function called after the journal menu's initialize script runs.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus AfterJournalMenuOpen(Internal::AfterJournalMenuOpenCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterJournalMenuOpen(Internal::AfterJournalMenuOpenCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::after_journal_menu_open_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Game::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Game::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterJournalMenuOpenHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Game::AfterJournalMenuOpen",
+				Internal::after_journal_menu_open_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that runs after the journal menu closes.
 		/// @param callback A function called after the journal menu's close script runs.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus AfterJournalMenuClose(Internal::AfterJournalMenuCloseCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterJournalMenuClose(Internal::AfterJournalMenuCloseCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::after_journal_menu_close_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Game::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Game::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterJournalMenuCloseHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Game::AfterJournalMenuClose",
+				Internal::after_journal_menu_close_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that runs after the store menu opens.
 		/// @param callback A function called after the store menu's initialize script runs.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus AfterStoreMenuOpen(Internal::AfterStoreMenuOpenCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterStoreMenuOpen(Internal::AfterStoreMenuOpenCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::after_store_menu_open_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Game::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Game::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterStoreMenuOpenHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Game::AfterStoreMenuOpen",
+				Internal::after_store_menu_open_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that runs after the store menu closes.
 		/// @param callback A function called after the store menu's close script runs.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus AfterStoreMenuClose(Internal::AfterStoreMenuCloseCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterStoreMenuClose(Internal::AfterStoreMenuCloseCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::after_store_menu_close_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Game::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Game::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterStoreMenuCloseHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Game::AfterStoreMenuClose",
+				Internal::after_store_menu_close_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that runs before the title menu's setup_main_screen script.
 		/// MMAPI automatically clears its instance reference map and fires module-local "return-to-title"
 		/// handlers before this callback runs, so mods do not need to reset captured state manually.
 		/// @param callback A function called before the title menu setup script runs (after MMAPI's auto-clears).
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus BeforeSetupMainScreen(MMAPI::Internal::BeforeSetupMainScreenCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforeSetupMainScreen(MMAPI::Internal::BeforeSetupMainScreenCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (MMAPI::Internal::before_setup_main_screen_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Game::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Game::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return MMAPI::Internal::RegisterBeforeSetupMainScreenHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Game::BeforeSetupMainScreen",
+				MMAPI::Internal::before_setup_main_screen_callback,
+				callback
+			);
+		}
+
+		/// Registers a callback that fires once per session when the game becomes interactive — defined as
+		/// the first `get_weather@WeatherManager@Weather` script call after a save load. Re-fires on each
+		/// subsequent save load (cleared on return-to-title alongside other session-scoped Weather state).
+		///
+		/// @attention Localizer is not guaranteed to be populated yet at this point. Mods that need to
+		/// resolve localized item/text names should still pair this with `Text::Hooks::AfterLocalizedString`
+		/// (e.g. set a flag in AfterGameActive, consume it in AfterLocalizedString) so the work runs after
+		/// at least one localized string has been resolved.
+		///
+		/// @param callback A function called once per session when the game becomes interactive.
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterGameActive(MMAPI::Weather::Internal::GameActiveCallback callback)
+		{
+			MMAPI::Status status = MMAPI::Game::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
+
+			return MMAPI::Internal::RegisterHook(
+				"Game::AfterGameActive",
+				MMAPI::Weather::Internal::game_active_callback,
+				callback
+			);
 		}
 	}
 }

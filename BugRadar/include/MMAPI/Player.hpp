@@ -3,7 +3,10 @@
 #include "Bark.hpp"
 #include "Core.hpp"
 #include "Engine.hpp"
+#include "Hook.hpp"
 #include "Instance.hpp"
+#include "Log.hpp"
+#include "Status.hpp"
 
 #include <optional>
 #include <string>
@@ -142,6 +145,8 @@ namespace MMAPI::Player
 
 	namespace Internal
 	{
+		inline bool enabled = false;
+
 		inline constexpr const char* GML_SCRIPT_GET_HEALTH             = "gml_Script_get_health@Ari@Ari";
 		inline constexpr const char* GML_SCRIPT_SET_HEALTH             = "gml_Script_set_health@Ari@Ari";
 		inline constexpr const char* GML_SCRIPT_MODIFY_HEALTH          = "gml_Script_modify_health@Ari@Ari";
@@ -211,20 +216,6 @@ namespace MMAPI::Player
 			}
 
 			return Result;
-		}
-
-		inline Aurie::AurieStatus RegisterMoveSpeedHook(AfterMoveSpeedCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_GET_MOVE_SPEED,
-				reinterpret_cast<PVOID>(GmlScriptGetMoveSpeedCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			after_move_speed_callback = callback;
-			return Aurie::AURIE_SUCCESS;
 		}
 
 		inline YYTK::RValue& GmlScriptModifyHealthCallback(
@@ -312,62 +303,6 @@ namespace MMAPI::Player
 			return Result;
 		}
 
-		inline Aurie::AurieStatus RegisterHealthChangeHook(BeforeHealthChangeCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_MODIFY_HEALTH,
-				reinterpret_cast<PVOID>(GmlScriptModifyHealthCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			before_health_change_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
-
-		inline Aurie::AurieStatus RegisterAfterHealthChangeHook(AfterHealthChangeCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_MODIFY_HEALTH,
-				reinterpret_cast<PVOID>(GmlScriptModifyHealthCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			after_health_change_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
-
-		inline Aurie::AurieStatus RegisterStaminaChangeHook(BeforeStaminaChangeCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_MODIFY_STAMINA,
-				reinterpret_cast<PVOID>(GmlScriptModifyStaminaCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			before_stamina_change_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
-
-		inline Aurie::AurieStatus RegisterManaChangeHook(BeforeManaChangeCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_MODIFY_MANA,
-				reinterpret_cast<PVOID>(GmlScriptModifyManaCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			before_mana_change_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
-
 		inline YYTK::RValue& GmlScriptBeforeFaceDirCallback(
 			IN YYTK::CInstance* Self,
 			IN YYTK::CInstance* Other,
@@ -388,20 +323,6 @@ namespace MMAPI::Player
 			original(Self, Other, Result, ArgumentCount, Arguments);
 
 			return Result;
-		}
-
-		inline Aurie::AurieStatus RegisterFaceDirHook(BeforeFaceDirCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_FACE_DIR,
-				reinterpret_cast<PVOID>(GmlScriptBeforeFaceDirCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			before_face_dir_callback = callback;
-			return Aurie::AURIE_SUCCESS;
 		}
 
 		inline YYTK::RValue& GmlScriptAfterHeldItemCallback(
@@ -431,20 +352,6 @@ namespace MMAPI::Player
 			}
 
 			return Result;
-		}
-
-		inline Aurie::AurieStatus RegisterHeldItemHook(AfterHeldItemCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_HELD_ITEM,
-				reinterpret_cast<PVOID>(GmlScriptAfterHeldItemCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			after_held_item_callback = callback;
-			return Aurie::AURIE_SUCCESS;
 		}
 	}
 
@@ -481,6 +388,8 @@ namespace MMAPI::Player
 	/// @return The held item struct as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetHeldItem()
 	{
+		MMAPI_REQUIRE_ENABLED("Player", {});
+
 		YYTK::CInstance* Self  = nullptr;
 		YYTK::CInstance* Other = nullptr;
 		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
@@ -512,6 +421,8 @@ namespace MMAPI::Player
 	/// @return True if the player state was resolved, false if the required context is unavailable.
 	inline bool TryGetState(MMAPI::Player::States& state)
 	{
+		MMAPI_REQUIRE_ENABLED("Player", false);
+
 		YYTK::RValue state_id = Internal::GetStateId();
 		if (state_id.m_Kind == YYTK::VALUE_UNDEFINED || state_id.m_Kind == YYTK::VALUE_UNSET)
 			return false;
@@ -542,6 +453,8 @@ namespace MMAPI::Player
 	/// @return Ari's current x/y position, or std::nullopt if the required context is unavailable.
 	inline std::optional<MMAPI::Player::Position> GetPosition()
 	{
+		MMAPI_REQUIRE_ENABLED("Player", std::nullopt);
+
 		const auto& refs = MMAPI::Internal::instance_reference_map;
 		if (!refs.contains(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI))
 			return std::nullopt;
@@ -561,6 +474,8 @@ namespace MMAPI::Player
 	/// @return Ari's current health as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetHealth()
 	{
+		MMAPI_REQUIRE_ENABLED("Player", {});
+
 		YYTK::CInstance* Self  = nullptr;
 		YYTK::CInstance* Other = nullptr;
 		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
@@ -579,6 +494,8 @@ namespace MMAPI::Player
 	/// @param value The health value to set.
 	inline void SetHealth(int value)
 	{
+		MMAPI_REQUIRE_ENABLED_VOID("Player");
+
 		YYTK::CInstance* Self  = nullptr;
 		YYTK::CInstance* Other = nullptr;
 		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
@@ -598,6 +515,8 @@ namespace MMAPI::Player
 	/// @return Ari's current maximum health as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetMaxHealth()
 	{
+		MMAPI_REQUIRE_ENABLED("Player", {});
+
 		YYTK::CInstance* Self  = nullptr;
 		YYTK::CInstance* Other = nullptr;
 		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
@@ -629,6 +548,8 @@ namespace MMAPI::Player
 	/// @param value The amount to add to Ari's current health. Negative values reduce health.
 	inline void ModifyHealth(int value)
 	{
+		MMAPI_REQUIRE_ENABLED_VOID("Player");
+
 		YYTK::CInstance* Self  = nullptr;
 		YYTK::CInstance* Other = nullptr;
 		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
@@ -660,6 +581,8 @@ namespace MMAPI::Player
 	/// @param value The amount to add to Ari's current stamina. Negative values reduce stamina.
 	inline void ModifyStamina(int value)
 	{
+		MMAPI_REQUIRE_ENABLED_VOID("Player");
+
 		YYTK::CInstance* Self  = nullptr;
 		YYTK::CInstance* Other = nullptr;
 		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
@@ -679,6 +602,8 @@ namespace MMAPI::Player
 	/// @return Ari's current stamina as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetStamina()
 	{
+		MMAPI_REQUIRE_ENABLED("Player", {});
+
 		YYTK::CInstance* Self  = nullptr;
 		YYTK::CInstance* Other = nullptr;
 		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
@@ -697,6 +622,8 @@ namespace MMAPI::Player
 	/// @param value The amount to add to Ari's current gold. Negative values reduce gold.
 	inline void ModifyGold(int value)
 	{
+		MMAPI_REQUIRE_ENABLED_VOID("Player");
+
 		YYTK::CInstance* Self  = nullptr;
 		YYTK::CInstance* Other = nullptr;
 		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
@@ -716,6 +643,8 @@ namespace MMAPI::Player
 	/// @param value The amount to add to Ari's current renown. Negative values reduce renown.
 	inline void ModifyRenown(int value)
 	{
+		MMAPI_REQUIRE_ENABLED_VOID("Player");
+
 		YYTK::CInstance* Self  = nullptr;
 		YYTK::CInstance* Other = nullptr;
 		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
@@ -735,6 +664,8 @@ namespace MMAPI::Player
 	/// @return Ari's current mana as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetMana()
 	{
+		MMAPI_REQUIRE_ENABLED("Player", {});
+
 		YYTK::CInstance* Self  = nullptr;
 		YYTK::CInstance* Other = nullptr;
 		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
@@ -753,6 +684,8 @@ namespace MMAPI::Player
 	/// @param value The amount to add to Ari's current mana. Negative values reduce mana.
 	inline void ModifyMana(int value)
 	{
+		MMAPI_REQUIRE_ENABLED_VOID("Player");
+
 		YYTK::CInstance* Self  = nullptr;
 		YYTK::CInstance* Other = nullptr;
 		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
@@ -772,6 +705,8 @@ namespace MMAPI::Player
 	/// @return Ari's current essence as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetEssence()
 	{
+		MMAPI_REQUIRE_ENABLED("Player", {});
+
 		YYTK::CInstance* Self  = nullptr;
 		YYTK::CInstance* Other = nullptr;
 		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
@@ -790,6 +725,8 @@ namespace MMAPI::Player
 	/// @param value The amount to add to Ari's current essence. Negative values reduce essence.
 	inline void ModifyEssence(int value)
 	{
+		MMAPI_REQUIRE_ENABLED_VOID("Player");
+
 		YYTK::CInstance* Self  = nullptr;
 		YYTK::CInstance* Other = nullptr;
 		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
@@ -809,6 +746,8 @@ namespace MMAPI::Player
 	/// @return Ari's current movement speed as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetMoveSpeed()
 	{
+		MMAPI_REQUIRE_ENABLED("Player", {});
+
 		YYTK::CInstance* Self  = nullptr;
 		YYTK::CInstance* Other = nullptr;
 		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
@@ -822,14 +761,37 @@ namespace MMAPI::Player
 		return result;
 	}
 
-	/// Activates Player utility functions that directly call game scripts.
-	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
-	inline Aurie::AurieStatus Enable()
+	/// Activates Player utility functions that directly call game scripts. Eagerly installs every Player
+	/// script hook used by Hooks::* registrars (get_move_speed, modify_health/stamina/mana, face_dir, held_item).
+	/// @return Status::Success if the hooks are installed (or already were); otherwise a failure status.
+	inline MMAPI::Status Enable()
 	{
-		Aurie::AurieStatus status = MMAPI::Bark::Enable();
-		if (!Aurie::AurieSuccess(status))
+		if (Internal::enabled)
+			return MMAPI::Status::Success;
+
+		MMAPI::Log::Debug("MMAPI::Player::Enable() called");
+
+		MMAPI::Status status = MMAPI::Bark::Enable();
+		if (!MMAPI::IsSuccess(status))
 			return status;
-		return MMAPI::Instance::Enable();
+
+		status = MMAPI::Instance::Enable();
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		status = MMAPI::Internal::InstallScriptHooks({
+			{ Internal::GML_SCRIPT_GET_MOVE_SPEED, reinterpret_cast<PVOID>(Internal::GmlScriptGetMoveSpeedCallback) },
+			{ Internal::GML_SCRIPT_MODIFY_HEALTH,  reinterpret_cast<PVOID>(Internal::GmlScriptModifyHealthCallback) },
+			{ Internal::GML_SCRIPT_MODIFY_STAMINA, reinterpret_cast<PVOID>(Internal::GmlScriptModifyStaminaCallback) },
+			{ Internal::GML_SCRIPT_MODIFY_MANA,    reinterpret_cast<PVOID>(Internal::GmlScriptModifyManaCallback) },
+			{ Internal::GML_SCRIPT_FACE_DIR,       reinterpret_cast<PVOID>(Internal::GmlScriptBeforeFaceDirCallback) },
+			{ Internal::GML_SCRIPT_HELD_ITEM,      reinterpret_cast<PVOID>(Internal::GmlScriptAfterHeldItemCallback) },
+		});
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		Internal::enabled = true;
+		return MMAPI::Status::Success;
 	}
 
 	namespace Hooks
@@ -838,117 +800,105 @@ namespace MMAPI::Player
 		/// Use ctx.AddModifier(value) to add a signed offset, or ctx.SetOverride(value) to force a specific speed.
 		/// If multiple callbacks call SetOverride, the last registered callback wins.
 		/// @param callback A function called with a mutable move speed context after the game calculates it.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus AfterMoveSpeed(Internal::AfterMoveSpeedCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterMoveSpeed(Internal::AfterMoveSpeedCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::after_move_speed_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Player::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Player::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterMoveSpeedHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Player::AfterMoveSpeed",
+				Internal::after_move_speed_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that can modify the amount passed to the game's modify_health script.
 		/// Use ctx.SetAmount(value) to change the health delta before the game applies it.
 		/// @param callback A function called with a mutable health change context before the game processes it.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus BeforeHealthChange(Internal::BeforeHealthChangeCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforeHealthChange(Internal::BeforeHealthChangeCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::before_health_change_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Player::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Player::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterHealthChangeHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Player::BeforeHealthChange",
+				Internal::before_health_change_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that runs after the game's modify_health script. Read `ctx.GetAmount()`
 		/// to inspect the final delta the game applied (post any BeforeHealthChange mutations) — pair
 		/// with set-bonus / threshold logic that should react only once the game has processed the change.
 		/// @param callback A function called with a `MMAPI::Player::AfterHealthChangeContext`.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus AfterHealthChange(Internal::AfterHealthChangeCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterHealthChange(Internal::AfterHealthChangeCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::after_health_change_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Player::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Player::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterAfterHealthChangeHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Player::AfterHealthChange",
+				Internal::after_health_change_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that can modify the amount passed to the game's modify_stamina script.
 		/// Use ctx.SetAmount(value) to change the stamina delta before the game applies it.
 		/// @param callback A function called with a mutable stamina change context before the game processes it.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus BeforeStaminaChange(Internal::BeforeStaminaChangeCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforeStaminaChange(Internal::BeforeStaminaChangeCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::before_stamina_change_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Player::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Player::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterStaminaChangeHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Player::BeforeStaminaChange",
+				Internal::before_stamina_change_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that can modify the amount passed to the game's modify_mana script.
 		/// Use ctx.SetAmount(value) to change the mana delta before the game applies it.
 		/// @param callback A function called with a mutable mana change context before the game processes it.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus BeforeManaChange(Internal::BeforeManaChangeCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforeManaChange(Internal::BeforeManaChangeCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::before_mana_change_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Player::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Player::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterManaChangeHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Player::BeforeManaChange",
+				Internal::before_mana_change_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that runs before the game's `face_dir@obj_ari` script — fired whenever
 		/// the game updates Ari's facing direction. Read `ctx.GetDirectionDegrees()` to inspect the
 		/// direction the game is about to apply (raw GameMaker degrees).
 		/// @param callback A function called with a `MMAPI::Player::FaceDirContext`.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus BeforeFaceDir(Internal::BeforeFaceDirCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforeFaceDir(Internal::BeforeFaceDirCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::before_face_dir_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Player::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Player::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterFaceDirHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Player::BeforeFaceDir",
+				Internal::before_face_dir_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that runs after the game's `held_item@Ari@Ari` script. The wrapper
@@ -956,20 +906,18 @@ namespace MMAPI::Player
 		/// Read `ctx.GetItemId()` to react to changes in what Ari is holding — push-style counterpart
 		/// to the pull-style [`Player::GetHeldItem`](API-MMAPI-Player-GetHeldItem.md).
 		/// @param callback A function called with a `MMAPI::Player::HeldItemContext`.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus AfterHeldItem(Internal::AfterHeldItemCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterHeldItem(Internal::AfterHeldItemCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::after_held_item_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Player::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Player::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterHeldItemHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Player::AfterHeldItem",
+				Internal::after_held_item_callback,
+				callback
+			);
 		}
 	}
 

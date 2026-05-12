@@ -2,6 +2,9 @@
 
 #include "Core.hpp"
 #include "Game.hpp"
+#include "Hook.hpp"
+#include "Log.hpp"
+#include "Status.hpp"
 
 #include "YYToolkit/YYTK_Shared.hpp"
 
@@ -64,6 +67,8 @@ namespace MMAPI::Calendar
 
 	namespace Internal
 	{
+		inline bool enabled = false;
+
 		inline constexpr const char* GML_SCRIPT_GET_UNIFIED_TIME = "gml_Script_unified_time@Calendar@Calendar";
 		inline constexpr const char* GML_SCRIPT_GET_DAY          = "gml_Script_day@Calendar@Calendar";
 		inline constexpr const char* GML_SCRIPT_GET_SEASON       = "gml_Script_season@Calendar@Calendar";
@@ -133,34 +138,6 @@ namespace MMAPI::Calendar
 			return Result;
 		}
 
-		inline Aurie::AurieStatus RegisterBeforeClockUpdateHook(BeforeClockUpdateCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_UPDATE_CLOCK,
-				reinterpret_cast<PVOID>(GmlScriptClockUpdateCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			before_clock_update_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
-
-		inline Aurie::AurieStatus RegisterAfterClockUpdateHook(AfterClockUpdateCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_UPDATE_CLOCK,
-				reinterpret_cast<PVOID>(GmlScriptClockUpdateCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			after_clock_update_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
-
 		/// Resolves the Calendar's GML calling context, latched from the most recent unified_time tick.
 		/// Cleared automatically when the game returns to the title menu.
 		/// @return True if a Calendar unified_time call has been observed this session, false otherwise.
@@ -208,16 +185,26 @@ namespace MMAPI::Calendar
 	/// for TryGetCalendarContext (cleared on return-to-title via the setup_main_screen pub/sub). All Calendar scripts
 	/// share the same singleton context, so a single latch serves day/season/year as well.
 	/// Also installs the Clock.update hook used by BeforeClockUpdate / AfterClockUpdate; the callbacks no-op until bound.
-	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
-	inline Aurie::AurieStatus Enable()
+	/// @return Status::Success if the hooks are installed (or already were); otherwise a failure status.
+	inline MMAPI::Status Enable()
 	{
+		if (Internal::enabled)
+			return MMAPI::Status::Success;
+
+		MMAPI::Log::Debug("MMAPI::Calendar::Enable() called");
+
 		MMAPI::Internal::RegisterOnSetupMainScreenHandler(Internal::ClearCalendarOnReturnToTitle);
 
-		return MMAPI::Internal::InstallScriptHooks({
+		MMAPI::Status status = MMAPI::Internal::InstallScriptHooks({
 			{ MMAPI::Internal::GML_SCRIPT_SETUP_MAIN_SCREEN, reinterpret_cast<PVOID>(MMAPI::Internal::GmlScriptBeforeSetupMainScreenCallback) },
 			{ Internal::GML_SCRIPT_GET_UNIFIED_TIME,         reinterpret_cast<PVOID>(Internal::UnifiedTimeContextCallback) },
 			{ Internal::GML_SCRIPT_UPDATE_CLOCK,             reinterpret_cast<PVOID>(Internal::GmlScriptClockUpdateCallback) },
 		});
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		Internal::enabled = true;
+		return MMAPI::Status::Success;
 	}
 
 	/// Gets the current 1-indexed day of the month from the Calendar script context.
@@ -225,6 +212,8 @@ namespace MMAPI::Calendar
 	/// @return The current day of the month from 1 to 28 as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetDay()
 	{
+		MMAPI_REQUIRE_ENABLED("Calendar", {});
+
 		YYTK::RValue day = Internal::GetDay();
 		if (day.m_Kind == YYTK::VALUE_UNDEFINED)
 			return {};
@@ -269,6 +258,8 @@ namespace MMAPI::Calendar
 	/// @return True if the season was resolved, false if the required context is unavailable.
 	inline bool TryGetSeason(MMAPI::Calendar::Seasons& season)
 	{
+		MMAPI_REQUIRE_ENABLED("Calendar", false);
+
 		YYTK::RValue current_season = Internal::GetSeason();
 		if (current_season.m_Kind == YYTK::VALUE_UNDEFINED || current_season.m_Kind == YYTK::VALUE_UNSET)
 			return false;
@@ -299,6 +290,8 @@ namespace MMAPI::Calendar
 	/// @return The current calendar year as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetYear()
 	{
+		MMAPI_REQUIRE_ENABLED("Calendar", {});
+
 		YYTK::RValue year = Internal::GetYear();
 		if (year.m_Kind == YYTK::VALUE_UNDEFINED)
 			return {};
@@ -325,6 +318,7 @@ namespace MMAPI::Calendar
 	/// @return The current unified time as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetUnifiedTime()
 	{
+		MMAPI_REQUIRE_ENABLED("Calendar", {});
 		return Internal::CallCalendarScript(Internal::GML_SCRIPT_GET_UNIFIED_TIME);
 	}
 
@@ -335,20 +329,18 @@ namespace MMAPI::Calendar
 		/// before the game advances the clock. To inspect the pre-original time, read it via
 		/// `MMAPI::Game::GetCurrentTimeInSeconds()` (or directly via `globalInstance.__clock.time`).
 		/// @param callback A parameterless function called before each clock update.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus BeforeClockUpdate(Internal::BeforeClockUpdateCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforeClockUpdate(Internal::BeforeClockUpdateCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::before_clock_update_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Calendar::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Calendar::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterBeforeClockUpdateHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Calendar::BeforeClockUpdate",
+				Internal::before_clock_update_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that runs after the game's `update@Clock@Clock` script.
@@ -356,20 +348,18 @@ namespace MMAPI::Calendar
 		/// BeforeClockUpdate callback and the original script. Compare it to
 		/// `MMAPI::Game::GetCurrentTimeInSeconds()` to determine how much the clock advanced this tick.
 		/// @param callback A function called with a `MMAPI::Calendar::ClockUpdateContext`.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus AfterClockUpdate(Internal::AfterClockUpdateCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterClockUpdate(Internal::AfterClockUpdateCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::after_clock_update_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Calendar::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Calendar::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterAfterClockUpdateHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Calendar::AfterClockUpdate",
+				Internal::after_clock_update_callback,
+				callback
+			);
 		}
 	}
 }

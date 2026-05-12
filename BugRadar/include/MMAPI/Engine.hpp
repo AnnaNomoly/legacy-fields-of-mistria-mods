@@ -17,6 +17,28 @@ namespace MMAPI::Engine
 		inline constexpr double DIRECTION_DEGREES_DOWN  = 270.0;
 	}
 
+	/// Return values of GameMaker's `asset_get_type` builtin. Values match the GameMaker LTS manual:
+	/// https://manual.gamemaker.io/lts/en/GameMaker_Language/GML_Reference/Asset_Management/Assets_And_Tags/asset_get_type.htm
+	/// GML-standardized, not game-specific. `Unknown = -1` is the sentinel the builtin returns when
+	/// the looked-up name doesn't refer to a known asset.
+	enum class AssetType : int
+	{
+		Unknown        = -1,
+		Object         = 0,
+		Sprite         = 1,
+		Sound          = 2,
+		Room           = 3,
+		Tiles          = 4,
+		Path           = 5,
+		Script         = 6,
+		Font           = 7,
+		Timeline       = 8,
+		Shader         = 9,
+		AnimationCurve = 10,
+		Sequence       = 11,
+		ParticleSystem = 12,
+	};
+
 	/// Returns true if the RValue holds a numeric type (int32, int64, or real).
 	/// @param value The RValue to test.
 	/// @return True if the value is VALUE_INT32, VALUE_INT64, or VALUE_REAL.

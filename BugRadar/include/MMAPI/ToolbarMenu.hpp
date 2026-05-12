@@ -1,6 +1,9 @@
 #pragma once
 
 #include "Core.hpp"
+#include "Hook.hpp"
+#include "Log.hpp"
+#include "Status.hpp"
 
 #include "YYToolkit/YYTK_Shared.hpp"
 
@@ -8,6 +11,8 @@ namespace MMAPI::ToolbarMenu
 {
 	namespace Internal
 	{
+		inline bool enabled = false;
+
 		inline constexpr const char* GML_SCRIPT_UPDATE_TOOLBAR_MENU = "gml_Script_update@ToolbarMenu@ToolbarMenu";
 
 		// Live ToolbarMenu Self/Other, latched per-tick from the update hook.
@@ -57,15 +62,25 @@ namespace MMAPI::ToolbarMenu
 
 	/// Activates ToolbarMenu utility functions. Installs the update hook so the live ToolbarMenu Self/Other are latched
 	/// for TryGetToolbarMenuContext (cleared on return-to-title via the setup_main_screen pub/sub).
-	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
-	inline Aurie::AurieStatus Enable()
+	/// @return Status::Success if the hooks are installed (or already were); otherwise a failure status.
+	inline MMAPI::Status Enable()
 	{
+		if (Internal::enabled)
+			return MMAPI::Status::Success;
+
+		MMAPI::Log::Debug("MMAPI::ToolbarMenu::Enable() called");
+
 		MMAPI::Internal::RegisterOnSetupMainScreenHandler(Internal::ClearToolbarMenuOnReturnToTitle);
 
-		return MMAPI::Internal::InstallScriptHooks({
+		MMAPI::Status status = MMAPI::Internal::InstallScriptHooks({
 			{ MMAPI::Internal::GML_SCRIPT_SETUP_MAIN_SCREEN, reinterpret_cast<PVOID>(MMAPI::Internal::GmlScriptBeforeSetupMainScreenCallback) },
 			{ Internal::GML_SCRIPT_UPDATE_TOOLBAR_MENU,      reinterpret_cast<PVOID>(Internal::GmlScriptToolbarMenuUpdateCallback) },
 		});
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		Internal::enabled = true;
+		return MMAPI::Status::Success;
 	}
 
 	/// Forces the toolbar menu to re-run its update script (refreshes equipped-slot rendering, stack counts, etc.).
@@ -73,6 +88,8 @@ namespace MMAPI::ToolbarMenu
 	/// @return True if the update script was invoked, false if the required context is unavailable.
 	inline bool ForceUpdate()
 	{
+		MMAPI_REQUIRE_ENABLED("ToolbarMenu", false);
+
 		YYTK::CInstance* Self  = nullptr;
 		YYTK::CInstance* Other = nullptr;
 		if (!Internal::TryGetToolbarMenuContext(Self, Other))

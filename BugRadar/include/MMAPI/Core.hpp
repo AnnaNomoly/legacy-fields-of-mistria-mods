@@ -1,11 +1,11 @@
 #pragma once
 
+#include "Status.hpp"
+
 #include <chrono>
 #include <cstdint>
-#include <initializer_list>
 #include <map>
 #include <string>
-#include <utility>
 #include <vector>
 #include "YYToolkit/YYTK_Shared.hpp"
 
@@ -30,6 +30,10 @@ namespace MMAPI
 		// The Aurie module using MMAPI. Required for MMAPI-owned hooks.
 		inline Aurie::AurieModule* self_module = nullptr;
 
+		// Mod identity, passed to Initialize. Used for log attribution and per-mod log file paths.
+		inline std::string mod_name;
+		inline std::string mod_version;
+
 		// Persisted game object instance pairs, keyed by a descriptive instance name.
 		// Used for objects like obj_ari whose context is captured from an object callback rather than a script hook.
 		inline std::map<std::string, std::vector<YYTK::CInstance*>> instance_reference_map;
@@ -48,47 +52,6 @@ namespace MMAPI
 				if (existing == handler)
 					return;
 			on_setup_main_screen_internal_handlers.push_back(handler);
-		}
-
-		inline Aurie::AurieStatus InstallScriptHook(const char* script_name, PVOID callback)
-		{
-			if (owned_script_hook_installed_map[script_name])
-				return Aurie::AURIE_SUCCESS;
-
-			YYTK::CScript* gml_script = nullptr;
-			Aurie::AurieStatus status = module_interface->GetNamedRoutinePointer(
-				script_name,
-				reinterpret_cast<PVOID*>(&gml_script)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			status = Aurie::MmCreateHook(
-				self_module,
-				script_name,
-				gml_script->m_Functions->m_ScriptFunction,
-				callback,
-				nullptr
-			);
-
-			if (Aurie::AurieSuccess(status))
-				owned_script_hook_installed_map[script_name] = true;
-
-			return status;
-		}
-
-		/// Installs a batch of script hooks. Returns the first failure (and stops short-circuit),
-		/// or AURIE_SUCCESS if every hook was installed (or already was).
-		inline Aurie::AurieStatus InstallScriptHooks(std::initializer_list<std::pair<const char*, PVOID>> hooks)
-		{
-			for (const auto& [script_name, callback] : hooks)
-			{
-				Aurie::AurieStatus status = InstallScriptHook(script_name, callback);
-				if (!Aurie::AurieSuccess(status))
-					return status;
-			}
-			return Aurie::AURIE_SUCCESS;
 		}
 
 		/// Captures a pair of game object instance pointers the first time it is seen.
@@ -129,29 +92,44 @@ namespace MMAPI
 			original(Self, Other, Result, ArgumentCount, Arguments);
 			return Result;
 		}
-
-		inline Aurie::AurieStatus RegisterBeforeSetupMainScreenHook(BeforeSetupMainScreenCallback callback)
-		{
-			Aurie::AurieStatus status = InstallScriptHook(
-				GML_SCRIPT_SETUP_MAIN_SCREEN,
-				reinterpret_cast<PVOID>(GmlScriptBeforeSetupMainScreenCallback)
-			);
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			before_setup_main_screen_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
 	}
 
 	/// Initializes MMAPI. Call once from ModuleInitialize.
 	/// @param module_interface The YYTKInterface pointer received in ModuleInitialize.
 	/// @param global The GML global instance pointer obtained from GetGlobalInstance.
 	/// @param module The Aurie module pointer received in ModuleInitialize.
-	inline void Initialize(YYTK::YYTKInterface* module_interface, YYTK::CInstance* global, Aurie::AurieModule* module)
+	/// @param mod_name The mod's name, used for log attribution and the per-mod log file path.
+	/// @param mod_version The mod's version string, used in console log prefixes.
+	inline void Initialize(
+		YYTK::YYTKInterface* module_interface,
+		YYTK::CInstance* global,
+		Aurie::AurieModule* module,
+		const char* mod_name,
+		const char* mod_version
+	)
 	{
+		// Diagnostic: surface missing pointers loudly. Without these, every downstream MMAPI call is a
+		// silent no-op (utility functions fail their preconditions; hook installs return NotInitialized).
+		// Bypass MMAPI::Log here because Log itself reads module_interface — if that's the missing one,
+		// Log has nowhere to write. Fall back to YYTK Print directly when possible.
+		if (!module_interface || !global || !module)
+		{
+			if (module_interface)
+			{
+				module_interface->Print(YYTK::CM_LIGHTRED,
+					"[MMAPI::Initialize] missing required pointer "
+					"(module_interface=%p, global=%p, module=%p) -- downstream MMAPI calls will fail",
+					static_cast<void*>(module_interface),
+					static_cast<void*>(global),
+					static_cast<void*>(module));
+			}
+			// No interface at all means we can't log; the only signal will be downstream failures.
+		}
+
 		MMAPI::Internal::module_interface = module_interface;
-		MMAPI::Internal::global_instance = global;
-		MMAPI::Internal::self_module = module;
+		MMAPI::Internal::global_instance  = global;
+		MMAPI::Internal::self_module      = module;
+		MMAPI::Internal::mod_name         = mod_name    ? mod_name    : "";
+		MMAPI::Internal::mod_version      = mod_version ? mod_version : "";
 	}
 }

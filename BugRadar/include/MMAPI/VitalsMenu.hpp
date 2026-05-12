@@ -1,6 +1,9 @@
 #pragma once
 
 #include "Core.hpp"
+#include "Hook.hpp"
+#include "Log.hpp"
+#include "Status.hpp"
 
 #include "YYToolkit/YYTK_Shared.hpp"
 
@@ -8,6 +11,8 @@ namespace MMAPI::VitalsMenu
 {
 	namespace Internal
 	{
+		inline bool enabled = false;
+
 		inline constexpr const char* GML_SCRIPT_SET_MAX_HEALTH = "gml_Script_set_max_health@VitalsMenu@VitalsMenu";
 		inline constexpr const char* GML_SCRIPT_SET_HEALTH     = "gml_Script_set_health@VitalsMenu@VitalsMenu";
 
@@ -58,15 +63,25 @@ namespace MMAPI::VitalsMenu
 
 	/// Activates VitalsMenu utility functions. Installs the set_max_health hook so the live VitalsMenu Self/Other
 	/// are latched for TryGetVitalsMenuContext (cleared on return-to-title via the setup_main_screen pub/sub).
-	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
-	inline Aurie::AurieStatus Enable()
+	/// @return Status::Success if the hooks are installed (or already were); otherwise a failure status.
+	inline MMAPI::Status Enable()
 	{
+		if (Internal::enabled)
+			return MMAPI::Status::Success;
+
+		MMAPI::Log::Debug("MMAPI::VitalsMenu::Enable() called");
+
 		MMAPI::Internal::RegisterOnSetupMainScreenHandler(Internal::ClearVitalsMenuOnReturnToTitle);
 
-		return MMAPI::Internal::InstallScriptHooks({
+		MMAPI::Status status = MMAPI::Internal::InstallScriptHooks({
 			{ MMAPI::Internal::GML_SCRIPT_SETUP_MAIN_SCREEN, reinterpret_cast<PVOID>(MMAPI::Internal::GmlScriptBeforeSetupMainScreenCallback) },
 			{ Internal::GML_SCRIPT_SET_MAX_HEALTH,           reinterpret_cast<PVOID>(Internal::GmlScriptVitalsMenuSetMaxHealthCallback) },
 		});
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		Internal::enabled = true;
+		return MMAPI::Status::Success;
 	}
 
 	/// Updates the HUD health bar's maximum value. Does not modify Ari's actual max health — only the displayed bar's max.
@@ -76,6 +91,8 @@ namespace MMAPI::VitalsMenu
 	/// @return True if the script was invoked, false if the required context is unavailable.
 	inline bool SetMaxHealth(int max_health)
 	{
+		MMAPI_REQUIRE_ENABLED("VitalsMenu", false);
+
 		YYTK::CInstance* Self  = nullptr;
 		YYTK::CInstance* Other = nullptr;
 		if (!Internal::TryGetVitalsMenuContext(Self, Other))
@@ -98,6 +115,8 @@ namespace MMAPI::VitalsMenu
 	/// @return True if the script was invoked, false if the required context is unavailable.
 	inline bool SetHealth(int current_health, int max_health)
 	{
+		MMAPI_REQUIRE_ENABLED("VitalsMenu", false);
+
 		YYTK::CInstance* Self  = nullptr;
 		YYTK::CInstance* Other = nullptr;
 		if (!Internal::TryGetVitalsMenuContext(Self, Other))

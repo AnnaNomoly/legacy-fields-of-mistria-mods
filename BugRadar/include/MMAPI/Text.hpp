@@ -1,7 +1,10 @@
 #pragma once
 
 #include "Core.hpp"
+#include "Hook.hpp"
 #include "Instance.hpp"
+#include "Log.hpp"
+#include "Status.hpp"
 
 #include <string>
 
@@ -49,6 +52,8 @@ namespace MMAPI::Text
 
 	namespace Internal
 	{
+		inline bool enabled = false;
+
 		inline constexpr const char* GML_SCRIPT_GET_LOCALIZER     = "gml_Script_get@Localizer@Localizer";
 		inline constexpr const char* GML_SCRIPT_PLAY_CONVERSATION = "gml_Script_play_conversation";
 		inline constexpr const char* GML_SCRIPT_CLOSE_TEXTBOX     = "gml_Script_begin_close@TextboxMenu@TextboxMenu";
@@ -185,34 +190,6 @@ namespace MMAPI::Text
 			return Result;
 		}
 
-		inline Aurie::AurieStatus RegisterLocalizedStringHook(BeforeLocalizedStringCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_GET_LOCALIZER,
-				reinterpret_cast<PVOID>(GmlScriptGetLocalizerCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			before_localized_string_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
-
-		inline Aurie::AurieStatus RegisterPlayConversationHook(BeforePlayConversationCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_PLAY_CONVERSATION,
-				reinterpret_cast<PVOID>(GmlScriptPlayConversationCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			before_play_conversation_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
-
 		// Live TextboxMenu Self/Other, latched from the play_text hook (fires whenever a textbox displays).
 		// Used by TryGetTextboxMenuContext for callers outside any hook frame (e.g. CloseTextbox from arbitrary code paths).
 		inline YYTK::CInstance* textbox_menu_self  = nullptr;
@@ -268,42 +245,38 @@ namespace MMAPI::Text
 
 			return Result;
 		}
-
-		inline Aurie::AurieStatus RegisterPlayTextHook(BeforePlayTextCallback callback)
-		{
-			Aurie::AurieStatus status = MMAPI::Internal::InstallScriptHook(
-				GML_SCRIPT_PLAY_TEXT,
-				reinterpret_cast<PVOID>(GmlScriptPlayTextCallback)
-			);
-
-			if (!Aurie::AurieSuccess(status))
-				return status;
-
-			before_play_text_callback = callback;
-			return Aurie::AURIE_SUCCESS;
-		}
 	}
 
 	/// Activates Text utility functions. Installs the get_localizer and play_text hooks so the Localizer and
 	/// TextboxMenu Self/Other pairs are latched for TryGetLocalizerContext / TryGetTextboxMenuContext (both
 	/// cleared on return-to-title via the setup_main_screen pub/sub). Cascades to MMAPI::Instance::Enable so
 	/// PlayConversation can resolve Ari's calling context.
-	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
-	inline Aurie::AurieStatus Enable()
+	/// @return Status::Success if the hooks are installed (or already were); otherwise a failure status.
+	inline MMAPI::Status Enable()
 	{
-		Aurie::AurieStatus status = MMAPI::Instance::Enable();
-		if (!Aurie::AurieSuccess(status))
+		if (Internal::enabled)
+			return MMAPI::Status::Success;
+
+		MMAPI::Log::Debug("MMAPI::Text::Enable() called");
+
+		MMAPI::Status status = MMAPI::Instance::Enable();
+		if (!MMAPI::IsSuccess(status))
 			return status;
 
 		MMAPI::Internal::RegisterOnSetupMainScreenHandler(Internal::ClearLocalizerOnReturnToTitle);
 		MMAPI::Internal::RegisterOnSetupMainScreenHandler(Internal::ClearTextboxMenuOnReturnToTitle);
 
-		return MMAPI::Internal::InstallScriptHooks({
+		status = MMAPI::Internal::InstallScriptHooks({
 			{ MMAPI::Internal::GML_SCRIPT_SETUP_MAIN_SCREEN, reinterpret_cast<PVOID>(MMAPI::Internal::GmlScriptBeforeSetupMainScreenCallback) },
 			{ Internal::GML_SCRIPT_GET_LOCALIZER,            reinterpret_cast<PVOID>(Internal::GmlScriptGetLocalizerCallback) },
 			{ Internal::GML_SCRIPT_PLAY_CONVERSATION,        reinterpret_cast<PVOID>(Internal::GmlScriptPlayConversationCallback) },
 			{ Internal::GML_SCRIPT_PLAY_TEXT,                reinterpret_cast<PVOID>(Internal::GmlScriptPlayTextCallback) },
 		});
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		Internal::enabled = true;
+		return MMAPI::Status::Success;
 	}
 
 	/// Gets a localized string by localization key.
@@ -312,6 +285,8 @@ namespace MMAPI::Text
 	/// @return The localized string as an RValue, or undefined if the required context is unavailable.
 	inline YYTK::RValue GetLocalizedString(const std::string& localization_key)
 	{
+		MMAPI_REQUIRE_ENABLED("Text", {});
+
 		YYTK::CInstance* Self  = nullptr;
 		YYTK::CInstance* Other = nullptr;
 		if (!Internal::TryGetLocalizerContext(Self, Other))
@@ -333,6 +308,8 @@ namespace MMAPI::Text
 	/// @return True if the conversation was played, false if the required context is unavailable.
 	inline bool PlayConversation(const std::string& conversation_key)
 	{
+		MMAPI_REQUIRE_ENABLED("Text", false);
+
 		YYTK::CInstance* Self  = nullptr;
 		YYTK::CInstance* Other = nullptr;
 		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
@@ -356,6 +333,8 @@ namespace MMAPI::Text
 	/// @return True if the close was issued, false if the required context is unavailable.
 	inline bool CloseTextbox()
 	{
+		MMAPI_REQUIRE_ENABLED("Text", false);
+
 		YYTK::CInstance* Self  = nullptr;
 		YYTK::CInstance* Other = nullptr;
 		if (!Internal::TryGetTextboxMenuContext(Self, Other))
@@ -373,78 +352,69 @@ namespace MMAPI::Text
 	{
 		/// Registers a callback that can modify a localization key before the game resolves the localized string.
 		/// @param callback A function called with a mutable localized string context.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus BeforeLocalizedString(Internal::BeforeLocalizedStringCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforeLocalizedString(Internal::BeforeLocalizedStringCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::before_localized_string_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Text::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Text::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterLocalizedStringHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Text::BeforeLocalizedString",
+				Internal::before_localized_string_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that can modify a resolved localized string after the game's Localizer returns it.
 		/// Use ctx.SetResolved() to substitute the string the game receives — useful for placeholder substitution in localized templates.
 		/// @param callback A function called with a mutable `MMAPI::Text::AfterLocalizedStringContext`.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus AfterLocalizedString(Internal::AfterLocalizedStringCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterLocalizedString(Internal::AfterLocalizedStringCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::after_localized_string_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Text::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Text::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			Internal::after_localized_string_callback = callback;
-			return Aurie::AURIE_SUCCESS;
+			return MMAPI::Internal::RegisterHook(
+				"Text::AfterLocalizedString",
+				Internal::after_localized_string_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that runs before the game plays a conversation.
 		/// Use ctx.SetKey() to redirect the conversation, or ctx.Cancel() to prevent it from playing entirely.
 		/// @param callback A function called with a mutable conversation context before the game processes it.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus BeforePlayConversation(Internal::BeforePlayConversationCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforePlayConversation(Internal::BeforePlayConversationCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::before_play_conversation_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Text::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Text::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterPlayConversationHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Text::BeforePlayConversation",
+				Internal::before_play_conversation_callback,
+				callback
+			);
 		}
 
 		/// Registers a callback that runs before the game plays a conversation text node.
 		/// Use ctx.SetKey() to redirect to a different text node, or ctx.Cancel() to prevent it from playing entirely.
 		/// @param callback A function called with a mutable text context before the game processes it.
-		/// @return AURIE_SUCCESS if the hook was installed; AURIE_OBJECT_ALREADY_EXISTS if a callback is already registered; otherwise the Aurie failure status.
-		inline Aurie::AurieStatus BeforePlayText(Internal::BeforePlayTextCallback callback)
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforePlayText(Internal::BeforePlayTextCallback callback)
 		{
-			if (!callback)
-				return Aurie::AURIE_INVALID_PARAMETER;
-
-			if (Internal::before_play_text_callback)
-				return Aurie::AURIE_OBJECT_ALREADY_EXISTS;
-
-			Aurie::AurieStatus status = MMAPI::Text::Enable();
-			if (!Aurie::AurieSuccess(status))
+			MMAPI::Status status = MMAPI::Text::Enable();
+			if (!MMAPI::IsSuccess(status))
 				return status;
 
-			return Internal::RegisterPlayTextHook(callback);
+			return MMAPI::Internal::RegisterHook(
+				"Text::BeforePlayText",
+				Internal::before_play_text_callback,
+				callback
+			);
 		}
 	}
 }

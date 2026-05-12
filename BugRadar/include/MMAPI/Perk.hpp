@@ -2,6 +2,8 @@
 
 #include "Core.hpp"
 #include "Instance.hpp"
+#include "Log.hpp"
+#include "Status.hpp"
 
 #include "YYToolkit/YYTK_Shared.hpp"
 
@@ -188,15 +190,27 @@ namespace MMAPI::Perk
 
 	namespace Internal
 	{
+		inline bool enabled = false;
+
 		inline constexpr const char* GML_SCRIPT_PERK_ACTIVE = "gml_Script_perk_active@Ari@Ari";
 	}
 
 	/// Activates Perk utility functions. Cascades to MMAPI::Instance::Enable so IsActive can resolve Ari's
 	/// calling context internally.
-	/// @return AURIE_SUCCESS if the hooks are installed (or already were); otherwise the Aurie failure status.
-	inline Aurie::AurieStatus Enable()
+	/// @return Status::Success if the hooks are installed (or already were); otherwise a failure status.
+	inline MMAPI::Status Enable()
 	{
-		return MMAPI::Instance::Enable();
+		if (Internal::enabled)
+			return MMAPI::Status::Success;
+
+		MMAPI::Log::Debug("MMAPI::Perk::Enable() called");
+
+		MMAPI::Status status = MMAPI::Instance::Enable();
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		Internal::enabled = true;
+		return MMAPI::Status::Success;
 	}
 
 	/// Returns true if Ari has the given perk active.
@@ -204,6 +218,8 @@ namespace MMAPI::Perk
 	/// @param perk The perk to check.
 	inline bool IsActive(MMAPI::Perk::Ids perk)
 	{
+		MMAPI_REQUIRE_ENABLED("Perk", false);
+
 		YYTK::CInstance* Self  = nullptr;
 		YYTK::CInstance* Other = nullptr;
 		if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other))
