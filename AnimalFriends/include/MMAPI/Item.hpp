@@ -200,6 +200,26 @@ namespace MMAPI::Item
 		inline BeforeDropItemCallback               before_drop_item_callback               = nullptr;
 		inline BeforeGiveItemCallback               before_give_item_callback               = nullptr;
 
+		// Item prototype cache, populated by GmlScriptAfterCreateItemPrototypesCallback when the game's
+		// create_item_prototypes script runs once at startup. The prototype struct is what `LiveItem.prototype`
+		// expects — distinct from `globalInstance.__item_data` which is the item-definition table.
+		//
+		// IMPORTANT: the game runs create_item_prototypes very early during startup. The hook must already be
+		// installed by then or this cache stays empty. Item::Enable() installs the hook eagerly; mods must call
+		// MMAPI::Initialize + Item::Enable from ModuleInitialize (which is the only path that runs early enough).
+		inline std::map<int, YYTK::RValue> item_id_to_prototype_map;
+
+		/// Returns the cached item prototype for the given item_id, or undefined if the cache is empty
+		/// (Item::Enable was not called before the game's create_item_prototypes script ran) or item_id
+		/// is not in the cache.
+		inline YYTK::RValue GetPrototype(int item_id)
+		{
+			auto it = item_id_to_prototype_map.find(item_id);
+			if (it == item_id_to_prototype_map.end())
+				return {};
+			return it->second;
+		}
+
 		inline YYTK::RValue GetItemData()
 		{
 			return MMAPI::Internal::global_instance->GetMember("__item_data");
@@ -333,11 +353,24 @@ namespace MMAPI::Item
 			);
 			original(Self, Other, Result, ArgumentCount, Arguments);
 
+			size_t array_length = 0;
+			MMAPI::Internal::module_interface->GetArraySize(Result, array_length);
+
+			// Always cache the prototypes, regardless of whether a user callback is registered.
+			// Used by Item::Drop / DropItemContext::Drop / DropItemContext::SetItem to populate the
+			// `prototype` member of a deserialized live item before drop_item runs.
+			item_id_to_prototype_map.clear();
+			for (size_t i = 0; i < array_length; ++i)
+			{
+				YYTK::RValue* entry = nullptr;
+				MMAPI::Internal::module_interface->GetArrayEntry(Result, i, entry);
+				if (entry)
+					item_id_to_prototype_map[static_cast<int>(i)] = *entry;
+			}
+			MMAPI::Log::Debug("Cached %zu item prototypes", array_length);
+
 			if (after_create_item_prototypes_callback)
 			{
-				size_t array_length = 0;
-				MMAPI::Internal::module_interface->GetArraySize(Result, array_length);
-
 				MMAPI::Item::CreateItemPrototypesContext context{ Result, array_length };
 				after_create_item_prototypes_callback(context);
 			}
@@ -844,11 +877,11 @@ namespace MMAPI::Item
 		if (item.m_Kind == YYTK::VALUE_UNDEFINED)
 			return;
 
-		YYTK::RValue item_data = Internal::GetItemData(item_id);
-		if (item_data.m_Kind == YYTK::VALUE_UNDEFINED)
+		YYTK::RValue prototype = Internal::GetPrototype(item_id);
+		if (prototype.m_Kind == YYTK::VALUE_UNDEFINED)
 			return;
 
-		*item.GetRefMember("prototype") = item_data;
+		*item.GetRefMember("prototype") = prototype;
 		*item.GetRefMember("item_id") = item_id;
 
 		YYTK::CScript* gml_script = nullptr;
@@ -880,11 +913,11 @@ namespace MMAPI::Item
 		if (m_arg0->m_Kind == YYTK::VALUE_OBJECT
 			&& MMAPI::Engine::StructVariableExists(*m_arg0, "item_id"))
 		{
-			YYTK::RValue item_data = Internal::GetItemData(item_id);
-			if (item_data.m_Kind == YYTK::VALUE_UNDEFINED)
+			YYTK::RValue prototype = Internal::GetPrototype(item_id);
+			if (prototype.m_Kind == YYTK::VALUE_UNDEFINED)
 				return false;
 
-			*m_arg0->GetRefMember("prototype") = item_data;
+			*m_arg0->GetRefMember("prototype") = prototype;
 			*m_arg0->GetRefMember("item_id")   = item_id;
 			return true;
 		}
@@ -915,11 +948,11 @@ namespace MMAPI::Item
 		if (item.m_Kind == YYTK::VALUE_UNDEFINED)
 			return;
 
-		YYTK::RValue item_data = Internal::GetItemData(item_id);
-		if (item_data.m_Kind == YYTK::VALUE_UNDEFINED)
+		YYTK::RValue prototype = Internal::GetPrototype(item_id);
+		if (prototype.m_Kind == YYTK::VALUE_UNDEFINED)
 			return;
 
-		*item.GetRefMember("prototype") = item_data;
+		*item.GetRefMember("prototype") = prototype;
 		*item.GetRefMember("item_id")   = item_id;
 
 		YYTK::CScript* gml_script = nullptr;

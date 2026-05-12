@@ -2,9 +2,12 @@
 
 #include "Core.hpp"
 #include "Dungeon.hpp"
+#include "Engine.hpp"
 #include "Hook.hpp"
 #include "Log.hpp"
 #include "Status.hpp"
+
+#include <initializer_list>
 
 #include "YYToolkit/YYTK_Shared.hpp"
 
@@ -63,6 +66,116 @@ namespace MMAPI::Monster
 			fn(static_cast<Ids>(i));
 	}
 
+	/// Source: globalInstance.__monster_category__
+	/// Logical groupings used by the game's per-category FSM state arrays
+	/// (e.g. Category::Mite corresponds to globalInstance.__mite_state__).
+	enum class Categories : int
+	{
+		Shroom     = 0,
+		Clod       = 1,
+		Sap        = 2,
+		Enchantern = 3,
+		Mite       = 4,
+		Bat        = 5,
+		Mimic      = 6,
+		Spirit     = 7,
+		Cat        = 8,
+		Barrel     = 9,
+		RockStack  = 10,
+		Statue     = 11,
+		Tome       = 12
+	};
+
+	/// Per-category FSM state enums. Each enum's integer value matches the index of the corresponding
+	/// state name in `globalInstance.__<category>_state__`, which is also what the game stores in
+	/// `monster_instance.fsm.state.state_id`. Use MMAPI::Monster::IsInState(monster, StateEnum::X) to
+	/// compare against a specific state.
+	///
+	/// Monster::Enable() verifies these enums against the live game arrays and logs a warning on any
+	/// mismatch — if the game patches a state list, the warning surfaces the divergence so the enum
+	/// can be re-dumped from globalInstance.
+	namespace States
+	{
+		/// Source: globalInstance.__shroom_state__
+		enum class Shroom : int
+		{
+			Idle, Acknowledgment, Walk, WindupSlide, Windup, Attack, Tired,
+			Shell, Wiggle, WiggleExit, Dying, Explode
+		};
+
+		/// Source: globalInstance.__rockclod_state__
+		enum class Clod : int
+		{
+			Idle, Acknowledgment, Walk, Windup, Attack, Tired, Hurt, Dying, Flying
+		};
+
+		/// Source: globalInstance.__sapling_state__
+		enum class Sap : int
+		{
+			Idle, Acknowledgment, Walk, Windup, Attack, Tired, Hurt, Dying, Splitting
+		};
+
+		/// Source: globalInstance.__enchantern_state__
+		enum class Enchantern : int
+		{
+			Idle, Acknowledgment, FlickerOn, Charge, Flee, GoHome, Hurt, Dying
+		};
+
+		/// Source: globalInstance.__mite_state__
+		enum class Mite : int
+		{
+			Idle, Walk, Windup, Attack, Tired, Flee, Hurt, Dying
+		};
+
+		/// Source: globalInstance.__bat_state__
+		enum class Bat : int
+		{
+			Idle, Acknowledgment, Walk, Windup, Attack, Hurt, Dying, Flee
+		};
+
+		/// Source: globalInstance.__mimic_state__
+		enum class Mimic : int
+		{
+			Idle, Attack, Hurt, Gobble, Dying, Fade
+		};
+
+		/// Source: globalInstance.__spirit_state__
+		enum class Spirit : int
+		{
+			Idle, Teleport, Windup, Attack, Tired, Hurt, Dying, Acknowledgment, Recovery
+		};
+
+		/// Source: globalInstance.__cat_state__
+		enum class Cat : int
+		{
+			Idle, Acknowledgment, Walk, Windup, Attack, Tired, Petrified, Hurt, Dying
+		};
+
+		/// Source: globalInstance.__barrel_state__
+		enum class Barrel : int
+		{
+			Idle, Priming, Swelling
+		};
+
+		/// Source: globalInstance.__rock_stack_state__
+		enum class RockStack : int
+		{
+			Idle, Acknowledgment, Walk, Windup, Hurt, Launching, Catching, Dying, Hopping
+		};
+
+		/// Source: globalInstance.__statue_state__
+		enum class Statue : int
+		{
+			Acknowledgment, Idle, Chase, Tumbling, Dying
+		};
+
+		/// Source: globalInstance.__tome_state__
+		enum class Tome : int
+		{
+			Acknowledgment, Stunned, Idle, Windup, StunAttack, Flying, Hurt, Dying, GentleStun
+		};
+	}
+
 	struct SpawnMonsterContext
 	{
 		int m_monster_id = 0;
@@ -83,6 +196,90 @@ namespace MMAPI::Monster
 		inline bool enabled = false;
 
 		inline constexpr const char* GML_SCRIPT_SPAWN_MONSTER = "gml_Script_spawn_monster";
+
+		/// Verifies that one globalInstance.__<x>_state__ array matches the corresponding MMAPI States enum.
+		/// Logs a Warn on length mismatch or per-index name mismatch — the warning lets mod authors notice
+		/// when a game patch shifts a state list so the MMAPI enum can be re-dumped from globalInstance.
+		inline void VerifyStateArray(const char* member_name, std::initializer_list<const char*> expected)
+		{
+			YYTK::RValue arr = MMAPI::Internal::global_instance->GetMember(member_name);
+			if (arr.m_Kind != YYTK::VALUE_ARRAY)
+			{
+				MMAPI::Log::Warn("Monster state array %s not found in globalInstance", member_name);
+				return;
+			}
+
+			size_t actual_size = 0;
+			MMAPI::Internal::module_interface->GetArraySize(arr, actual_size);
+			if (actual_size != expected.size())
+			{
+				MMAPI::Log::Warn("Monster state array %s size mismatch: game=%zu, MMAPI=%zu",
+					member_name, actual_size, expected.size());
+			}
+
+			size_t i = 0;
+			for (const char* expected_name : expected)
+			{
+				if (i >= actual_size)
+					break;
+
+				YYTK::RValue* entry = nullptr;
+				MMAPI::Internal::module_interface->GetArrayEntry(arr, i, entry);
+				if (entry && entry->m_Kind == YYTK::VALUE_STRING)
+				{
+					std::string actual = entry->ToString();
+					if (actual != expected_name)
+					{
+						MMAPI::Log::Warn("Monster state %s[%zu]: game=%s, MMAPI=%s",
+							member_name, i, actual.c_str(), expected_name);
+					}
+				}
+				++i;
+			}
+		}
+
+		inline void VerifyAllStateArrays()
+		{
+			VerifyStateArray("__shroom_state__",
+				{ "idle", "acknowledgment", "walk", "windup_slide", "windup", "attack", "tired",
+				  "shell", "wiggle", "wiggle_exit", "dying", "explode" });
+
+			VerifyStateArray("__rockclod_state__",
+				{ "idle", "acknowledgment", "walk", "windup", "attack", "tired", "hurt", "dying", "flying" });
+
+			VerifyStateArray("__sapling_state__",
+				{ "idle", "acknowledgment", "walk", "windup", "attack", "tired", "hurt", "dying", "splitting" });
+
+			VerifyStateArray("__enchantern_state__",
+				{ "idle", "acknowledgment", "flicker_on", "charge", "flee", "go_home", "hurt", "dying" });
+
+			VerifyStateArray("__mite_state__",
+				{ "idle", "walk", "windup", "attack", "tired", "flee", "hurt", "dying" });
+
+			VerifyStateArray("__bat_state__",
+				{ "idle", "acknowledgment", "walk", "windup", "attack", "hurt", "dying", "flee" });
+
+			VerifyStateArray("__mimic_state__",
+				{ "idle", "attack", "hurt", "gobble", "dying", "fade" });
+
+			VerifyStateArray("__spirit_state__",
+				{ "idle", "teleport", "windup", "attack", "tired", "hurt", "dying", "acknowledgment", "recovery" });
+
+			VerifyStateArray("__cat_state__",
+				{ "idle", "acknowledgment", "walk", "windup", "attack", "tired", "petrified", "hurt", "dying" });
+
+			VerifyStateArray("__barrel_state__",
+				{ "idle", "priming", "swelling" });
+
+			VerifyStateArray("__rock_stack_state__",
+				{ "idle", "acknowledgment", "walk", "windup", "hurt", "launching", "catching", "dying", "hopping" });
+
+			VerifyStateArray("__statue_state__",
+				{ "acknowledgment", "idle", "chase", "tumbling", "dying" });
+
+			VerifyStateArray("__tome_state__",
+				{ "acknowledgment", "stunned", "idle", "windup", "stun_attack", "flying", "hurt", "dying", "gentle_stun" });
+		}
 
 		using BeforeMonsterSpawnCallback = void(*)(MMAPI::Monster::SpawnMonsterContext&);
 
@@ -118,7 +315,8 @@ namespace MMAPI::Monster
 
 	/// Activates Monster utility functions. Cascades to MMAPI::Dungeon::Enable so SpawnMonster can resolve
 	/// the live DungeonRunner via TryGetDungeonRunnerContext. Eagerly installs the spawn_monster script hook
-	/// used by Hooks::BeforeMonsterSpawn.
+	/// used by Hooks::BeforeMonsterSpawn. Also verifies the 13 per-category state arrays in globalInstance
+	/// against the MMAPI::Monster::States enums and logs a Warn on any mismatch.
 	/// @return Status::Success if the hooks are installed (or already were); otherwise a failure status.
 	inline MMAPI::Status Enable()
 	{
@@ -138,8 +336,44 @@ namespace MMAPI::Monster
 		if (!MMAPI::IsSuccess(status))
 			return status;
 
+		Internal::VerifyAllStateArrays();
+
 		Internal::enabled = true;
 		return MMAPI::Status::Success;
+	}
+
+	/// Returns the FSM state id from the given monster instance, read from `monster.fsm.state.state_id`.
+	/// @return The state id, or -1 if monster is null or doesn't expose the expected fsm/state members.
+	inline int GetStateId(YYTK::CInstance* monster)
+	{
+		MMAPI_REQUIRE_ENABLED("Monster", -1);
+
+		if (!monster)
+			return -1;
+
+		YYTK::RValue monster_rv = monster->ToRValue();
+		if (!MMAPI::Engine::StructVariableExists(monster_rv, "fsm"))
+			return -1;
+
+		YYTK::RValue fsm = monster_rv.GetMember("fsm");
+		if (!MMAPI::Engine::StructVariableExists(fsm, "state"))
+			return -1;
+
+		YYTK::RValue state = fsm.GetMember("state");
+		if (!MMAPI::Engine::StructVariableExists(state, "state_id"))
+			return -1;
+
+		return static_cast<int>(state.GetMember("state_id").ToInt64());
+	}
+
+	/// Returns true if the monster's current FSM state id matches the given category state.
+	/// The caller is responsible for pairing the monster with the right state enum
+	/// (e.g. comparing a stalagmite against MMAPI::Monster::States::Mite::Attack).
+	/// @tparam StateEnum One of the enums declared in MMAPI::Monster::States.
+	template <typename StateEnum>
+	inline bool IsInState(YYTK::CInstance* monster, StateEnum state)
+	{
+		return GetStateId(monster) == static_cast<int>(state);
 	}
 
 	namespace Hooks

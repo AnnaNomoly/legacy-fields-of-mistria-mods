@@ -136,15 +136,20 @@ namespace MMAPI::Bark
 		inline constexpr const char* GML_SCRIPT_BARK_EMITTER      = "gml_Script_BarkEmitter";
 		inline constexpr const char* GML_SCRIPT_BARK_EMITTER_EMIT = "gml_Script_emit@BarkEmitter@BarkEmitter";
 
-		// Live BarkEmitter Self, latched on the first BarkEmitter call (the free constructor-style script).
-		// BarkEmitter is a singleton created early in the game session; the latched Self stays valid until return-to-title.
-		inline YYTK::CInstance* bark_emitter_self = nullptr;
+		// Live Self/Other for the *player's* BarkEmitter, latched when the hook fires with Other being
+		// the Ari struct (identified by the presence of `god_mode` or `wimp_mode` cheat flags — those
+		// members live on Ari's struct and reliably distinguish the player emitter from NPC/animal
+		// emitters that also call BarkEmitter). Without this filter the latched context would be
+		// overwritten by any non-player bark emitter.
+		inline YYTK::CInstance* player_bark_emitter_self  = nullptr;
+		inline YYTK::CInstance* player_bark_emitter_other = nullptr;
 
 		// Cleared from the setup_main_screen pub/sub when the player returns to the title menu.
 		// Registered by Bark::Enable().
 		inline void ClearBarkEmitterOnReturnToTitle(YYTK::CInstance* /*Self*/, YYTK::CInstance* /*Other*/)
 		{
-			bark_emitter_self = nullptr;
+			player_bark_emitter_self  = nullptr;
+			player_bark_emitter_other = nullptr;
 		}
 
 		inline YYTK::RValue& BarkEmitterContextCallback(
@@ -155,8 +160,18 @@ namespace MMAPI::Bark
 			IN YYTK::RValue** Arguments
 		)
 		{
-			// Refresh on every fire so we always have the freshest BarkEmitter Self.
-			bark_emitter_self = Self;
+			// Only latch when Other is the Ari struct (filtered by god_mode/wimp_mode presence).
+			// Non-player bark emitters (NPCs, animals, etc.) fire this hook too — ignore those.
+			if (Other)
+			{
+				YYTK::RValue other_rv = Other->ToRValue();
+				if (MMAPI::Engine::StructVariableExists(other_rv, "god_mode")
+					|| MMAPI::Engine::StructVariableExists(other_rv, "wimp_mode"))
+				{
+					player_bark_emitter_self  = Self;
+					player_bark_emitter_other = Other;
+				}
+			}
 
 			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
 				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_BARK_EMITTER)
@@ -165,28 +180,25 @@ namespace MMAPI::Bark
 			return Result;
 		}
 
-		/// Resolves the calling context for `emit@BarkEmitter@BarkEmitter` — Self from the latched BarkEmitter,
-		/// Other from the obj_ari instance (so the bark appears over Ari).
-		/// @return True if both pointers were resolved, false otherwise.
-		inline bool TryGetBarkEmitterContext(YYTK::CInstance*& Self, YYTK::CInstance*& Other)
+		/// Resolves the calling context for `emit@BarkEmitter@BarkEmitter` — the latched player BarkEmitter
+		/// Self/Other captured the first time the player's BarkEmitter ran with Ari as Other (cleared on
+		/// return-to-title). NPC/animal bark emitters are not latched here — see
+		/// `BarkEmitterContextCallback` for the filter rationale.
+		/// @return True if both pointers were resolved, false if the player's BarkEmitter hasn't fired yet.
+		inline bool TryGetPlayerBarkEmitterContext(YYTK::CInstance*& Self, YYTK::CInstance*& Other)
 		{
-			if (!bark_emitter_self)
+			if (!player_bark_emitter_self)
 				return false;
 
-			YYTK::CInstance* ari_struct   = nullptr;
-			YYTK::CInstance* ari_instance = nullptr;
-			if (!MMAPI::Instance::Internal::TryGetAriContext(ari_struct, ari_instance))
-				return false;
-
-			Self  = bark_emitter_self;
-			Other = ari_instance;
+			Self  = player_bark_emitter_self;
+			Other = player_bark_emitter_other;
 			return true;
 		}
 	}
 
-	/// Activates Bark utility functions. Installs the BarkEmitter hook so the live BarkEmitter Self is latched
-	/// for TryGetBarkEmitterContext (cleared on return-to-title via the setup_main_screen pub/sub).
-	/// Cascades to MMAPI::Instance::Enable so the obj_ari instance is available.
+	/// Activates Bark utility functions. Installs the BarkEmitter hook so the live *player* BarkEmitter
+	/// Self/Other are latched for TryGetPlayerBarkEmitterContext (cleared on return-to-title via the
+	/// setup_main_screen pub/sub). Cascades to MMAPI::Instance::Enable.
 	/// @return Status::Success if the hooks are installed (or already were); otherwise a failure status.
 	inline MMAPI::Status Enable()
 	{
@@ -223,7 +235,7 @@ namespace MMAPI::Bark
 
 		YYTK::CInstance* Self  = nullptr;
 		YYTK::CInstance* Other = nullptr;
-		if (!Internal::TryGetBarkEmitterContext(Self, Other))
+		if (!Internal::TryGetPlayerBarkEmitterContext(Self, Other))
 			return false;
 
 		YYTK::CScript* gml_script = nullptr;
