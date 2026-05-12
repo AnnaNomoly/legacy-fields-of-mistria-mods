@@ -192,4 +192,26 @@ namespace MMAPI::Engine
 	{
 		MMAPI::Internal::module_interface->CallBuiltin("variable_instance_set", { instance, variable_name, value });
 	}
+
+	/// Returns true if a GML layer with the given name exists in the current room.
+	/// @param layer_name The GML layer name (e.g. "Impl_Ritual").
+	inline bool LayerExists(const std::string& layer_name)
+	{
+		return MMAPI::Internal::module_interface->CallBuiltin("layer_exists", { layer_name.c_str() }).ToBoolean();
+	}
+
+	/// Creates an instance of the given GML object on the given layer at (x, y).
+	/// @param x The X coordinate to spawn the instance at.
+	/// @param y The Y coordinate to spawn the instance at.
+	/// @param layer_name The GML layer name to spawn on (e.g. "Impl_Ritual").
+	/// @param object_name The GML object asset name (e.g. "obj_dungeon_ritual_altar").
+	/// @return The newly-created instance as an RValue.
+	inline YYTK::RValue InstanceCreateLayer(double x, double y, const std::string& layer_name, const std::string& object_name)
+	{
+		YYTK::RValue object_index = AssetGetIndex(object_name);
+		return MMAPI::Internal::module_interface->CallBuiltin(
+			"instance_create_layer",
+			{ x, y, YYTK::RValue(layer_name), object_index }
+		);
+	}
 }

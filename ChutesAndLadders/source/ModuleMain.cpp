@@ -200,7 +200,6 @@ void from_json(const json& json_object, ChutesAndLaddersConfig& config)
 		json_object, SPAWN_LADDER_AT_PLAYER_POSITION_KEY, DEFAULT_SPAWN_LADDER_AT_PLAYER_POSITION);
 }
 
-static YYTKInterface* g_ModuleInterface = nullptr;
 static ChutesAndLaddersConfig config = {};
 static bool activation_button_is_controller_key = false;
 static int activation_button_int_value = -1;
@@ -378,16 +377,10 @@ void OnAfterRoomStart(MMAPI::Weather::AfterRoomStartContext& ctx)
 		MMAPI::Location::TeleportAri(MMAPI::Location::Ids::MinesEntry, 192, 352);
 	}
 
-	if (create_ritual_altar)
+	if (create_ritual_altar && MMAPI::Engine::LayerExists("Impl_Ritual"))
 	{
-		RValue layer_exists = g_ModuleInterface->CallBuiltin("layer_exists", { "Impl_Ritual" });
-		if (layer_exists.ToBoolean())
-		{
-			RValue obj_dungeon_ritual_altar_index = g_ModuleInterface->CallBuiltin("asset_get_index", { "obj_dungeon_ritual_altar" });
-			std::string layer_name = "Impl_Ritual";
-			g_ModuleInterface->CallBuiltin("instance_create_layer", { 192.0, 224.0, RValue(layer_name), obj_dungeon_ritual_altar_index });
-			create_ritual_altar = false;
-		}
+		MMAPI::Engine::InstanceCreateLayer(192.0, 224.0, "Impl_Ritual", "obj_dungeon_ritual_altar");
+		create_ritual_altar = false;
 	}
 }
 
@@ -498,19 +491,20 @@ EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path&
 {
 	UNREFERENCED_PARAMETER(ModulePath);
 
+	YYTKInterface* module_interface = nullptr;
 	AurieStatus status = ObGetInterface(
 		"YYTK_Main",
-		(AurieInterfaceBase*&)(g_ModuleInterface)
+		(AurieInterfaceBase*&)(module_interface)
 	);
 
 	if (!AurieSuccess(status))
 		return AURIE_MODULE_DEPENDENCY_NOT_RESOLVED;
 
-	g_ModuleInterface->Print(CM_LIGHTAQUA, "[%s %s] - Plugin starting...", MOD_NAME, VERSION);
+	module_interface->Print(CM_LIGHTAQUA, "[%s %s] - Plugin starting...", MOD_NAME, VERSION);
 
 	CInstance* global_instance = nullptr;
-	g_ModuleInterface->GetGlobalInstance(&global_instance);
-	MMAPI::Initialize(g_ModuleInterface, global_instance, g_ArSelfModule, MOD_NAME, VERSION);
+	module_interface->GetGlobalInstance(&global_instance);
+	MMAPI::Initialize(module_interface, global_instance, g_ArSelfModule, MOD_NAME, VERSION);
 
 	MMAPI::Dungeon::Enable();
 	MMAPI::Location::Enable();
