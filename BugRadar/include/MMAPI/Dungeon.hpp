@@ -238,10 +238,11 @@ namespace MMAPI::Dungeon
 	}
 
 	/// Spawns a dungeon ladder at the given room coordinates.
-	/// Coordinates are converted from room pixels to the internal ladder grid before being passed to the game.
+	/// Accepts pixel coordinates (matching `obj_ari.x` / `obj_ari.y` and UMT's room editor) and divides
+	/// by 8 internally to produce the grid coordinates the game's `spawn_ladder` script expects.
 	/// @attention Requires MMAPI::Dungeon::Enable() to have been called.
-	/// @param x_coord The X position in the dungeon room.
-	/// @param y_coord The Y position in the dungeon room.
+	/// @param x_coord The X position in the dungeon room, in pixels.
+	/// @param y_coord The Y position in the dungeon room, in pixels.
 	/// @return True if the script was invoked, false if the required context is unavailable.
 	inline bool SpawnLadder(int64_t x_coord, int64_t y_coord)
 	{
@@ -255,8 +256,8 @@ namespace MMAPI::Dungeon
 		YYTK::CScript* gml_script = nullptr;
 		MMAPI::Internal::module_interface->GetNamedRoutinePointer(Internal::GML_SCRIPT_SPAWN_LADDER, reinterpret_cast<PVOID*>(&gml_script));
 
-		YYTK::RValue x = (x_coord * 2) / 16;
-		YYTK::RValue y = (y_coord * 2) / 16;
+		YYTK::RValue x = x_coord / 8;
+		YYTK::RValue y = y_coord / 8;
 		YYTK::RValue retval;
 		YYTK::RValue* arguments[2] = { &x, &y };
 

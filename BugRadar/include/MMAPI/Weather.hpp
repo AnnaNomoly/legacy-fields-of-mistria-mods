@@ -9,14 +9,31 @@
 
 namespace MMAPI::Weather
 {
+	/// Context passed to AfterRoomStart callbacks. Exposes the WeatherManager Self/Other so the
+	/// callback can invoke follow-up scripts that prefer a valid GML calling context.
+	struct AfterRoomStartContext
+	{
+		YYTK::CInstance* m_self  = nullptr;
+		YYTK::CInstance* m_other = nullptr;
+
+		/// The WeatherManager instance (the script's Self at hook time).
+		YYTK::CInstance* GetSelf() const { return m_self; }
+
+		/// The script's Other at hook time.
+		YYTK::CInstance* GetOther() const { return m_other; }
+	};
+
 	namespace Internal
 	{
 		inline bool enabled = false;
 
-		inline constexpr const char* GML_SCRIPT_GET_WEATHER = "gml_Script_get_weather@WeatherManager@Weather";
+		inline constexpr const char* GML_SCRIPT_GET_WEATHER    = "gml_Script_get_weather@WeatherManager@Weather";
+		inline constexpr const char* GML_SCRIPT_ON_ROOM_START  = "gml_Script_on_room_start@WeatherManager@Weather";
 
 		using BeforeGetWeatherCallback = void(*)();
+		using AfterRoomStartCallback   = void(*)(MMAPI::Weather::AfterRoomStartContext&);
 		inline BeforeGetWeatherCallback before_get_weather_callback = nullptr;
+		inline AfterRoomStartCallback   after_room_start_callback   = nullptr;
 
 		// Live WeatherManager Self/Other, latched from the get_weather hook.
 		// Used by TryGetWeatherManagerContext for callers outside any hook frame.
@@ -49,6 +66,28 @@ namespace MMAPI::Weather
 			Self  = weather_manager_self;
 			Other = weather_manager_other;
 			return true;
+		}
+
+		inline YYTK::RValue& GmlScriptAfterRoomStartCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_ON_ROOM_START)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			if (after_room_start_callback)
+			{
+				MMAPI::Weather::AfterRoomStartContext context{ Self, Other };
+				after_room_start_callback(context);
+			}
+
+			return Result;
 		}
 
 		inline YYTK::RValue& GetWeatherContextCallback(IN YYTK::CInstance* Self, IN YYTK::CInstance* Other, OUT YYTK::RValue& Result, IN int ArgumentCount, IN YYTK::RValue** Arguments)
@@ -91,6 +130,7 @@ namespace MMAPI::Weather
 		MMAPI::Status status = MMAPI::Internal::InstallScriptHooks({
 			{ MMAPI::Internal::GML_SCRIPT_SETUP_MAIN_SCREEN, reinterpret_cast<PVOID>(MMAPI::Internal::GmlScriptBeforeSetupMainScreenCallback) },
 			{ Internal::GML_SCRIPT_GET_WEATHER,              reinterpret_cast<PVOID>(Internal::GetWeatherContextCallback) },
+			{ Internal::GML_SCRIPT_ON_ROOM_START,            reinterpret_cast<PVOID>(Internal::GmlScriptAfterRoomStartCallback) },
 		});
 		if (!MMAPI::IsSuccess(status))
 			return status;
@@ -186,6 +226,26 @@ namespace MMAPI::Weather
 			return MMAPI::Internal::RegisterHook(
 				"Weather::BeforeGetWeather",
 				Internal::before_get_weather_callback,
+				callback
+			);
+		}
+
+		/// Registers a callback that runs after the game's `on_room_start@WeatherManager@Weather` script.
+		/// Fires on every room load (any room, not just dungeon rooms) — use this for cross-cutting
+		/// room-entry work that must happen after the WeatherManager has handled the transition.
+		/// Read `ctx.GetSelf()` / `ctx.GetOther()` to invoke follow-up scripts that need the
+		/// WeatherManager calling context.
+		/// @param callback A function called with a `MMAPI::Weather::AfterRoomStartContext`.
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterRoomStart(Internal::AfterRoomStartCallback callback)
+		{
+			MMAPI::Status status = MMAPI::Weather::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
+
+			return MMAPI::Internal::RegisterHook(
+				"Weather::AfterRoomStart",
+				Internal::after_room_start_callback,
 				callback
 			);
 		}

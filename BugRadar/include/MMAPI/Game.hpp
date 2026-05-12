@@ -67,6 +67,20 @@ namespace MMAPI::Game
 		void SetResult(bool result) { m_result = result; }
 	};
 
+	struct BeforeErrorContext
+	{
+		std::string m_message;
+		bool        m_cancelled = false;
+
+		/// Returns the error message the game's `error` script is about to log.
+		std::string_view GetMessage() const { return m_message; }
+
+		/// Prevents the game's `error` script from running, suppressing this specific error.
+		/// Use to silence specific game-emitted errors that mods deliberately trigger
+		/// (e.g. when a probing script call fails in an expected way).
+		void Cancel() { m_cancelled = true; }
+	};
+
 	namespace Internal
 	{
 		inline bool enabled = false;
@@ -87,9 +101,12 @@ namespace MMAPI::Game
 		inline constexpr const char* GML_SCRIPT_JOURNAL_MENU_CLOSE      = "gml_Script_on_close@JournalMenu@JournalMenu";
 		inline constexpr const char* GML_SCRIPT_STORE_MENU_OPEN         = "gml_Script_init@StoreMenu@StoreMenu";
 		inline constexpr const char* GML_SCRIPT_STORE_MENU_CLOSE        = "gml_Script_anon@10878@StoreMenu@StoreMenu";
+		inline constexpr const char* GML_SCRIPT_ERROR                   = "gml_Script_error";
 
 		using EndDayCallback = void(*)();
 		using NewDayCallback = void(*)();
+		using BeforeErrorCallback = void(*)(MMAPI::Game::BeforeErrorContext&);
+		inline BeforeErrorCallback before_error_callback = nullptr;
 
 		inline EndDayCallback after_end_day_callback = nullptr;
 		inline NewDayCallback before_new_day_callback = nullptr;
@@ -412,6 +429,30 @@ namespace MMAPI::Game
 			return Result;
 		}
 
+		inline YYTK::RValue& GmlScriptBeforeErrorCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			if (before_error_callback && Arguments && ArgumentCount >= 1 && Arguments[0]
+				&& Arguments[0]->m_Kind == YYTK::VALUE_STRING)
+			{
+				MMAPI::Game::BeforeErrorContext context{ Arguments[0]->ToString() };
+				before_error_callback(context);
+				if (context.m_cancelled)
+					return Result;
+			}
+
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_ERROR)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+			return Result;
+		}
+
 	}
 
 	/// Returns true if the game is currently paused.
@@ -541,6 +582,7 @@ namespace MMAPI::Game
 			{ Internal::GML_SCRIPT_JOURNAL_MENU_CLOSE,      reinterpret_cast<PVOID>(Internal::GmlScriptJournalMenuCloseCallback) },
 			{ Internal::GML_SCRIPT_STORE_MENU_OPEN,         reinterpret_cast<PVOID>(Internal::GmlScriptStoreMenuOpenCallback) },
 			{ Internal::GML_SCRIPT_STORE_MENU_CLOSE,        reinterpret_cast<PVOID>(Internal::GmlScriptStoreMenuCloseCallback) },
+			{ Internal::GML_SCRIPT_ERROR,                   reinterpret_cast<PVOID>(Internal::GmlScriptBeforeErrorCallback) },
 		});
 		if (!MMAPI::IsSuccess(status))
 			return status;
@@ -820,6 +862,24 @@ namespace MMAPI::Game
 			return MMAPI::Internal::RegisterHook(
 				"Game::AfterGameActive",
 				MMAPI::Weather::Internal::game_active_callback,
+				callback
+			);
+		}
+
+		/// Registers a callback that runs before the game's `error` script. Read `ctx.GetMessage()`
+		/// to inspect the error message; call `ctx.Cancel()` to swallow it (the original error script
+		/// won't run for this fire). Use sparingly — silencing legitimate game errors masks bugs.
+		/// @param callback A function called with a mutable `MMAPI::Game::BeforeErrorContext`.
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforeError(Internal::BeforeErrorCallback callback)
+		{
+			MMAPI::Status status = MMAPI::Game::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
+
+			return MMAPI::Internal::RegisterHook(
+				"Game::BeforeError",
+				Internal::before_error_callback,
 				callback
 			);
 		}

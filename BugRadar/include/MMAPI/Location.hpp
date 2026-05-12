@@ -519,22 +519,17 @@ namespace MMAPI::Location
 		if (!m_arg0)
 			return false;
 
-		YYTK::RValue asset_index = MMAPI::Internal::module_interface->CallBuiltin(
-			"asset_get_index", { gm_room_name.c_str() }
-		);
-
-		// asset_get_index returns -1 for unknown asset names.
-		if (!MMAPI::Engine::IsNumeric(asset_index) || asset_index.ToInt64() < 0)
-			return false;
-
-		// Verify the resolved asset is a room.
+		// asset_get_type takes the asset NAME (string), not an index — passing the resolved index
+		// returns Unknown (-1) and the validation below would reject every legitimate room.
 		YYTK::RValue asset_type = MMAPI::Internal::module_interface->CallBuiltin(
-			"asset_get_type", { asset_index }
+			"asset_get_type", { gm_room_name.c_str() }
 		);
 		if (asset_type.ToInt64() != static_cast<int64_t>(MMAPI::Engine::AssetType::Room))
 			return false;
 
-		*m_arg0 = asset_index;
+		*m_arg0 = MMAPI::Internal::module_interface->CallBuiltin(
+			"asset_get_index", { gm_room_name.c_str() }
+		);
 		return true;
 	}
 
