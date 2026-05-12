@@ -79,6 +79,22 @@ namespace MMAPI::Log
 			{
 				case Level::Trace: return "TRACE";
 				case Level::Debug: return "DEBUG";
+				case Level::Info:  return "INFO";
+				case Level::Warn:  return "WARN";
+				case Level::Error: return "ERROR";
+			}
+			return "?????";
+		}
+
+		// File-output variant: padded to 5 chars so columns line up. Console output uses the
+		// unpadded LevelTag because its [mod_name mod_version] prefix varies in length, defeating
+		// any alignment the level tag could provide.
+		constexpr const char* LevelTagPadded(Level level) noexcept
+		{
+			switch (level)
+			{
+				case Level::Trace: return "TRACE";
+				case Level::Debug: return "DEBUG";
 				case Level::Info:  return "INFO ";
 				case Level::Warn:  return "WARN ";
 				case Level::Error: return "ERROR";
@@ -137,7 +153,7 @@ namespace MMAPI::Log
 				tm.tm_hour, tm.tm_min, tm.tm_sec,
 				static_cast<long long>(ms.count()));
 
-			file_stream << timestamp << " [" << LevelTag(level) << "] " << message << '\n';
+			file_stream << timestamp << " [" << LevelTagPadded(level) << "] " << message << '\n';
 			file_stream.flush();
 		}
 
