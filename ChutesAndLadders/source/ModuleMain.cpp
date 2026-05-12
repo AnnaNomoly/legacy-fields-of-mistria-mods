@@ -350,7 +350,7 @@ void SpawnLadder()
 	}
 
 	// Both ari_x/ari_y and LADDER_SPAWN_POINTS values are in room pixels (matching UMT's room editor).
-	// MMAPI::Dungeon::SpawnLadder handles the pixel→grid conversion internally.
+	// MMAPI::Dungeon::SpawnLadder handles the pixel to grid conversion internally.
 	int x = config.spawn_ladder_at_player_position ? ari_x : LADDER_SPAWN_POINTS.at(ari_current_gm_room)[0];
 	int y = config.spawn_ladder_at_player_position ? ari_y : LADDER_SPAWN_POINTS.at(ari_current_gm_room)[1];
 

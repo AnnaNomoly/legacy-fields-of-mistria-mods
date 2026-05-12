@@ -153,6 +153,7 @@ namespace MMAPI::Location
 		inline constexpr const char* GML_SCRIPT_GO_TO_ROOM                = "gml_Script_goto_gm_room";
 		inline constexpr const char* GML_SCRIPT_TELEPORT_ARI_TO_ROOM      = "gml_Script_ari_teleport_to_room";
 		inline constexpr const char* GML_SCRIPT_TRY_LOCATION_ID_TO_STRING = "gml_Script_try_location_id_to_string";
+		inline constexpr const char* GML_SCRIPT_SHOW_ROOM_TITLE           = "gml_Script_show_room_title";
 
 		inline constexpr const char* INTERNAL_NAME_DUNGEON = "dungeon";
 		inline constexpr const char* GM_ROOM_PREFIX_MINES  = "rm_mines";
@@ -168,11 +169,13 @@ namespace MMAPI::Location
 		// signal of where the player will be on the next frame.
 		inline std::string current_gm_room_name;
 
-		using AfterGoToRoomCallback  = void(*)(MMAPI::Location::AfterGoToRoomContext&);
-		using BeforeGoToRoomCallback = void(*)(MMAPI::Location::BeforeGoToRoomContext&);
+		using AfterGoToRoomCallback       = void(*)(MMAPI::Location::AfterGoToRoomContext&);
+		using BeforeGoToRoomCallback      = void(*)(MMAPI::Location::BeforeGoToRoomContext&);
+		using AfterShowRoomTitleCallback  = void(*)();
 
-		inline AfterGoToRoomCallback  after_go_to_room_callback  = nullptr;
-		inline BeforeGoToRoomCallback before_go_to_room_callback = nullptr;
+		inline AfterGoToRoomCallback       after_go_to_room_callback        = nullptr;
+		inline BeforeGoToRoomCallback      before_go_to_room_callback       = nullptr;
+		inline AfterShowRoomTitleCallback  after_show_room_title_callback   = nullptr;
 
 		// Internal pub/sub list of handlers invoked from the goto_gm_room hook after the original runs,
 		// before the public AfterGoToRoom callback. Used by modules that need to react to room transitions
@@ -340,6 +343,25 @@ namespace MMAPI::Location
 
 			return Result;
 		}
+
+		inline YYTK::RValue& GmlScriptAfterShowRoomTitleCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_SHOW_ROOM_TITLE)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			if (after_show_room_title_callback)
+				after_show_room_title_callback();
+
+			return Result;
+		}
 	}
 
 	/// Activates Location utility functions that track the current location.
@@ -363,6 +385,7 @@ namespace MMAPI::Location
 		status = MMAPI::Internal::InstallScriptHooks({
 			{ MMAPI::Internal::GML_SCRIPT_SETUP_MAIN_SCREEN, reinterpret_cast<PVOID>(MMAPI::Internal::GmlScriptBeforeSetupMainScreenCallback) },
 			{ Internal::GML_SCRIPT_GO_TO_ROOM,               reinterpret_cast<PVOID>(Internal::GmlScriptGoToRoomCallback) },
+			{ Internal::GML_SCRIPT_SHOW_ROOM_TITLE,          reinterpret_cast<PVOID>(Internal::GmlScriptAfterShowRoomTitleCallback) },
 		});
 		if (!MMAPI::IsSuccess(status))
 			return status;
@@ -585,6 +608,27 @@ namespace MMAPI::Location
 			return MMAPI::Internal::RegisterHook(
 				"Location::AfterGoToRoom",
 				Internal::after_go_to_room_callback,
+				callback
+			);
+		}
+
+		/// Registers a callback that runs after the game's `show_room_title` script — the moment
+		/// the on-screen location banner appears (only fires for rooms with a named banner, not
+		/// every room transition). This is a later signal than AfterGoToRoom: by the time the
+		/// banner shows, the room is fully set up and Ari is in position, which is the right
+		/// timing for "spawn something in the new area" patterns. Pair with
+		/// `Location::TryGetCurrentLocation()` inside the callback to filter by destination.
+		/// @param callback A parameter-less function called after show_room_title runs.
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterShowRoomTitle(Internal::AfterShowRoomTitleCallback callback)
+		{
+			MMAPI::Status status = MMAPI::Location::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
+
+			return MMAPI::Internal::RegisterHook(
+				"Location::AfterShowRoomTitle",
+				Internal::after_show_room_title_callback,
 				callback
 			);
 		}

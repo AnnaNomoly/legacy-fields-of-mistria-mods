@@ -59,7 +59,6 @@ struct TelepopTarget
 	int y;
 };
 
-// Directional Telepop item → fixed teleport destination.
 static const std::map<std::string, TelepopTarget> TELEPOP_TARGETS = {
 	{ TELEPOP_PURPLE, { MMAPI::Location::Ids::MinesEntry,   216,  198  } },
 	{ TELEPOP_BLUE,   { MMAPI::Location::Ids::Beach,        1722, 505  } },

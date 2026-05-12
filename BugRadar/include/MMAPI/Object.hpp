@@ -2,6 +2,9 @@
 
 #include "Core.hpp"
 #include "Engine.hpp"
+#include "Hook.hpp"
+#include "Log.hpp"
+#include "Status.hpp"
 
 #include <map>
 #include <optional>
@@ -17,8 +20,48 @@ namespace MMAPI::Object
 		int y = 0;
 	};
 
+	struct FurniturePlacedContext
+	{
+		YYTK::RValue m_furniture;
+
+		/// Returns the placed-furniture struct (the script's Result). Has members like object_id,
+		/// top_left_x/y, write_size_x/y.
+		YYTK::RValue GetFurniture() const { return m_furniture; }
+
+		/// Convenience: object_id from the furniture struct, or -1 if it can't be resolved.
+		int GetObjectId() const;
+
+		/// Convenience: top-left tile position of the furniture, or std::nullopt if unavailable.
+		std::optional<MMAPI::Object::Position> GetTopLeftPosition() const;
+	};
+
+	struct ObjectErasedContext
+	{
+		YYTK::RValue m_object;
+
+		/// Returns the object renderer being erased (the script's Arguments[0]).
+		YYTK::RValue GetObject() const { return m_object; }
+
+		/// Convenience: object_id of the object being erased, or -1 if it can't be resolved.
+		int GetObjectId() const;
+
+		/// Convenience: top-left tile position of the object, or std::nullopt if unavailable.
+		std::optional<MMAPI::Object::Position> GetTopLeftPosition() const;
+	};
+
 	namespace Internal
 	{
+		inline bool enabled = false;
+
+		inline constexpr const char* GML_SCRIPT_WRITE_FURNITURE_TO_LOCATION = "gml_Script_write_furniture_to_location";
+		inline constexpr const char* GML_SCRIPT_ERASE_OBJECT_RENDERER       = "gml_Script_erase_object_renderer";
+
+		using AfterFurniturePlacedCallback = void(*)(MMAPI::Object::FurniturePlacedContext&);
+		using AfterObjectErasedCallback    = void(*)(MMAPI::Object::ObjectErasedContext&);
+
+		inline AfterFurniturePlacedCallback after_furniture_placed_callback = nullptr;
+		inline AfterObjectErasedCallback    after_object_erased_callback    = nullptr;
+
 		inline std::map<int, std::string> object_id_to_internal_name_map;
 		inline std::map<std::string, int> internal_name_to_object_id_map;
 
@@ -354,5 +397,140 @@ namespace MMAPI::Object
 			return false;
 
 		return IsLadderCandidate(instance->ToRValue());
+	}
+
+	inline int FurniturePlacedContext::GetObjectId() const
+	{
+		YYTK::RValue id = MMAPI::Object::GetObjectId(m_furniture);
+		return MMAPI::Engine::IsNumeric(id) ? static_cast<int>(id.ToInt64()) : -1;
+	}
+
+	inline std::optional<MMAPI::Object::Position> FurniturePlacedContext::GetTopLeftPosition() const
+	{
+		return MMAPI::Object::GetTopLeftPosition(m_furniture);
+	}
+
+	inline int ObjectErasedContext::GetObjectId() const
+	{
+		YYTK::RValue id = MMAPI::Object::GetObjectId(m_object);
+		return MMAPI::Engine::IsNumeric(id) ? static_cast<int>(id.ToInt64()) : -1;
+	}
+
+	inline std::optional<MMAPI::Object::Position> ObjectErasedContext::GetTopLeftPosition() const
+	{
+		return MMAPI::Object::GetTopLeftPosition(m_object);
+	}
+
+	namespace Internal
+	{
+		inline YYTK::RValue& GmlScriptAfterWriteFurnitureCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_WRITE_FURNITURE_TO_LOCATION)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			if (after_furniture_placed_callback
+				&& Result.m_Kind != YYTK::VALUE_UNDEFINED
+				&& Result.m_Kind != YYTK::VALUE_UNSET)
+			{
+				MMAPI::Object::FurniturePlacedContext context{ Result };
+				after_furniture_placed_callback(context);
+			}
+
+			return Result;
+		}
+
+		inline YYTK::RValue& GmlScriptAfterEraseObjectRendererCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_ERASE_OBJECT_RENDERER)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			if (after_object_erased_callback && Arguments && ArgumentCount >= 1 && Arguments[0])
+			{
+				MMAPI::Object::ObjectErasedContext context{ *Arguments[0] };
+				after_object_erased_callback(context);
+			}
+
+			return Result;
+		}
+	}
+
+	/// Activates Object utility hooks. Eagerly installs the write_furniture_to_location and
+	/// erase_object_renderer script hooks used by Hooks::AfterFurniturePlaced and
+	/// Hooks::AfterObjectErased. Object's pure utility functions (GetObjectId,
+	/// GetTopLeftPosition, etc.) do NOT require Enable() — they work standalone.
+	/// @return Status::Success if the hooks are installed (or already were); otherwise a failure status.
+	inline MMAPI::Status Enable()
+	{
+		if (Internal::enabled)
+			return MMAPI::Status::Success;
+
+		MMAPI::Log::Debug("MMAPI::Object::Enable() called");
+
+		MMAPI::Status status = MMAPI::Internal::InstallScriptHooks({
+			{ Internal::GML_SCRIPT_WRITE_FURNITURE_TO_LOCATION, reinterpret_cast<PVOID>(Internal::GmlScriptAfterWriteFurnitureCallback) },
+			{ Internal::GML_SCRIPT_ERASE_OBJECT_RENDERER,       reinterpret_cast<PVOID>(Internal::GmlScriptAfterEraseObjectRendererCallback) },
+		});
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
+		Internal::enabled = true;
+		return MMAPI::Status::Success;
+	}
+
+	namespace Hooks
+	{
+		/// Registers a callback that runs after the game writes a placed piece of furniture into
+		/// its location data (i.e., the player just placed furniture and it has been committed to
+		/// the location's persistent state). Use `ctx.GetObjectId()` to filter by object type and
+		/// `ctx.GetTopLeftPosition()` to read where it was placed.
+		/// @param callback A function called with a `MMAPI::Object::FurniturePlacedContext`.
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterFurniturePlaced(Internal::AfterFurniturePlacedCallback callback)
+		{
+			MMAPI::Status status = MMAPI::Object::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
+
+			return MMAPI::Internal::RegisterHook(
+				"Object::AfterFurniturePlaced",
+				Internal::after_furniture_placed_callback,
+				callback
+			);
+		}
+
+		/// Registers a callback that runs after the game erases an object renderer (e.g., the
+		/// player picks up placed furniture and the game removes its on-screen renderer). Use
+		/// `ctx.GetObjectId()` to filter by object type and `ctx.GetTopLeftPosition()` to read
+		/// where it was. Pairs with AfterFurniturePlaced for furniture-lifecycle tracking.
+		/// @param callback A function called with a `MMAPI::Object::ObjectErasedContext`.
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterObjectErased(Internal::AfterObjectErasedCallback callback)
+		{
+			MMAPI::Status status = MMAPI::Object::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
+
+			return MMAPI::Internal::RegisterHook(
+				"Object::AfterObjectErased",
+				Internal::after_object_erased_callback,
+				callback
+			);
+		}
 	}
 }

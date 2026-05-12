@@ -16,6 +16,7 @@
 #include "Dungeon.hpp"
 #include "Engine.hpp"
 #include "Equipment.hpp"
+#include "Fish.hpp"
 #include "Game.hpp"
 #include "Infusion.hpp"
 #include "Input.hpp"
