@@ -7,8 +7,6 @@
 #include "Log.hpp"
 #include "Status.hpp"
 
-#include <initializer_list>
-
 #include "YYToolkit/YYTK_Shared.hpp"
 
 namespace MMAPI::Monster
@@ -197,90 +195,6 @@ namespace MMAPI::Monster
 
 		inline constexpr const char* GML_SCRIPT_SPAWN_MONSTER = "gml_Script_spawn_monster";
 
-		/// Verifies that one globalInstance.__<x>_state__ array matches the corresponding MMAPI States enum.
-		/// Logs a Warn on length mismatch or per-index name mismatch — the warning lets mod authors notice
-		/// when a game patch shifts a state list so the MMAPI enum can be re-dumped from globalInstance.
-		inline void VerifyStateArray(const char* member_name, std::initializer_list<const char*> expected)
-		{
-			YYTK::RValue arr = MMAPI::Internal::global_instance->GetMember(member_name);
-			if (arr.m_Kind != YYTK::VALUE_ARRAY)
-			{
-				MMAPI::Log::Warn("Monster state array %s not found in globalInstance", member_name);
-				return;
-			}
-
-			size_t actual_size = 0;
-			MMAPI::Internal::module_interface->GetArraySize(arr, actual_size);
-			if (actual_size != expected.size())
-			{
-				MMAPI::Log::Warn("Monster state array %s size mismatch: game=%zu, MMAPI=%zu",
-					member_name, actual_size, expected.size());
-			}
-
-			size_t i = 0;
-			for (const char* expected_name : expected)
-			{
-				if (i >= actual_size)
-					break;
-
-				YYTK::RValue* entry = nullptr;
-				MMAPI::Internal::module_interface->GetArrayEntry(arr, i, entry);
-				if (entry && entry->m_Kind == YYTK::VALUE_STRING)
-				{
-					std::string actual = entry->ToString();
-					if (actual != expected_name)
-					{
-						MMAPI::Log::Warn("Monster state %s[%zu]: game=%s, MMAPI=%s",
-							member_name, i, actual.c_str(), expected_name);
-					}
-				}
-				++i;
-			}
-		}
-
-		inline void VerifyAllStateArrays()
-		{
-			VerifyStateArray("__shroom_state__",
-				{ "idle", "acknowledgment", "walk", "windup_slide", "windup", "attack", "tired",
-				  "shell", "wiggle", "wiggle_exit", "dying", "explode" });
-
-			VerifyStateArray("__rockclod_state__",
-				{ "idle", "acknowledgment", "walk", "windup", "attack", "tired", "hurt", "dying", "flying" });
-
-			VerifyStateArray("__sapling_state__",
-				{ "idle", "acknowledgment", "walk", "windup", "attack", "tired", "hurt", "dying", "splitting" });
-
-			VerifyStateArray("__enchantern_state__",
-				{ "idle", "acknowledgment", "flicker_on", "charge", "flee", "go_home", "hurt", "dying" });
-
-			VerifyStateArray("__mite_state__",
-				{ "idle", "walk", "windup", "attack", "tired", "flee", "hurt", "dying" });
-
-			VerifyStateArray("__bat_state__",
-				{ "idle", "acknowledgment", "walk", "windup", "attack", "hurt", "dying", "flee" });
-
-			VerifyStateArray("__mimic_state__",
-				{ "idle", "attack", "hurt", "gobble", "dying", "fade" });
-
-			VerifyStateArray("__spirit_state__",
-				{ "idle", "teleport", "windup", "attack", "tired", "hurt", "dying", "acknowledgment", "recovery" });
-
-			VerifyStateArray("__cat_state__",
-				{ "idle", "acknowledgment", "walk", "windup", "attack", "tired", "petrified", "hurt", "dying" });
-
-			VerifyStateArray("__barrel_state__",
-				{ "idle", "priming", "swelling" });
-
-			VerifyStateArray("__rock_stack_state__",
-				{ "idle", "acknowledgment", "walk", "windup", "hurt", "launching", "catching", "dying", "hopping" });
-
-			VerifyStateArray("__statue_state__",
-				{ "acknowledgment", "idle", "chase", "tumbling", "dying" });
-
-			VerifyStateArray("__tome_state__",
-				{ "acknowledgment", "stunned", "idle", "windup", "stun_attack", "flying", "hurt", "dying", "gentle_stun" });
-		}
-
 		using BeforeMonsterSpawnCallback = void(*)(MMAPI::Monster::SpawnMonsterContext&);
 
 		inline BeforeMonsterSpawnCallback before_monster_spawn_callback = nullptr;
@@ -315,8 +229,7 @@ namespace MMAPI::Monster
 
 	/// Activates Monster utility functions. Cascades to MMAPI::Dungeon::Enable so SpawnMonster can resolve
 	/// the live DungeonRunner via TryGetDungeonRunnerContext. Eagerly installs the spawn_monster script hook
-	/// used by Hooks::BeforeMonsterSpawn. Also verifies the 13 per-category state arrays in globalInstance
-	/// against the MMAPI::Monster::States enums and logs a Warn on any mismatch.
+	/// used by Hooks::BeforeMonsterSpawn.
 	/// @return Status::Success if the hooks are installed (or already were); otherwise a failure status.
 	inline MMAPI::Status Enable()
 	{
@@ -335,8 +248,6 @@ namespace MMAPI::Monster
 		);
 		if (!MMAPI::IsSuccess(status))
 			return status;
-
-		Internal::VerifyAllStateArrays();
 
 		Internal::enabled = true;
 		return MMAPI::Status::Success;

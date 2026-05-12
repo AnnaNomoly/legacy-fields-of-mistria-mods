@@ -17,7 +17,12 @@ namespace MMAPI::Internal
 			return MMAPI::Status::Success;
 
 		if (!module_interface || !self_module)
+		{
+			MMAPI::Log::Error("InstallScriptHook(%s): MMAPI not initialized "
+				"(module_interface=%p, self_module=%p)",
+				script_name, static_cast<void*>(module_interface), static_cast<void*>(self_module));
 			return MMAPI::Status::NotInitialized;
+		}
 
 		YYTK::CScript* gml_script = nullptr;
 		Aurie::AurieStatus status = module_interface->GetNamedRoutinePointer(
@@ -26,7 +31,12 @@ namespace MMAPI::Internal
 		);
 
 		if (!Aurie::AurieSuccess(status))
+		{
+			MMAPI::Log::Error("InstallScriptHook(%s): script not found in game "
+				"(GetNamedRoutinePointer failed, Aurie status %d) -- likely the game patched the script name",
+				script_name, static_cast<int>(status));
 			return MMAPI::Status::InstallFailed;
+		}
 
 		status = Aurie::MmCreateHook(
 			self_module,
@@ -37,7 +47,11 @@ namespace MMAPI::Internal
 		);
 
 		if (!Aurie::AurieSuccess(status))
+		{
+			MMAPI::Log::Error("InstallScriptHook(%s): MmCreateHook failed (Aurie status %d)",
+				script_name, static_cast<int>(status));
 			return MMAPI::Status::InstallFailed;
+		}
 
 		owned_script_hook_installed_map[script_name] = true;
 		MMAPI::Log::Debug("Installed script hook: %s", script_name);

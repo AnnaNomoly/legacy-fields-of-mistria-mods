@@ -523,8 +523,6 @@ namespace MMAPI::Game
 		if (!MMAPI::IsSuccess(status))
 			return status;
 
-		// Game::Hooks::AfterGameActive is implemented via Weather's get_weather wrapper —
-		// the user-facing registrar lives on Game, but the underlying signal lives in Weather.
 		status = MMAPI::Weather::Enable();
 		if (!MMAPI::IsSuccess(status))
 			return status;

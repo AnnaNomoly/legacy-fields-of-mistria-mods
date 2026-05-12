@@ -10,6 +10,8 @@
 #include "Status.hpp"
 #include "Text.hpp"
 
+#include <algorithm>
+#include <cctype>
 #include <map>
 #include <string>
 #include <vector>
@@ -211,12 +213,30 @@ namespace MMAPI::Item
 
 		/// Returns the cached item prototype for the given item_id, or undefined if the cache is empty
 		/// (Item::Enable was not called before the game's create_item_prototypes script ran) or item_id
-		/// is not in the cache.
+		/// is not in the cache. Logs a one-shot Warn when the cache is empty, and per-call Warn when an
+		/// item_id is missing from a populated cache.
 		inline YYTK::RValue GetPrototype(int item_id)
 		{
+			if (item_id_to_prototype_map.empty())
+			{
+				static bool warned_empty_cache = false;
+				if (!warned_empty_cache)
+				{
+					MMAPI::Log::Warn(
+						"Item prototype cache is empty! Was Item::Enable() called before the game's "
+						"create_item_prototypes script ran? Be sure to call it from ModuleInitialize."
+					);
+					warned_empty_cache = true;
+				}
+				return {};
+			}
+
 			auto it = item_id_to_prototype_map.find(item_id);
 			if (it == item_id_to_prototype_map.end())
+			{
+				MMAPI::Log::Warn("Item prototype not found for item_id=%d", item_id);
 				return {};
+			}
 			return it->second;
 		}
 
@@ -684,6 +704,69 @@ namespace MMAPI::Item
 		}
 
 		return item_ids;
+	}
+
+	/// Invokes fn with every item_id in `globalInstance.__item_data`, in id order.
+	/// @attention Requires MMAPI::Item::Enable() to have been called.
+	template <typename Fn>
+	inline void ForEachItem(Fn fn)
+	{
+		MMAPI_REQUIRE_ENABLED_VOID("Item");
+
+		YYTK::RValue item_data = Internal::GetItemData();
+
+		size_t item_count = 0;
+		MMAPI::Internal::module_interface->GetArraySize(item_data, item_count);
+
+		for (size_t i = 0; i < item_count; ++i)
+			fn(static_cast<int>(i));
+	}
+
+	/// Finds every item whose internal recipe key OR localized display name case-insensitively
+	/// matches any entry in `names`. Common pattern for resolving user-supplied item lists from
+	/// config files (where users might write either internal keys like "ore_stone" or display
+	/// names like "Stone").
+	/// @attention Requires MMAPI::Item::Enable() to have been called.
+	/// @param names The set of names to match against. Compared case-insensitively.
+	/// @return All matching item_ids (no duplicates — a single item that matches multiple names
+	///         appears once).
+	inline std::vector<int> FindIdsByName(const std::vector<std::string>& names)
+	{
+		MMAPI_REQUIRE_ENABLED("Item", {});
+
+		auto to_lower = [](std::string s)
+		{
+			std::transform(s.begin(), s.end(), s.begin(),
+				[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+			return s;
+		};
+
+		std::vector<std::string> needles;
+		needles.reserve(names.size());
+		for (const auto& n : names)
+			needles.push_back(to_lower(n));
+
+		std::vector<int> matching_ids;
+		ForEachItem([&](int item_id)
+		{
+			YYTK::RValue internal_rv = GetInternalName(item_id);
+			std::string internal_lc = (internal_rv.m_Kind == YYTK::VALUE_STRING) ? to_lower(internal_rv.ToString()) : "";
+
+			YYTK::RValue localized_rv = GetLocalizedName(item_id);
+			std::string localized_lc = (localized_rv.m_Kind == YYTK::VALUE_STRING) ? to_lower(localized_rv.ToString()) : "";
+
+			for (const auto& needle : needles)
+			{
+				if ((!internal_lc.empty() && needle == internal_lc) ||
+					(!localized_lc.empty() && needle == localized_lc))
+				{
+					matching_ids.push_back(item_id);
+					break;
+				}
+			}
+		});
+
+		return matching_ids;
 	}
 
 	/// Gets the stamina modifier for an item.

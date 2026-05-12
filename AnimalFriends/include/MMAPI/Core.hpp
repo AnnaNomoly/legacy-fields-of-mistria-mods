@@ -108,6 +108,24 @@ namespace MMAPI
 		const char* mod_version
 	)
 	{
+		// Diagnostic: surface missing pointers loudly. Without these, every downstream MMAPI call is a
+		// silent no-op (utility functions fail their preconditions; hook installs return NotInitialized).
+		// Bypass MMAPI::Log here because Log itself reads module_interface — if that's the missing one,
+		// Log has nowhere to write. Fall back to YYTK Print directly when possible.
+		if (!module_interface || !global || !module)
+		{
+			if (module_interface)
+			{
+				module_interface->Print(YYTK::CM_LIGHTRED,
+					"[MMAPI::Initialize] missing required pointer "
+					"(module_interface=%p, global=%p, module=%p) -- downstream MMAPI calls will fail",
+					static_cast<void*>(module_interface),
+					static_cast<void*>(global),
+					static_cast<void*>(module));
+			}
+			// No interface at all means we can't log; the only signal will be downstream failures.
+		}
+
 		MMAPI::Internal::module_interface = module_interface;
 		MMAPI::Internal::global_instance  = global;
 		MMAPI::Internal::self_module      = module;

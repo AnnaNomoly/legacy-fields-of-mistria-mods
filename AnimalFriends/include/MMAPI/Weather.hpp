@@ -23,12 +23,20 @@ namespace MMAPI::Weather
 		inline YYTK::CInstance* weather_manager_self  = nullptr;
 		inline YYTK::CInstance* weather_manager_other = nullptr;
 
+		// Slot for the Game::Hooks::AfterGameActive user-facing hook. Slot lives here because the
+		// signal we use to detect "game is active" is Weather's get_weather first-fire-per-session,
+		// but the public registrar lives on Game (where lifecycle hooks logically belong).
+		using GameActiveCallback = void(*)();
+		inline GameActiveCallback game_active_callback = nullptr;
+		inline bool game_active_observed_this_session = false;
+
 		// Cleared from the setup_main_screen pub/sub when the player returns to the title menu.
 		// Registered by Weather::Enable().
 		inline void ClearWeatherManagerOnReturnToTitle(YYTK::CInstance* /*Self*/, YYTK::CInstance* /*Other*/)
 		{
 			weather_manager_self  = nullptr;
 			weather_manager_other = nullptr;
+			game_active_observed_this_session = false;
 		}
 
 		/// Resolves the WeatherManager's GML calling context, latched from the most recent get_weather call.
@@ -48,6 +56,16 @@ namespace MMAPI::Weather
 			// Refresh on every fire.
 			weather_manager_self  = Self;
 			weather_manager_other = Other;
+
+			// First get_weather fire per session signals "game is interactive". Drives the
+			// user-facing Game::Hooks::AfterGameActive hook. Fires exactly once between title
+			// transitions — game_active_observed_this_session is cleared on return-to-title.
+			if (!game_active_observed_this_session)
+			{
+				game_active_observed_this_session = true;
+				if (game_active_callback)
+					game_active_callback();
+			}
 
 			if (before_get_weather_callback)
 				before_get_weather_callback();

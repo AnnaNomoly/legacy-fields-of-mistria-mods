@@ -5,6 +5,7 @@ using namespace Aurie;
 using namespace YYTK;
 using json = nlohmann::json;
 
+static const char* const MOD_NAME = "AnimalFriends";
 static const char* const VERSION = "1.4.4";
 static const char* const FRIENDSHIP_MULTIPLIER_KEY = "friendship_multiplier";
 static const char* const AUTO_PET_KEY = "auto_pet";
@@ -99,7 +100,7 @@ void handle_eptr(std::exception_ptr eptr)
 		}
 	}
 	catch (const std::exception& e) {
-		g_ModuleInterface->Print(CM_LIGHTRED, "[AnimalFriends %s] - Error: %s", VERSION, e.what());
+		MMAPI::Log::Error("Error: %s", e.what());
 	}
 }
 
@@ -107,18 +108,18 @@ void LogDefaultConfigValues()
 {
 	config = AnimalFriendsConfig{};
 
-	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[AnimalFriends %s] - Using DEFAULT \"%s\" value: %d!", VERSION, FRIENDSHIP_MULTIPLIER_KEY, config.friendship_multiplier);
-	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[AnimalFriends %s] - Using DEFAULT \"%s\" value: %s!", VERSION, PREVENT_FRIENDSHIP_LOSS_KEY, config.prevent_friendship_loss ? "true" : "false");
-	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[AnimalFriends %s] - Using DEFAULT \"%s\" value: %s!", VERSION, AUTO_PET_KEY, config.auto_pet ? "true" : "false");
-	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[AnimalFriends %s] - Using DEFAULT \"%s\" value: %s!", VERSION, AUTO_FEED_KEY, config.auto_feed ? "true" : "false");
-	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[AnimalFriends %s] - Using DEFAULT \"%s\" value: %s!", VERSION, AUTO_BELL_IN_KEY, config.auto_bell_in ? "true" : "false");
-	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[AnimalFriends %s] - Using DEFAULT \"%s\" value: %s!", VERSION, AUTO_BELL_OUT_KEY, config.auto_bell_out ? "true" : "false");
-	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[AnimalFriends %s] - Using DEFAULT \"%s\" value: %d!", VERSION, ANIMAL_WAKE_UP_TIME_KEY, config.animal_wake_up_time);
-	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[AnimalFriends %s] - Using DEFAULT \"%s\" value: %d!", VERSION, ANIMAL_BED_TIME_KEY, config.animal_bed_time);
-	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[AnimalFriends %s] - Using DEFAULT \"%s\" value: %s!", VERSION, MUTE_AUTO_BELL_SOUNDS_KEY, config.mute_auto_bell_sounds ? "true" : "false");
-	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[AnimalFriends %s] - Using DEFAULT \"%s\" value: %s!", VERSION, SPAWN_EXTRA_BEADS_DAILY_KEY, config.spawn_extra_beads_daily ? "true" : "false");
-	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[AnimalFriends %s] - Using DEFAULT \"%s\" value: %d!", VERSION, EXTRA_BEADS_DAILY_MULTIPLIER_KEY, config.extra_beads_daily_multiplier);
-	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[AnimalFriends %s] - Using DEFAULT \"%s\" value: %s!", VERSION, GAIN_RANCHING_XP_KEY, config.gain_ranching_xp ? "true" : "false");
+	MMAPI::Log::Warn("Using DEFAULT \"%s\" value: %d!", FRIENDSHIP_MULTIPLIER_KEY, config.friendship_multiplier);
+	MMAPI::Log::Warn("Using DEFAULT \"%s\" value: %s!", PREVENT_FRIENDSHIP_LOSS_KEY, config.prevent_friendship_loss ? "true" : "false");
+	MMAPI::Log::Warn("Using DEFAULT \"%s\" value: %s!", AUTO_PET_KEY, config.auto_pet ? "true" : "false");
+	MMAPI::Log::Warn("Using DEFAULT \"%s\" value: %s!", AUTO_FEED_KEY, config.auto_feed ? "true" : "false");
+	MMAPI::Log::Warn("Using DEFAULT \"%s\" value: %s!", AUTO_BELL_IN_KEY, config.auto_bell_in ? "true" : "false");
+	MMAPI::Log::Warn("Using DEFAULT \"%s\" value: %s!", AUTO_BELL_OUT_KEY, config.auto_bell_out ? "true" : "false");
+	MMAPI::Log::Warn("Using DEFAULT \"%s\" value: %d!", ANIMAL_WAKE_UP_TIME_KEY, config.animal_wake_up_time);
+	MMAPI::Log::Warn("Using DEFAULT \"%s\" value: %d!", ANIMAL_BED_TIME_KEY, config.animal_bed_time);
+	MMAPI::Log::Warn("Using DEFAULT \"%s\" value: %s!", MUTE_AUTO_BELL_SOUNDS_KEY, config.mute_auto_bell_sounds ? "true" : "false");
+	MMAPI::Log::Warn("Using DEFAULT \"%s\" value: %s!", SPAWN_EXTRA_BEADS_DAILY_KEY, config.spawn_extra_beads_daily ? "true" : "false");
+	MMAPI::Log::Warn("Using DEFAULT \"%s\" value: %d!", EXTRA_BEADS_DAILY_MULTIPLIER_KEY, config.extra_beads_daily_multiplier);
+	MMAPI::Log::Warn("Using DEFAULT \"%s\" value: %s!", GAIN_RANCHING_XP_KEY, config.gain_ranching_xp ? "true" : "false");
 }
 
 void LoadOrCreateConfigFile()
@@ -126,21 +127,21 @@ void LoadOrCreateConfigFile()
 	std::exception_ptr eptr;
 	try
 	{
-		std::filesystem::path config_file = MMAPI::Config::GetConfigPath("AnimalFriends");
+		std::filesystem::path config_file = MMAPI::Config::GetConfigPath(MOD_NAME);
 		bool config_file_exists = std::filesystem::exists(config_file);
 		json json_object = MMAPI::Config::Load(config_file);
 
 		if (!config_file_exists)
 		{
-			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[AnimalFriends %s] - Configuration file was not found. Creating file: %s", VERSION, config_file.string().c_str());
+			MMAPI::Log::Warn("Configuration file was not found. Creating file: %s", config_file.string().c_str());
 		}
 
 		if (json_object.empty())
 		{
 			if (config_file_exists)
 			{
-				g_ModuleInterface->Print(CM_LIGHTRED, "[AnimalFriends %s] - No readable values found in mod configuration file: %s!", VERSION, config_file.string().c_str());
-				g_ModuleInterface->Print(CM_LIGHTYELLOW, "[AnimalFriends %s] - Defaults will be used and written back to the configuration file.", VERSION);
+				MMAPI::Log::Error("No readable values found in mod configuration file: %s!", config_file.string().c_str());
+				MMAPI::Log::Warn("Defaults will be used and written back to the configuration file.");
 			}
 
 			LogDefaultConfigValues();
@@ -151,14 +152,14 @@ void LoadOrCreateConfigFile()
 		config = json_object.get<AnimalFriendsConfig>();
 		if (config.animal_wake_up_time >= config.animal_bed_time)
 		{
-			g_ModuleInterface->Print(CM_LIGHTRED, "[AnimalFriends %s] - Invalid animal schedule in mod configuration file: wake up time must be before bed time.", VERSION);
-			g_ModuleInterface->Print(CM_LIGHTGREEN, "[AnimalFriends %s] - Using DEFAULT animal schedule values.", VERSION);
+			MMAPI::Log::Error("Invalid animal schedule in mod configuration file: wake up time must be before bed time.");
+			MMAPI::Log::Info("Using DEFAULT animal schedule values.");
 			config.animal_wake_up_time = EIGHT_AM_IN_SECONDS;
 			config.animal_bed_time = SIX_PM_IN_SECONDS;
 		}
 
 		MMAPI::Config::Save(config_file, config);
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[AnimalFriends %s] - Loaded configuration file: %s", VERSION, config_file.string().c_str());
+		MMAPI::Log::Info("Loaded configuration file: %s", config_file.string().c_str());
 	}
 	catch (...)
 	{
@@ -194,11 +195,11 @@ void AutoFeedAnimal(RValue animal, int& xp_out)
 	{
 		int updated = min(original + (BASE_HEART_POINTS_PER_ACTION * config.friendship_multiplier), MAX_ANIMAL_HEART_POINTS);
 		MMAPI::Animal::SetHeartPoints(animal, updated);
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[AnimalFriends %s] - AUTO FEEDER fed an animal, and boosted it's heart points from %d to %d!", VERSION, original, updated);
+		MMAPI::Log::Info("AUTO FEEDER fed an animal, and boosted it's heart points from %d to %d!", original, updated);
 	}
 	else
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[AnimalFriends %s] - AUTO FEEDER fed an animal, but it's already at MAX heart points!", VERSION);
+		MMAPI::Log::Info("AUTO FEEDER fed an animal, but it's already at MAX heart points!");
 	}
 }
 
@@ -217,11 +218,11 @@ void AutoPetAnimal(RValue animal, int& xp_out)
 	{
 		int updated = min(original + (BASE_HEART_POINTS_PER_ACTION * config.friendship_multiplier), MAX_ANIMAL_HEART_POINTS);
 		MMAPI::Animal::SetHeartPoints(animal, updated);
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[AnimalFriends %s] - AUTO PETTER pet an animal, and boosted it's heart points from %d to %d!", VERSION, original, updated);
+		MMAPI::Log::Info("AUTO PETTER pet an animal, and boosted it's heart points from %d to %d!", original, updated);
 	}
 	else
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[AnimalFriends %s] - AUTO PETTER pet an animal, but it's already at MAX heart points!", VERSION);
+		MMAPI::Log::Info("AUTO PETTER pet an animal, but it's already at MAX heart points!");
 	}
 }
 
@@ -243,7 +244,7 @@ void HandleAri(CInstance* self)
 	if (ranching_xp_gained > 0)
 	{
 		MMAPI::Skill::GainExperience(MMAPI::Skill::Ids::Ranching, ranching_xp_gained);
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[AnimalFriends %s] - Ari gained %d ranching experience from the AUTO PETTER and AUTO FEEDER!", VERSION, ranching_xp_gained);
+		MMAPI::Log::Info("Ari gained %d ranching experience from the AUTO PETTER and AUTO FEEDER!", ranching_xp_gained);
 	}
 
 	once_per_day = false;
@@ -286,14 +287,14 @@ void OnAnimalHeartPointsChanged(MMAPI::Animal::HeartPointsChangedContext& ctx)
 	if (config.prevent_friendship_loss && amount < 0.0)
 	{
 		amount = 0.0;
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[AnimalFriends %s] - Prevented an animal's heart points from being reduced!", VERSION);
+		MMAPI::Log::Info("Prevented an animal's heart points from being reduced!");
 	}
 
 	int original_amount = static_cast<int>(amount);
 	int modified_amount = static_cast<int>(std::round(amount * config.friendship_multiplier));
 	ctx.SetAmount(static_cast<double>(modified_amount));
 	if (modified_amount > 0)
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[AnimalFriends %s] - Boosted the heart points gained for animal from %d to %d!", VERSION, original_amount, modified_amount);
+		MMAPI::Log::Info("Boosted the heart points gained for animal from %d to %d!", original_amount, modified_amount);
 }
 
 void OnNewDay()
@@ -335,11 +336,11 @@ EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path&
 	if (!AurieSuccess(status))
 		return AURIE_MODULE_DEPENDENCY_NOT_RESOLVED;
 
-	g_ModuleInterface->Print(CM_LIGHTAQUA, "[AnimalFriends %s] - Plugin starting...", VERSION);
+	g_ModuleInterface->Print(CM_LIGHTAQUA, "[%s %s] - Plugin starting...", MOD_NAME, VERSION);
 
 	CInstance* global_instance = nullptr;
 	g_ModuleInterface->GetGlobalInstance(&global_instance);
-	MMAPI::Initialize(g_ModuleInterface, global_instance, g_ArSelfModule, "AnimalFriends", VERSION);
+	MMAPI::Initialize(g_ModuleInterface, global_instance, g_ArSelfModule, MOD_NAME, VERSION);
 	MMAPI::Animal::Enable();
 	MMAPI::Skill::Enable();
 	MMAPI::Weather::Enable();
@@ -352,6 +353,6 @@ EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path&
 	MMAPI::Game::Hooks::BeforeSetupMainScreen(OnSetupMainScreen);
 	LoadOrCreateConfigFile();
 
-	g_ModuleInterface->Print(CM_LIGHTGREEN, "[AnimalFriends %s] - Plugin started!", VERSION);
+	MMAPI::Log::Info("Plugin started!");
 	return AURIE_SUCCESS;
 }

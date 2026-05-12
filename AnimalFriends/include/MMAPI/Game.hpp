@@ -3,6 +3,7 @@
 #include "Core.hpp"
 #include "Hook.hpp"
 #include "Instance.hpp"
+#include "Weather.hpp"
 #include "Log.hpp"
 #include "Status.hpp"
 
@@ -522,6 +523,10 @@ namespace MMAPI::Game
 		if (!MMAPI::IsSuccess(status))
 			return status;
 
+		status = MMAPI::Weather::Enable();
+		if (!MMAPI::IsSuccess(status))
+			return status;
+
 		status = MMAPI::Internal::InstallScriptHooks({
 			{ Internal::GML_SCRIPT_END_DAY,                 reinterpret_cast<PVOID>(Internal::GmlScriptEndDayCallback) },
 			{ Internal::GML_SCRIPT_ARI_ON_NEW_DAY,          reinterpret_cast<PVOID>(Internal::GmlScriptAriBeforeNewDayCallback) },
@@ -791,6 +796,30 @@ namespace MMAPI::Game
 			return MMAPI::Internal::RegisterHook(
 				"Game::BeforeSetupMainScreen",
 				MMAPI::Internal::before_setup_main_screen_callback,
+				callback
+			);
+		}
+
+		/// Registers a callback that fires once per session when the game becomes interactive — defined as
+		/// the first `get_weather@WeatherManager@Weather` script call after a save load. Re-fires on each
+		/// subsequent save load (cleared on return-to-title alongside other session-scoped Weather state).
+		///
+		/// @attention Localizer is not guaranteed to be populated yet at this point. Mods that need to
+		/// resolve localized item/text names should still pair this with `Text::Hooks::AfterLocalizedString`
+		/// (e.g. set a flag in AfterGameActive, consume it in AfterLocalizedString) so the work runs after
+		/// at least one localized string has been resolved.
+		///
+		/// @param callback A function called once per session when the game becomes interactive.
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterGameActive(MMAPI::Weather::Internal::GameActiveCallback callback)
+		{
+			MMAPI::Status status = MMAPI::Game::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
+
+			return MMAPI::Internal::RegisterHook(
+				"Game::AfterGameActive",
+				MMAPI::Weather::Internal::game_active_callback,
 				callback
 			);
 		}

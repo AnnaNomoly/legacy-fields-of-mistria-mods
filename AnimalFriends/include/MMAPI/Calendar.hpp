@@ -313,6 +313,22 @@ namespace MMAPI::Calendar
 		return !IsNight();
 	}
 
+	/// Returns true if the current game clock time is within `[start_seconds, end_seconds)`.
+	/// The game's clock is monotonic within a day-cycle and does not wrap at midnight. To
+	/// express an overnight range, use times past 86400 for `end_seconds`.
+	///
+	/// Examples:
+	///   IsInTimeRange(28800, 64800)   // true between 08:00 and 18:00
+	///   IsInTimeRange(79200, 93600)   // true between 22:00 and 02:00 the next morning
+	///
+	/// @param start_seconds Inclusive start of the range, in game-clock seconds.
+	/// @param end_seconds Exclusive end of the range, in game-clock seconds.
+	inline bool IsInTimeRange(int start_seconds, int end_seconds)
+	{
+		int current = MMAPI::Game::GetCurrentTimeInSeconds();
+		return current >= start_seconds && current < end_seconds;
+	}
+
 	/// Gets the current unified game time from the Calendar script context.
 	/// @attention Requires MMAPI::Calendar::Enable() to have been called.
 	/// @return The current unified time as an RValue, or undefined if the required context is unavailable.
