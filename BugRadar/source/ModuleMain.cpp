@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <filesystem>
+#include <random>
 #include <set>
 #include <YYToolkit/YYTK_Shared.hpp>
 #include <MMAPI/MMAPI.hpp>
@@ -854,17 +855,13 @@ void CalculateBoundingBoxCenters()
 	}
 }
 
-double CalculateDistance(int x1, int y1, int x2, int y2) {
-	return std::sqrt(std::pow(x2 - x1, 2) + std::pow(y2 - y1, 2));
-}
-
 std::tuple<int, int, int> GenerateRandomPointInClosestBoundingBox(int X, int Y, const std::string& room_name) {
 	double min_distance = DBL_MAX;
 	size_t closest_index = 0;
 
 	for (size_t i = 0; i < ROOM_BUG_SPAWN_BOUNDING_BOX_CENTER_MAP[room_name].size(); ++i) {
 		const auto& center = ROOM_BUG_SPAWN_BOUNDING_BOX_CENTER_MAP[room_name][i];
-		double distance = CalculateDistance(X, Y, center.first, center.second);
+		double distance = MMAPI::Math::GetDistance(X, Y, center.first, center.second);
 
 		if (distance < min_distance) {
 			min_distance = distance;
@@ -885,9 +882,11 @@ std::tuple<int, int, int> GenerateRandomPointInClosestBoundingBox(int X, int Y, 
 		max_y = max(max_y, point.second);
 	}
 
-	srand(static_cast<unsigned int>(time(0)));
-	int random_x = min_x + rand() % (max_x - min_x + 1);
-	int random_y = min_y + rand() % (max_y - min_y + 1);
+	static std::mt19937 rng{ std::random_device{}() };
+	std::uniform_int_distribution<int> x_dist(min_x, max_x);
+	std::uniform_int_distribution<int> y_dist(min_y, max_y);
+	int random_x = x_dist(rng);
+	int random_y = y_dist(rng);
 
 	return { random_x, random_y, closest_index + 1 };
 }
@@ -908,7 +907,7 @@ void NormalizeBugList()
 	for (const auto& entry : config.bug_list)
 		normalized_config_entries.push_back(ToLower(entry));
 
-	YYTK::RValue item_data = MMAPI::Internal::global_instance->GetMember("__item_data");
+	YYTK::RValue item_data = MMAPI::Item::GetItemData();
 	size_t item_count = 0;
 	g_ModuleInterface->GetArraySize(item_data, item_count);
 
