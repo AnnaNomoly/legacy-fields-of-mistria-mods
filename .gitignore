@@ -352,6 +352,18 @@ MigrationBackup/
 # YYExplorer
 YYExplorer/
 
+# Claude
+.claude/
+.claude/settings.local.json
+CLAUDE.local.md
+
+# Codex
+.codex/auth.json
+.codex/history.jsonl
+.codex/logs/
+.codex/sessions/
+.codex/cache/
+.codex/tmp/
 
 ### MOUSIE'S MAKEFILE BUILD SYSTEM ###
 _build/
