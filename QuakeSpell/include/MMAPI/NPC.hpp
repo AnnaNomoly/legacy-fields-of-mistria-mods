@@ -371,7 +371,6 @@ namespace MMAPI::NPC
 	/// @return The NPC data struct as an RValue, or undefined if the ID is out of bounds.
 	inline YYTK::RValue GetData(MMAPI::NPC::Ids npc)
 	{
-		MMAPI_REQUIRE_ENABLED("NPC", {});
 		return Internal::GetData(GetId(npc));
 	}
 
@@ -380,7 +379,6 @@ namespace MMAPI::NPC
 	/// @return The liked gift item ID buffer as an RValue, or undefined if the NPC is not found.
 	inline YYTK::RValue GetLikedGifts(MMAPI::NPC::Ids npc)
 	{
-		MMAPI_REQUIRE_ENABLED("NPC", {});
 		return Internal::GetGiftBuffer(GetId(npc), "liked_gifts");
 	}
 
@@ -389,7 +387,6 @@ namespace MMAPI::NPC
 	/// @return The loved gift item ID buffer as an RValue, or undefined if the NPC is not found.
 	inline YYTK::RValue GetLovedGifts(MMAPI::NPC::Ids npc)
 	{
-		MMAPI_REQUIRE_ENABLED("NPC", {});
 		return Internal::GetGiftBuffer(GetId(npc), "loved_gifts");
 	}
 
@@ -398,7 +395,6 @@ namespace MMAPI::NPC
 	/// @param item_id The item ID to check.
 	inline bool LikesGift(MMAPI::NPC::Ids npc, int item_id)
 	{
-		MMAPI_REQUIRE_ENABLED("NPC", false);
 		return Internal::GiftBufferContains(GetLikedGifts(npc), item_id);
 	}
 
@@ -407,7 +403,6 @@ namespace MMAPI::NPC
 	/// @param item_id The item ID to check.
 	inline bool LovesGift(MMAPI::NPC::Ids npc, int item_id)
 	{
-		MMAPI_REQUIRE_ENABLED("NPC", false);
 		return Internal::GiftBufferContains(GetLovedGifts(npc), item_id);
 	}
 
@@ -416,8 +411,6 @@ namespace MMAPI::NPC
 	/// @param item_id The item ID to check.
 	inline bool KnowsGiftPreference(YYTK::CInstance* npc, int item_id)
 	{
-		MMAPI_REQUIRE_ENABLED("NPC", false);
-
 		YYTK::RValue known_gift_preferences = Internal::GetKnownGiftPreferences(npc);
 		if (known_gift_preferences.m_Kind == YYTK::VALUE_UNDEFINED)
 			return false;
@@ -430,8 +423,6 @@ namespace MMAPI::NPC
 	/// @param item_id The item ID to mark as learned.
 	inline void LearnGiftPreference(YYTK::CInstance* npc, int item_id)
 	{
-		MMAPI_REQUIRE_ENABLED_VOID("NPC");
-
 		YYTK::RValue known_gift_preferences = Internal::GetKnownGiftPreferences(npc);
 		if (known_gift_preferences.m_Kind == YYTK::VALUE_UNDEFINED)
 			return;
@@ -444,8 +435,6 @@ namespace MMAPI::NPC
 	/// @return The NPC's heart points, or 0 if the NPC is not found.
 	inline int GetHeartPoints(MMAPI::NPC::Ids npc)
 	{
-		MMAPI_REQUIRE_ENABLED("NPC", 0);
-
 		YYTK::RValue npc_data = GetData(npc);
 		if (npc_data.m_Kind == YYTK::VALUE_UNDEFINED)
 			return 0;
@@ -458,8 +447,6 @@ namespace MMAPI::NPC
 	/// @param value The heart point value to assign.
 	inline void SetHeartPoints(MMAPI::NPC::Ids npc, int value)
 	{
-		MMAPI_REQUIRE_ENABLED_VOID("NPC");
-
 		YYTK::RValue npc_data = GetData(npc);
 		if (npc_data.m_Kind == YYTK::VALUE_UNDEFINED)
 			return;

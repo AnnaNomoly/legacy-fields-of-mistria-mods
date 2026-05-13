@@ -279,8 +279,6 @@ namespace MMAPI::Animal
 	/// @return The XP value as an RValue, or undefined if unavailable.
 	inline YYTK::RValue GetXpValue(MMAPI::Animal::XpValues xp_value)
 	{
-		MMAPI_REQUIRE_ENABLED("Animal", {});
-
 		const char* xp_value_key = Internal::ToGameKey(xp_value);
 		if (!xp_value_key)
 			return {};
@@ -308,42 +306,36 @@ namespace MMAPI::Animal
 	/// Returns true if the animal has been pet today.
 	inline bool HasBeenPet(YYTK::RValue animal)
 	{
-		MMAPI_REQUIRE_ENABLED("Animal", false);
 		return MMAPI::Engine::StructVariableGet(animal, "has_been_pat").ToBoolean();
 	}
 
 	/// Sets whether the animal has been pet today.
 	inline void SetHasBeenPet(YYTK::RValue animal, bool value)
 	{
-		MMAPI_REQUIRE_ENABLED_VOID("Animal");
 		MMAPI::Engine::StructVariableSet(animal, "has_been_pat", value);
 	}
 
 	/// Returns true if the animal has eaten today.
 	inline bool HasEaten(YYTK::RValue animal)
 	{
-		MMAPI_REQUIRE_ENABLED("Animal", false);
 		return MMAPI::Engine::StructVariableGet(animal, "has_eaten").ToBoolean();
 	}
 
 	/// Sets whether the animal has eaten today.
 	inline void SetHasEaten(YYTK::RValue animal, bool value)
 	{
-		MMAPI_REQUIRE_ENABLED_VOID("Animal");
 		MMAPI::Engine::StructVariableSet(animal, "has_eaten", value);
 	}
 
 	/// Returns the animal's current heart points.
 	inline int GetHeartPoints(YYTK::RValue animal)
 	{
-		MMAPI_REQUIRE_ENABLED("Animal", 0);
 		return static_cast<int>(MMAPI::Engine::StructVariableGet(animal, "heart_points").ToInt64());
 	}
 
 	/// Sets the animal's heart points.
 	inline void SetHeartPoints(YYTK::RValue animal, int value)
 	{
-		MMAPI_REQUIRE_ENABLED_VOID("Animal");
 		MMAPI::Engine::StructVariableSet(animal, "heart_points", value);
 	}
 
@@ -357,8 +349,6 @@ namespace MMAPI::Animal
 	/// @param farm_bell The obj_farm_bell instance to ring.
 	inline void RingBellIn(YYTK::CInstance* farm_bell)
 	{
-		MMAPI_REQUIRE_ENABLED_VOID("Animal");
-
 		if (!farm_bell)
 			return;
 
@@ -377,8 +367,6 @@ namespace MMAPI::Animal
 	/// @param farm_bell The obj_farm_bell instance to ring.
 	inline void RingBellOut(YYTK::CInstance* farm_bell)
 	{
-		MMAPI_REQUIRE_ENABLED_VOID("Animal");
-
 		if (!farm_bell)
 			return;
 

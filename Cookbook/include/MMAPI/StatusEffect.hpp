@@ -334,6 +334,7 @@ namespace MMAPI::StatusEffect
 	/// @attention Requires MMAPI::StatusEffect::Enable() to have been called.
 	inline void CancelAll()
 	{
+		MMAPI_REQUIRE_ENABLED_VOID("StatusEffect");
 		for (int i = 0; i <= static_cast<int>(MMAPI::StatusEffect::Ids::SacredLight); i++)
 			Internal::CancelById(i);
 	}

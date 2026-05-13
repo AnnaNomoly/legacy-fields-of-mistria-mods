@@ -249,7 +249,6 @@ namespace MMAPI::Input
 	/// @param key The GameMaker virtual key code to check.
 	inline bool KeyboardCheckPressed(int key)
 	{
-		MMAPI_REQUIRE_ENABLED("Input", false);
 		YYTK::RValue pressed = MMAPI::Internal::module_interface->CallBuiltin("keyboard_check_pressed", { key });
 		return pressed.ToBoolean();
 	}
@@ -258,7 +257,6 @@ namespace MMAPI::Input
 	/// @param gamepad_slot The gamepad slot to check.
 	inline bool GamepadIsConnected(int gamepad_slot)
 	{
-		MMAPI_REQUIRE_ENABLED("Input", false);
 		YYTK::RValue connected = MMAPI::Internal::module_interface->CallBuiltin("gamepad_is_connected", { gamepad_slot });
 		return connected.ToBoolean();
 	}
@@ -266,7 +264,6 @@ namespace MMAPI::Input
 	/// Returns the first connected gamepad slot, or -1 if no gamepad is connected.
 	inline int GetFirstConnectedGamepadSlot()
 	{
-		MMAPI_REQUIRE_ENABLED("Input", -1);
 		for (int slot = 0; slot < 12; slot++)
 		{
 			if (GamepadIsConnected(slot))
@@ -281,7 +278,6 @@ namespace MMAPI::Input
 	/// @param button The GameMaker gamepad button constant to check.
 	inline bool GamepadButtonCheckPressed(int gamepad_slot, int button)
 	{
-		MMAPI_REQUIRE_ENABLED("Input", false);
 		YYTK::RValue pressed = MMAPI::Internal::module_interface->CallBuiltin("gamepad_button_check_pressed", { gamepad_slot, button });
 		return pressed.ToBoolean();
 	}
@@ -312,7 +308,6 @@ namespace MMAPI::Input
 	/// Returns true if the keybind was pressed this frame. Dispatches to `KeyboardCheckPressed` or
 	/// `GamepadButtonCheckPressed` based on `keybind.is_gamepad`. For gamepad keybinds, automatically
 	/// resolves the first connected gamepad slot — returns false if no gamepad is connected.
-	/// @attention Requires MMAPI::Input::Enable() to have been called (inherited from the underlying check helpers).
 	/// @param keybind The keybind to check, typically produced by `TryParseKeybind`.
 	inline bool IsKeybindPressed(const Keybind& keybind)
 	{

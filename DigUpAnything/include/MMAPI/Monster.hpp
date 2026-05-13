@@ -257,8 +257,6 @@ namespace MMAPI::Monster
 	/// @return The state id, or -1 if monster is null or doesn't expose the expected fsm/state members.
 	inline int GetStateId(YYTK::CInstance* monster)
 	{
-		MMAPI_REQUIRE_ENABLED("Monster", -1);
-
 		if (!monster)
 			return -1;
 

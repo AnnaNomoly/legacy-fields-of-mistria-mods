@@ -316,8 +316,11 @@ namespace MMAPI::Dungeon
 	///
 	/// Note that MMAPI::Dungeon::EnterDungeon takes a 0-indexed floor argument,
 	/// so callers passing GetFloorNumber() to EnterDungeon should subtract 1.
+	/// @attention Requires MMAPI::Dungeon::Enable() to have been called; the floor counter is updated
+	/// by the goto_gm_room handler that Enable installs.
 	inline int GetFloorNumber()
 	{
+		MMAPI_REQUIRE_ENABLED("Dungeon", 0);
 		return Internal::current_floor_number;
 	}
 

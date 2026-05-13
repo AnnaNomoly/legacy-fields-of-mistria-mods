@@ -102,8 +102,6 @@ namespace MMAPI::Equipment
 	/// @return A vector containing the equipped armor item structs.
 	inline std::vector<YYTK::RValue> GetEquippedArmor()
 	{
-		MMAPI_REQUIRE_ENABLED("Equipment", {});
-
 		std::vector<YYTK::RValue> equipped_armor;
 		YYTK::RValue buffer = Internal::GetArmorSlots();
 
@@ -130,8 +128,6 @@ namespace MMAPI::Equipment
 	/// @return A vector of internal item recipe keys.
 	inline std::vector<std::string> GetEquippedArmorInternalNames()
 	{
-		MMAPI_REQUIRE_ENABLED("Equipment", {});
-
 		std::vector<std::string> internal_names;
 
 		for (YYTK::RValue item : GetEquippedArmor())
@@ -151,8 +147,6 @@ namespace MMAPI::Equipment
 	/// @return A map from infusion ID to count.
 	inline std::map<MMAPI::Infusion::Ids, int> GetEquippedArmorInfusions()
 	{
-		MMAPI_REQUIRE_ENABLED("Equipment", {});
-
 		std::map<MMAPI::Infusion::Ids, int> infusions;
 
 		for (YYTK::RValue item : GetEquippedArmor())

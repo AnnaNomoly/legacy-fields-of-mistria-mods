@@ -680,6 +680,8 @@ namespace MMAPI::Player
 	/// @param value The new maximum health value.
 	inline void SetMaxHealth(int value)
 	{
+		MMAPI_REQUIRE_ENABLED_VOID("Player");
+
 		YYTK::RValue ari = *MMAPI::Internal::global_instance->GetRefMember("__ari");
 		*ari.GetRefMember("base_health") = value;
 
