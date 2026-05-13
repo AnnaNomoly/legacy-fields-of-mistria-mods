@@ -1,1284 +1,382 @@
+#include <cmath>
+#include <map>
+#include <string>
 #include <unordered_set>
-#include <YYToolkit/YYTK_Shared.hpp> // YYTK v4
+
+#include <YYToolkit/YYTK_Shared.hpp>
+#include <MMAPI/MMAPI.hpp>
+
 using namespace Aurie;
 using namespace YYTK;
 
+// ----- Mod metadata -----
+
 static const char* const MOD_NAME = "FauxSigils";
-static const char* const VERSION = "1.0.1";
-static const char* const GML_SCRIPT_CREATE_NOTIFICATION = "gml_Script_create_notification";
-static const char* const GML_SCRIPT_SPAWN_LADDER = "gml_Script_spawn_ladder@DungeonRunner@DungeonRunner";
-static const char* const GML_SCRIPT_REGISTER_STATUS_EFFECT = "gml_Script_register@StatusEffectManager@StatusEffectManager";
-static const char* const GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE = "gml_Script_update@StatusEffectManager@StatusEffectManager";
-static const char* const GML_SCRIPT_SPAWN_MONSTER = "gml_Script_spawn_monster";
-static const char* const GML_SCRIPT_UPDATE_TOOLBAR_MENU = "gml_Script_update@ToolbarMenu@ToolbarMenu";
-static const char* const GML_SCRIPT_GET_ITEM_UI_ICON = "gml_Script_get_ui_icon@anon@4244@LiveItem@LiveItem";
-static const char* const GML_SCRIPT_DAMAGE = "gml_Script_damage@gml_Object_obj_damage_receiver_Create_0";
-static const char* const GML_SCRIPT_USE_ITEM = "gml_Script_use_item";
-static const char* const GML_SCRIPT_HELD_ITEM = "gml_Script_held_item@Ari@Ari";
-static const char* const GML_SCRIPT_GET_WEATHER = "gml_Script_get_weather@WeatherManager@Weather";
-static const char* const GML_SCRIPT_GO_TO_ROOM = "gml_Script_goto_gm_room";
-static const char* const GML_SCRIPT_SETUP_MAIN_SCREEN = "gml_Script_setup_main_screen@TitleMenu@TitleMenu";
+static const char* const VERSION  = "1.1.0";
+
+// ----- Localization keys -----
 
 static const std::string SIGIL_RESTRICTED_NOTIFICATION_KEY = "Notifications/Mods/Faux Sigils/sigil_restricted";
-static const std::string SIGIL_LIMIT_NOTIFICATION_KEY = "Notifications/Mods/Faux Sigils/sigil_limit";
+static const std::string SIGIL_LIMIT_NOTIFICATION_KEY      = "Notifications/Mods/Faux Sigils/sigil_limit";
 static const std::string CONCEALMENT_LOST_NOTIFICATION_KEY = "Notifications/Mods/Faux Sigils/Sigils/concealment/deactivated";
 
-static enum class Sigils {
-	CONCEALMENT,
-	FORTIFICATION,
-	FORTUNE,
-	PROTECTION,
-	RAGE,
-	REDEMPTION,
-	SILENCE,
-	STRENGTH
+// ----- Sigil definitions -----
+
+enum class Sigil
+{
+	Concealment,
+	Fortification,
+	Fortune,
+	Protection,
+	Rage,
+	Redemption,
+	Silence,
+	Strength,
 };
 
-static const std::string FAUX_SIGIL_OF_CONCEALMENT_NAME = "faux_sigil_of_concealment";
-static const std::string FAUX_SIGIL_OF_FORTIFICATION_NAME = "faux_sigil_of_fortification";
-static const std::string FAUX_SIGIL_OF_FORTUNE_NAME = "faux_sigil_of_fortune";
-static const std::string FAUX_SIGIL_OF_PROTECTION_NAME = "faux_sigil_of_protection";
-static const std::string FAUX_SIGIL_OF_RAGE_NAME = "faux_sigil_of_rage";
-static const std::string FAUX_SIGIL_OF_REDEMPTION_NAME = "faux_sigil_of_redemption";
-static const std::string FAUX_SIGIL_OF_SILENCE_NAME = "faux_sigil_of_silence";
-static const std::string FAUX_SIGIL_OF_STRENGTH_NAME = "faux_sigil_of_strength";
-
-static const std::map<std::string, Sigils> item_name_to_sigil_map = {
-	{ FAUX_SIGIL_OF_CONCEALMENT_NAME, Sigils::CONCEALMENT },
-	{ FAUX_SIGIL_OF_FORTIFICATION_NAME, Sigils::FORTIFICATION },
-	{ FAUX_SIGIL_OF_FORTUNE_NAME, Sigils::FORTUNE },
-	{ FAUX_SIGIL_OF_PROTECTION_NAME, Sigils::PROTECTION },
-	{ FAUX_SIGIL_OF_RAGE_NAME, Sigils::RAGE },
-	{ FAUX_SIGIL_OF_REDEMPTION_NAME, Sigils::REDEMPTION },
-	{ FAUX_SIGIL_OF_SILENCE_NAME, Sigils::SILENCE },
-	{ FAUX_SIGIL_OF_STRENGTH_NAME, Sigils::STRENGTH },
+struct SigilDef
+{
+	std::string item_name;       // Internal item name (recipe_key).
+	std::string sprite_normal;   // UI icon when the sigil is available.
+	std::string sprite_disabled; // UI icon when the sigil is currently unusable (active or out-of-dungeon).
 };
 
-static YYTKInterface* g_ModuleInterface = nullptr;
-static CInstance* global_instance = nullptr;
-static bool load_on_start = true;
-static bool unlock_recipes = true;
-static bool sigil_item_used = false;
-static bool sigil_of_silence = false;
-static double ari_x = -1;
-static double ari_y = -1;
-static int held_item_id = -1;
-static std::string ari_current_gm_room = "";
-static std::unordered_set<Sigils> active_sigils = {};
-static std::map<Sigils, int> sigil_to_item_id_map = {};
-static std::map<int, Sigils> item_id_to_sigil_map = {};
-static std::map<std::string, int> player_state_to_id_map = {};
-static std::map<std::string, int> monster_name_to_id_map = {};
-static std::map<std::string, int> status_effect_name_to_id_map = {};
-static std::map<std::string, uint64_t> notification_name_to_last_display_time_map = {}; // Tracks when a notification was last displayed.
-static std::map<std::string, std::vector<CInstance*>> script_name_to_reference_map = {}; // Vector<CInstance*> holds references to Self and Other for each script.
+static const std::map<Sigil, SigilDef> SIGIL_DEFS = {
+	{ Sigil::Concealment,   { "faux_sigil_of_concealment",   "spr_ui_item_faux_sigil_of_concealment",   "spr_ui_item_faux_sigil_of_concealment_disabled"   }},
+	{ Sigil::Fortification, { "faux_sigil_of_fortification", "spr_ui_item_faux_sigil_of_fortification", "spr_ui_item_faux_sigil_of_fortification_disabled" }},
+	{ Sigil::Fortune,       { "faux_sigil_of_fortune",       "spr_ui_item_faux_sigil_of_fortune",       "spr_ui_item_faux_sigil_of_fortune_disabled"       }},
+	{ Sigil::Protection,    { "faux_sigil_of_protection",    "spr_ui_item_faux_sigil_of_protection",    "spr_ui_item_faux_sigil_of_protection_disabled"    }},
+	{ Sigil::Rage,          { "faux_sigil_of_rage",          "spr_ui_item_faux_sigil_of_rage",          "spr_ui_item_faux_sigil_of_rage_disabled"          }},
+	{ Sigil::Redemption,    { "faux_sigil_of_redemption",    "spr_ui_item_faux_sigil_of_redemption",    "spr_ui_item_faux_sigil_of_redemption_disabled"    }},
+	{ Sigil::Silence,       { "faux_sigil_of_silence",       "spr_ui_item_faux_sigil_of_silence",       "spr_ui_item_faux_sigil_of_silence_disabled"       }},
+	{ Sigil::Strength,      { "faux_sigil_of_strength",      "spr_ui_item_faux_sigil_of_strength",      "spr_ui_item_faux_sigil_of_strength_disabled"      }},
+};
 
-void ResetStaticFields()
+// ----- State -----
+
+// Sigil ↔ item_id lookups, populated once at title-screen setup.
+static std::map<Sigil, int> sigil_to_item_id;
+static std::map<int, Sigil> item_id_to_sigil;
+
+// Sigils currently active for the player. Cleared on floor transition (and on return-to-title).
+static std::unordered_set<Sigil> active_sigils;
+
+// One-shot: recipe-unlock all sigils when the game becomes interactive each session.
+static bool recipes_unlocked = false;
+
+// When the player triggers Sigil of Silence on floor N, monster spawns are suppressed on floor N+1
+// (the silence carries through the room transition to the next floor's spawn pass, then clears).
+static bool sigil_silence_armed = false;
+
+// Set by BeforeUseItem when a sigil item-use passes all cancellation guards, consumed by
+// AfterUseActionComplete to commit the activation. Mirrors the original mod's `sigil_item_used` flag.
+static bool sigil_use_pending = false;
+
+// ----- Helpers -----
+
+bool IsInDungeonFloor()
 {
-	unlock_recipes = true;
-	sigil_item_used = false;
-	sigil_of_silence = false;
-	ari_x = -1;
-	ari_y = -1;
-	held_item_id = -1;
-	ari_current_gm_room = "";
-	active_sigils.clear();
-	notification_name_to_last_display_time_map.clear();
-	script_name_to_reference_map.clear();
+	return MMAPI::Location::IsCurrentLocation(MMAPI::Location::Ids::Dungeon);
 }
 
-bool GameIsPaused()
-{
-	CInstance* global_instance = nullptr;
-	g_ModuleInterface->GetGlobalInstance(&global_instance);
-	RValue paused = global_instance->GetMember("__pause_status");
-	return paused.ToInt64() > 0;
-}
-
-uint64_t GetCurrentSystemTime() {
-	return duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
-}
-
-bool StructVariableExists(RValue the_struct, const char* variable_name)
-{
-	RValue struct_exists = g_ModuleInterface->CallBuiltin(
-		"struct_exists",
-		{ the_struct, variable_name }
-	);
-
-	return struct_exists.ToBoolean();
-}
-
-RValue StructVariableSet(RValue the_struct, const char* variable_name, RValue value)
-{
-	return g_ModuleInterface->CallBuiltin(
-		"struct_set",
-		{ the_struct, variable_name, value }
-	);
-}
-
-void LoadPlayerStates()
-{
-	size_t array_length;
-	RValue player_states = global_instance->GetMember("__player_state__");
-	g_ModuleInterface->GetArraySize(player_states, array_length);
-
-	for (size_t i = 0; i < array_length; i++)
-	{
-		RValue* player_state;
-		g_ModuleInterface->GetArrayEntry(player_states, i, player_state);
-
-		player_state_to_id_map[player_state->ToString()] = i;
-	}
-}
-
-void LoadItems()
-{
-	size_t array_length;
-	RValue item_data = global_instance->GetMember("__item_data");
-	g_ModuleInterface->GetArraySize(item_data, array_length);
-
-	for (size_t i = 0; i < array_length; i++)
-	{
-		RValue* item;
-		g_ModuleInterface->GetArrayEntry(item_data, i, item);
-
-		RValue name_key = item->GetMember("name_key"); // The item's localization key
-		if (name_key.m_Kind != VALUE_NULL && name_key.m_Kind != VALUE_UNDEFINED && name_key.m_Kind != VALUE_UNSET)
-		{
-			int item_id = item->GetMember("item_id").ToInt64();
-			std::string item_name = item->GetMember("recipe_key").ToString(); // The internal item name
-
-			// Sigil items
-			if (item_name_to_sigil_map.contains(item_name))
-			{
-				sigil_to_item_id_map[item_name_to_sigil_map.at(item_name)] = item_id;
-				item_id_to_sigil_map[item_id] = item_name_to_sigil_map.at(item_name);
-
-				*item->GetRefMember("health_modifier") = 0;
-			}
-		}
-	}
-}
-
-void LoadMonsters()
-{
-	size_t array_length;
-	RValue monster_names = global_instance->GetMember("__monster_id__");
-	g_ModuleInterface->GetArraySize(monster_names, array_length);
-
-	for (size_t i = 0; i < array_length; i++)
-	{
-		RValue* monster_name;
-		g_ModuleInterface->GetArrayEntry(monster_names, i, monster_name);
-
-		monster_name_to_id_map[monster_name->ToString()] = i;
-	}
-}
-
-void LoadStatusEffects()
-{
-	size_t array_length;
-	RValue status_effects = global_instance->GetMember("__status_effect_id__");
-	g_ModuleInterface->GetArraySize(status_effects, array_length);
-
-	for (size_t i = 0; i < array_length; i++)
-	{
-		RValue* status_effect;
-		g_ModuleInterface->GetArrayEntry(status_effects, i, status_effect);
-
-		status_effect_name_to_id_map[status_effect->ToString()] = i;
-	}
-}
-
-bool AriCurrentGmRoomIsDungeonFloor()
-{
-	return ari_current_gm_room.contains("rm_mines") && ari_current_gm_room != "rm_mines_entry" && !ari_current_gm_room.contains("seal");
-}
-
-void UnlockRecipe(int item_id, CInstance* Self, CInstance* Other)
-{
-	RValue __ari = *global_instance->GetRefMember("__ari");
-	RValue recipe_unlocks = *__ari.GetRefMember("recipe_unlocks");
-	bool new_recipe_unlocked = false;
-
-	if (recipe_unlocks[item_id].m_Real == 0.0)
-	{
-		recipe_unlocks[item_id] = 1.0; // This value is ultimately what unlocks the recipe.
-		new_recipe_unlocked = true;
-	}
-}
-
-void CreateNotification(bool ignore_cooldown, std::string notification_localization_str, CInstance* Self, CInstance* Other)
-{
-	uint64_t current_system_time = GetCurrentSystemTime();
-	if (ignore_cooldown || current_system_time > notification_name_to_last_display_time_map[notification_localization_str] + 5000)
-	{
-		CScript* gml_script_create_notification = nullptr;
-		g_ModuleInterface->GetNamedRoutinePointer(
-			GML_SCRIPT_CREATE_NOTIFICATION,
-			(PVOID*)&gml_script_create_notification
-		);
-
-		RValue result;
-		RValue notification = RValue(notification_localization_str);
-		RValue* notification_ptr = &notification;
-		gml_script_create_notification->m_Functions->m_ScriptFunction(
-			Self,
-			Other,
-			result,
-			1,
-			{ &notification_ptr }
-		);
-
-		notification_name_to_last_display_time_map[notification_localization_str] = current_system_time;
-	}
-}
-
-void SpawnLadder(CInstance* Self, CInstance* Other, int64_t x_coord, int64_t y_coord)
-{
-	CScript* gml_Script_spawn_ladder = nullptr;
-	g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_SPAWN_LADDER,
-		(PVOID*)&gml_Script_spawn_ladder
-	);
-
-	RValue x = (x_coord * 2) / 16;
-	RValue y = (y_coord * 2) / 16;
-	RValue* x_ptr = &x;
-	RValue* y_ptr = &y;
-	RValue* rvalue_array[2] = { x_ptr, y_ptr };
-	RValue retval;
-	gml_Script_spawn_ladder->m_Functions->m_ScriptFunction(
-		Self,
-		Other,
-		retval,
-		2,
-		rvalue_array
-	);
-}
-
-void RegisterStatusEffect(CInstance* Self, CInstance* Other, RValue status_effect_id, RValue amount, RValue start, RValue finish)
-{
-	CScript* gml_script_register_status_effect = nullptr;
-	g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_REGISTER_STATUS_EFFECT,
-		(PVOID*)&gml_script_register_status_effect
-	);
-
-	RValue result;
-	RValue* status_effect_id_ptr = &status_effect_id;
-	RValue* amount_ptr = &amount;
-	RValue* start_ptr = &start;
-	RValue* finish_ptr = &finish;
-	RValue* argument_array[4] = { status_effect_id_ptr, amount_ptr, start_ptr, finish_ptr };
-
-	gml_script_register_status_effect->m_Functions->m_ScriptFunction(
-		Self,
-		Other,
-		result,
-		4,
-		argument_array
-	);
-}
-
+// Returns true if Ari currently has the Fairy status effect active (Sigil of Redemption's revive buff).
 bool FairyBuffIsActive()
 {
-	RValue ari = global_instance->GetMember("__ari");
-	RValue status_effects = ari.GetMember("status_effects");
-	RValue effects = status_effects.GetMember("effects");
-	RValue inner = effects.GetMember("inner");
+	YYTK::RValue ari = MMAPI::Internal::global_instance->GetMember("__ari");
+	YYTK::RValue status_effects = ari.GetMember("status_effects");
+	YYTK::RValue effects        = status_effects.GetMember("effects");
+	YYTK::RValue inner          = effects.GetMember("inner");
 
-	if (StructVariableExists(inner, std::to_string(status_effect_name_to_id_map["fairy"]).c_str()))
-	{
-		RValue fairy_status = inner.GetMember(std::to_string(status_effect_name_to_id_map["fairy"]));
-		return fairy_status.m_Kind == VALUE_OBJECT;
-	}
-
-	return false;
+	std::string key = std::to_string(static_cast<int>(MMAPI::StatusEffect::Ids::Fairy));
+	if (!MMAPI::Engine::StructVariableExists(inner, key.c_str()))
+		return false;
+	return inner.GetMember(key.c_str()).m_Kind == YYTK::VALUE_OBJECT;
 }
 
-double GetInvulnerabilityHits()
+// Picks the sprite a sigil item should display right now — disabled variant when the sigil is
+// active, when an equivalent buff already covers Ari, or when she's not on a dungeon floor.
+YYTK::RValue GetDynamicSigilSprite(int item_id)
 {
-	RValue ari = global_instance->GetMember("__ari");
-	return ari.GetMember("invulnerable_hits").ToDouble(); 
+	auto it = item_id_to_sigil.find(item_id);
+	if (it == item_id_to_sigil.end()) return {};
+	Sigil sigil = it->second;
+	const SigilDef& def = SIGIL_DEFS.at(sigil);
+
+	bool unavailable = active_sigils.contains(sigil) || !IsInDungeonFloor();
+
+	if (sigil == Sigil::Protection)
+	{
+		YYTK::RValue hits = MMAPI::Player::GetInvulnerabilityHits();
+		if (MMAPI::Engine::IsNumeric(hits) && hits.ToInt64() > 0)
+			unavailable = true;
+	}
+	if (sigil == Sigil::Redemption && FairyBuffIsActive())
+		unavailable = true;
+
+	// Original gated the disabled sprite on `!GameIsPaused()` so the pause menu always shows the
+	// "available" icon — preserved here so the pause-menu icon snapshot doesn't suddenly change.
+	if (!MMAPI::Game::IsPaused() && unavailable)
+		return MMAPI::Engine::AssetGetIndex(def.sprite_disabled);
+	return MMAPI::Engine::AssetGetIndex(def.sprite_normal);
 }
 
-void SetInvulnerabilityHits(double amount)
+// Applies the sigil's effect (status effect registration, ladder spawn, etc.). Always invoked from
+// the AfterUseActionComplete edge, so the item has already been consumed by the time we get here.
+void ActivateSigil(Sigil sigil, CInstance* obj_ari)
 {
-	RValue ari = *global_instance->GetRefMember("__ari");
-	double invulnerability_hits = ari.GetMember("invulnerable_hits").ToDouble();
+	active_sigils.insert(sigil);
 
-	if (amount == 0)
-		*ari.GetRefMember("invulnerable_hits") = amount;
-	else
-		*ari.GetRefMember("invulnerable_hits") = invulnerability_hits + amount;
-}
-
-void UpdateToolbarMenu(CInstance* Self, CInstance* Other)
-{
-	CScript* gml_script_update_toolbar_menu = nullptr;
-	g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_UPDATE_TOOLBAR_MENU,
-		(PVOID*)&gml_script_update_toolbar_menu
-	);
-
-	RValue result;
-	gml_script_update_toolbar_menu->m_Functions->m_ScriptFunction(
-		Self,
-		Other,
-		result,
-		0,
-		nullptr
-	);
-}
-
-RValue GetDynamicItemSprite(int item_id)
-{
-	if (item_id == sigil_to_item_id_map[Sigils::CONCEALMENT])
+	switch (sigil)
 	{
-		if (!GameIsPaused() && (active_sigils.contains(Sigils::CONCEALMENT) || !AriCurrentGmRoomIsDungeonFloor()))
-			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_faux_sigil_of_concealment_disabled" });
-		else
-			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_faux_sigil_of_concealment" });
-	}
-	if (item_id == sigil_to_item_id_map[Sigils::FORTIFICATION])
-	{
-		if (!GameIsPaused() && (active_sigils.contains(Sigils::FORTIFICATION) || !AriCurrentGmRoomIsDungeonFloor()))
-			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_faux_sigil_of_fortification_disabled" });
-		else
-			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_faux_sigil_of_fortification" });
-	}
-	if (item_id == sigil_to_item_id_map[Sigils::FORTUNE])
-	{
-		if (!GameIsPaused() && (active_sigils.contains(Sigils::FORTUNE) || !AriCurrentGmRoomIsDungeonFloor()))
-			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_faux_sigil_of_fortune_disabled" });
-		else
-			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_faux_sigil_of_fortune" });
-	}
-	if (item_id == sigil_to_item_id_map[Sigils::PROTECTION])
-	{
-		if (!GameIsPaused() && (active_sigils.contains(Sigils::PROTECTION) || !AriCurrentGmRoomIsDungeonFloor() || GetInvulnerabilityHits() > 0))
-			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_faux_sigil_of_protection_disabled" });
-		else
-			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_faux_sigil_of_protection" });
-	}
-	if (item_id == sigil_to_item_id_map[Sigils::RAGE])
-	{
-		if (!GameIsPaused() && (active_sigils.contains(Sigils::RAGE) || !AriCurrentGmRoomIsDungeonFloor()))
-			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_faux_sigil_of_rage_disabled" });
-		else
-			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_faux_sigil_of_rage" });
-	}
-	if (item_id == sigil_to_item_id_map[Sigils::REDEMPTION])
-	{
-		if (!GameIsPaused() && (active_sigils.contains(Sigils::REDEMPTION) || !AriCurrentGmRoomIsDungeonFloor() || FairyBuffIsActive()))
-			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_faux_sigil_of_redemption_disabled" });
-		else
-			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_faux_sigil_of_redemption" });
-	}
-	if (item_id == sigil_to_item_id_map[Sigils::SILENCE])
-	{
-		if (!GameIsPaused() && (active_sigils.contains(Sigils::SILENCE) || !AriCurrentGmRoomIsDungeonFloor()))
-			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_faux_sigil_of_silence_disabled" });
-		else
-			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_faux_sigil_of_silence" });
-	}
-	if (item_id == sigil_to_item_id_map[Sigils::STRENGTH])
-	{
-		if (!GameIsPaused() && (active_sigils.contains(Sigils::STRENGTH) || !AriCurrentGmRoomIsDungeonFloor()))
-			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_faux_sigil_of_strength_disabled" });
-		else
-			return g_ModuleInterface->CallBuiltin("asset_get_index", { "spr_ui_item_faux_sigil_of_strength" });
-	}
-}
-
-
-void ObjectCallback(
-	IN FWCodeEvent& CodeEvent
-)
-{
-	auto& [self, other, code, argc, argv] = CodeEvent.Arguments();
-
-	if (!self)
-		return;
-
-	if (!self->m_Object)
-		return;
-
-	if (strstr(self->m_Object->m_Name, "obj_ari"))
-	{
-		RValue x;
-		g_ModuleInterface->GetBuiltin("x", self, NULL_INDEX, x);
-		ari_x = x.ToDouble();
-
-		RValue y;
-		g_ModuleInterface->GetBuiltin("y", self, NULL_INDEX, y);
-		ari_y = y.ToDouble();
-
-
-		// Process used items.
-		RValue ari = self->ToRValue();
-		if (StructVariableExists(ari, "fsm"))
+		case Sigil::Fortune:
 		{
-			RValue fsm = ari.GetMember("fsm");
-
-			if (StructVariableExists(fsm, "state"))
-			{
-				RValue state = fsm.GetMember("state");
-				if (StructVariableExists(state, "state_id"))
-				{
-					RValue state_id = state.GetMember("state_id");
-					if (state_id.ToInt64() == player_state_to_id_map["hold_to_use"])
-					{
-						if (StructVariableExists(state, "did_action"))
-						{
-							RValue did_action = state.GetMember("did_action");
-							if (did_action.ToBoolean())
-							{
-								if (sigil_item_used) // Necessary since did_action==true will get called a few times when the item is used.
-								{
-									sigil_item_used = false;
-
-									if (held_item_id == sigil_to_item_id_map[Sigils::CONCEALMENT])
-										active_sigils.insert(Sigils::CONCEALMENT);
-									else if (held_item_id == sigil_to_item_id_map[Sigils::FORTIFICATION])
-										active_sigils.insert(Sigils::FORTIFICATION);
-									else if (held_item_id == sigil_to_item_id_map[Sigils::FORTUNE])
-									{
-										active_sigils.insert(Sigils::FORTUNE);
-										SpawnLadder(global_instance->GetRefMember("__ari")->ToInstance(), self, ari_x, ari_y);
-									}
-									else if (held_item_id == sigil_to_item_id_map[Sigils::PROTECTION])
-									{
-										std::vector<CInstance*> refs = script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE];
-
-										active_sigils.insert(Sigils::PROTECTION);
-										RegisterStatusEffect(refs[0], refs[1], status_effect_name_to_id_map["guardians_shield"], RValue(), 1, 2147483647.0);
-										SetInvulnerabilityHits(2);
-									}
-									else if (held_item_id == sigil_to_item_id_map[Sigils::RAGE])
-										active_sigils.insert(Sigils::RAGE);
-									else if (held_item_id == sigil_to_item_id_map[Sigils::REDEMPTION])
-									{
-										std::vector<CInstance*> refs = script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE];
-
-										active_sigils.insert(Sigils::REDEMPTION);
-										RegisterStatusEffect(refs[0], refs[1], status_effect_name_to_id_map["fairy"], RValue(), 1, 2147483647.0);
-									}
-									else if (held_item_id == sigil_to_item_id_map[Sigils::SILENCE])
-										active_sigils.insert(Sigils::SILENCE);
-									else if (held_item_id == sigil_to_item_id_map[Sigils::STRENGTH])
-										active_sigils.insert(Sigils::STRENGTH);
-
-									if (script_name_to_reference_map.contains(GML_SCRIPT_UPDATE_TOOLBAR_MENU))
-										UpdateToolbarMenu(script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][0], script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][1]);
-								}
-							}
-						}
-					}
-				}
-			}
+			if (!obj_ari) break;
+			YYTK::RValue ari_rv = obj_ari->ToRValue();
+			int64_t x = static_cast<int64_t>(ari_rv.GetMember("x").ToDouble());
+			int64_t y = static_cast<int64_t>(ari_rv.GetMember("y").ToDouble());
+			MMAPI::Dungeon::SpawnLadder(x, y);
+			break;
 		}
+		case Sigil::Protection:
+			MMAPI::StatusEffect::RegisterPersistent(MMAPI::StatusEffect::Ids::GuardiansShield);
+			MMAPI::Player::ModifyInvulnerabilityHits(2);
+			break;
+		case Sigil::Redemption:
+			MMAPI::StatusEffect::RegisterPersistent(MMAPI::StatusEffect::Ids::Fairy);
+			break;
+		default:
+			break;
 	}
 
-	if (strstr(self->m_Object->m_Name, "obj_monster"))
-	{
-		RValue monster = self->ToRValue();
-		if (StructVariableExists(monster, "monster_id"))
-		{
-			RValue monster_id = *monster.GetRefMember("monster_id");
-
-			bool is_valid_monster_object = false;
-			for (const auto& entry : monster_name_to_id_map) {
-				if (entry.second == monster_id.ToInt64()) {
-					is_valid_monster_object = true;
-					break;
-				}
-			}
-
-			if (is_valid_monster_object)
-			{
-				// Sigil of Concealment
-				if (active_sigils.contains(Sigils::CONCEALMENT))
-				{
-					if (StructVariableExists(monster, "config"))
-					{
-						RValue config = *monster.GetRefMember("config");
-						RValue hit_points = monster.GetMember("hit_points");
-						if (!StructVariableExists(monster, "__deep_dungeon__conceal_hit_points"))
-							StructVariableSet(monster, "__deep_dungeon__conceal_hit_points", hit_points);
-
-						RValue original_hit_points = monster.GetMember("__deep_dungeon__conceal_hit_points");
-						if (hit_points.ToDouble() == original_hit_points.ToDouble())
-							StructVariableSet(monster, "aggro", false);
-						else
-						{
-							active_sigils.erase(Sigils::CONCEALMENT);
-							CreateNotification(false, CONCEALMENT_LOST_NOTIFICATION_KEY, nullptr, nullptr);
-
-							if (script_name_to_reference_map.contains(GML_SCRIPT_UPDATE_TOOLBAR_MENU))
-								UpdateToolbarMenu(script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][0], script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][1]);
-						}
-					}
-				}
-
-				// Sigil of Rage
-				if (active_sigils.contains(Sigils::RAGE))
-				{
-					if (StructVariableExists(monster, "config") && StructVariableExists(monster, "hit_points"))
-					{
-						RValue config = *monster.GetRefMember("config");
-						RValue hit_points = monster.GetMember("hit_points");
-						if (!StructVariableExists(monster, "__deep_dungeon__rage_hit_points"))
-							StructVariableSet(monster, "__deep_dungeon__rage_hit_points", hit_points);
-
-						RValue original_hit_points = monster.GetMember("__deep_dungeon__rage_hit_points");
-						if (hit_points.ToDouble() != original_hit_points.ToDouble())
-							*monster.GetRefMember("hit_points") = 0;
-					}
-				}
-			}
-		}
-	}
+	MMAPI::ToolbarMenu::ForceUpdate();
 }
 
-RValue& GmlScriptStatusEffectManagerUpdateCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
+// ----- Hooks -----
+
+void OnSetupMainScreen()
 {
-	if (!script_name_to_reference_map.contains(GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE))
-		script_name_to_reference_map[GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE] = { Self, Other };
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
-}
-
-RValue& GmlScriptSpawnMonsterCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	// Sigil of Silence
-	if (sigil_of_silence)
-		return Result;
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_SPAWN_MONSTER));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
-}
-
-RValue& GmlScriptUpdateToolbarMenuCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	if (!script_name_to_reference_map.contains(GML_SCRIPT_UPDATE_TOOLBAR_MENU))
-		script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU] = { Self, Other };
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_UPDATE_TOOLBAR_MENU));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
-}
-
-RValue& GmlScriptGetUiIconCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_GET_ITEM_UI_ICON));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	if (Self != nullptr)
-	{
-		RValue self = Self->ToRValue();
-		if (StructVariableExists(self, "item_id"))
-		{
-			int item_id = self.GetMember("item_id").ToInt64();
-
-			if (item_id_to_sigil_map.contains(item_id))
-				Result = GetDynamicItemSprite(item_id);
-		}
-	}
-
-	return Result;
-}
-
-RValue& GmlScriptDamageCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	// Sigil of Fortification
-	if (active_sigils.contains(Sigils::FORTIFICATION))
-	{
-		if (!StructVariableExists(*Arguments[0], "__deep_dungeon__fortification_applied")) // Prevents monster attacks that "persist" from repeatedly getting Fortification applied
-		{
-			RValue target = Arguments[0]->GetMember("target");
-			if (target.ToInt64() == 1) // Ari
-			{
-				double damage = Arguments[0]->GetMember("damage").ToDouble();
-				int penalty = std::trunc(damage * 0.50); // 50% reduced damage
-				*Arguments[0]->GetRefMember("damage") = damage - penalty;
-			}
-
-			StructVariableSet(*Arguments[0], "__deep_dungeon__fortification_applied", true);
-		}
-	}
-
-	// Sigil of Strength
-	if (active_sigils.contains(Sigils::STRENGTH))
-	{
-		RValue target = Arguments[0]->GetMember("target");
-		if (target.ToInt64() != 1) // Everything not Ari
-		{
-			if (!StructVariableExists(*Arguments[0], "__deep_dungeon__strength_applied"))
-			{
-				double damage = std::trunc(Arguments[0]->GetMember("damage").ToDouble() * 1.5); // 50% increased damage
-				*Arguments[0]->GetRefMember("damage") = damage;
-				StructVariableSet(*Arguments[0], "__deep_dungeon__strength_applied", true);
-			}
-		}
-	}
-
-	// Sigil of Rage
-	if (active_sigils.contains(Sigils::RAGE))
-	{
-		RValue target = Arguments[0]->GetMember("target");
-		if (target.ToInt64() != 1) // Everything not Ari
-		{
-			double damage = Arguments[0]->GetMember("damage").ToDouble();
-			if (damage != 0) // Not a miss
-			{
-				*Arguments[0]->GetRefMember("critical") = true;
-				*Arguments[0]->GetRefMember("damage") = 9999.0;
-			}
-		}
-	}
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_DAMAGE));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
-}
-
-RValue& GmlScriptUseItemCallback(
-	IN CInstance* Self, // Changes depending on the invocation context. For world interactables like a fountain, Self->m_Object->m_Name == "obj_world_fountain". For Ari using an item, Self->m_Object == NULL.
-	IN CInstance* Other, // Changes depending on the invocation context. For world interactables like a fountain, Other->m_Object->m_Name == "Game". For Ari using an item, Other->m_Object->m_Name == "obj_ari".
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	if (AriCurrentGmRoomIsDungeonFloor())
-	{
-		if (Self->m_Object == NULL && strstr(Other->m_Object->m_Name, "obj_ari"))
-		{
-			// Sigil Already Used
-			if (item_id_to_sigil_map.contains(held_item_id) && active_sigils.contains(item_id_to_sigil_map[held_item_id]))
-			{
-				g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - That sigil is already active!", MOD_NAME, VERSION);
-				CreateNotification(false, SIGIL_LIMIT_NOTIFICATION_KEY, Self, Other);
-				return Result;
-			}
-
-			// Protection Already Active
-			if (held_item_id == sigil_to_item_id_map[Sigils::PROTECTION] && GetInvulnerabilityHits() > 0)
-			{
-				g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - That sigil is already active!", MOD_NAME, VERSION);
-				CreateNotification(false, SIGIL_LIMIT_NOTIFICATION_KEY, Self, Other);
-				return Result;
-			}
-
-			// Redemption Already Active
-			if (held_item_id == sigil_to_item_id_map[Sigils::REDEMPTION] && FairyBuffIsActive())
-			{
-				g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - That sigil is already active!", MOD_NAME, VERSION);
-				CreateNotification(false, SIGIL_LIMIT_NOTIFICATION_KEY, Self, Other);
-				return Result;
-			}
-		}
-	}
-	else
-	{
-		if (Self->m_Object == NULL && strstr(Other->m_Object->m_Name, "obj_ari"))
-		{
-			// Faux Sigil Items
-			if (item_id_to_sigil_map.contains(held_item_id))
-			{
-				g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - You may only use Faux Sigils inside the dungeon!", MOD_NAME, VERSION);
-				CreateNotification(false, SIGIL_RESTRICTED_NOTIFICATION_KEY, Self, Other);
-				return Result;
-			}
-		}
-	}
-
-	// Sigil Item
-	sigil_item_used = false;
-	if (item_id_to_sigil_map.contains(held_item_id))
-		sigil_item_used = true;
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_USE_ITEM));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
-}
-
-RValue& GmlScriptHeldItemCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_HELD_ITEM));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	if (Result.m_Kind != VALUE_UNDEFINED)
-	{
-		int item_id = Result.GetMember("item_id").ToInt64();
-		if (held_item_id != item_id)
-			held_item_id = item_id;
-	}
-
-	return Result;
-}
-
-RValue& GmlScriptGetWeatherCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	if (unlock_recipes)
-	{
-		unlock_recipes = false;
-		for (auto& entry : sigil_to_item_id_map)
-			UnlockRecipe(entry.second, Self, Other);
-	}
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_GET_WEATHER));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
-}
-
-RValue& GmlScriptGoToRoomCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_GO_TO_ROOM));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	RValue gm_room = Result.GetMember("gm_room");
-	RValue room_name = g_ModuleInterface->CallBuiltin("room_get_name", { gm_room });
-	ari_current_gm_room = room_name.ToString();
-
-	if (active_sigils.contains(Sigils::SILENCE))
-		sigil_of_silence = true;
-	else
-		sigil_of_silence = false;
+	// Return-to-title resets: all transient state goes back to zero. Sigil id lookups (which depend
+	// only on the game's item data) are populated once on the first title fire and kept.
 	active_sigils.clear();
+	recipes_unlocked    = false;
+	sigil_silence_armed = false;
+	sigil_use_pending   = false;
 
-	if (script_name_to_reference_map.contains(GML_SCRIPT_UPDATE_TOOLBAR_MENU))
-		UpdateToolbarMenu(script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][0], script_name_to_reference_map[GML_SCRIPT_UPDATE_TOOLBAR_MENU][1]);
+	if (!sigil_to_item_id.empty()) return;
 
-	return Result;
+	for (const auto& [sigil, def] : SIGIL_DEFS)
+	{
+		YYTK::RValue id_rv = MMAPI::Item::GetIdFromInternalName(def.item_name);
+		if (!MMAPI::Engine::IsNumeric(id_rv)) continue;
+
+		int item_id = static_cast<int>(id_rv.ToInt64());
+		sigil_to_item_id[sigil]   = item_id;
+		item_id_to_sigil[item_id] = sigil;
+
+		// Sigil items inherit their health_modifier from food categorization; zero it so eating one
+		// doesn't visibly nudge Ari's HP bar. The actual sigil effects fire from AfterUseActionComplete.
+		MMAPI::Item::SetHealthModifier(item_id, 0.0);
+	}
 }
 
-RValue& GmlScriptSetupMainScreenCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
+void OnAfterGameActive()
 {
-	if (load_on_start)
-	{
-		load_on_start = false;
-		g_ModuleInterface->GetGlobalInstance(&global_instance);
-
-		LoadItems();
-		LoadMonsters();
-		LoadPlayerStates();
-		LoadStatusEffects();
-	}
-	else
-		ResetStaticFields();
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_SETUP_MAIN_SCREEN));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
+	if (recipes_unlocked) return;
+	recipes_unlocked = true;
+	for (const auto& [sigil, item_id] : sigil_to_item_id)
+		MMAPI::Recipe::Unlock(item_id, /*show_popup=*/false);
 }
 
-void CreateObjectCallback(AurieStatus& status)
+void OnBeforeUseItem(MMAPI::Item::UseItemContext& ctx)
 {
-	status = g_ModuleInterface->CreateCallback(
-		g_ArSelfModule,
-		EVENT_OBJECT_CALL,
-		ObjectCallback,
-		0
-	);
+	sigil_use_pending = false;
 
-	if (!AurieSuccess(status))
+	if (!ctx.IsAriUse()) return;
+	auto it = item_id_to_sigil.find(ctx.GetItemId());
+	if (it == item_id_to_sigil.end()) return;
+	Sigil sigil = it->second;
+
+	if (!IsInDungeonFloor())
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook (EVENT_OBJECT_CALL)!", MOD_NAME, VERSION);
+		MMAPI::Log::Warn("You may only use Faux Sigils inside the dungeon!");
+		MMAPI::Game::CreateNotification(false, SIGIL_RESTRICTED_NOTIFICATION_KEY);
+		ctx.Cancel();
+		return;
 	}
+
+	if (active_sigils.contains(sigil))
+	{
+		MMAPI::Log::Warn("That sigil is already active!");
+		MMAPI::Game::CreateNotification(false, SIGIL_LIMIT_NOTIFICATION_KEY);
+		ctx.Cancel();
+		return;
+	}
+
+	if (sigil == Sigil::Protection)
+	{
+		YYTK::RValue hits = MMAPI::Player::GetInvulnerabilityHits();
+		if (MMAPI::Engine::IsNumeric(hits) && hits.ToInt64() > 0)
+		{
+			MMAPI::Log::Warn("That sigil is already active!");
+			MMAPI::Game::CreateNotification(false, SIGIL_LIMIT_NOTIFICATION_KEY);
+			ctx.Cancel();
+			return;
+		}
+	}
+
+	if (sigil == Sigil::Redemption && FairyBuffIsActive())
+	{
+		MMAPI::Log::Warn("That sigil is already active!");
+		MMAPI::Game::CreateNotification(false, SIGIL_LIMIT_NOTIFICATION_KEY);
+		ctx.Cancel();
+		return;
+	}
+
+	// All cancellation guards passed — arm activation for the next use-action edge.
+	sigil_use_pending = true;
 }
 
-void CreateHookGmlScriptStatusEffectManagerUpdate(AurieStatus& status)
+void OnAfterUseActionComplete(MMAPI::Player::AfterUseActionContext& ctx)
 {
-	CScript* gml_script_status_effect_manager_update = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE,
-		(PVOID*)&gml_script_status_effect_manager_update
-	);
+	if (!sigil_use_pending) return;
+	sigil_use_pending = false;
 
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE,
-		gml_script_status_effect_manager_update->m_Functions->m_ScriptFunction,
-		GmlScriptStatusEffectManagerUpdateCallback,
-		nullptr
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE);
-	}
+	auto it = item_id_to_sigil.find(ctx.GetItemId());
+	if (it == item_id_to_sigil.end()) return;
+	ActivateSigil(it->second, ctx.GetSelf());
 }
 
-void CreateHookGmlScriptSpawnMonster(AurieStatus& status)
+void OnAfterGetUiIcon(MMAPI::Item::GetUiIconContext& ctx)
 {
-	CScript* gml_script_spawn_monster = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_SPAWN_MONSTER,
-		(PVOID*)&gml_script_spawn_monster
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SPAWN_MONSTER);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_SPAWN_MONSTER,
-		gml_script_spawn_monster->m_Functions->m_ScriptFunction,
-		GmlScriptSpawnMonsterCallback,
-		nullptr
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SPAWN_MONSTER);
-	}
+	if (!item_id_to_sigil.contains(ctx.GetItemId())) return;
+	ctx.SetSpriteAsset(GetDynamicSigilSprite(ctx.GetItemId()));
 }
 
-void CreateHookGmlScriptUpdateToolbarMenu(AurieStatus& status)
+void OnBeforeDamage(MMAPI::Damage::BeforeDamageContext& ctx)
 {
-	CScript* gml_script_update_toolbar_menu = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_UPDATE_TOOLBAR_MENU,
-		(PVOID*)&gml_script_update_toolbar_menu
-	);
+	YYTK::RValue* dd = ctx.damage_data;
+	if (!dd) return;
 
-	if (!AurieSuccess(status))
+	// Sigil of Fortification — 50% reduction to incoming damage on Ari, applied once per packet.
+	if (active_sigils.contains(Sigil::Fortification) && ctx.IsTargetAri()
+		&& !MMAPI::Engine::StructVariableExists(*dd, "__faux_sigils__fortification_applied"))
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_UPDATE_TOOLBAR_MENU);
+		double damage = ctx.GetAmount();
+		int penalty = static_cast<int>(std::trunc(damage * 0.50));
+		ctx.SetAmount(damage - penalty);
+		MMAPI::Engine::StructVariableSet(*dd, "__faux_sigils__fortification_applied", true);
 	}
 
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_UPDATE_TOOLBAR_MENU,
-		gml_script_update_toolbar_menu->m_Functions->m_ScriptFunction,
-		GmlScriptUpdateToolbarMenuCallback,
-		nullptr
-	);
-
-	if (!AurieSuccess(status))
+	// Sigil of Strength — 50% bonus to outgoing damage, applied once per packet.
+	if (active_sigils.contains(Sigil::Strength) && !ctx.IsTargetAri()
+		&& !MMAPI::Engine::StructVariableExists(*dd, "__faux_sigils__strength_applied"))
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_UPDATE_TOOLBAR_MENU);
+		ctx.SetAmount(std::trunc(ctx.GetAmount() * 1.5));
+		MMAPI::Engine::StructVariableSet(*dd, "__faux_sigils__strength_applied", true);
+	}
+
+	// Sigil of Rage — every non-miss outgoing hit becomes a 9999 critical.
+	if (active_sigils.contains(Sigil::Rage) && !ctx.IsTargetAri() && !ctx.IsMiss())
+	{
+		ctx.SetCritical(true);
+		ctx.SetAmount(9999.0);
 	}
 }
 
-void CreateHookGmlScriptGetUiIcon(AurieStatus& status)
+void OnBeforeMonsterSpawn(MMAPI::Monster::SpawnMonsterContext& ctx)
 {
-	CScript* gml_script_get_ui_icon = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_GET_ITEM_UI_ICON,
-		(PVOID*)&gml_script_get_ui_icon
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_ITEM_UI_ICON);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_GET_ITEM_UI_ICON,
-		gml_script_get_ui_icon->m_Functions->m_ScriptFunction,
-		GmlScriptGetUiIconCallback,
-		nullptr
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_ITEM_UI_ICON);
-	}
+	if (sigil_silence_armed) ctx.Cancel();
 }
 
-void CreateHookGmlScriptDamage(AurieStatus& status)
+void OnAfterGoToRoom(MMAPI::Location::AfterGoToRoomContext& /*ctx*/)
 {
-	CScript* gml_script_damage = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_DAMAGE,
-		(PVOID*)&gml_script_damage
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_DAMAGE);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_DAMAGE,
-		gml_script_damage->m_Functions->m_ScriptFunction,
-		GmlScriptDamageCallback,
-		nullptr
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_DAMAGE);
-	}
+	// Each floor transition: arm silence for the upcoming spawn pass (if it was active), then clear
+	// all sigils since they only persist within a single floor. Toolbar refreshes to show available icons.
+	sigil_silence_armed = active_sigils.contains(Sigil::Silence);
+	active_sigils.clear();
+	MMAPI::ToolbarMenu::ForceUpdate();
 }
 
-void CreateHookGmlScriptUseItem(AurieStatus& status)
+void OnMonsterTick(CInstance* self)
 {
-	CScript* gml_script_use_item = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_USE_ITEM,
-		(PVOID*)&gml_script_use_item
-	);
+	if (active_sigils.empty()) return;
+	if (!self) return;
 
-	if (!AurieSuccess(status))
+	YYTK::RValue monster = self->ToRValue();
+	if (!MMAPI::Engine::StructVariableExists(monster, "config")) return;
+	if (!MMAPI::Engine::StructVariableExists(monster, "hit_points")) return;
+
+	YYTK::RValue hit_points = monster.GetMember("hit_points");
+
+	// Sigil of Concealment — suppress monster aggro until something damages this monster. We snapshot
+	// the monster's HP on first sight; any deviation from that baseline means Ari hit it, which breaks
+	// concealment immediately for ALL monsters this floor.
+	if (active_sigils.contains(Sigil::Concealment))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_USE_ITEM);
+		if (!MMAPI::Engine::StructVariableExists(monster, "__faux_sigils__conceal_hit_points"))
+			MMAPI::Engine::StructVariableSet(monster, "__faux_sigils__conceal_hit_points", hit_points);
+
+		YYTK::RValue baseline = monster.GetMember("__faux_sigils__conceal_hit_points");
+		if (hit_points.ToDouble() == baseline.ToDouble())
+		{
+			MMAPI::Engine::StructVariableSet(monster, "aggro", false);
+		}
+		else
+		{
+			active_sigils.erase(Sigil::Concealment);
+			MMAPI::Game::CreateNotification(false, CONCEALMENT_LOST_NOTIFICATION_KEY);
+			MMAPI::ToolbarMenu::ForceUpdate();
+		}
 	}
 
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_USE_ITEM,
-		gml_script_use_item->m_Functions->m_ScriptFunction,
-		GmlScriptUseItemCallback,
-		nullptr
-	);
-
-
-	if (!AurieSuccess(status))
+	// Sigil of Rage — same one-hit-kill behavior: snapshot HP, instakill if Ari has hit it.
+	if (active_sigils.contains(Sigil::Rage))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_USE_ITEM);
+		if (!MMAPI::Engine::StructVariableExists(monster, "__faux_sigils__rage_hit_points"))
+			MMAPI::Engine::StructVariableSet(monster, "__faux_sigils__rage_hit_points", hit_points);
+
+		YYTK::RValue baseline = monster.GetMember("__faux_sigils__rage_hit_points");
+		if (hit_points.ToDouble() != baseline.ToDouble())
+			*monster.GetRefMember("hit_points") = 0.0;
 	}
 }
 
-void CreateHookGmlScriptHeldItem(AurieStatus& status)
+EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path& ModulePath)
 {
-	CScript* gml_script_held_item = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_HELD_ITEM,
-		(PVOID*)&gml_script_held_item
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_HELD_ITEM);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_HELD_ITEM,
-		gml_script_held_item->m_Functions->m_ScriptFunction,
-		GmlScriptHeldItemCallback,
-		nullptr
-	);
-
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_HELD_ITEM);
-	}
-}
-
-void CreateHookGmlScriptGetWeather(AurieStatus& status)
-{
-	CScript* gml_script_get_weather = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_GET_WEATHER,
-		(PVOID*)&gml_script_get_weather
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_WEATHER);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_GET_WEATHER,
-		gml_script_get_weather->m_Functions->m_ScriptFunction,
-		GmlScriptGetWeatherCallback,
-		nullptr
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_WEATHER);
-	}
-}
-
-void CreateHookGmlScriptGoToRoom(AurieStatus& status)
-{
-	CScript* gml_script_go_to_room = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_GO_TO_ROOM,
-		(PVOID*)&gml_script_go_to_room
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GO_TO_ROOM);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_GO_TO_ROOM,
-		gml_script_go_to_room->m_Functions->m_ScriptFunction,
-		GmlScriptGoToRoomCallback,
-		nullptr
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GO_TO_ROOM);
-	}
-}
-
-void CreateHookGmlScriptSetupMainScreen(AurieStatus& status)
-{
-	CScript* gml_script_setup_main_screen = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_SETUP_MAIN_SCREEN,
-		(PVOID*)&gml_script_setup_main_screen
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SETUP_MAIN_SCREEN);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_SETUP_MAIN_SCREEN,
-		gml_script_setup_main_screen->m_Functions->m_ScriptFunction,
-		GmlScriptSetupMainScreenCallback,
-		nullptr
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SETUP_MAIN_SCREEN);
-	}
-}
-
-EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path& ModulePath) {
 	UNREFERENCED_PARAMETER(ModulePath);
 
-	AurieStatus status = AURIE_SUCCESS;
-
-	status = ObGetInterface(
-		"YYTK_Main",
-		(AurieInterfaceBase*&)(g_ModuleInterface)
-	);
-
+	YYTKInterface* module_interface = nullptr;
+	AurieStatus status = ObGetInterface("YYTK_Main", (AurieInterfaceBase*&)module_interface);
 	if (!AurieSuccess(status))
 		return AURIE_MODULE_DEPENDENCY_NOT_RESOLVED;
 
-	g_ModuleInterface->Print(CM_LIGHTAQUA, "[%s %s] - Plugin starting...", MOD_NAME, VERSION);
+	module_interface->Print(CM_LIGHTAQUA, "[%s %s] - Plugin starting...", MOD_NAME, VERSION);
 
-	CreateObjectCallback(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
+	CInstance* global_instance = nullptr;
+	module_interface->GetGlobalInstance(&global_instance);
+	MMAPI::Initialize(module_interface, global_instance, g_ArSelfModule, MOD_NAME, VERSION);
 
-	CreateHookGmlScriptStatusEffectManagerUpdate(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
+	MMAPI::Damage::Enable();
+	MMAPI::Dungeon::Enable();
+	MMAPI::Game::Enable();
+	MMAPI::Item::Enable();
+	MMAPI::Location::Enable();
+	MMAPI::Monster::Enable();
+	MMAPI::Player::Enable();
+	MMAPI::Recipe::Enable();
+	MMAPI::StatusEffect::Enable();
+	MMAPI::ToolbarMenu::Enable();
 
-	CreateHookGmlScriptSpawnMonster(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
+	MMAPI::Game::Hooks::BeforeSetupMainScreen(OnSetupMainScreen);
+	MMAPI::Game::Hooks::AfterGameActive(OnAfterGameActive);
+	MMAPI::Item::Hooks::BeforeUseItem(OnBeforeUseItem);
+	MMAPI::Item::Hooks::AfterGetUiIcon(OnAfterGetUiIcon);
+	MMAPI::Player::Hooks::AfterUseActionComplete(OnAfterUseActionComplete);
+	MMAPI::Damage::Hooks::BeforeDamage(OnBeforeDamage);
+	MMAPI::Monster::Hooks::BeforeMonsterSpawn(OnBeforeMonsterSpawn);
+	MMAPI::Location::Hooks::AfterGoToRoom(OnAfterGoToRoom);
+	MMAPI::Instance::Hooks::OnObjectCall(MMAPI::Instance::Objects::Monster, OnMonsterTick);
 
-	CreateHookGmlScriptUpdateToolbarMenu(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	CreateHookGmlScriptGetUiIcon(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	CreateHookGmlScriptDamage(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	CreateHookGmlScriptUseItem(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	CreateHookGmlScriptHeldItem(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	CreateHookGmlScriptGetWeather(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	CreateHookGmlScriptGoToRoom(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	CreateHookGmlScriptSetupMainScreen(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Plugin started!", MOD_NAME, VERSION);
+	MMAPI::Log::Info("Plugin started!");
 	return AURIE_SUCCESS;
 }
