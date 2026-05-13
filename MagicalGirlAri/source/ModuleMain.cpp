@@ -1,1126 +1,364 @@
-#include <fstream>
 #include <algorithm>
 #include <unordered_set>
-#include <nlohmann/json.hpp>
-#include <YYToolkit/YYTK_Shared.hpp> // YYTK v4
-using namespace Aurie; 
+#include <vector>
+
+#include <YYToolkit/YYTK_Shared.hpp>
+#include <MMAPI/MMAPI.hpp>
+
+using namespace Aurie;
 using namespace YYTK;
 using json = nlohmann::json;
 
 static const char* const MOD_NAME = "MagicalGirlAri";
-static const char* const VERSION = "1.0.3";
-static const char* const EASTER_EGG_SET_PIECE_REQUIREMENT_KEY = "easter_egg_set_piece_requirement";
-static const char* const BONUS_DAILY_MANA_SET_PIECE_REQUIREMENT_KEY = "bonus_daily_mana_set_piece_requirement";
-static const char* const VANQUISH_ENEMY_SET_PIECE_REQUIREMENT_KEY = "vanquish_enemy_set_piece_requirement";
-static const char* const HEALTH_RECOVERY_SET_PIECE_REQUIREMENT_KEY = "health_recovery_set_piece_requirement";
-static const char* const GML_SCRIPT_MODIFY_HEALTH = "gml_Script_modify_health@Ari@Ari";
-static const char* const GML_SCRIPT_HELD_ITEM = "gml_Script_held_item@Ari@Ari";
-static const char* const GML_SCRIPT_DAMAGE = "gml_Script_damage@gml_Object_obj_damage_receiver_Create_0";
-static const char* const GML_SCRIPT_PLAY_CONVERSATION = "gml_Script_play_conversation";
-static const char* const GML_SCRIPT_NPC_RECEIVE_GIFT = "gml_Script_receive_gift@gml_Object_par_NPC_Create_0";
-static const char* const GML_SCRIPT_GET_MANA = "gml_Script_get_mana@Ari@Ari";
-static const char* const GML_SCRIPT_MODIFY_MANA = "gml_Script_modify_mana@Ari@Ari";
-static const char* const GML_SCRIPT_GET_WEATHER = "gml_Script_get_weather@WeatherManager@Weather";
-static const char* const GML_SCRIPT_ARI_ON_NEW_DAY = "gml_Script_on_new_day@Ari@Ari";
-static const char* const GML_SCRIPT_SETUP_MAIN_SCREEN = "gml_Script_setup_main_screen@TitleMenu@TitleMenu";
+static const char* const VERSION = "1.1.0";
+
+// Config keys
+static const char* const EASTER_EGG_REQUIREMENT_KEY       = "easter_egg_set_piece_requirement";
+static const char* const BONUS_DAILY_MANA_REQUIREMENT_KEY = "bonus_daily_mana_set_piece_requirement";
+static const char* const VANQUISH_ENEMY_REQUIREMENT_KEY   = "vanquish_enemy_set_piece_requirement";
+static const char* const HEALTH_RECOVERY_REQUIREMENT_KEY  = "health_recovery_set_piece_requirement";
+
+// Defaults
+static const int DEFAULT_EASTER_EGG_REQUIREMENT       = 3;
+static const int DEFAULT_BONUS_DAILY_MANA_REQUIREMENT = 3;
+static const int DEFAULT_VANQUISH_ENEMY_REQUIREMENT   = 3;
+static const int DEFAULT_HEALTH_RECOVERY_REQUIREMENT  = 3;
+
+// Localization keys
 static const std::string JUNIPER_EASTER_EGG_CONVERSATION_KEY = "Conversations/Mods/Magical Girl Ari/juniper_contract";
-static const std::string SAILOR_MISTRIA_DRESS_ITEM_NAME = "sailor_mistria"; // Core set piece (interchangeable with sailor_mistria_m)
-static const std::string SAILOR_MISTRIA_SUIT_ITEM_NAME = "sailor_mistria_m"; // Core set piece (interchangeable with sailor_mistria)
-static const std::string SAILOR_MISTRIA_HEELS_ITEM_NAME = "sailor_mistria_heels"; // Core set piece (interchangeable with boots)
-static const std::string SAILOR_MISTRIA_BOOTS_ITEM_NAME = "sailor_mistria_boots"; // Core set piece (interchangeable with heels)
-static const std::string PRINCESS_TWINTAILS_HAIR_NAME = "princess_twintails"; // Additional set piece
-static const std::string SERENE_BUN_HAIR_NAME = "serene_bun"; // Additional set piece
-static const std::string RINI_BUN_HAIR_NAME = "rini_bun"; // Additional set piece
-static const std::string PRINCESS_BRIOCHE_HAIR_NAME = "princess_brioche"; // Additional set piece
-static const std::string SAILOR_MISTRIA_PINS_ACCESSORY_NAME = "sailor_mistria_pins"; // Additional set piece
-static const std::string SAILOR_MISTRIA_PINS_B_ACCESSORY_NAME = "sailor_mistria_pins_b"; // Additional set piece
-static const std::string SAILOR_MISTRIA_PINS_C_ACCESSORY_NAME = "sailor_mistria_pins_c"; // Additional set piece
-static const std::string HEART_SWORD_NAME = "sword_verdigris";
 
-static const std::unordered_set<std::string> MAGICAL_GIRL_ARI_CORE_SET_PIECE_NAMES = { SAILOR_MISTRIA_DRESS_ITEM_NAME, SAILOR_MISTRIA_SUIT_ITEM_NAME, SAILOR_MISTRIA_HEELS_ITEM_NAME, SAILOR_MISTRIA_BOOTS_ITEM_NAME };
-static const std::unordered_set<std::string> MAGICAL_GIRL_ARI_ADDITIONAL_SET_PIECE_NAMES = { PRINCESS_TWINTAILS_HAIR_NAME, SERENE_BUN_HAIR_NAME, RINI_BUN_HAIR_NAME, SAILOR_MISTRIA_PINS_ACCESSORY_NAME, SAILOR_MISTRIA_PINS_B_ACCESSORY_NAME, SAILOR_MISTRIA_PINS_C_ACCESSORY_NAME };
+// Asset names
 static const std::string MANA_POTION_ITEM_NAME = "mana_potion";
-static const int DEFAULT_EASTER_EGG_SET_PIECE_REQUIREMENT = 3;
-static const int DEFAULT_BONUS_DAILY_MANA_SET_PIECE_REQUIREMENT = 3;
-static const int DEFAULT_VANQUISH_ENEMY_SET_PIECE_REQUIREMENT = 3;
-static const int DEFAULT_HEALTH_RECOVERY_SET_PIECE_REQUIREMENT = 3;
+static const std::string HEART_SWORD_NAME      = "sword_verdigris";
 
-static YYTKInterface* g_ModuleInterface = nullptr;
-static CInstance* global_instance = nullptr;
-static bool load_on_start = true;
-static bool game_is_active = false;
-static bool is_new_day = false;
-static bool modify_juniper_conversation = false;
-static bool heart_sword_equipped = false;
-static int ari_health_recovery = 0;
-static int core_set_pieces_equipped = 0;
-static int additional_set_pieces_equipped = 0;
-static int original_heart_sword_damage = 10;
-static int easter_egg_set_piece_requirement = DEFAULT_EASTER_EGG_SET_PIECE_REQUIREMENT;
-static int bonus_daily_mana_set_piece_requirement = DEFAULT_BONUS_DAILY_MANA_SET_PIECE_REQUIREMENT;
-static int vanquish_enemy_set_piece_requirement = DEFAULT_VANQUISH_ENEMY_SET_PIECE_REQUIREMENT;
-static int health_recovery_set_piece_requirement = DEFAULT_HEALTH_RECOVERY_SET_PIECE_REQUIREMENT;
-static int mana_potion_item_id = -1;
-static int heart_sword_item_id = -1;
-static std::map<int, int> spell_id_to_default_cost_map = {};
-static std::map<std::string, int> monster_name_to_id_map = {};
+// Core set pieces — outfit (dress/suit interchangeable) + footwear (heels/boots interchangeable).
+static const std::unordered_set<std::string> CORE_SET_PIECE_NAMES = {
+	"sailor_mistria",        // dress
+	"sailor_mistria_m",      // suit
+	"sailor_mistria_heels",
+	"sailor_mistria_boots",
+};
 
-void ResetStaticFields(bool returned_to_title_screen)
+// Additional set pieces — hair + accessory variants.
+static const std::unordered_set<std::string> ADDITIONAL_SET_PIECE_NAMES = {
+	"princess_twintails",
+	"serene_bun",
+	"rini_bun",
+	"princess_brioche",
+	"sailor_mistria_pins",
+	"sailor_mistria_pins_b",
+	"sailor_mistria_pins_c",
+};
+
+struct MagicalGirlAriConfig
 {
-	if (returned_to_title_screen)
-	{
-		game_is_active = false;
-		is_new_day = false;
-		modify_juniper_conversation = false;
-		heart_sword_equipped = false;
-		ari_health_recovery = 0;
-		core_set_pieces_equipped = 0;
-		additional_set_pieces_equipped = 0;
-	}
-}
+	int easter_egg_requirement       = DEFAULT_EASTER_EGG_REQUIREMENT;
+	int bonus_daily_mana_requirement = DEFAULT_BONUS_DAILY_MANA_REQUIREMENT;
+	int vanquish_enemy_requirement   = DEFAULT_VANQUISH_ENEMY_REQUIREMENT;
+	int health_recovery_requirement  = DEFAULT_HEALTH_RECOVERY_REQUIREMENT;
+};
 
-bool StructVariableExists(RValue the_struct, const char* variable_name)
+void to_json(json& j, const MagicalGirlAriConfig& c)
 {
-	RValue struct_exists = g_ModuleInterface->CallBuiltin(
-		"struct_exists",
-		{ the_struct, variable_name }
-	);
-
-	return struct_exists.ToBoolean();
-}
-
-RValue StructVariableSet(RValue the_struct, const char* variable_name, RValue value)
-{
-	return g_ModuleInterface->CallBuiltin(
-		"struct_set",
-		{ the_struct, variable_name, value }
-	);
-}
-
-void PrintError(std::exception_ptr eptr)
-{
-	try {
-		if (eptr) {
-			std::rethrow_exception(eptr);
-		}
-	}
-	catch (const std::exception& e) {
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Error: %s", MOD_NAME, VERSION, e.what());
-	}
-}
-
-json CreateConfigJson(bool use_defaults)
-{
-	json config_json = {
-		{ EASTER_EGG_SET_PIECE_REQUIREMENT_KEY, use_defaults ? DEFAULT_EASTER_EGG_SET_PIECE_REQUIREMENT : easter_egg_set_piece_requirement },
-		{ BONUS_DAILY_MANA_SET_PIECE_REQUIREMENT_KEY, use_defaults ? DEFAULT_BONUS_DAILY_MANA_SET_PIECE_REQUIREMENT : bonus_daily_mana_set_piece_requirement },
-		{ VANQUISH_ENEMY_SET_PIECE_REQUIREMENT_KEY, use_defaults ? DEFAULT_VANQUISH_ENEMY_SET_PIECE_REQUIREMENT : vanquish_enemy_set_piece_requirement },
-		{ HEALTH_RECOVERY_SET_PIECE_REQUIREMENT_KEY, use_defaults ? DEFAULT_HEALTH_RECOVERY_SET_PIECE_REQUIREMENT : health_recovery_set_piece_requirement }
+	j = json{
+		{ EASTER_EGG_REQUIREMENT_KEY,       c.easter_egg_requirement       },
+		{ BONUS_DAILY_MANA_REQUIREMENT_KEY, c.bonus_daily_mana_requirement },
+		{ VANQUISH_ENEMY_REQUIREMENT_KEY,   c.vanquish_enemy_requirement   },
+		{ HEALTH_RECOVERY_REQUIREMENT_KEY,  c.health_recovery_requirement  },
 	};
-	return config_json;
 }
 
-void LogDefaultConfigValues()
+void from_json(const json& j, MagicalGirlAriConfig& c)
 {
-	easter_egg_set_piece_requirement = DEFAULT_EASTER_EGG_SET_PIECE_REQUIREMENT;
-	bonus_daily_mana_set_piece_requirement = DEFAULT_BONUS_DAILY_MANA_SET_PIECE_REQUIREMENT;
-	vanquish_enemy_set_piece_requirement = DEFAULT_VANQUISH_ENEMY_SET_PIECE_REQUIREMENT;
-	health_recovery_set_piece_requirement = DEFAULT_HEALTH_RECOVERY_SET_PIECE_REQUIREMENT;
-
-	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Using DEFAULT \"%s\" value: %d!", MOD_NAME, VERSION, EASTER_EGG_SET_PIECE_REQUIREMENT_KEY, DEFAULT_EASTER_EGG_SET_PIECE_REQUIREMENT);
-	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Using DEFAULT \"%s\" value: %d!", MOD_NAME, VERSION, BONUS_DAILY_MANA_SET_PIECE_REQUIREMENT_KEY, DEFAULT_BONUS_DAILY_MANA_SET_PIECE_REQUIREMENT);
-	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Using DEFAULT \"%s\" value: %d!", MOD_NAME, VERSION, VANQUISH_ENEMY_SET_PIECE_REQUIREMENT_KEY, DEFAULT_VANQUISH_ENEMY_SET_PIECE_REQUIREMENT);
-	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Using DEFAULT \"%s\" value: %d!", MOD_NAME, VERSION, HEALTH_RECOVERY_SET_PIECE_REQUIREMENT_KEY, DEFAULT_HEALTH_RECOVERY_SET_PIECE_REQUIREMENT);
+	c.easter_egg_requirement       = MMAPI::Config::GetValue<int>(j, EASTER_EGG_REQUIREMENT_KEY,       DEFAULT_EASTER_EGG_REQUIREMENT,       2, 3);
+	c.bonus_daily_mana_requirement = MMAPI::Config::GetValue<int>(j, BONUS_DAILY_MANA_REQUIREMENT_KEY, DEFAULT_BONUS_DAILY_MANA_REQUIREMENT, 2, 3);
+	c.vanquish_enemy_requirement   = MMAPI::Config::GetValue<int>(j, VANQUISH_ENEMY_REQUIREMENT_KEY,   DEFAULT_VANQUISH_ENEMY_REQUIREMENT,   0, 3);
+	c.health_recovery_requirement  = MMAPI::Config::GetValue<int>(j, HEALTH_RECOVERY_REQUIREMENT_KEY,  DEFAULT_HEALTH_RECOVERY_REQUIREMENT,  0, 3);
 }
 
+// ----- State -----
 
-void CreateOrLoadConfigFile()
+static MagicalGirlAriConfig config = {};
+static bool startup_loaded                = false;
+static bool game_is_active                = false;
+static bool is_new_day                    = false;
+static bool modify_juniper_conversation   = false;
+static bool heart_sword_equipped          = false;
+static int  ari_health_recovery_pending   = 0;
+static int  core_set_pieces_equipped      = 0;
+static int  additional_set_pieces_equipped = 0;
+static int  mana_potion_item_id           = -1;
+static int  heart_sword_item_id           = -1;
+static int  original_heart_sword_damage   = 10;
+static std::vector<int> default_spell_costs;  // indexed by spell id
+
+// ----- Helpers -----
+
+void LoadOrCreateConfigFile()
 {
-	// Load config file.
-	std::exception_ptr eptr;
 	try
 	{
-		// Try to find the mod_data directory.
-		std::string current_dir = std::filesystem::current_path().string();
-		std::string mod_data_folder = current_dir + "\\mod_data";
-		if (!std::filesystem::exists(mod_data_folder))
+		auto path = MMAPI::Config::GetConfigPath(MOD_NAME);
+		bool existed = std::filesystem::exists(path);
+		json j = MMAPI::Config::Load(path);
+
+		if (!existed)
+			MMAPI::Log::Warn("Configuration file was not found. Creating file: %s", path.string().c_str());
+
+		if (j.empty())
 		{
-			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - The \"mod_data\" directory was not found. Creating directory: %s", MOD_NAME, VERSION, mod_data_folder.c_str());
-			std::filesystem::create_directory(mod_data_folder);
-		}
-
-		// Try to find the mod_data/MagicalGirlAri directory.
-		std::string magical_girl_ari_folder = mod_data_folder + "\\MagicalGirlAri";
-		if (!std::filesystem::exists(magical_girl_ari_folder))
-		{
-			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - The \"MagicalGirlAri\" directory was not found. Creating directory: %s", MOD_NAME, VERSION, magical_girl_ari_folder.c_str());
-			std::filesystem::create_directory(magical_girl_ari_folder);
-		}
-
-		// Try to find the mod_data/MagicalGirlAri/MagicalGirlAri.json config file.
-		bool update_config_file = false;
-		std::string config_file = magical_girl_ari_folder + "\\" + "MagicalGirlAri.json";
-		std::ifstream in_stream(config_file);
-		if (in_stream.good())
-		{
-			try
-			{
-				json json_object = json::parse(in_stream);
-
-				// Check if the json_object is empty.
-				if (json_object.empty())
-				{
-					g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - No values found in mod configuration file: %s!", MOD_NAME, VERSION, config_file.c_str());
-					g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Add your desired values to the configuration file, otherwise defaults will be used.", MOD_NAME, VERSION);
-					LogDefaultConfigValues();
-				}
-				else
-				{
-					// Try loading the easter_egg_set_piece_requirement value.
-					if (json_object.contains(EASTER_EGG_SET_PIECE_REQUIREMENT_KEY))
-					{
-						easter_egg_set_piece_requirement = json_object[EASTER_EGG_SET_PIECE_REQUIREMENT_KEY];
-						if (easter_egg_set_piece_requirement < 2 || easter_egg_set_piece_requirement > 3)
-						{
-							g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Invalid \"%s\" value (%d) in mod configuration file: %s", MOD_NAME, VERSION, EASTER_EGG_SET_PIECE_REQUIREMENT_KEY, easter_egg_set_piece_requirement, config_file.c_str());
-							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Make sure the value is a valid integer between 2 and 3 (inclusive)!", MOD_NAME, VERSION);
-							g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %d!", MOD_NAME, VERSION, EASTER_EGG_SET_PIECE_REQUIREMENT_KEY, DEFAULT_EASTER_EGG_SET_PIECE_REQUIREMENT);
-							easter_egg_set_piece_requirement = DEFAULT_EASTER_EGG_SET_PIECE_REQUIREMENT;
-						}
-						else
-						{
-							g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using CUSTOM \"%s\" value: %d!", MOD_NAME, VERSION, EASTER_EGG_SET_PIECE_REQUIREMENT_KEY, easter_egg_set_piece_requirement);
-						}
-					}
-					else
-					{
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, EASTER_EGG_SET_PIECE_REQUIREMENT_KEY, config_file.c_str());
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %d!", MOD_NAME, VERSION, EASTER_EGG_SET_PIECE_REQUIREMENT_KEY, DEFAULT_EASTER_EGG_SET_PIECE_REQUIREMENT);
-					}
-
-					// Try loading the bonus_daily_mana_set_piece_requirement value.
-					if (json_object.contains(BONUS_DAILY_MANA_SET_PIECE_REQUIREMENT_KEY))
-					{
-						bonus_daily_mana_set_piece_requirement = json_object[BONUS_DAILY_MANA_SET_PIECE_REQUIREMENT_KEY];
-						if (bonus_daily_mana_set_piece_requirement < 2 || bonus_daily_mana_set_piece_requirement > 3)
-						{
-							g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Invalid \"%s\" value (%d) in mod configuration file: %s", MOD_NAME, VERSION, BONUS_DAILY_MANA_SET_PIECE_REQUIREMENT_KEY, bonus_daily_mana_set_piece_requirement, config_file.c_str());
-							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Make sure the value is a valid integer between 2 and 3 (inclusive)!", MOD_NAME, VERSION);
-							g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %d!", MOD_NAME, VERSION, BONUS_DAILY_MANA_SET_PIECE_REQUIREMENT_KEY, DEFAULT_BONUS_DAILY_MANA_SET_PIECE_REQUIREMENT);
-							bonus_daily_mana_set_piece_requirement = DEFAULT_BONUS_DAILY_MANA_SET_PIECE_REQUIREMENT;
-						}
-						else
-						{
-							g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using CUSTOM \"%s\" value: %d!", MOD_NAME, VERSION, BONUS_DAILY_MANA_SET_PIECE_REQUIREMENT_KEY, bonus_daily_mana_set_piece_requirement);
-						}
-					}
-					else
-					{
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, BONUS_DAILY_MANA_SET_PIECE_REQUIREMENT_KEY, config_file.c_str());
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %d!", MOD_NAME, VERSION, BONUS_DAILY_MANA_SET_PIECE_REQUIREMENT_KEY, DEFAULT_BONUS_DAILY_MANA_SET_PIECE_REQUIREMENT);
-					}
-
-					// Try loading the vanquish_enemy_set_piece_requirement value.
-					if (json_object.contains(VANQUISH_ENEMY_SET_PIECE_REQUIREMENT_KEY))
-					{
-						vanquish_enemy_set_piece_requirement = json_object[VANQUISH_ENEMY_SET_PIECE_REQUIREMENT_KEY];
-						if (vanquish_enemy_set_piece_requirement < 0 || vanquish_enemy_set_piece_requirement > 3)
-						{
-							g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Invalid \"%s\" value (%d) in mod configuration file: %s", MOD_NAME, VERSION, VANQUISH_ENEMY_SET_PIECE_REQUIREMENT_KEY, vanquish_enemy_set_piece_requirement, config_file.c_str());
-							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Make sure the value is a valid integer between 0 and 3 (inclusive)!", MOD_NAME, VERSION);
-							g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %d!", MOD_NAME, VERSION, VANQUISH_ENEMY_SET_PIECE_REQUIREMENT_KEY, DEFAULT_VANQUISH_ENEMY_SET_PIECE_REQUIREMENT);
-							vanquish_enemy_set_piece_requirement = DEFAULT_VANQUISH_ENEMY_SET_PIECE_REQUIREMENT;
-						}
-						else
-						{
-							g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using CUSTOM \"%s\" value: %d!", MOD_NAME, VERSION, VANQUISH_ENEMY_SET_PIECE_REQUIREMENT_KEY, vanquish_enemy_set_piece_requirement);
-						}
-					}
-					else
-					{
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, VANQUISH_ENEMY_SET_PIECE_REQUIREMENT_KEY, config_file.c_str());
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %d!", MOD_NAME, VERSION, VANQUISH_ENEMY_SET_PIECE_REQUIREMENT_KEY, DEFAULT_VANQUISH_ENEMY_SET_PIECE_REQUIREMENT);
-					}
-
-					// Try loading the health_recovery_set_piece_requirement value.
-					if (json_object.contains(HEALTH_RECOVERY_SET_PIECE_REQUIREMENT_KEY))
-					{
-						health_recovery_set_piece_requirement = json_object[HEALTH_RECOVERY_SET_PIECE_REQUIREMENT_KEY];
-						if (health_recovery_set_piece_requirement < 0 || health_recovery_set_piece_requirement > 3)
-						{
-							g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Invalid \"%s\" value (%d) in mod configuration file: %s", MOD_NAME, VERSION, HEALTH_RECOVERY_SET_PIECE_REQUIREMENT_KEY, health_recovery_set_piece_requirement, config_file.c_str());
-							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Make sure the value is a valid integer between 0 and 3 (inclusive)!", MOD_NAME, VERSION);
-							g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %d!", MOD_NAME, VERSION, HEALTH_RECOVERY_SET_PIECE_REQUIREMENT_KEY, DEFAULT_HEALTH_RECOVERY_SET_PIECE_REQUIREMENT);
-							health_recovery_set_piece_requirement = DEFAULT_HEALTH_RECOVERY_SET_PIECE_REQUIREMENT;
-						}
-						else
-						{
-							g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using CUSTOM \"%s\" value: %d!", MOD_NAME, VERSION, HEALTH_RECOVERY_SET_PIECE_REQUIREMENT_KEY, health_recovery_set_piece_requirement);
-						}
-					}
-					else
-					{
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, HEALTH_RECOVERY_SET_PIECE_REQUIREMENT_KEY, config_file.c_str());
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %d!", MOD_NAME, VERSION, HEALTH_RECOVERY_SET_PIECE_REQUIREMENT_KEY, DEFAULT_HEALTH_RECOVERY_SET_PIECE_REQUIREMENT);
-					}
-				}
-
-				update_config_file = true;
-			}
-			catch (...)
-			{
-				eptr = std::current_exception();
-				PrintError(eptr);
-
-				g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to parse JSON from configuration file: %s", MOD_NAME, VERSION, config_file.c_str());
-				g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Make sure the file is valid JSON!", MOD_NAME, VERSION);
-				LogDefaultConfigValues();
-			}
-
-			in_stream.close();
+			if (existed)
+				MMAPI::Log::Error("No readable values found in mod configuration file: %s!", path.string().c_str());
+			config = MagicalGirlAriConfig{};
 		}
 		else
 		{
-			in_stream.close();
-
-			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - The \"MagicalGirlAri.json\" file was not found. Creating file: %s", MOD_NAME, VERSION, config_file.c_str());
-
-			json default_config_json = CreateConfigJson(true);
-			std::ofstream out_stream(config_file);
-			out_stream << std::setw(4) << default_config_json << std::endl;
-			out_stream.close();
-
-			LogDefaultConfigValues();
+			config = j.get<MagicalGirlAriConfig>();
 		}
 
-		if (update_config_file)
-		{
-			json config_json = CreateConfigJson(false);
-			std::ofstream out_stream(config_file);
-			out_stream << std::setw(4) << config_json << std::endl;
-			out_stream.close();
-		}
+		MMAPI::Config::Save(path, config);
+		MMAPI::Log::Info("Loaded configuration file: %s", path.string().c_str());
 	}
-	catch (...)
+	catch (const std::exception& e)
 	{
-		eptr = std::current_exception();
-		PrintError(eptr);
-
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - An error occurred loading the mod configuration file.", MOD_NAME, VERSION);
-		LogDefaultConfigValues();
+		MMAPI::Log::Error("Error loading config: %s", e.what());
+		config = MagicalGirlAriConfig{};
 	}
 }
 
-
-void LoadItems()
+void LoadDefaultSpellCosts()
 {
-	size_t array_length = 0;
-	RValue item_id_array = global_instance->GetMember("__item_id__");
-	g_ModuleInterface->GetArraySize(item_id_array, array_length);
-	for (size_t i = 0; i < array_length; i++)
+	default_spell_costs.clear();
+	default_spell_costs.reserve(MMAPI::Spell::IdCount);
+	for (int i = 0; i < MMAPI::Spell::IdCount; i++)
 	{
-		RValue* array_element;
-		g_ModuleInterface->GetArrayEntry(item_id_array, i, array_element);
-
-		std::string item_name = array_element->ToString();
-		if (item_name == MANA_POTION_ITEM_NAME)
-			mana_potion_item_id = i;
-
-		if (item_name == HEART_SWORD_NAME)
-			heart_sword_item_id = i;
+		YYTK::RValue cost = MMAPI::Spell::GetCost(static_cast<MMAPI::Spell::Ids>(i));
+		default_spell_costs.push_back(MMAPI::Engine::IsNumeric(cost) ? static_cast<int>(cost.ToInt64()) : 0);
 	}
 }
 
 void LoadOriginalHeartSwordDamage()
 {
-	RValue item_data = global_instance->GetMember("__item_data");
-	
-	RValue* heart_sword;
-	g_ModuleInterface->GetArrayEntry(item_data, heart_sword_item_id, heart_sword);
-
-	original_heart_sword_damage = heart_sword->GetMember("damage").ToInt64();
+	YYTK::RValue dmg = MMAPI::Item::GetDamage(heart_sword_item_id);
+	if (MMAPI::Engine::IsNumeric(dmg))
+		original_heart_sword_damage = static_cast<int>(dmg.ToInt64());
 }
 
-void LoadSpells()
+// Applies a spell-cost reduction across all spells. Reduction = number of core set pieces equipped, capped at 2.
+void ApplySpellCostReduction(int reduction)
 {
-	size_t array_length = 0;
-	RValue spells = global_instance->GetMember("__spells");
-	g_ModuleInterface->GetArraySize(spells, array_length);
-	for (size_t i = 0; i < array_length; i++)
+	if (default_spell_costs.empty()) return;
+	for (int i = 0; i < MMAPI::Spell::IdCount; i++)
 	{
-		RValue* array_element;
-		g_ModuleInterface->GetArrayEntry(spells, i, array_element);
-		
-		spell_id_to_default_cost_map[i] = array_element->GetMember("cost").ToInt64();
+		int new_cost = (std::max)(0, default_spell_costs[i] - reduction);
+		MMAPI::Spell::SetCost(static_cast<MMAPI::Spell::Ids>(i), new_cost);
 	}
 }
 
-void LoadMonsters()
+// Counts the player's currently-equipped set pieces. Two outputs: (core, additional).
+std::pair<int, int> CountEquippedSetPieces()
 {
-	size_t array_length;
-	RValue monster_names = global_instance->GetMember("__monster_id__");
-	g_ModuleInterface->GetArraySize(monster_names, array_length);
+	int core = 0;
+	int additional = 0;
+	for (const auto& name : CORE_SET_PIECE_NAMES)
+		if (MMAPI::Cosmetic::IsEquipped(name)) core++;
+	for (const auto& name : ADDITIONAL_SET_PIECE_NAMES)
+		if (MMAPI::Cosmetic::IsEquipped(name)) additional++;
+	return { core, additional };
+}
 
-	for (size_t i = 0; i < array_length; i++)
+int TotalSetPieces() { return core_set_pieces_equipped + additional_set_pieces_equipped; }
+
+// ----- Hooks -----
+
+void OnSetupMainScreen()
+{
+	if (!startup_loaded)
 	{
-		RValue* monster_name;
-		g_ModuleInterface->GetArrayEntry(monster_names, i, monster_name);
+		// First-time setup: load reference data at title screen so it's ready before gameplay.
+		LoadOrCreateConfigFile();
+		LoadDefaultSpellCosts();
 
-		monster_name_to_id_map[monster_name->ToString()] = i;
-	}
-}
+		YYTK::RValue mana_potion_rv = MMAPI::Item::GetIdFromInternalName(MANA_POTION_ITEM_NAME);
+		if (MMAPI::Engine::IsNumeric(mana_potion_rv))
+			mana_potion_item_id = static_cast<int>(mana_potion_rv.ToInt64());
 
-void ModifySpellCosts(int mana_cost_reduction) {
-	size_t array_length = 0;
-	RValue spells = global_instance->GetMember("__spells");
-	g_ModuleInterface->GetArraySize(spells, array_length);
-	for (size_t i = 0; i < array_length; i++)
-	{
-		RValue* array_element;
-		g_ModuleInterface->GetArrayEntry(spells, i, array_element);
+		YYTK::RValue heart_sword_rv = MMAPI::Item::GetIdFromInternalName(HEART_SWORD_NAME);
+		if (MMAPI::Engine::IsNumeric(heart_sword_rv))
+			heart_sword_item_id = static_cast<int>(heart_sword_rv.ToInt64());
 
-		int cost = (std::max)(0, spell_id_to_default_cost_map[i] - mana_cost_reduction);
-		*array_element->GetRefMember("cost") = cost;
-	}
-}
-
-void ModifyHealth(CInstance* Self, CInstance* Other, int value)
-{
-	CScript* gml_script_modify_health = nullptr;
-	g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_MODIFY_HEALTH,
-		(PVOID*)&gml_script_modify_health
-	);
-
-	RValue result;
-	RValue health_modifier = value;
-	RValue* health_modifier_ptr = &health_modifier;
-
-	gml_script_modify_health->m_Functions->m_ScriptFunction(
-		Self,
-		Other,
-		result,
-		1,
-		{ &health_modifier_ptr }
-	);
-}
-
-RValue GetMana(CInstance* Self, CInstance* Other)
-{
-	CScript* gml_script_get_mana = nullptr;
-	g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_GET_MANA,
-		(PVOID*)&gml_script_get_mana
-	);
-
-	RValue result;
-	gml_script_get_mana->m_Functions->m_ScriptFunction(
-		Self,
-		Other,
-		result,
-		0,
-		nullptr
-	);
-
-	return result;
-}
-
-void ScaleHeartSword(int current_mana)
-{
-	RValue item_data = *global_instance->GetRefMember("__item_data");
-
-	RValue* heart_sword;
-	g_ModuleInterface->GetArrayEntry(item_data, heart_sword_item_id, heart_sword);
-
-	double damage = original_heart_sword_damage + current_mana;
-	*heart_sword->GetRefMember("damage") = damage;
-}
-
-std::tuple<int, int> CountMagicalGirlAriCosmeticsEquipped()
-{
-	RValue __ari = *global_instance->GetRefMember("__ari");
-	RValue preset_index_selected = *__ari.GetRefMember("preset_index_selected");
-	RValue presets = *__ari.GetRefMember("presets");
-	RValue buffer = *presets.GetRefMember("__buffer");
-
-	RValue* selelected_buffer_entry; // Ari's current cosmetics
-	g_ModuleInterface->GetArrayEntry(buffer, preset_index_selected.m_Real, selelected_buffer_entry);
-
-	RValue assets = *selelected_buffer_entry->GetRefMember("assets");
-	RValue inner_buffer = *assets.GetRefMember("__buffer");
-	size_t inner_buffer_size;
-	g_ModuleInterface->GetArraySize(inner_buffer, inner_buffer_size);
-
-	int core_set_piece_cosmetics_equipped = 0;
-	int additional_set_piece_cosmetics_equipped = 0;
-
-	for (int i = 0; i < inner_buffer_size; i++)
-	{
-		RValue* equipped_cosmetic;
-		g_ModuleInterface->GetArrayEntry(inner_buffer, i, equipped_cosmetic);
-		RValue equipped_cosmetic_name = *equipped_cosmetic->GetRefMember("name");
-
-		if (MAGICAL_GIRL_ARI_CORE_SET_PIECE_NAMES.contains(equipped_cosmetic_name.ToString()))
-			core_set_piece_cosmetics_equipped++;
-
-		if (MAGICAL_GIRL_ARI_ADDITIONAL_SET_PIECE_NAMES.contains(equipped_cosmetic_name.ToString()))
-			additional_set_piece_cosmetics_equipped++;
+		LoadOriginalHeartSwordDamage();
+		startup_loaded = true;
 	}
 
-	std::tuple<int, int> tuple = { core_set_piece_cosmetics_equipped, additional_set_piece_cosmetics_equipped };
-	return tuple;
+	// Return-to-title reset.
+	game_is_active = false;
+	is_new_day = false;
+	modify_juniper_conversation = false;
+	heart_sword_equipped = false;
+	ari_health_recovery_pending = 0;
+	core_set_pieces_equipped = 0;
+	additional_set_pieces_equipped = 0;
 }
 
-void ObjectCallback(
-	IN FWCodeEvent& CodeEvent
-)
-{
-	auto& [self, other, code, argc, argv] = CodeEvent.Arguments();
-
-	if (!self)
-		return;
-
-	if (!self->m_Object)
-		return;
-
-	if (!game_is_active)
-		return;
-
-	if (strstr(self->m_Object->m_Name, "obj_ari"))
-	{
-		int mana = GetMana(global_instance->GetRefMember("__ari")->ToInstance(), self).ToInt64();
-		ScaleHeartSword(mana);
-
-		// Track equipped gear.
-		std::tuple<int, int> tuple = CountMagicalGirlAriCosmeticsEquipped();
-		core_set_pieces_equipped = std::get<0>(tuple);
-		additional_set_pieces_equipped = std::get<1>(tuple);
-		
-		// Adjust spell costs.
-		ModifySpellCosts(core_set_pieces_equipped > 2 ? 2 : core_set_pieces_equipped);
-		
-		// Process health recovery.
-		if (ari_health_recovery > 0)
-		{
-			ModifyHealth(global_instance->GetRefMember("__ari")->ToInstance(), self, ari_health_recovery);
-			ari_health_recovery = 0;
-		}
-	}
-
-	if (strstr(self->m_Object->m_Name, "obj_monster"))
-	{
-		RValue monster = self->ToRValue();
-		if (StructVariableExists(monster, "monster_id"))
-		{
-			RValue monster_id = *monster.GetRefMember("monster_id");
-
-			bool is_valid_monster_object = false;
-			for (const auto& entry : monster_name_to_id_map) {
-				if (entry.second == monster_id.ToInt64()) {
-					is_valid_monster_object = true;
-					break;
-				}
-			}
-
-			if (!is_valid_monster_object)
-				return;
-
-			if (StructVariableExists(monster, "config") && StructVariableExists(monster, "hit_points"))
-			{
-				RValue config = *monster.GetRefMember("config");
-				RValue hit_points = monster.GetMember("hit_points");
-
-				// Vanquish Enemy
-				if (heart_sword_equipped && (core_set_pieces_equipped + additional_set_pieces_equipped) >= vanquish_enemy_set_piece_requirement)
-				{
-					if (!StructVariableExists(monster, "__magical_girl_ari__vanquish_hit_points"))
-						StructVariableSet(monster, "__magical_girl_ari__vanquish_hit_points", hit_points);
-
-					RValue original_hit_points = monster.GetMember("__magical_girl_ari__vanquish_hit_points");
-					if (hit_points.ToDouble() != original_hit_points.ToDouble())
-						*monster.GetRefMember("hit_points") = 0;
-				}
-
-				// Health Recovery
-				if (heart_sword_equipped && (core_set_pieces_equipped + additional_set_pieces_equipped) >= health_recovery_set_piece_requirement)
-				{
-					if (!StructVariableExists(monster, "__magical_girl_ari__processed_monster_death"))
-					{
-						if (hit_points.ToInt64() <= 0)
-						{
-							g_ModuleInterface->CallBuiltin("struct_set", { monster, "__magical_girl_ari__processed_monster_death", true });
-							ari_health_recovery += 10;
-						}
-					}
-				}
-			}
-		}
-	}
-}
-
-RValue& GmlScriptHeldItemCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_HELD_ITEM));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	if (Result.m_Kind != VALUE_UNDEFINED)
-	{
-		int item_id = Result.GetMember("item_id").ToInt64();
-		if (item_id == heart_sword_item_id)
-			heart_sword_equipped = true;
-		else
-			heart_sword_equipped = false;
-	}
-	else
-		heart_sword_equipped = false;
-
-	return Result;
-}
-
-RValue& GmlScriptDamageCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	// Vanquish Enemy
-	if (heart_sword_equipped && (core_set_pieces_equipped + additional_set_pieces_equipped) >= vanquish_enemy_set_piece_requirement)
-	{
-		RValue target = Arguments[0]->GetMember("target");
-		if (target.ToInt64() != 1) // Everything not Ari
-		{
-			double damage = Arguments[0]->GetMember("damage").ToDouble();
-			if (damage != 0) // Not a miss
-			{
-				*Arguments[0]->GetRefMember("critical") = true;
-				*Arguments[0]->GetRefMember("damage") = 9999.0;
-			}
-		}
-	}
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_DAMAGE));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
-}
-
-RValue& GmlScriptPlayConversationCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	if (game_is_active)
-	{
-		std::string conversation_name = Arguments[1]->ToString();
-		if (conversation_name.contains("gift_lines") && conversation_name.contains("Conversations/Bank/Juniper"))
-		{
-			if (modify_juniper_conversation)
-			{
-				modify_juniper_conversation = false;
-				*Arguments[1] = RValue(JUNIPER_EASTER_EGG_CONVERSATION_KEY);
-			}
-		}
-	}
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_PLAY_CONVERSATION));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
-}
-
-RValue& GmlScriptNpcReceiveGiftCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	if (Self != NULL && Self->m_Object != NULL)
-	{
-		std::string npc_name = Self->m_Object->m_Name;
-		if (npc_name == "obj_juniper")
-		{
-			if (ArgumentCount == 0 || ArgumentCount > 1)
-				g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Expected 1 argument but got %d for %s!", MOD_NAME, VERSION, ArgumentCount, GML_SCRIPT_NPC_RECEIVE_GIFT);
-
-			if (ArgumentCount == 1 && Arguments[0]->m_Kind == VALUE_OBJECT)
-			{
-				RValue item_id = Arguments[0]->GetMember("item_id");
-				if (item_id.ToInt64() == mana_potion_item_id)
-				{
-					if ((core_set_pieces_equipped + additional_set_pieces_equipped) >= easter_egg_set_piece_requirement)
-						modify_juniper_conversation = true;
-				}
-			}
-		}
-	}
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_NPC_RECEIVE_GIFT));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
-}
-
-RValue& GmlScriptModifyManaCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	if (is_new_day)
-	{
-		if ((core_set_pieces_equipped + additional_set_pieces_equipped) >= bonus_daily_mana_set_piece_requirement)
-		{
-			double mana_modifier = Arguments[0]->m_Real;
-			Arguments[0]->m_Real = mana_modifier + 1;
-		}
-
-		is_new_day = false;
-	}
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_MODIFY_MANA));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
-}
-
-RValue& GmlScriptGetWeatherCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
+void OnGameActive()
 {
 	game_is_active = true;
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_GET_WEATHER));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
 }
 
-RValue& GmlScriptAriOnNewDayCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
+void OnBeforeNewDay()
 {
 	is_new_day = true;
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_ARI_ON_NEW_DAY));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
 }
 
-RValue& GmlScriptSetupMainScreenCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
+void OnAfterHeldItem(MMAPI::Player::HeldItemContext& ctx)
 {
-	if (load_on_start)
-	{
-		g_ModuleInterface->GetGlobalInstance(&global_instance);
-		CreateOrLoadConfigFile();
-		LoadSpells();
-		LoadMonsters();
-		LoadItems();
-		LoadOriginalHeartSwordDamage();
-		load_on_start = false;
-	}
-
-	ResetStaticFields(true);
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_SETUP_MAIN_SCREEN));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
+	heart_sword_equipped = (ctx.GetItemId() == heart_sword_item_id);
 }
 
-void CreateObjectCallback(AurieStatus& status)
+void OnBeforeDamage(MMAPI::Damage::BeforeDamageContext& ctx)
 {
-	status = g_ModuleInterface->CreateCallback(
-		g_ArSelfModule,
-		EVENT_OBJECT_CALL,
-		ObjectCallback,
-		0
-	);
+	// Vanquish Enemy: with the heart sword equipped and enough set pieces, every non-Ari hit that
+	// would deal damage becomes a one-shot critical.
+	if (!heart_sword_equipped) return;
+	if (TotalSetPieces() < config.vanquish_enemy_requirement) return;
 
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook (EVENT_OBJECT_CALL)!", MOD_NAME, VERSION);
-	}
+	if (ctx.IsTargetAri()) return;  // Don't one-shot Ari herself.
+	if (ctx.IsMiss())      return;  // Don't crit a guaranteed miss.
+
+	ctx.SetCritical(true);
+	ctx.SetAmount(9999.0);
 }
 
-void CreateHookGmlScriptHeldItem(AurieStatus& status)
+void OnBeforePlayConversation(MMAPI::Text::PlayConversationContext& ctx)
 {
-	CScript* gml_script_held_item = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_HELD_ITEM,
-		(PVOID*)&gml_script_held_item
-	);
+	if (!game_is_active) return;
+	if (!modify_juniper_conversation) return;
 
-	if (!AurieSuccess(status))
+	std::string_view key = ctx.GetKey();
+	if (key.find("gift_lines") != std::string_view::npos
+	    && key.find("Conversations/Bank/Juniper") != std::string_view::npos)
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_HELD_ITEM);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_HELD_ITEM,
-		gml_script_held_item->m_Functions->m_ScriptFunction,
-		GmlScriptHeldItemCallback,
-		nullptr
-	);
-
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_HELD_ITEM);
+		modify_juniper_conversation = false;
+		ctx.SetKey(JUNIPER_EASTER_EGG_CONVERSATION_KEY);
 	}
 }
 
-void CreateHookGmlScriptDamage(AurieStatus& status)
+void OnBeforeReceiveGift(CInstance* npc, int item_id)
 {
-	CScript* gml_script_damage = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_DAMAGE,
-		(PVOID*)&gml_script_damage
-	);
+	if (!npc || !npc->m_Object || !npc->m_Object->m_Name) return;
+	if (std::string_view(npc->m_Object->m_Name) != "obj_juniper") return;
+	if (item_id != mana_potion_item_id) return;
 
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_DAMAGE);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_DAMAGE,
-		gml_script_damage->m_Functions->m_ScriptFunction,
-		GmlScriptDamageCallback,
-		nullptr
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_DAMAGE);
-	}
+	if (TotalSetPieces() >= config.easter_egg_requirement)
+		modify_juniper_conversation = true;
 }
 
-void CreateHookGmlScriptPlayConversation(AurieStatus& status)
+void OnBeforeManaChange(MMAPI::Player::BeforeManaChangeContext& ctx)
 {
-	CScript* gml_script_play_conversation = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_PLAY_CONVERSATION,
-		(PVOID*)&gml_script_play_conversation
-	);
+	// On the first mana change of a new day, grant +1 bonus mana if enough set pieces are worn.
+	if (!is_new_day) return;
+	is_new_day = false;
 
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_PLAY_CONVERSATION);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_PLAY_CONVERSATION,
-		gml_script_play_conversation->m_Functions->m_ScriptFunction,
-		GmlScriptPlayConversationCallback,
-		nullptr
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_PLAY_CONVERSATION);
-	}
+	if (TotalSetPieces() >= config.bonus_daily_mana_requirement)
+		ctx.SetAmount(ctx.GetAmount() + 1);
 }
 
-void CreateHookGmlScriptNpcReceiveGift(AurieStatus& status)
+void OnAriTick(CInstance* self)
 {
-	CScript* gml_script_npc_receive_gift = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_NPC_RECEIVE_GIFT,
-		(PVOID*)&gml_script_npc_receive_gift
-	);
+	if (!game_is_active) return;
 
-	if (!AurieSuccess(status))
+	// Scale the heart sword's damage by Ari's current mana (regardless of whether it's equipped —
+	// the change applies to the item template so an unequip → equip cycle reflects current mana).
+	YYTK::RValue mana_rv = MMAPI::Player::GetMana();
+	int current_mana = MMAPI::Engine::IsNumeric(mana_rv) ? static_cast<int>(mana_rv.ToInt64()) : 0;
+	MMAPI::Item::SetDamage(heart_sword_item_id, static_cast<double>(original_heart_sword_damage + current_mana));
+
+	// Update equipped-set-piece counts.
+	auto [core, additional] = CountEquippedSetPieces();
+	core_set_pieces_equipped = core;
+	additional_set_pieces_equipped = additional;
+
+	// Spell cost reduction: -1 per core set piece, capped at -2.
+	ApplySpellCostReduction((std::min)(2, core_set_pieces_equipped));
+
+	// Health Recovery: consume any pending heal queued from a monster death.
+	if (ari_health_recovery_pending > 0)
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_NPC_RECEIVE_GIFT);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_NPC_RECEIVE_GIFT,
-		gml_script_npc_receive_gift->m_Functions->m_ScriptFunction,
-		GmlScriptNpcReceiveGiftCallback,
-		nullptr
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_NPC_RECEIVE_GIFT);
+		MMAPI::Player::ModifyHealth(ari_health_recovery_pending);
+		ari_health_recovery_pending = 0;
 	}
 }
 
-void CreateHookGmlScriptModifyMana(AurieStatus& status)
+void OnMonsterTick(CInstance* self)
 {
-	CScript* gml_script_modify_mana = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_MODIFY_MANA,
-		(PVOID*)&gml_script_modify_mana
-	);
+	// Both Vanquish Enemy and Health Recovery only apply when wielding the heart sword.
+	if (!heart_sword_equipped) return;
 
-	if (!AurieSuccess(status))
+	YYTK::RValue self_rv = self->ToRValue();
+	if (!MMAPI::Engine::StructVariableExists(self_rv, "hit_points")) return;
+	YYTK::RValue hp = self_rv.GetMember("hit_points");
+	if (!MMAPI::Engine::IsNumeric(hp)) return;
+
+	int total = TotalSetPieces();
+
+	// Vanquish Enemy: if HP has dropped from its original value (i.e. we hit it once), zero it out.
+	// Caches the first-observed HP on the monster struct so we know when it's been damaged.
+	if (total >= config.vanquish_enemy_requirement
+	    && MMAPI::Engine::StructVariableExists(self_rv, "config"))
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_MODIFY_MANA);
+		if (!MMAPI::Engine::StructVariableExists(self_rv, "__magical_girl_ari__vanquish_hit_points"))
+			MMAPI::Engine::StructVariableSet(self_rv, "__magical_girl_ari__vanquish_hit_points", hp);
+
+		YYTK::RValue original_hp = self_rv.GetMember("__magical_girl_ari__vanquish_hit_points");
+		if (MMAPI::Engine::IsNumeric(original_hp) && hp.ToDouble() != original_hp.ToDouble())
+			*self_rv.GetRefMember("hit_points") = 0.0;
 	}
 
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_MODIFY_MANA,
-		gml_script_modify_mana->m_Functions->m_ScriptFunction,
-		GmlScriptModifyManaCallback,
-		nullptr
-	);
-
-	if (!AurieSuccess(status))
+	// Health Recovery: queue +10 HP on the next obj_ari tick the first time we see this monster at hp<=0.
+	if (total >= config.health_recovery_requirement
+	    && !MMAPI::Engine::StructVariableExists(self_rv, "__magical_girl_ari__processed_monster_death")
+	    && hp.ToDouble() <= 0)
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_MODIFY_MANA);
-	}
-}
-
-void CreateHookGmlScriptGetWeather(AurieStatus& status)
-{
-	CScript* gml_script_get_weather = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_GET_WEATHER,
-		(PVOID*)&gml_script_get_weather
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_WEATHER);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_GET_WEATHER,
-		gml_script_get_weather->m_Functions->m_ScriptFunction,
-		GmlScriptGetWeatherCallback,
-		nullptr
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_WEATHER);
+		MMAPI::Engine::StructVariableSet(self_rv, "__magical_girl_ari__processed_monster_death", true);
+		ari_health_recovery_pending += 10;
 	}
 }
 
-void CreateHookGmlScriptAriOnNewDay(AurieStatus& status)
-{
-	CScript* gml_script_ari_on_new_day = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_ARI_ON_NEW_DAY,
-		(PVOID*)&gml_script_ari_on_new_day
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ARI_ON_NEW_DAY);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_ARI_ON_NEW_DAY,
-		gml_script_ari_on_new_day->m_Functions->m_ScriptFunction,
-		GmlScriptAriOnNewDayCallback,
-		nullptr
-	);
-
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ARI_ON_NEW_DAY);
-	}
-}
-
-void CreateHookGmlScriptSetupMainScreen(AurieStatus& status)
-{
-	CScript* gml_script_setup_main_screen = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_SETUP_MAIN_SCREEN,
-		(PVOID*)&gml_script_setup_main_screen
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SETUP_MAIN_SCREEN);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_SETUP_MAIN_SCREEN,
-		gml_script_setup_main_screen->m_Functions->m_ScriptFunction,
-		GmlScriptSetupMainScreenCallback,
-		nullptr
-	);
-
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SETUP_MAIN_SCREEN);
-	}
-}
-
-EXPORTED AurieStatus ModuleInitialize(
-	IN AurieModule* Module,
-	IN const fs::path& ModulePath
-)
+EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path& ModulePath)
 {
 	UNREFERENCED_PARAMETER(ModulePath);
 
-	AurieStatus status = AURIE_SUCCESS;
-
-	status = ObGetInterface(
-		"YYTK_Main",
-		(AurieInterfaceBase*&)(g_ModuleInterface)
-	);
-
+	YYTKInterface* module_interface = nullptr;
+	AurieStatus status = ObGetInterface("YYTK_Main", (AurieInterfaceBase*&)(module_interface));
 	if (!AurieSuccess(status))
 		return AURIE_MODULE_DEPENDENCY_NOT_RESOLVED;
 
-	g_ModuleInterface->Print(CM_LIGHTAQUA, "[%s %s] - Plugin starting...", MOD_NAME, VERSION);
+	module_interface->Print(CM_LIGHTAQUA, "[%s %s] - Plugin starting...", MOD_NAME, VERSION);
 
-	CreateObjectCallback(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
+	CInstance* global_instance = nullptr;
+	module_interface->GetGlobalInstance(&global_instance);
+	MMAPI::Initialize(module_interface, global_instance, g_ArSelfModule, MOD_NAME, VERSION);
 
-	CreateHookGmlScriptHeldItem(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
+	MMAPI::Damage::Enable();
+	MMAPI::Item::Enable();
+	MMAPI::NPC::Enable();
+	MMAPI::Player::Enable();
+	MMAPI::Spell::Enable();
+	MMAPI::Text::Enable();
+	MMAPI::Game::Enable();
 
-	CreateHookGmlScriptDamage(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
+	MMAPI::Game::Hooks::BeforeSetupMainScreen(OnSetupMainScreen);
+	MMAPI::Game::Hooks::AfterGameActive(OnGameActive);
+	MMAPI::Game::Hooks::BeforeNewDay(OnBeforeNewDay);
+	MMAPI::Player::Hooks::AfterHeldItem(OnAfterHeldItem);
+	MMAPI::Player::Hooks::BeforeManaChange(OnBeforeManaChange);
+	MMAPI::Damage::Hooks::BeforeDamage(OnBeforeDamage);
+	MMAPI::Text::Hooks::BeforePlayConversation(OnBeforePlayConversation);
+	MMAPI::NPC::Hooks::BeforeReceiveGift(OnBeforeReceiveGift);
+	MMAPI::Instance::Hooks::OnObjectCall(MMAPI::Instance::Objects::Ari,     OnAriTick);
+	MMAPI::Instance::Hooks::OnObjectCall(MMAPI::Instance::Objects::Monster, OnMonsterTick);
 
-	CreateHookGmlScriptPlayConversation(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	CreateHookGmlScriptNpcReceiveGift(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	CreateHookGmlScriptModifyMana(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	CreateHookGmlScriptGetWeather(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	CreateHookGmlScriptAriOnNewDay(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	CreateHookGmlScriptSetupMainScreen(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Plugin started!", MOD_NAME, VERSION);
+	MMAPI::Log::Info("Plugin started!");
 	return AURIE_SUCCESS;
 }
