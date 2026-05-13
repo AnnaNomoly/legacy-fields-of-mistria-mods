@@ -613,6 +613,29 @@ namespace MMAPI::Player
 		return MMAPI::Player::Position{ x.ToDouble(), y.ToDouble() };
 	}
 
+	/// Sets Ari's room position by writing directly to the live obj_ari instance's `x` and `y`
+	/// built-in variables. Bypasses any game-side movement logic — use when teleporting Ari to
+	/// an arbitrary position after a room transition (the room's spawn logic typically clobbers
+	/// the position, so callers should sequence the write after the room has fully loaded).
+	/// @attention Requires MMAPI::Player::Enable() to have been called and at least one obj_ari
+	/// tick to have been observed (so MMAPI has latched the live instance).
+	/// @param x The new X coordinate.
+	/// @param y The new Y coordinate.
+	inline void SetPosition(double x, double y)
+	{
+		MMAPI_REQUIRE_ENABLED_VOID("Player");
+
+		const auto& refs = MMAPI::Internal::instance_reference_map;
+		auto it = refs.find(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI);
+		if (it == refs.end() || it->second.empty()) return;
+		YYTK::CInstance* obj_ari = it->second[0];
+
+		YYTK::RValue rx = x;
+		YYTK::RValue ry = y;
+		MMAPI::Internal::module_interface->SetBuiltin("x", obj_ari, NULL_INDEX, rx);
+		MMAPI::Internal::module_interface->SetBuiltin("y", obj_ari, NULL_INDEX, ry);
+	}
+
 	/// Returns Ari's current health.
 	/// @attention Requires MMAPI::Player::Enable() to have been called.
 	/// @return Ari's current health as an RValue, or undefined if the required context is unavailable.

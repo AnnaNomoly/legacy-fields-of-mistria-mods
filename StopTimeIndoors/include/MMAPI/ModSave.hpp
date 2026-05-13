@@ -83,4 +83,17 @@ namespace MMAPI::ModSave
 			MMAPI::Log::Error("Failed to write mod save data (%s): %s", path.string().c_str(), e.what());
 		}
 	}
+
+	/// Deletes the mod's per-save data file for the given save-slot prefix. No-op if the file
+	/// doesn't exist or `save_prefix` is empty. Useful for "consume on end-of-day" style state
+	/// that shouldn't carry over to the next play session.
+	/// @param save_prefix The stable per-save identifier.
+	inline void Delete(const std::string& save_prefix)
+	{
+		std::filesystem::path path = GetPath(save_prefix);
+		if (path.empty()) return;
+
+		std::error_code ec;
+		std::filesystem::remove(path, ec);
+	}
 }

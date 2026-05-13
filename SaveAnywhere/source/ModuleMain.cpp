@@ -1,1423 +1,458 @@
-#include <map>
-#include <fstream>
-#include <iostream>
-#include <filesystem>
-#include <nlohmann/json.hpp>
-#include <YYToolkit/YYTK_Shared.hpp> // YYTK v4
+#include <cstdint>
+#include <optional>
+#include <string>
+
+#include <YYToolkit/YYTK_Shared.hpp>
+#include <MMAPI/MMAPI.hpp>
+#include <MMAPI/Config.hpp>
+#include <MMAPI/ModSave.hpp>
+
 using namespace Aurie;
 using namespace YYTK;
-using json = nlohmann::json;
+
+namespace fs = std::filesystem;
+
+// ----- Mod metadata -----
 
 static const char* const MOD_NAME = "SaveAnywhere";
-static const char* const VERSION = "1.2.4";
-static const char* const ACTIVATION_BUTTON_KEY = "activation_button";
-static const char* const SAVE_LOCATION_KEY = "save_location";
+static const char* const VERSION  = "1.3.0";
+
+// ----- Config -----
+
+static const char* const CONFIG_KEY_ACTIVATION_BUTTON = "activation_button";
+static const std::string DEFAULT_ACTIVATION_BUTTON    = "HOME";
+
+static std::string activation_button = DEFAULT_ACTIVATION_BUTTON;
+static std::optional<MMAPI::Input::Keybind> keybind;
+
+// ----- Mod save JSON keys -----
+
+static const char* const SAVE_LOCATION_KEY   = "save_location";
 static const char* const SAVE_X_POSITION_KEY = "save_x_position";
 static const char* const SAVE_Y_POSITION_KEY = "save_y_position";
-static const char* const GML_SCRIPT_CREATE_NOTIFICATION = "gml_Script_create_notification";
+
+// ----- Localization keys -----
+
+static const std::string SAVING_DISABLED_NOTIFICATION    = "Notifications/Mods/SaveAnywhere/saving_disabled";
+static const std::string NEW_GAME_NOTIFICATION           = "Notifications/Mods/SaveAnywhere/new_game_warning";
+static const std::string DUNGEON_SAVE_NOTIFICATION       = "Notifications/Mods/SaveAnywhere/location/dungeon";
+static const std::string FARM_BUILDING_SAVE_NOTIFICATION = "Notifications/Mods/SaveAnywhere/location/farm_building";
+
+// ----- Cross-mod -----
+
+// Set by Deep Dungeon mod on its __YYTK sub-struct. When non-zero, the player is on a dungeon
+// floor and saving must be disabled (the save state isn't compatible with mid-run interruption).
+static const char* const DEEP_DUNGEON_MOD_NAME = "DeepDungeon";
+static const char* const DEEP_DUNGEON_FLOOR_KEY = "floor";
+
+// ----- GML scripts called directly -----
+
+// Transitions Ari to the given location id using the location's default spawn coordinates.
+// Distinct from Location::TeleportAri (which uses ari_teleport_to_room with custom x/y) — the
+// original SaveAnywhere uses goto_location_id and overrides x/y on a later tick, which appears
+// to be necessary because ari_teleport_to_room's x/y get clobbered by the destination room's
+// own spawn init. Inlining the call here preserves the original's exact teleport semantics.
+static const char* const GML_SCRIPT_GOTO_LOCATION_ID         = "gml_Script_goto_location_id";
+// The game's "Game Saved!" UI banner.
 static const char* const GML_SCRIPT_CREATE_SAVE_NOTIFICATION = "gml_Script_create_save_notification";
-static const char* const GML_SCRIPT_SAVE_GAME = "gml_Script_save_game";
-static const char* const GML_SCRIPT_LOAD_GAME = "gml_Script_load_game";
-static const char* const GML_SCRIPT_GET_WEATHER = "gml_Script_get_weather@WeatherManager@Weather";
-static const char* const GML_SCRIPT_SHOW_ROOM_TITLE = "gml_Script_show_room_title";
-static const char* const GML_SCRIPT_TRY_LOCATION_ID_TO_STRING = "gml_Script_try_location_id_to_string";
-static const char* const GML_SCRIPT_END_DAY = "gml_Script_end_day";
-static const char* const GML_SCRIPT_SETUP_MAIN_SCREEN = "gml_Script_setup_main_screen@TitleMenu@TitleMenu";
-static const char* const GML_SCRIPT_ON_DRAW_GUI = "gml_Script_on_draw_gui@Display@Display";
-static const std::string SAVING_DISABLED_NOTIFICATION_KEY = "Notifications/Mods/SaveAnywhere/saving_disabled";
-static const std::string NEW_GAME_NOTIFICATION_KEY = "Notifications/Mods/SaveAnywhere/new_game_warning";
-static const std::string DUNGEON_SAVE_NOTIFICATION_KEY = "Notifications/Mods/SaveAnywhere/location/dungeon";
-static const std::string FARM_BUILDING_SAVE_NOTIFICATION_KEY = "Notifications/Mods/SaveAnywhere/location/farm_building";
-static const std::string SMALL_BARN = "small_barn";
-static const std::string MEDIUM_BARN = "medium_barn";
-static const std::string LARGE_BARN = "large_barn";
-static const std::string SMALL_COOP = "small_coop";
-static const std::string MEDIUM_COOP = "medium_coop";
-static const std::string LARGE_COOP = "large_coop";
-static const std::string SMALL_GREENHOUSE = "small_greenhouse";
-static const std::string LARGE_GREENHOUSE = "large_greenhouse";
-static const std::string MINES_ENTRY = "mines_entry";
-static const std::string DUNGEON = "dungeon";
-static const std::string WATER_SEAL = "water_seal";
-static const std::string EARTH_SEAL = "earth_seal";
-static const std::string FIRE_SEAL = "fire_seal";
-static const std::string RUINS_SEAL = "ruins_seal";
-static const std::string VOID_SEAL = "void_seal";
-static const std::string PRIESTESS_QUARTERS = "priestess_quarters";
-static const std::string SERIDIAS_CHAMBER = "seridias_chamber";
-static const std::string FARM = "farm";
-static const double UNSET_INT = -1;
-static const std::string DEFAULT_ACTIVATION_BUTTON = "HOME";
-static const std::string ALLOWED_ACTIVATION_BUTTONS[] = {
-	"F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12",
-	"NUMPAD_0", "NUMPAD_1", "NUMPAD_2", "NUMPAD_3", "NUMPAD_4", "NUMPAD_5", "NUMPAD_6", "NUMPAD_7", "NUMPAD_8", "NUMPAD_9",
-	"0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
-	"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
-	"INSERT", "DELETE", "HOME", "PAGE_UP", "PAGE_DOWN", "NUM_LOCK", "SCROLL_LOCK", "CAPS_LOCK", "PAUSE_BREAK",
-	"GAMEPAD_A", "GAMEPAD_B", "GAMEPAD_X", "GAMEPAD_Y", "GAMEPAD_LEFT_SHOULDER", "GAMEPAD_RIGHT_SHOULDER", "GAMEPAD_LEFT_TRIGGER", "GAMEPAD_RIGHT_TRIGGER", "GAMEPAD_DPAD_UP", "GAMEPAD_DPAD_DOWN", "GAMEPAD_DPAD_LEFT", "GAMEPAD_DPAD_RIGHT", "GAMEPAD_LEFT_STICK", "GAMEPAD_RIGHT_STICK", "GAMEPAD_SELECT", "GAMEPAD_START"
-};
+// The game's save_game entry point — called directly so we can pass a custom autosave path
+// instead of waiting for the game to trigger save on its own schedule.
+static const char* const GML_SCRIPT_SAVE_GAME                = "gml_Script_save_game";
 
-static YYTKInterface* g_ModuleInterface = nullptr;
-static RValue __YYTK;
-static bool load_on_start = true;
-static bool game_is_active = false; // Used to indicate if the game is NOT on the title screen AND a file is being played. 
-static bool mod_healthy = false;
-static bool mod_save = false;
-static int ari_x = UNSET_INT;
-static int ari_y = UNSET_INT;
-static int ari_room_id = UNSET_INT;
-static int saved_x = UNSET_INT;
-static int saved_y = UNSET_INT;
-static std::string saved_room_name = "";
-static bool wait_to_teleport_ari = false;
-static bool ready_to_teleport_ari = false;
-static bool wait_to_reposition_ari = false;
-static bool ready_to_reposition_ari = false;
-static bool activation_button_is_controller_key = false;
-static int activation_button_int_value = -1;
-static bool processing_user_input = false;
-static std::string activation_button = DEFAULT_ACTIVATION_BUTTON;
+// ----- State -----
+
+static bool startup_loaded = false;
+// True between AfterGameActive and the next BeforeSetupMainScreen — gates the hotkey check.
+static bool game_is_active = false;
+// Stable per-save identifier extracted from the game's save_path. Populated from AfterLoadGame
+// (and topped up from BeforeSaveGame so a new game becomes save-able once the player saves at
+// the bed for the first time). Empty if the player is on a brand-new file with no save yet.
 static std::string save_prefix = "";
+// Directory part of the save_path. Captured the same way and used to compose our custom
+// autosave path so we save into the same directory as the game's normal saves.
 static std::string save_folder = "";
-static std::string mod_folder = "";
-static std::map<int, std::string> location_id_to_name_map = {};
-static std::map<std::string, int> location_name_to_id_map = {};
+// Latched true around our own SaveGameToDisk call so the BeforeSaveGame observer can tell
+// "mod-initiated save" apart from "game-initiated save" and skip re-parsing the prefix from
+// our own custom path. Defensive — in practice the mod path parses to the same prefix, but
+// the original mod deliberately only trusts game-initiated saves to set the canonical value.
+static bool mod_initiated_save = false;
 
-void PrintError(std::exception_ptr eptr)
+// Teleport state machine: after AfterLoadGame reads the mod save file, we sequence
+//   wait_to_teleport → AfterShowRoomTitle → ready_to_teleport → obj_ari tick → goto_location_id
+//   → wait_to_reposition → AfterShowRoomTitle → ready_to_reposition → obj_ari tick → SetPosition
+// The two-stage dance is needed because setting x/y before the destination room loads gets
+// clobbered by the destination's own spawn-init.
+static bool wait_to_teleport    = false;
+static bool ready_to_teleport   = false;
+static bool wait_to_reposition  = false;
+static bool ready_to_reposition = false;
+static std::optional<MMAPI::Location::Ids> saved_location;
+static double saved_x = 0.0;
+static double saved_y = 0.0;
+
+// Locations that map to "you're in a dungeon — save under the fallback location instead".
+static bool IsDungeonLikeLocation(MMAPI::Location::Ids loc)
 {
-	try {
-		if (eptr) {
-			std::rethrow_exception(eptr);
-		}
-	}
-	catch (const std::exception& e) {
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Error: %s", MOD_NAME, VERSION, e.what());
-	}
+	return loc == MMAPI::Location::Ids::Dungeon
+	    || loc == MMAPI::Location::Ids::WaterSeal
+	    || loc == MMAPI::Location::Ids::EarthSeal
+	    || loc == MMAPI::Location::Ids::FireSeal
+	    || loc == MMAPI::Location::Ids::RuinsSeal
+	    || loc == MMAPI::Location::Ids::VoidSeal
+	    || loc == MMAPI::Location::Ids::PriestessQuarters
+	    || loc == MMAPI::Location::Ids::SeridiasChamber;
 }
 
-int RValueAsInt(RValue value)
+// Locations that map to "you're inside a farm building — save under the farm fallback instead".
+static bool IsFarmBuilding(MMAPI::Location::Ids loc)
 {
-	if (value.m_Kind == VALUE_REAL)
-		return static_cast<int>(value.m_Real);
-	if (value.m_Kind == VALUE_INT64)
-		return static_cast<int>(value.m_i64);
-	if (value.m_Kind == VALUE_INT32)
-		return static_cast<int>(value.m_i32);
+	return loc == MMAPI::Location::Ids::SmallBarn
+	    || loc == MMAPI::Location::Ids::MediumBarn
+	    || loc == MMAPI::Location::Ids::LargeBarn
+	    || loc == MMAPI::Location::Ids::SmallCoop
+	    || loc == MMAPI::Location::Ids::MediumCoop
+	    || loc == MMAPI::Location::Ids::LargeCoop
+	    || loc == MMAPI::Location::Ids::SmallGreenhouse
+	    || loc == MMAPI::Location::Ids::LargeGreenhouse;
 }
 
-bool RValueAsBool(RValue value)
+// ----- Config -----
+
+static void LoadConfig()
 {
-	if (value.m_Kind == VALUE_REAL && value.m_Real == 1)
-		return true;
-	if (value.m_Kind == VALUE_BOOL && value.m_Real == 1)
-		return true;
-	return false;
-}
+	fs::path config_path = MMAPI::Config::GetConfigPath(MOD_NAME);
+	nlohmann::json config = MMAPI::Config::Load(config_path);
 
-bool IsNumeric(RValue value)
-{
-	return value.m_Kind == VALUE_INT32 || value.m_Kind == VALUE_INT64 || value.m_Kind == VALUE_REAL;
-}
+	activation_button = MMAPI::Config::GetValue<std::string>(config, CONFIG_KEY_ACTIVATION_BUTTON, DEFAULT_ACTIVATION_BUTTON);
 
-bool StructVariableExists(RValue the_struct, const char* variable_name)
-{
-	RValue struct_exists = g_ModuleInterface->CallBuiltin(
-		"struct_exists",
-		{ the_struct, variable_name }
-	);
-
-	return struct_exists.ToBoolean();
-}
-
-bool GlobalVariableExists(const char* variable_name)
-{
-	RValue global_variable_exists = g_ModuleInterface->CallBuiltin(
-		"variable_global_exists",
-		{ variable_name }
-	);
-
-	return global_variable_exists.ToBoolean();
-}
-
-RValue GlobalVariableGet(const char* variable_name)
-{
-	return g_ModuleInterface->CallBuiltin(
-		"variable_global_get",
-		{ variable_name }
-	);
-}
-
-RValue GlobalVariableSet(const char* variable_name, RValue value)
-{
-	return g_ModuleInterface->CallBuiltin(
-		"variable_global_set",
-		{ variable_name, value }
-	);
-}
-
-void CreateOrGetGlobalYYTKVariable()
-{
-	if (!GlobalVariableExists("__YYTK"))
+	keybind = MMAPI::Input::TryParseKeybind(activation_button);
+	if (!keybind)
 	{
-		g_ModuleInterface->GetRunnerInterface().StructCreate(&__YYTK);
-		GlobalVariableSet("__YYTK", __YYTK);
+		MMAPI::Log::Warn("Invalid %s value (%s) — falling back to default %s",
+			CONFIG_KEY_ACTIVATION_BUTTON, activation_button.c_str(), DEFAULT_ACTIVATION_BUTTON.c_str());
+		activation_button = DEFAULT_ACTIVATION_BUTTON;
+		keybind = MMAPI::Input::TryParseKeybind(activation_button);
 	}
-	else
-		__YYTK = GlobalVariableGet("__YYTK");
+
+	nlohmann::json roundtrip;
+	roundtrip[CONFIG_KEY_ACTIVATION_BUTTON] = activation_button;
+	MMAPI::Config::Save(config_path, roundtrip);
+
+	MMAPI::Log::Info("Config: %s=%s", CONFIG_KEY_ACTIVATION_BUTTON, activation_button.c_str());
 }
 
-bool GameWindowHasFocus()
+// ----- Save / load -----
+
+// Returns true if Deep Dungeon is in a non-zero floor — i.e., saving should be disabled.
+static bool DeepDungeonInProgress()
 {
-	RValue window_has_focus = g_ModuleInterface->CallBuiltin("window_has_focus", {});
-	return RValueAsBool(window_has_focus);
+	YYTK::RValue dd = MMAPI::CrossMod::TryGetModStruct(DEEP_DUNGEON_MOD_NAME);
+	if (dd.m_Kind != YYTK::VALUE_OBJECT) return false;
+	if (!MMAPI::Engine::StructVariableExists(dd, DEEP_DUNGEON_FLOOR_KEY)) return false;
+
+	YYTK::RValue floor = dd.GetMember(DEEP_DUNGEON_FLOOR_KEY);
+	if (!MMAPI::Engine::IsNumeric(floor)) return false;
+
+	return floor.ToInt64() != 0;
 }
 
-int ActivationButtonToVirtualKey()
+// Writes the mod's per-save file recording the location + (x, y) Ari should restore to on load.
+// Dungeon and farm-building locations get rewritten to fallback positions (mines_entry / farm)
+// to avoid loading into a procedural or building-interior room where Ari can't safely spawn.
+static void WriteModSaveFile()
 {
-	// Function Keys
-	if (activation_button == "F1")
-		return VK_F1;
-	if (activation_button == "F2")
-		return VK_F2;
-	if (activation_button == "F3")
-		return VK_F3;
-	if (activation_button == "F4")
-		return VK_F4;
-	if (activation_button == "F5")
-		return VK_F5;
-	if (activation_button == "F6")
-		return VK_F6;
-	if (activation_button == "F7")
-		return VK_F7;
-	if (activation_button == "F8")
-		return VK_F8;
-	if (activation_button == "F9")
-		return VK_F9;
-	if (activation_button == "F10")
-		return VK_F10;
-	if (activation_button == "F11")
-		return VK_F11;
-	if (activation_button == "F12")
-		return VK_F12;
-
-	// Numpad
-	if (activation_button == "NUMPAD_0")
-		return VK_NUMPAD0;
-	if (activation_button == "NUMPAD_1")
-		return VK_NUMPAD1;
-	if (activation_button == "NUMPAD_2")
-		return VK_NUMPAD2;
-	if (activation_button == "NUMPAD_3")
-		return VK_NUMPAD3;
-	if (activation_button == "NUMPAD_4")
-		return VK_NUMPAD4;
-	if (activation_button == "NUMPAD_5")
-		return VK_NUMPAD5;
-	if (activation_button == "NUMPAD_6")
-		return VK_NUMPAD6;
-	if (activation_button == "NUMPAD_7")
-		return VK_NUMPAD7;
-	if (activation_button == "NUMPAD_8")
-		return VK_NUMPAD8;
-	if (activation_button == "NUMPAD_9")
-		return VK_NUMPAD9;
-
-	// Numbers
-	if (activation_button == "0")
-		return '0';
-	if (activation_button == "1")
-		return '1';
-	if (activation_button == "2")
-		return '2';
-	if (activation_button == "3")
-		return '3';
-	if (activation_button == "4")
-		return '4';
-	if (activation_button == "5")
-		return '5';
-	if (activation_button == "6")
-		return '6';
-	if (activation_button == "7")
-		return '7';
-	if (activation_button == "8")
-		return '8';
-	if (activation_button == "9")
-		return '9';
-
-	// Letters
-	if (activation_button == "A")
-		return 'A';
-	if (activation_button == "B")
-		return 'B';
-	if (activation_button == "C")
-		return 'C';
-	if (activation_button == "D")
-		return 'D';
-	if (activation_button == "E")
-		return 'E';
-	if (activation_button == "F")
-		return 'F';
-	if (activation_button == "G")
-		return 'G';
-	if (activation_button == "H")
-		return 'H';
-	if (activation_button == "I")
-		return 'I';
-	if (activation_button == "J")
-		return 'J';
-	if (activation_button == "K")
-		return 'K';
-	if (activation_button == "L")
-		return 'L';
-	if (activation_button == "M")
-		return 'M';
-	if (activation_button == "N")
-		return 'N';
-	if (activation_button == "O")
-		return 'O';
-	if (activation_button == "P")
-		return 'P';
-	if (activation_button == "Q")
-		return 'Q';
-	if (activation_button == "R")
-		return 'R';
-	if (activation_button == "S")
-		return 'S';
-	if (activation_button == "T")
-		return 'T';
-	if (activation_button == "U")
-		return 'U';
-	if (activation_button == "V")
-		return 'V';
-	if (activation_button == "W")
-		return 'W';
-	if (activation_button == "X")
-		return 'X';
-	if (activation_button == "Y")
-		return 'Y';
-	if (activation_button == "Z")
-		return 'Z';
-
-	// Special
-	if (activation_button == "INSERT")
-		return VK_INSERT;
-	if (activation_button == "DELETE")
-		return VK_DELETE;
-	if (activation_button == "HOME")
-		return VK_HOME;
-	if (activation_button == "PAGE_UP")
-		return VK_PRIOR;
-	if (activation_button == "PAGE_DOWN")
-		return VK_NEXT;
-	if (activation_button == "NUM_LOCK")
-		return VK_NUMLOCK;
-	if (activation_button == "SCROLL_LOCK")
-		return VK_SCROLL;
-	if (activation_button == "CAPS_LOCK")
-		return VK_CAPITAL;
-	if (activation_button == "PAUSE_BREAK")
-		return VK_PAUSE;
-}
-
-int ActivationButtonToControllerKey()
-{
-	if (activation_button == "GAMEPAD_A")
-		return 0x8001;
-	if (activation_button == "GAMEPAD_B")
-		return 0x8002;
-	if (activation_button == "GAMEPAD_X")
-		return 0x8003;
-	if (activation_button == "GAMEPAD_Y")
-		return 0x8004;
-	if (activation_button == "GAMEPAD_LEFT_SHOULDER")
-		return 0x8005;
-	if (activation_button == "GAMEPAD_RIGHT_SHOULDER")
-		return 0x8006;
-	if (activation_button == "GAMEPAD_LEFT_TRIGGER")
-		return 0x8007;
-	if (activation_button == "GAMEPAD_RIGHT_TRIGGER")
-		return 0x8008;
-	if (activation_button == "GAMEPAD_SELECT")
-		return 0x8009;
-	if (activation_button == "GAMEPAD_START")
-		return 0x800A;
-	if (activation_button == "GAMEPAD_LEFT_STICK")
-		return 0x800B;
-	if (activation_button == "GAMEPAD_RIGHT_STICK")
-		return 0x800C;
-	if (activation_button == "GAMEPAD_DPAD_UP")
-		return 0x800D;
-	if (activation_button == "GAMEPAD_DPAD_DOWN")
-		return 0x800E;
-	if (activation_button == "GAMEPAD_DPAD_LEFT")
-		return 0x800F;
-	if (activation_button == "GAMEPAD_DPAD_RIGHT")
-		return 0x8010;
-	return -1;
-}
-
-int GetGamepadSlotNumber()
-{
-	for (int i = 0; i < 12; i++)
+	if (save_prefix.empty())
 	{
-		RValue gamepad_is_connected = g_ModuleInterface->CallBuiltin("gamepad_is_connected", { i });
-		if (gamepad_is_connected.ToBoolean())
-		{
-			return i;
-		}
-	}
-
-	return -1;
-}
-
-bool CheckControllerInput()
-{
-	int gamepad_slot = GetGamepadSlotNumber();
-	if (gamepad_slot != -1)
-	{
-		RValue button_pressed = g_ModuleInterface->CallBuiltin("gamepad_button_check_pressed", { gamepad_slot, activation_button_int_value });
-		return button_pressed.ToBoolean();
-	}
-
-	return false;
-}
-
-bool CheckVirtualKeyInput()
-{
-	RValue key_pressed = g_ModuleInterface->CallBuiltin("keyboard_check_pressed", { activation_button_int_value });
-	if (RValueAsBool(key_pressed))
-	{
-		processing_user_input = true;
-		return true;
-	}
-	return false;
-}
-
-void ConfigureActivationButton()
-{
-	if (activation_button.find("GAMEPAD") != std::string::npos)
-	{
-		activation_button_is_controller_key = true;
-		activation_button_int_value = ActivationButtonToControllerKey();
-	}
-	else
-	{
-		activation_button_is_controller_key = false;
-		activation_button_int_value = ActivationButtonToVirtualKey();
-	}
-}
-
-void LogDefaultConfigValues()
-{
-	activation_button = DEFAULT_ACTIVATION_BUTTON;
-
-	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, ACTIVATION_BUTTON_KEY, DEFAULT_ACTIVATION_BUTTON);
-}
-
-void CreateOrLoadConfigFile()
-{
-	// Load config file.
-	std::exception_ptr eptr;
-	try
-	{
-		// Try to find the mod_data directory.
-		std::string current_dir = std::filesystem::current_path().string();
-		std::string mod_data_folder = current_dir + "\\mod_data";
-		if (!std::filesystem::exists(mod_data_folder))
-		{
-			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - The \"mod_data\" directory was not found. Creating directory: %s", MOD_NAME, VERSION, mod_data_folder.c_str());
-			std::filesystem::create_directory(mod_data_folder);
-		}
-
-		// Try to find the mod_data/SaveAnywhere directory.
-		std::string save_anywhere_folder = mod_data_folder + "\\SaveAnywhere";
-		if (!std::filesystem::exists(save_anywhere_folder))
-		{
-			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - The \"SaveAnywhere\" directory was not found. Creating directory: %s", MOD_NAME, VERSION, save_anywhere_folder.c_str());
-			std::filesystem::create_directory(save_anywhere_folder);
-		}
-
-		// Try to find the mod_data/SaveAnywhere/SaveAnywhere.json config file.
-		std::string config_file = save_anywhere_folder + "\\" + "SaveAnywhere.json";
-		std::ifstream in_stream(config_file);
-		if (in_stream.good())
-		{
-			try
-			{
-				json json_object = json::parse(in_stream);
-
-				// Check if the json_object is empty.
-				if (json_object.empty())
-				{
-					g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - No values found in mod configuration file: %s!", MOD_NAME, VERSION, config_file.c_str());
-					g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Add your desired values to the configuration file, otherwise defaults will be used.", MOD_NAME, VERSION);
-					LogDefaultConfigValues();
-				}
-				else
-				{
-					// Try loading the activation_button value.
-					if (json_object.contains(ACTIVATION_BUTTON_KEY))
-					{
-						activation_button = json_object[ACTIVATION_BUTTON_KEY];
-						auto allowed_button = std::find(std::begin(ALLOWED_ACTIVATION_BUTTONS), std::end(ALLOWED_ACTIVATION_BUTTONS), activation_button);
-						if (allowed_button == std::end(ALLOWED_ACTIVATION_BUTTONS))
-						{
-							g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Invalid \"%s\" value (%s) in mod configuration file: %s", MOD_NAME, VERSION, ACTIVATION_BUTTON_KEY, activation_button, config_file.c_str());
-							g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Make sure the value is one of the supported keys!", MOD_NAME, VERSION);
-							g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, ACTIVATION_BUTTON_KEY, DEFAULT_ACTIVATION_BUTTON.c_str());
-							activation_button = DEFAULT_ACTIVATION_BUTTON;
-						}
-						else
-						{
-							g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using CUSTOM \"%s\" value: %s!", MOD_NAME, VERSION, ACTIVATION_BUTTON_KEY, activation_button.c_str());
-						}
-					}
-					else
-					{
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, ACTIVATION_BUTTON_KEY, config_file.c_str());
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, ACTIVATION_BUTTON_KEY, DEFAULT_ACTIVATION_BUTTON.c_str());
-					}
-				}
-			}
-			catch (...)
-			{
-				eptr = std::current_exception();
-				PrintError(eptr);
-
-				g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to parse JSON from configuration file: %s", MOD_NAME, VERSION, config_file.c_str());
-				g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Make sure the file is valid JSON!", MOD_NAME, VERSION);
-				LogDefaultConfigValues();
-			}
-
-			in_stream.close();
-		}
-		else
-		{
-			in_stream.close();
-
-			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - The \"SaveAnywhere.json\" file was not found. Creating file: %s", MOD_NAME, VERSION, config_file.c_str());
-			json default_json = {
-				{ACTIVATION_BUTTON_KEY, DEFAULT_ACTIVATION_BUTTON}
-			};
-
-			std::ofstream out_stream(config_file);
-			out_stream << std::setw(4) << default_json << std::endl;
-			out_stream.close();
-
-			LogDefaultConfigValues();
-		}
-
-		mod_folder = save_anywhere_folder;
-		mod_healthy = true;
-	}
-	catch (...)
-	{
-		eptr = std::current_exception();
-		PrintError(eptr);
-
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - An error occurred loading the mod configuration file.", MOD_NAME, VERSION);
-		mod_healthy = false;
-	}
-}
-
-void CreateNotification(CInstance* Self, CInstance* Other, std::string notification_localization_str)
-{
-	CScript* gml_script_create_notification = nullptr;
-	g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_CREATE_NOTIFICATION,
-		(PVOID*)&gml_script_create_notification
-	);
-
-	RValue result;
-	RValue notification = RValue(notification_localization_str);
-	RValue* notification_ptr = &notification;
-	gml_script_create_notification->m_Functions->m_ScriptFunction(
-		Self,
-		Other,
-		result,
-		1,
-		{ &notification_ptr }
-	);
-}
-
-void WriteModSaveFile(CInstance* Self, CInstance* Other)
-{
-	// Write the custom mod data file.
-	if (save_prefix.length() != 0 && mod_folder.length() != 0 && location_id_to_name_map.count(ari_room_id) > 0)
-	{
-		json mod_save_data = {};
-
-		// Override dungeon locations.
-		if (location_id_to_name_map[ari_room_id] == DUNGEON ||
-			location_id_to_name_map[ari_room_id] == WATER_SEAL ||
-			location_id_to_name_map[ari_room_id] == EARTH_SEAL ||
-			location_id_to_name_map[ari_room_id] == FIRE_SEAL ||
-			location_id_to_name_map[ari_room_id] == RUINS_SEAL ||
-			location_id_to_name_map[ari_room_id] == VOID_SEAL ||
-			location_id_to_name_map[ari_room_id] == PRIESTESS_QUARTERS ||
-			location_id_to_name_map[ari_room_id] == SERIDIAS_CHAMBER)
-		{
-			mod_save_data[SAVE_LOCATION_KEY] = MINES_ENTRY;
-			mod_save_data[SAVE_X_POSITION_KEY] = 216;
-			mod_save_data[SAVE_Y_POSITION_KEY] = 198;
-
-			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - You are currently in the dungeon! Your location will be saved as \"mines_entry\" to avoid errors.", MOD_NAME, VERSION);
-			g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Saving your game at the fallback location: \"mines_entry\".", MOD_NAME, VERSION);
-			CreateNotification(Self, Other, DUNGEON_SAVE_NOTIFICATION_KEY);
-		}
-		// Farm building locations.
-		else if (location_id_to_name_map[ari_room_id] == SMALL_BARN ||
-			location_id_to_name_map[ari_room_id] == MEDIUM_BARN ||
-			location_id_to_name_map[ari_room_id] == LARGE_BARN ||
-			location_id_to_name_map[ari_room_id] == SMALL_COOP ||
-			location_id_to_name_map[ari_room_id] == MEDIUM_COOP ||
-			location_id_to_name_map[ari_room_id] == LARGE_COOP ||
-			location_id_to_name_map[ari_room_id] == SMALL_GREENHOUSE ||
-			location_id_to_name_map[ari_room_id] == LARGE_GREENHOUSE)
-		{
-			mod_save_data[SAVE_LOCATION_KEY] = FARM;
-			mod_save_data[SAVE_X_POSITION_KEY] = 1032;
-			mod_save_data[SAVE_Y_POSITION_KEY] = 87;
-
-			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - You are currently in a farm building! Your location will be saved as \"farm\" to avoid errors.", MOD_NAME, VERSION);
-			g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Saving your game at the fallback location: \"farm\".", MOD_NAME, VERSION);
-			CreateNotification(Self, Other, FARM_BUILDING_SAVE_NOTIFICATION_KEY);
-		}
-		else
-		{
-			mod_save_data[SAVE_LOCATION_KEY] = location_id_to_name_map[ari_room_id];
-			mod_save_data[SAVE_X_POSITION_KEY] = ari_x;
-			mod_save_data[SAVE_Y_POSITION_KEY] = ari_y;
-
-			g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Saving your game at your current location: \"%s\".", MOD_NAME, VERSION, location_id_to_name_map[ari_room_id].c_str());
-		}
-
-		std::exception_ptr eptr;
-		try
-		{
-			std::ofstream out_stream(mod_folder + "\\" + save_prefix + ".json");
-			out_stream << std::setw(4) << mod_save_data << std::endl;
-			out_stream.close();
-			g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Successfully saved the mod file!", MOD_NAME, VERSION);
-		}
-		catch (...)
-		{
-			g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to write the mod file! Your game was saved but the custom location was NOT. You will load in the Farmhouse.", MOD_NAME, VERSION);
-
-			eptr = std::current_exception();
-			PrintError(eptr);
-		}
-	}
-	else
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to write the mod file! Your game was saved but the custom location was NOT. You will load in the Farmhouse.", MOD_NAME, VERSION);
-	}
-}
-
-void ReadModSaveFile()
-{
-	std::exception_ptr eptr;
-	try
-	{
-		std::ifstream in_stream(mod_folder + "\\" + save_prefix + ".json");
-		if (in_stream.good())
-		{
-			json mod_save_data = json::parse(in_stream);
-			saved_room_name = mod_save_data[SAVE_LOCATION_KEY];
-			saved_x = mod_save_data[SAVE_X_POSITION_KEY];
-			saved_y = mod_save_data[SAVE_Y_POSITION_KEY];
-
-			wait_to_teleport_ari = true;
-			g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Successfully loaded your saved location: \"%s\".", MOD_NAME, VERSION, saved_room_name.c_str());
-		}
-	}
-	catch (...)
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - An error occurred reading the mod file.", MOD_NAME, VERSION);
-
-		eptr = std::current_exception();
-		PrintError(eptr);
-	}
-}
-
-void ResetStaticFields(bool returnedToTitleScreen)
-{
-	if (returnedToTitleScreen)
-	{
-		save_prefix = "";
-		game_is_active = false;
-	}
-
-	mod_save = false;
-	ari_x = UNSET_INT;
-	ari_y = UNSET_INT;
-	ari_room_id = UNSET_INT;
-	saved_x = UNSET_INT;
-	saved_y = UNSET_INT;
-	saved_room_name = "";
-	wait_to_teleport_ari = false;
-	ready_to_teleport_ari = false;
-	wait_to_reposition_ari = false;
-	ready_to_reposition_ari = false;
-}
-
-void SaveGame(CInstance* Self, CInstance* Other)
-{
-	mod_save = true;
-
-	CScript* gml_script_save_game = nullptr;
-	g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_SAVE_GAME,
-		(PVOID*)&gml_script_save_game
-	);
-
-	std::string file_name = save_folder + "\\" + "game-" + save_prefix + "-autosave.sav";
-	RValue result;
-	RValue argument = RValue(file_name);
-	RValue* argument_ptr = &argument;
-
-	gml_script_save_game->m_Functions->m_ScriptFunction(
-		Self,
-		Other,
-		result,
-		1,
-		{ &argument_ptr }
-	);
-}
-
-void DisplaySaveNotification(CInstance* Self, CInstance* Other)
-{
-	CScript* gml_script_save_game_notification = nullptr;
-	g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_CREATE_SAVE_NOTIFICATION,
-		(PVOID*)&gml_script_save_game_notification
-	);
-
-	RValue result;
-	gml_script_save_game_notification->m_Functions->m_ScriptFunction(
-		Self,
-		Other,
-		result,
-		0,
-		nullptr
-	);
-}
-
-bool LoadLocationIds()
-{
-	CInstance* global_instance = nullptr;
-	g_ModuleInterface->GetGlobalInstance(&global_instance);
-
-	// Load locations.
-	size_t array_length;
-	RValue location_ids = *global_instance->GetRefMember("__location_id__");
-	g_ModuleInterface->GetArraySize(location_ids, array_length);
-	for (size_t i = 0; i < array_length; i++)
-	{
-		RValue* array_element;
-		g_ModuleInterface->GetArrayEntry(location_ids, i, array_element);
-
-		location_id_to_name_map[i] = array_element->ToString();
-		location_name_to_id_map[array_element->ToString()] = i;
-	}
-
-	if (location_id_to_name_map.size() > 0 && location_name_to_id_map.size() > 0)
-	{
-		return true;
-	}
-	else {
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to load location IDs!", MOD_NAME, VERSION);
-		return false;
-	}
-}
-
-void ObjectCallback(
-	IN FWCodeEvent& CodeEvent
-)
-{
-	auto& [self, other, code, argc, argv] = CodeEvent.Arguments();
-
-	if (!self)
+		MMAPI::Log::Error("Cannot write mod save file: no save_prefix yet.");
 		return;
+	}
 
-	if (!self->m_Object)
+	MMAPI::Location::Ids loc;
+	if (!MMAPI::Location::TryGetCurrentLocation(loc))
+	{
+		MMAPI::Log::Error("Cannot write mod save file: current location unresolved.");
 		return;
-
-	if (!strstr(self->m_Object->m_Name, "obj_ari"))
-		return;
-
-	if (mod_healthy)
-	{
-		RValue x;
-		g_ModuleInterface->GetBuiltin("x", self, NULL_INDEX, x);
-		ari_x = x.m_Real;
-
-		RValue y;
-		g_ModuleInterface->GetBuiltin("y", self, NULL_INDEX, y);
-		ari_y = y.m_Real;
-
-		if (wait_to_teleport_ari && ready_to_teleport_ari)
-		{
-			CScript* gml_script_goto_location_id = nullptr;
-			g_ModuleInterface->GetNamedRoutinePointer(
-				"gml_Script_goto_location_id",
-				(PVOID*)&gml_script_goto_location_id
-			);
-
-			RValue result;
-			RValue location_id = location_name_to_id_map[saved_room_name];
-			RValue* location_id_ptr = &location_id;
-			gml_script_goto_location_id->m_Functions->m_ScriptFunction(
-				self,
-				other,
-				result,
-				1,
-				{ &location_id_ptr }
-			);
-
-			saved_room_name = "";
-			wait_to_teleport_ari = false;
-			ready_to_teleport_ari = false;
-			wait_to_reposition_ari = true;
-		}
-		else if (wait_to_reposition_ari && ready_to_reposition_ari) {
-			RValue x = saved_x;
-			RValue y = saved_y;
-
-			g_ModuleInterface->SetBuiltin("x", self, NULL_INDEX, x);
-			g_ModuleInterface->SetBuiltin("y", self, NULL_INDEX, y);
-
-			saved_x = UNSET_INT;
-			saved_y = UNSET_INT;
-			wait_to_reposition_ari = false;
-			ready_to_reposition_ari = false;
-		}
-	}
-}
-
-RValue& GmlScriptSaveGameCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	if (mod_healthy)
-	{
-		if (!mod_save)
-		{
-			// No save prefix has been detected. This should only happen when a new game is started.
-			if (save_prefix.size() == 0)
-			{
-				// Get the save folder and file name.
-				std::string save_file = Arguments[0]->ToString();
-				std::size_t save_file_name_delimiter_index = save_file.find_last_of("/");
-				std::string save_name = save_file.substr(save_file_name_delimiter_index + 1);
-				save_folder = save_file.substr(0, save_file_name_delimiter_index);
-
-				// Check it's a valid value.
-				if (save_name.find("undefined") == std::string::npos)
-				{
-					// Get the save prefix.
-					std::size_t first_hyphen_index = save_name.find_first_of("-") + 1;
-					std::size_t second_hyphen_index = save_name.find_last_of("-");
-					save_prefix = save_name.substr(first_hyphen_index, (second_hyphen_index - first_hyphen_index));
-				}
-			}
-		}
-		else
-		{
-			mod_save = false;
-		}
 	}
 
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_SAVE_GAME));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
+	nlohmann::json data;
 
-	return Result;
-}
-
-RValue& GmlScriptLoadGameCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	if (mod_healthy)
+	if (IsDungeonLikeLocation(loc))
 	{
-		// Get the save folder and file name.
-		std::string save_file = Arguments[0]->GetRefMember("save_path")->ToString();
-		std::size_t save_file_name_delimiter_index = save_file.find_last_of("/");
-		std::string save_name = save_file.substr(save_file_name_delimiter_index + 1);
-		save_folder = save_file.substr(0, save_file_name_delimiter_index);
-
-		// Get the save prefix.
-		std::size_t first_hyphen_index = save_name.find_first_of("-") + 1;
-		std::size_t second_hyphen_index = save_name.find_last_of("-");
-		save_prefix = save_name.substr(first_hyphen_index, (second_hyphen_index - first_hyphen_index));
-
-		if (save_name.find("autosave") != std::string::npos)
-		{
-			ReadModSaveFile();
-		}
+		data[SAVE_LOCATION_KEY]   = MMAPI::Location::LocationIdToString(MMAPI::Location::Ids::MinesEntry);
+		data[SAVE_X_POSITION_KEY] = 216;
+		data[SAVE_Y_POSITION_KEY] = 198;
+		MMAPI::Log::Info("In a dungeon — saving location as fallback (mines_entry).");
+		MMAPI::Game::CreateNotification(true, DUNGEON_SAVE_NOTIFICATION);
 	}
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_LOAD_GAME));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
-}
-
-RValue& GmlScriptGetWeatherCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	if (mod_healthy)
+	else if (IsFarmBuilding(loc))
 	{
-		game_is_active = true;
-	}
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_GET_WEATHER));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
-}
-
-RValue& GmlScriptShowRoomTitleCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	if (mod_healthy)
-	{
-		if (wait_to_reposition_ari) {
-			ready_to_reposition_ari = true;
-		}
-		if (wait_to_teleport_ari) {
-			ready_to_teleport_ari = true;
-		}
-	}
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_SHOW_ROOM_TITLE));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
-}
-
-RValue& GmlScriptTryLocationIdToStringCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	if (mod_healthy)
-	{
-		if(Arguments[0]->m_Kind == VALUE_REAL)
-			ari_room_id = Arguments[0]->m_Real;
-		if (Arguments[0]->m_Kind == VALUE_INT64)
-			ari_room_id = Arguments[0]->m_i64;
-	}
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_TRY_LOCATION_ID_TO_STRING));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
-}
-
-RValue& GmlScriptEndDayCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	if (mod_healthy)
-	{
-		// Remove the mod file for this save (if one exists).
-		std::string file_name = mod_folder + "\\" + save_prefix + ".json";
-		std::remove(file_name.c_str());
-
-		ResetStaticFields(false);
-	}
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_END_DAY));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
-}
-
-RValue& GmlScriptSetupMainScreenCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	if (load_on_start)
-	{
-		CreateOrLoadConfigFile();
-		ConfigureActivationButton();
-		CreateOrGetGlobalYYTKVariable();
-
-		mod_healthy = mod_healthy && LoadLocationIds();
-		if (!mod_healthy)
-		{
-			g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - The mod is not healthy and will not function!", MOD_NAME, VERSION);
-		}
-
-		load_on_start = false;
+		data[SAVE_LOCATION_KEY]   = MMAPI::Location::LocationIdToString(MMAPI::Location::Ids::Farm);
+		data[SAVE_X_POSITION_KEY] = 1032;
+		data[SAVE_Y_POSITION_KEY] = 87;
+		MMAPI::Log::Info("In a farm building — saving location as fallback (farm).");
+		MMAPI::Game::CreateNotification(true, FARM_BUILDING_SAVE_NOTIFICATION);
 	}
 	else
 	{
-		if (mod_healthy)
+		auto position = MMAPI::Player::GetPosition();
+		if (!position)
 		{
-			ResetStaticFields(true);
+			MMAPI::Log::Error("Cannot write mod save file: Ari's position unresolved.");
+			return;
 		}
+		data[SAVE_LOCATION_KEY]   = MMAPI::Location::LocationIdToString(loc);
+		data[SAVE_X_POSITION_KEY] = static_cast<int>(position->x);
+		data[SAVE_Y_POSITION_KEY] = static_cast<int>(position->y);
+		MMAPI::Log::Info("Saving at current location: %s",
+			MMAPI::Location::LocationIdToString(loc).c_str());
 	}
 
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_SETUP_MAIN_SCREEN));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
+	MMAPI::ModSave::Write(save_prefix, data);
 }
 
-RValue& GmlScriptOnDrawGuiCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
+// Calls the game's save_game script with a custom autosave path, reusing the save folder we
+// captured from the most recent natural save/load.
+static void SaveGameToDisk()
 {
-	if (mod_healthy)
-	{
-		if (GameWindowHasFocus() && !processing_user_input && game_is_active)
-		{
-			bool activate = false;
-			if (activation_button_is_controller_key && CheckControllerInput())
-				activate = true;
-			if (!activation_button_is_controller_key && CheckVirtualKeyInput())
-				activate = true;
+	YYTK::CScript* gml_script = nullptr;
+	MMAPI::Internal::module_interface->GetNamedRoutinePointer(GML_SCRIPT_SAVE_GAME, reinterpret_cast<PVOID*>(&gml_script));
+	if (!gml_script) return;
 
-			if (activate)
-			{
-				if (save_prefix.size() != 0)
-				{
-					// Check if the Deep Dungeon mod is being used.
-					boolean save_disabled = false;
-					if (StructVariableExists(__YYTK, "DeepDungeon"))
-					{
-						RValue deep_dungeon = __YYTK.GetMember("DeepDungeon");
-						if (StructVariableExists(deep_dungeon, "floor"))
-						{
-							RValue floor = deep_dungeon.GetMember("floor");
-							if (IsNumeric(floor))
-							{
-								int floor_number = floor.ToInt64();
-								if (floor_number != 0)
-								{
-									CreateNotification(Self, Other, SAVING_DISABLED_NOTIFICATION_KEY);
-									save_disabled = true;
-								}
-							}
-						}
-					}
+	YYTK::CInstance* Self  = nullptr;
+	YYTK::CInstance* Other = nullptr;
+	if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other)) return;
 
-					if (!save_disabled)
-					{
-						WriteModSaveFile(Self, Other);
-						SaveGame(Self, Other);
-						DisplaySaveNotification(Self, Other);
-					}
-				}
-				else
-				{
-					g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Game was NOT saved! An autosave file has not been created. If this is a new file you must save at the bed at least once.", MOD_NAME, VERSION);
-					CreateNotification(Self, Other, NEW_GAME_NOTIFICATION_KEY);
-				}
-			}
-
-			processing_user_input = false;
-		}
-	}
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_ON_DRAW_GUI));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
+	std::string file_name = save_folder + "\\game-" + save_prefix + "-autosave.sav";
+	YYTK::RValue arg = YYTK::RValue(file_name);
+	YYTK::RValue result;
+	YYTK::RValue* args[1] = { &arg };
+	gml_script->m_Functions->m_ScriptFunction(Self, Other, result, 1, args);
 }
 
-void CreateHookObject(AurieStatus& status)
+static void DisplaySaveNotification()
 {
-	status = g_ModuleInterface->CreateCallback(
-		g_ArSelfModule,
-		EVENT_OBJECT_CALL,
-		ObjectCallback,
-		0
-	);
+	YYTK::CScript* gml_script = nullptr;
+	MMAPI::Internal::module_interface->GetNamedRoutinePointer(GML_SCRIPT_CREATE_SAVE_NOTIFICATION, reinterpret_cast<PVOID*>(&gml_script));
+	if (!gml_script) return;
 
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook (ObjectCallback)!", MOD_NAME, VERSION);
-	}
+	YYTK::CInstance* Self  = nullptr;
+	YYTK::CInstance* Other = nullptr;
+	if (!MMAPI::Instance::Internal::TryGetAriContext(Self, Other)) return;
+
+	YYTK::RValue result;
+	gml_script->m_Functions->m_ScriptFunction(Self, Other, result, 0, nullptr);
 }
 
-void CreateHookGmlScriptSaveGame(AurieStatus& status)
+static void TriggerSave()
 {
-	CScript* gml_script_save_game = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_SAVE_GAME,
-		(PVOID*)&gml_script_save_game
-	);
-
-	if (!AurieSuccess(status))
+	if (save_prefix.empty())
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SAVE_GAME);
+		MMAPI::Log::Warn("Game was NOT saved! An autosave doesn't exist yet — save at the bed at least once first.");
+		MMAPI::Game::CreateNotification(true, NEW_GAME_NOTIFICATION);
+		return;
 	}
 
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_SAVE_GAME,
-		gml_script_save_game->m_Functions->m_ScriptFunction,
-		GmlScriptSaveGameCallback,
-		nullptr
-	);
-
-	if (!AurieSuccess(status))
+	if (DeepDungeonInProgress())
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SAVE_GAME);
+		MMAPI::Log::Info("Saving disabled while in a Deep Dungeon run.");
+		MMAPI::Game::CreateNotification(true, SAVING_DISABLED_NOTIFICATION);
+		return;
 	}
+
+	WriteModSaveFile();
+	mod_initiated_save = true;
+	SaveGameToDisk();
+	DisplaySaveNotification();
 }
 
-void CreateHookGmlScriptLoadGame(AurieStatus& status)
+// Reads the mod's per-save file and primes the teleport state machine for the post-load tick.
+static void ReadModSaveFile()
 {
-	CScript* gml_script_load_game = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_LOAD_GAME,
-		(PVOID*)&gml_script_load_game
-	);
+	if (save_prefix.empty()) return;
 
-	if (!AurieSuccess(status))
+	nlohmann::json data = MMAPI::ModSave::Read(save_prefix);
+	if (data.empty()) return;
+	if (!data.contains(SAVE_LOCATION_KEY) || !data[SAVE_LOCATION_KEY].is_string()) return;
+
+	std::string location_name = data[SAVE_LOCATION_KEY].get<std::string>();
+	auto loc = MMAPI::Location::TryFromInternalName(location_name);
+	if (!loc)
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_LOAD_GAME);
+		MMAPI::Log::Warn("Mod save file references unknown location: %s", location_name.c_str());
+		return;
 	}
 
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_LOAD_GAME,
-		gml_script_load_game->m_Functions->m_ScriptFunction,
-		GmlScriptLoadGameCallback,
-		nullptr
-	);
+	saved_location = *loc;
+	saved_x = MMAPI::Config::GetValue<int>(data, SAVE_X_POSITION_KEY, 0);
+	saved_y = MMAPI::Config::GetValue<int>(data, SAVE_Y_POSITION_KEY, 0);
+	wait_to_teleport = true;
 
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_LOAD_GAME);
-	}
+	MMAPI::Log::Info("Mod save loaded — will teleport to: %s", location_name.c_str());
 }
 
-void CreateHookGmlScriptGetWeather(AurieStatus& status)
+// ----- Teleport -----
+
+// Invokes gml_Script_goto_location_id with the saved location id. The destination's spawn-init
+// will clobber Ari's x/y; reposition runs in a later tick after the room finishes loading.
+static void TeleportToSavedLocation(YYTK::CInstance* Self, YYTK::CInstance* Other)
 {
-	CScript* gml_script_show_room_title = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_GET_WEATHER,
-		(PVOID*)&gml_script_show_room_title
-	);
+	if (!saved_location) return;
 
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_WEATHER);
-	}
+	YYTK::CScript* gml_script = nullptr;
+	MMAPI::Internal::module_interface->GetNamedRoutinePointer(GML_SCRIPT_GOTO_LOCATION_ID, reinterpret_cast<PVOID*>(&gml_script));
+	if (!gml_script) return;
 
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_GET_WEATHER,
-		gml_script_show_room_title->m_Functions->m_ScriptFunction,
-		GmlScriptGetWeatherCallback,
-		nullptr
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_WEATHER);
-	}
+	YYTK::RValue location_id = static_cast<int>(*saved_location);
+	YYTK::RValue result;
+	YYTK::RValue* args[1] = { &location_id };
+	gml_script->m_Functions->m_ScriptFunction(Self, Other, result, 1, args);
 }
 
-void CreateHookGmlScriptShowRoomTitle(AurieStatus& status)
+// ----- Hooks -----
+
+void OnAriTick(YYTK::CInstance* self)
 {
-	CScript* gml_script_show_room_title = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_SHOW_ROOM_TITLE,
-		(PVOID*)&gml_script_show_room_title
-	);
-
-	if (!AurieSuccess(status))
+	if (wait_to_teleport && ready_to_teleport)
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SHOW_ROOM_TITLE);
+		TeleportToSavedLocation(self, self);
+		wait_to_teleport   = false;
+		ready_to_teleport  = false;
+		wait_to_reposition = true;
+		return;
 	}
 
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_SHOW_ROOM_TITLE,
-		gml_script_show_room_title->m_Functions->m_ScriptFunction,
-		GmlScriptShowRoomTitleCallback,
-		nullptr
-	);
-
-	if (!AurieSuccess(status))
+	if (wait_to_reposition && ready_to_reposition)
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SHOW_ROOM_TITLE);
+		MMAPI::Player::SetPosition(saved_x, saved_y);
+		wait_to_reposition  = false;
+		ready_to_reposition = false;
+		saved_location      = std::nullopt;
 	}
 }
 
-void CreateHookGmlScriptTryLocationIdToString(AurieStatus& status)
+void OnAfterShowRoomTitle()
 {
-	CScript* gml_script_try_location_id_to_string = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_TRY_LOCATION_ID_TO_STRING,
-		(PVOID*)&gml_script_try_location_id_to_string
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_TRY_LOCATION_ID_TO_STRING);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_TRY_LOCATION_ID_TO_STRING,
-		gml_script_try_location_id_to_string->m_Functions->m_ScriptFunction,
-		GmlScriptTryLocationIdToStringCallback,
-		nullptr
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_TRY_LOCATION_ID_TO_STRING);
-	}
+	if (wait_to_teleport)   ready_to_teleport  = true;
+	if (wait_to_reposition) ready_to_reposition = true;
 }
 
-void CreateHookGmlScriptEndDay(AurieStatus& status)
+void OnBeforeSaveGame(MMAPI::Game::SaveGameContext& ctx)
 {
-	CScript* gml_script_end_day = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_END_DAY,
-		(PVOID*)&gml_script_end_day
-	);
-
-	if (!AurieSuccess(status))
+	// Skip our own save fires — the mod's custom autosave path reuses the prefix we already
+	// captured, so re-parsing it would be redundant at best and corruption-prone at worst if
+	// the path were ever malformed. Only game-initiated saves are trusted to set the canonical
+	// prefix.
+	if (mod_initiated_save)
 	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_END_DAY);
+		mod_initiated_save = false;
+		return;
 	}
 
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_END_DAY,
-		gml_script_end_day->m_Functions->m_ScriptFunction,
-		GmlScriptEndDayCallback,
-		nullptr
-	);
+	// Only capture once. Subsequent natural saves (e.g. the game's periodic autosave) reuse
+	// the prefix we already locked in. This is also how a brand-new game becomes save-able —
+	// the first save-at-the-bed populates save_prefix, after which the hotkey works.
+	if (!save_prefix.empty()) return;
 
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_END_DAY);
-	}
+	std::string prefix = ctx.GetSavePrefix();
+	if (prefix.empty()) return;
+
+	save_prefix = prefix;
+	std::string path(ctx.GetSavePath());
+	std::size_t slash = path.find_last_of("/\\");
+	if (slash != std::string::npos)
+		save_folder = path.substr(0, slash);
 }
 
-void CreateHookGmlScriptSetupMainScreen(AurieStatus& status)
+void OnAfterLoadGame(MMAPI::Game::LoadGameContext& ctx)
 {
-	CScript* gml_script_setup_main_screen = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_SETUP_MAIN_SCREEN,
-		(PVOID*)&gml_script_setup_main_screen
-	);
+	std::string path(ctx.GetSavePath());
+	save_prefix = ctx.GetSavePrefix();
+	std::size_t slash = path.find_last_of("/\\");
+	if (slash != std::string::npos)
+		save_folder = path.substr(0, slash);
 
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SETUP_MAIN_SCREEN);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_SETUP_MAIN_SCREEN,
-		gml_script_setup_main_screen->m_Functions->m_ScriptFunction,
-		GmlScriptSetupMainScreenCallback,
-		nullptr
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SETUP_MAIN_SCREEN);
-	}
+	// Only restore mod-saved location for autosave loads — manual saves (the player choosing a
+	// specific named save) shouldn't snap them to wherever they last hit the hotkey.
+	if (path.find("autosave") != std::string::npos)
+		ReadModSaveFile();
 }
 
-void CreateHookGmlScriptOnDrawGui(AurieStatus& status)
+void OnAfterEndDay()
 {
-	CScript* gml_script_on_draw_gui = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_ON_DRAW_GUI,
-		(PVOID*)&gml_script_on_draw_gui
-	);
+	// Player slept through to the next day — they'll naturally be at the bed on the next load,
+	// so the per-save mod file is no longer needed.
+	if (!save_prefix.empty())
+		MMAPI::ModSave::Delete(save_prefix);
 
-	if (!AurieSuccess(status))
+	// Reset the teleport state machine in case end_day fires mid-restore.
+	wait_to_teleport    = false;
+	ready_to_teleport   = false;
+	wait_to_reposition  = false;
+	ready_to_reposition = false;
+	saved_location      = std::nullopt;
+}
+
+void OnBeforeSetupMainScreen()
+{
+	game_is_active = false;
+	save_prefix.clear();
+	mod_initiated_save  = false;
+	wait_to_teleport    = false;
+	ready_to_teleport   = false;
+	wait_to_reposition  = false;
+	ready_to_reposition = false;
+	saved_location      = std::nullopt;
+
+	if (!startup_loaded)
 	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ON_DRAW_GUI);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_ON_DRAW_GUI,
-		gml_script_on_draw_gui->m_Functions->m_ScriptFunction,
-		GmlScriptOnDrawGuiCallback,
-		nullptr
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ON_DRAW_GUI);
+		LoadConfig();
+		startup_loaded = true;
 	}
 }
 
-EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path& ModulePath) {
+void OnGameActive()
+{
+	game_is_active = true;
+}
+
+void OnAfterDrawGui()
+{
+	if (!game_is_active) return;
+	if (!MMAPI::Game::WindowHasFocus()) return;
+	if (!keybind || !MMAPI::Input::IsKeybindPressed(*keybind)) return;
+
+	TriggerSave();
+}
+
+EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path& ModulePath)
+{
 	UNREFERENCED_PARAMETER(ModulePath);
 
-	AurieStatus status = AURIE_SUCCESS;
-	
-	status = ObGetInterface(
-		"YYTK_Main", 
-		(AurieInterfaceBase*&)(g_ModuleInterface)
-	);
-
+	YYTKInterface* module_interface = nullptr;
+	AurieStatus status = ObGetInterface("YYTK_Main", (AurieInterfaceBase*&)module_interface);
 	if (!AurieSuccess(status))
 		return AURIE_MODULE_DEPENDENCY_NOT_RESOLVED;
 
-	g_ModuleInterface->Print(CM_LIGHTAQUA, "[%s %s] - Plugin starting...", MOD_NAME, VERSION);
+	module_interface->Print(CM_LIGHTAQUA, "[%s %s] - Plugin starting...", MOD_NAME, VERSION);
 
-	CreateHookObject(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
+	CInstance* global_instance = nullptr;
+	module_interface->GetGlobalInstance(&global_instance);
+	MMAPI::Initialize(module_interface, global_instance, g_ArSelfModule, MOD_NAME, VERSION);
 
-	CreateHookGmlScriptSaveGame(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
+	MMAPI::Game::Enable();
+	MMAPI::Player::Enable();
+	MMAPI::Location::Enable();
+	MMAPI::Instance::Enable();
 
-	CreateHookGmlScriptLoadGame(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
+	MMAPI::Game::Hooks::BeforeSetupMainScreen(OnBeforeSetupMainScreen);
+	MMAPI::Game::Hooks::AfterGameActive(OnGameActive);
+	MMAPI::Game::Hooks::AfterEndDay(OnAfterEndDay);
+	MMAPI::Game::Hooks::BeforeSaveGame(OnBeforeSaveGame);
+	MMAPI::Game::Hooks::AfterLoadGame(OnAfterLoadGame);
+	MMAPI::Game::Hooks::AfterDrawGui(OnAfterDrawGui);
+	MMAPI::Location::Hooks::AfterShowRoomTitle(OnAfterShowRoomTitle);
+	MMAPI::Instance::Hooks::OnObjectCall(MMAPI::Instance::Objects::Ari, OnAriTick);
 
-	CreateHookGmlScriptGetWeather(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-	
-	CreateHookGmlScriptShowRoomTitle(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	CreateHookGmlScriptTryLocationIdToString(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	CreateHookGmlScriptEndDay(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	CreateHookGmlScriptSetupMainScreen(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	CreateHookGmlScriptOnDrawGui(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Plugin started!", MOD_NAME, VERSION);
+	MMAPI::Log::Info("Plugin started!");
 	return AURIE_SUCCESS;
 }
