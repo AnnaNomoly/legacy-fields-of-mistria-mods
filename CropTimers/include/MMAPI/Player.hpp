@@ -55,6 +55,31 @@ namespace MMAPI::Player
 			fn(static_cast<States>(i));
 	}
 
+	/// Compass direction Ari can face. The integer values match the game's `cardinal` field used by
+	/// `obj_ari.set_cardinal` — East=0, North=1, West=2, South=3 (GameMaker convention: 0°=right,
+	/// 90°=up, counterclockwise).
+	enum class Cardinal : int
+	{
+		East  = 0,
+		North = 1,
+		West  = 2,
+		South = 3,
+	};
+
+	/// Returns the GameMaker-degree angle a cardinal direction faces.
+	/// East = 0°, North = 90°, West = 180°, South = 270°.
+	inline constexpr double CardinalToDegrees(Cardinal c)
+	{
+		switch (c)
+		{
+			case Cardinal::East:  return   0.0;
+			case Cardinal::North: return  90.0;
+			case Cardinal::West:  return 180.0;
+			case Cardinal::South: return 270.0;
+		}
+		return 0.0;
+	}
+
 	struct Position
 	{
 		double x = 0.0;
@@ -186,6 +211,7 @@ namespace MMAPI::Player
 		inline constexpr const char* GML_SCRIPT_GET_MOVE_SPEED         = "gml_Script_get_move_speed@Ari@Ari";
 		inline constexpr const char* GML_SCRIPT_HELD_ITEM              = "gml_Script_held_item@Ari@Ari";
 		inline constexpr const char* GML_SCRIPT_FACE_DIR               = "gml_Script_face_dir@gml_Object_obj_ari_Create_0";
+		inline constexpr const char* GML_SCRIPT_SET_CARDINAL           = "gml_Script_set_cardinal@gml_Object_obj_ari_Create_0";
 		inline constexpr const char* GML_SCRIPT_SHOULD_DIE             = "gml_Script_should_die@gml_Object_obj_ari_Create_0";
 		using AfterMoveSpeedCallback     = void(*)(MMAPI::Player::MoveSpeedContext&);
 		using BeforeHealthChangeCallback  = void(*)(MMAPI::Player::BeforeHealthChangeContext&);
@@ -816,6 +842,67 @@ namespace MMAPI::Player
 		YYTK::RValue result;
 		YYTK::RValue* args[1] = { &modifier };
 		gml_script->m_Functions->m_ScriptFunction(Self, Other, result, 1, args);
+	}
+
+	/// Forces Ari to face the given direction (in GameMaker degrees: 0°=right, 90°=up, counterclockwise).
+	/// Invokes `face_dir@obj_ari` with the live obj_ari instance as Self — the script is defined inside
+	/// obj_ari's Create event, so it expects obj_ari as the calling context (not the `__ari` struct
+	/// that most other Ari scripts use).
+	/// @attention Requires MMAPI::Player::Enable() to have been called and at least one obj_ari tick
+	/// to have been observed (so MMAPI has latched the live instance).
+	/// @param degrees The direction Ari should face, in GameMaker degrees.
+	inline void FaceDir(double degrees)
+	{
+		MMAPI_REQUIRE_ENABLED_VOID("Player");
+
+		const auto& refs = MMAPI::Internal::instance_reference_map;
+		auto it = refs.find(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI);
+		if (it == refs.end() || it->second.empty()) return;
+		YYTK::CInstance* obj_ari = it->second[0];
+
+		YYTK::CScript* gml_script = nullptr;
+		MMAPI::Internal::module_interface->GetNamedRoutinePointer(Internal::GML_SCRIPT_FACE_DIR, reinterpret_cast<PVOID*>(&gml_script));
+
+		YYTK::RValue arg = degrees;
+		YYTK::RValue result;
+		YYTK::RValue* args[1] = { &arg };
+		gml_script->m_Functions->m_ScriptFunction(obj_ari, obj_ari, result, 1, args);
+	}
+
+	/// Sets Ari's cardinal direction (0=East, 1=North, 2=West, 3=South). The cardinal is the
+	/// discrete-direction field used by the game for attack/movement direction logic, distinct from
+	/// the visual angle controlled by `FaceDir`. Most callers want to set both in sync — see
+	/// `FaceCardinal` for the combined helper.
+	/// @attention Requires MMAPI::Player::Enable() to have been called and at least one obj_ari tick
+	/// to have been observed (so MMAPI has latched the live instance).
+	/// @param cardinal The cardinal direction to set.
+	inline void SetCardinal(Cardinal cardinal)
+	{
+		MMAPI_REQUIRE_ENABLED_VOID("Player");
+
+		const auto& refs = MMAPI::Internal::instance_reference_map;
+		auto it = refs.find(MMAPI::Instance::Internal::INSTANCE_OBJ_ARI);
+		if (it == refs.end() || it->second.empty()) return;
+		YYTK::CInstance* obj_ari = it->second[0];
+
+		YYTK::CScript* gml_script = nullptr;
+		MMAPI::Internal::module_interface->GetNamedRoutinePointer(Internal::GML_SCRIPT_SET_CARDINAL, reinterpret_cast<PVOID*>(&gml_script));
+
+		YYTK::RValue arg = static_cast<int>(cardinal);
+		YYTK::RValue result;
+		YYTK::RValue* args[1] = { &arg };
+		gml_script->m_Functions->m_ScriptFunction(obj_ari, obj_ari, result, 1, args);
+	}
+
+	/// Sets both Ari's cardinal direction and her visual angle to match. Convenience for the common
+	/// "snap Ari to face this direction" pattern — equivalent to `SetCardinal(c); FaceDir(CardinalToDegrees(c));`.
+	/// @attention Requires MMAPI::Player::Enable() to have been called and at least one obj_ari tick
+	/// to have been observed.
+	/// @param cardinal The cardinal direction Ari should face.
+	inline void FaceCardinal(Cardinal cardinal)
+	{
+		SetCardinal(cardinal);
+		FaceDir(CardinalToDegrees(cardinal));
 	}
 
 	/// Returns Ari's current essence.

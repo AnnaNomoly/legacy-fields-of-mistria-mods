@@ -141,6 +141,18 @@ namespace MMAPI::Engine
 		return MMAPI::Internal::module_interface->CallBuiltin("window_get_height", {}).ToDouble();
 	}
 
+	/// Returns the mouse's current X position in window pixels (0 = left edge).
+	inline double GetMouseX()
+	{
+		return MMAPI::Internal::module_interface->CallBuiltin("window_mouse_get_x", {}).ToDouble();
+	}
+
+	/// Returns the mouse's current Y position in window pixels (0 = top edge).
+	inline double GetMouseY()
+	{
+		return MMAPI::Internal::module_interface->CallBuiltin("window_mouse_get_y", {}).ToDouble();
+	}
+
 	/// Gets a GML asset index by asset name.
 	/// @param asset_name The GML asset name to look up.
 	/// @return The asset index as an RValue.
