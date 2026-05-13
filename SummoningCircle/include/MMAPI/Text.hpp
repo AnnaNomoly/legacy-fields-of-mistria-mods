@@ -50,24 +50,6 @@ namespace MMAPI::Text
 		void Cancel() { m_cancelled = true; }
 	};
 
-	struct TextboxSayContext
-	{
-		std::string m_key;
-		bool m_cancelled = false;
-
-		/// Returns the dialogue line key passed to `say@TextboxMenu` (a per-line key, e.g.
-		/// "Conversations/Bank/Adeline/Banked Lines/inn_work/inn_work/init"). This fires once per line
-		/// as a conversation plays out — distinct from `play_text`/`play_conversation`, which are
-		/// higher-level entry points.
-		std::string_view GetKey() const { return m_key; }
-
-		/// Substitutes the dialogue key the textbox will say.
-		void SetKey(std::string key) { m_key = std::move(key); }
-
-		/// Prevents the game's `say@TextboxMenu` script from running this fire.
-		void Cancel() { m_cancelled = true; }
-	};
-
 	namespace Internal
 	{
 		inline bool enabled = false;
@@ -76,19 +58,16 @@ namespace MMAPI::Text
 		inline constexpr const char* GML_SCRIPT_PLAY_CONVERSATION = "gml_Script_play_conversation";
 		inline constexpr const char* GML_SCRIPT_CLOSE_TEXTBOX     = "gml_Script_begin_close@TextboxMenu@TextboxMenu";
 		inline constexpr const char* GML_SCRIPT_PLAY_TEXT         = "gml_Script_play_text@TextboxMenu@TextboxMenu";
-		inline constexpr const char* GML_SCRIPT_TEXTBOX_SAY       = "gml_Script_say@TextboxMenu@TextboxMenu";
 
 		using BeforeLocalizedStringCallback  = void(*)(MMAPI::Text::LocalizedStringContext&);
 		using AfterLocalizedStringCallback   = void(*)(MMAPI::Text::AfterLocalizedStringContext&);
 		using BeforePlayConversationCallback = void(*)(MMAPI::Text::PlayConversationContext&);
 		using BeforePlayTextCallback         = void(*)(MMAPI::Text::PlayTextContext&);
-		using BeforeTextboxSayCallback       = void(*)(MMAPI::Text::TextboxSayContext&);
 
 		inline BeforeLocalizedStringCallback  before_localized_string_callback  = nullptr;
 		inline AfterLocalizedStringCallback   after_localized_string_callback   = nullptr;
 		inline BeforePlayConversationCallback before_play_conversation_callback = nullptr;
 		inline BeforePlayTextCallback         before_play_text_callback         = nullptr;
-		inline BeforeTextboxSayCallback       before_textbox_say_callback       = nullptr;
 
 		// Live Localizer Self/Other, latched from the get_localizer hook
 		// or pulled from globalInstance.__localizer on first request.
@@ -266,34 +245,6 @@ namespace MMAPI::Text
 
 			return Result;
 		}
-
-		inline YYTK::RValue& GmlScriptTextboxSayCallback(
-			IN YYTK::CInstance* Self,
-			IN YYTK::CInstance* Other,
-			OUT YYTK::RValue& Result,
-			IN int ArgumentCount,
-			IN YYTK::RValue** Arguments
-		)
-		{
-			if (before_textbox_say_callback && Arguments && ArgumentCount >= 1 && Arguments[0]
-				&& Arguments[0]->m_Kind == YYTK::VALUE_STRING)
-			{
-				MMAPI::Text::TextboxSayContext context{ Arguments[0]->ToString() };
-				before_textbox_say_callback(context);
-
-				if (context.m_cancelled)
-					return Result;
-
-				*Arguments[0] = YYTK::RValue(context.m_key);
-			}
-
-			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
-				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_TEXTBOX_SAY)
-			);
-			original(Self, Other, Result, ArgumentCount, Arguments);
-
-			return Result;
-		}
 	}
 
 	/// Activates Text utility functions. Installs the get_localizer and play_text hooks so the Localizer and
@@ -320,7 +271,6 @@ namespace MMAPI::Text
 			{ Internal::GML_SCRIPT_GET_LOCALIZER,            reinterpret_cast<PVOID>(Internal::GmlScriptGetLocalizerCallback) },
 			{ Internal::GML_SCRIPT_PLAY_CONVERSATION,        reinterpret_cast<PVOID>(Internal::GmlScriptPlayConversationCallback) },
 			{ Internal::GML_SCRIPT_PLAY_TEXT,                reinterpret_cast<PVOID>(Internal::GmlScriptPlayTextCallback) },
-			{ Internal::GML_SCRIPT_TEXTBOX_SAY,              reinterpret_cast<PVOID>(Internal::GmlScriptTextboxSayCallback) },
 		});
 		if (!MMAPI::IsSuccess(status))
 			return status;
@@ -450,7 +400,9 @@ namespace MMAPI::Text
 			);
 		}
 
-		/// Registers a callback that runs before the game plays a conversation text node.
+		/// Registers a callback that runs before the game plays a conversation text node — fires once
+		/// per dialogue line as a conversation plays out. Catches every line shape: NPC banked lines,
+		/// gift_lines responses, speakerless textboxes (signs/furniture), and cutscene lines.
 		/// Use ctx.SetKey() to redirect to a different text node, or ctx.Cancel() to prevent it from playing entirely.
 		/// @param callback A function called with a mutable text context before the game processes it.
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
@@ -463,27 +415,6 @@ namespace MMAPI::Text
 			return MMAPI::Internal::RegisterHook(
 				"Text::BeforePlayText",
 				Internal::before_play_text_callback,
-				callback
-			);
-		}
-
-		/// Registers a callback that runs before the game's `say@TextboxMenu` script — fires once per
-		/// dialogue line as a conversation plays out (distinct from `BeforePlayText` /
-		/// `BeforePlayConversation`, which are higher-level entry points). Use this when you need to
-		/// inspect or substitute *individual line* keys (e.g. detecting gift hints in any line of any
-		/// conversation).
-		/// Use `ctx.SetKey()` to substitute the line key, or `ctx.Cancel()` to suppress this line.
-		/// @param callback A function called with a mutable `MMAPI::Text::TextboxSayContext`.
-		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
-		inline MMAPI::Status BeforeTextboxSay(Internal::BeforeTextboxSayCallback callback)
-		{
-			MMAPI::Status status = MMAPI::Text::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
-
-			return MMAPI::Internal::RegisterHook(
-				"Text::BeforeTextboxSay",
-				Internal::before_textbox_say_callback,
 				callback
 			);
 		}

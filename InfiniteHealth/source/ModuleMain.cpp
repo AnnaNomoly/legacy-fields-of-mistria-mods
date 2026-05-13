@@ -4,7 +4,7 @@ using namespace YYTK;
 
 static const char* const MOD_NAME = "InfiniteHealth";
 static const char* const VERSION = "1.0.2";
-static const char* const GML_SCRIPT_MODIFY_HEALTH = "gml_Script_use_item";
+static const char* const GML_SCRIPT_MODIFY_HEALTH = "gml_Script_play_text@TextboxMenu@TextboxMenu";
 
 static YYTKInterface* g_ModuleInterface = nullptr;
 
@@ -16,7 +16,11 @@ RValue& GmlScriptModifyHealthCallback(
 	IN RValue** Arguments
 )
 {
-	g_ModuleInterface->Print(CM_WHITE, "gml_Script_use_item");
+	if (Arguments[0]->m_Kind == VALUE_STRING)
+	{
+		std::string s = Arguments[0]->ToString();
+		int temp = 5;
+	}
 
 	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_MODIFY_HEALTH));
 	original(

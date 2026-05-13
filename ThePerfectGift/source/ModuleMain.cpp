@@ -714,7 +714,7 @@ void OnAfterLocalizedString(MMAPI::Text::AfterLocalizedStringContext& ctx)
 	ctx.SetResolved(std::move(result));
 }
 
-void OnBeforeTextboxSay(MMAPI::Text::TextboxSayContext& ctx)
+void OnBeforePlayText(MMAPI::Text::PlayTextContext& ctx)
 {
 	if (config.unlock_all_gift_preferences) return;  // Everything's already queued; no per-line work.
 
@@ -777,7 +777,7 @@ EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path&
 	MMAPI::Game::Hooks::AfterCraftingMenuClose(OnAfterCraftingMenuClose);
 	MMAPI::Item::Hooks::AfterGetDisplayDescription(OnAfterGetDisplayDescription);
 	MMAPI::Text::Hooks::AfterLocalizedString(OnAfterLocalizedString);
-	MMAPI::Text::Hooks::BeforeTextboxSay(OnBeforeTextboxSay);
+	MMAPI::Text::Hooks::BeforePlayText(OnBeforePlayText);
 
 	// Register the same OnNpcTick callback for every NPC's obj_<name>. Each call uses a unique
 	// object name (the map key) so the registrations don't collide on the AlreadyRegistered check.
