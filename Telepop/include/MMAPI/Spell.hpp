@@ -55,6 +55,11 @@ namespace MMAPI::Spell
 		/// Returns the spell being cast.
 		MMAPI::Spell::Ids GetSpell() const { return static_cast<MMAPI::Spell::Ids>(m_spell_id); }
 
+		/// Substitutes the spell the game will cast — the trampoline runs with the new id rather than
+		/// the original. Useful for "redirect this spell to a different one" patterns (e.g. routing a
+		/// custom variant cast to fire_breath so it triggers fire breath's status effect chain).
+		void SetSpell(MMAPI::Spell::Ids spell) { m_spell_id = static_cast<int>(spell); }
+
 		/// Prevents the game's cast_spell script from running.
 		void Cancel() { m_cancelled = true; }
 	};
@@ -120,6 +125,8 @@ namespace MMAPI::Spell
 
 				if (context.m_cancelled)
 					return Result;
+
+				*Arguments[0] = context.m_spell_id;
 			}
 
 			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
