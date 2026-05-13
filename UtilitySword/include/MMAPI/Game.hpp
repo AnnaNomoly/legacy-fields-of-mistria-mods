@@ -113,14 +113,6 @@ namespace MMAPI::Game
 		void Cancel() { m_cancelled = true; }
 	};
 
-	struct HudShouldShowContext
-	{
-		bool m_result = true;
-
-		bool GetResult() const { return m_result; }
-		void SetResult(bool result) { m_result = result; }
-	};
-
 	struct BeforeErrorContext
 	{
 		std::string m_message;
@@ -147,10 +139,6 @@ namespace MMAPI::Game
 		inline constexpr const char* GML_SCRIPT_LOAD_GAME               = "gml_Script_load_game";
 		inline constexpr const char* GML_SCRIPT_SAVE_GAME               = "gml_Script_save_game";
 		inline constexpr const char* GML_SCRIPT_SCENE_AUDIO_PLAYER_PLAY = "gml_Script_play@SceneAudioPlayer@SceneAudioPlayer";
-		inline constexpr const char* GML_SCRIPT_ON_DRAW_GUI             = "gml_Script_on_draw_gui@Display@Display";
-		inline constexpr const char* GML_SCRIPT_HUD_SHOULD_SHOW         = "gml_Script_hud_should_show";
-		inline constexpr const char* GML_SCRIPT_CRAFTING_MENU_OPEN      = "gml_Script_initialize@CraftingMenu@CraftingMenu";
-		inline constexpr const char* GML_SCRIPT_CRAFTING_MENU_CLOSE     = "gml_Script_on_close@CraftingMenu@CraftingMenu";
 		inline constexpr const char* GML_SCRIPT_JOURNAL_MENU_OPEN       = "gml_Script_initialize@JournalMenu@JournalMenu";
 		inline constexpr const char* GML_SCRIPT_JOURNAL_MENU_CLOSE      = "gml_Script_on_close@JournalMenu@JournalMenu";
 		inline constexpr const char* GML_SCRIPT_STORE_MENU_OPEN         = "gml_Script_init@StoreMenu@StoreMenu";
@@ -173,19 +161,11 @@ namespace MMAPI::Game
 		inline BeforeSaveGameCallback  before_save_game_callback  = nullptr;
 		inline BeforePlayAudioCallback before_play_audio_callback = nullptr;
 
-		using AfterDrawGuiCallback          = void(*)();
-		using AfterHudShouldShowCallback    = void(*)(MMAPI::Game::HudShouldShowContext&);
-		using AfterCraftingMenuOpenCallback  = void(*)();
-		using AfterCraftingMenuCloseCallback = void(*)();
 		using AfterJournalMenuOpenCallback   = void(*)();
 		using AfterJournalMenuCloseCallback  = void(*)();
 		using AfterStoreMenuOpenCallback     = void(*)();
 		using AfterStoreMenuCloseCallback    = void(*)();
 
-		inline AfterDrawGuiCallback          after_draw_gui_callback           = nullptr;
-		inline AfterHudShouldShowCallback    after_hud_should_show_callback    = nullptr;
-		inline AfterCraftingMenuOpenCallback  after_crafting_menu_open_callback  = nullptr;
-		inline AfterCraftingMenuCloseCallback after_crafting_menu_close_callback = nullptr;
 		inline AfterJournalMenuOpenCallback   after_journal_menu_open_callback   = nullptr;
 		inline AfterJournalMenuCloseCallback  after_journal_menu_close_callback  = nullptr;
 		inline AfterStoreMenuOpenCallback     after_store_menu_open_callback     = nullptr;
@@ -351,82 +331,6 @@ namespace MMAPI::Game
 			return Result;
 		}
 
-		inline YYTK::RValue& GmlScriptAfterDrawGuiCallback(
-			IN YYTK::CInstance* Self,
-			IN YYTK::CInstance* Other,
-			OUT YYTK::RValue& Result,
-			IN int ArgumentCount,
-			IN YYTK::RValue** Arguments
-		)
-		{
-			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
-				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_ON_DRAW_GUI)
-			);
-			original(Self, Other, Result, ArgumentCount, Arguments);
-
-			if (after_draw_gui_callback)
-				after_draw_gui_callback();
-
-			return Result;
-		}
-
-		inline YYTK::RValue& GmlScriptHudShouldShowCallback(
-			IN YYTK::CInstance* Self,
-			IN YYTK::CInstance* Other,
-			OUT YYTK::RValue& Result,
-			IN int ArgumentCount,
-			IN YYTK::RValue** Arguments
-		)
-		{
-			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
-				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_HUD_SHOULD_SHOW)
-			);
-			original(Self, Other, Result, ArgumentCount, Arguments);
-
-			if (after_hud_should_show_callback)
-			{
-				MMAPI::Game::HudShouldShowContext context{ Result.ToBoolean() };
-				after_hud_should_show_callback(context);
-				Result = context.m_result;
-			}
-
-			return Result;
-		}
-
-		inline YYTK::RValue& GmlScriptCraftingMenuOpenCallback(
-			IN YYTK::CInstance* Self,
-			IN YYTK::CInstance* Other,
-			OUT YYTK::RValue& Result,
-			IN int ArgumentCount,
-			IN YYTK::RValue** Arguments
-		)
-		{
-			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
-				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_CRAFTING_MENU_OPEN)
-			);
-			original(Self, Other, Result, ArgumentCount, Arguments);
-			if (after_crafting_menu_open_callback)
-				after_crafting_menu_open_callback();
-			return Result;
-		}
-
-		inline YYTK::RValue& GmlScriptCraftingMenuCloseCallback(
-			IN YYTK::CInstance* Self,
-			IN YYTK::CInstance* Other,
-			OUT YYTK::RValue& Result,
-			IN int ArgumentCount,
-			IN YYTK::RValue** Arguments
-		)
-		{
-			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
-				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_CRAFTING_MENU_CLOSE)
-			);
-			original(Self, Other, Result, ArgumentCount, Arguments);
-			if (after_crafting_menu_close_callback)
-				after_crafting_menu_close_callback();
-			return Result;
-		}
-
 		inline YYTK::RValue& GmlScriptJournalMenuOpenCallback(
 			IN YYTK::CInstance* Self,
 			IN YYTK::CInstance* Other,
@@ -528,13 +432,6 @@ namespace MMAPI::Game
 		return pause_status.ToInt64() > 0;
 	}
 
-	/// Returns true if the game window currently has focus.
-	inline bool WindowHasFocus()
-	{
-		YYTK::RValue window_has_focus = MMAPI::Internal::module_interface->CallBuiltin("window_has_focus", {});
-		return window_has_focus.ToBoolean();
-	}
-
 	/// Returns the current game clock time in seconds from MMAPI::Internal::global_instance.__clock.time.
 	inline int GetCurrentTimeInSeconds()
 	{
@@ -617,7 +514,7 @@ namespace MMAPI::Game
 
 	/// Activates Game utility functions that directly call game scripts. Eagerly installs every Game
 	/// script hook used by Hooks::* registrars (end_day, on_new_day, load/save_game, scene audio play,
-	/// on_draw_gui, hud_should_show, crafting/journal/store menu open/close).
+	/// journal/store menu open/close).
 	/// @return Status::Success if the hooks are installed (or already were); otherwise a failure status.
 	inline MMAPI::Status Enable()
 	{
@@ -640,10 +537,6 @@ namespace MMAPI::Game
 			{ Internal::GML_SCRIPT_LOAD_GAME,               reinterpret_cast<PVOID>(Internal::GmlScriptLoadGameCallback) },
 			{ Internal::GML_SCRIPT_SAVE_GAME,               reinterpret_cast<PVOID>(Internal::GmlScriptSaveGameCallback) },
 			{ Internal::GML_SCRIPT_SCENE_AUDIO_PLAYER_PLAY, reinterpret_cast<PVOID>(Internal::GmlScriptPlayAudioCallback) },
-			{ Internal::GML_SCRIPT_ON_DRAW_GUI,             reinterpret_cast<PVOID>(Internal::GmlScriptAfterDrawGuiCallback) },
-			{ Internal::GML_SCRIPT_HUD_SHOULD_SHOW,         reinterpret_cast<PVOID>(Internal::GmlScriptHudShouldShowCallback) },
-			{ Internal::GML_SCRIPT_CRAFTING_MENU_OPEN,      reinterpret_cast<PVOID>(Internal::GmlScriptCraftingMenuOpenCallback) },
-			{ Internal::GML_SCRIPT_CRAFTING_MENU_CLOSE,     reinterpret_cast<PVOID>(Internal::GmlScriptCraftingMenuCloseCallback) },
 			{ Internal::GML_SCRIPT_JOURNAL_MENU_OPEN,       reinterpret_cast<PVOID>(Internal::GmlScriptJournalMenuOpenCallback) },
 			{ Internal::GML_SCRIPT_JOURNAL_MENU_CLOSE,      reinterpret_cast<PVOID>(Internal::GmlScriptJournalMenuCloseCallback) },
 			{ Internal::GML_SCRIPT_STORE_MENU_OPEN,         reinterpret_cast<PVOID>(Internal::GmlScriptStoreMenuOpenCallback) },
@@ -759,71 +652,6 @@ namespace MMAPI::Game
 			return MMAPI::Internal::RegisterHook(
 				"Game::BeforePlayAudio",
 				Internal::before_play_audio_callback,
-				callback
-			);
-		}
-
-		/// Registers a callback that runs after each GUI draw step.
-		/// @param callback A function called after the game's draw GUI script runs.
-		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
-		inline MMAPI::Status AfterDrawGui(Internal::AfterDrawGuiCallback callback)
-		{
-			MMAPI::Status status = MMAPI::Game::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
-
-			return MMAPI::Internal::RegisterHook(
-				"Game::AfterDrawGui",
-				Internal::after_draw_gui_callback,
-				callback
-			);
-		}
-
-		/// Registers a callback that runs after the game evaluates whether the HUD should be shown.
-		/// Use ctx.SetResult(false) to hide the HUD.
-		/// @param callback A function called with a mutable HUD visibility context after the game evaluates it.
-		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
-		inline MMAPI::Status AfterHudShouldShow(Internal::AfterHudShouldShowCallback callback)
-		{
-			MMAPI::Status status = MMAPI::Game::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
-
-			return MMAPI::Internal::RegisterHook(
-				"Game::AfterHudShouldShow",
-				Internal::after_hud_should_show_callback,
-				callback
-			);
-		}
-
-		/// Registers a callback that runs after the crafting menu opens.
-		/// @param callback A function called after the crafting menu's initialize script runs.
-		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
-		inline MMAPI::Status AfterCraftingMenuOpen(Internal::AfterCraftingMenuOpenCallback callback)
-		{
-			MMAPI::Status status = MMAPI::Game::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
-
-			return MMAPI::Internal::RegisterHook(
-				"Game::AfterCraftingMenuOpen",
-				Internal::after_crafting_menu_open_callback,
-				callback
-			);
-		}
-
-		/// Registers a callback that runs after the crafting menu closes.
-		/// @param callback A function called after the crafting menu's close script runs.
-		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
-		inline MMAPI::Status AfterCraftingMenuClose(Internal::AfterCraftingMenuCloseCallback callback)
-		{
-			MMAPI::Status status = MMAPI::Game::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
-
-			return MMAPI::Internal::RegisterHook(
-				"Game::AfterCraftingMenuClose",
-				Internal::after_crafting_menu_close_callback,
 				callback
 			);
 		}

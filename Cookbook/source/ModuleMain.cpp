@@ -260,7 +260,7 @@ void OnAfterGameActive()
 
 void OnAfterDrawGui()
 {
-	if (!MMAPI::Game::WindowHasFocus()) return;
+	if (!MMAPI::Engine::WindowHasFocus()) return;
 	if (processing_user_input) return;
 
 	if (!CheckActivationPressed())
@@ -326,7 +326,7 @@ EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path&
 
 	MMAPI::Game::Hooks::BeforeSetupMainScreen(OnSetupMainScreen);
 	MMAPI::Game::Hooks::AfterGameActive(OnAfterGameActive);
-	MMAPI::Game::Hooks::AfterDrawGui(OnAfterDrawGui);
+	MMAPI::Display::Hooks::AfterDrawGui(OnAfterDrawGui);
 
 	MMAPI::Log::Info("Plugin started!");
 	return AURIE_SUCCESS;

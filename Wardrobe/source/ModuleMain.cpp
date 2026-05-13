@@ -229,7 +229,7 @@ void OnAfterLocalizedString(MMAPI::Text::AfterLocalizedStringContext& /*ctx*/)
 void OnAfterDrawGui()
 {
 	if (!game_is_active) return;
-	if (!MMAPI::Game::WindowHasFocus()) return;
+	if (!MMAPI::Engine::WindowHasFocus()) return;
 	if (!keybind || !MMAPI::Input::IsKeybindPressed(*keybind)) return;
 
 	PromptForCosmetic();
@@ -255,7 +255,7 @@ EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path&
 
 	MMAPI::Game::Hooks::BeforeSetupMainScreen(OnBeforeSetupMainScreen);
 	MMAPI::Game::Hooks::AfterGameActive(OnGameActive);
-	MMAPI::Game::Hooks::AfterDrawGui(OnAfterDrawGui);
+	MMAPI::Display::Hooks::AfterDrawGui(OnAfterDrawGui);
 	MMAPI::Text::Hooks::AfterLocalizedString(OnAfterLocalizedString);
 
 	MMAPI::Log::Info("Plugin started!");

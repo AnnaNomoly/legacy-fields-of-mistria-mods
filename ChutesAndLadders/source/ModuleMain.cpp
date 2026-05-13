@@ -303,7 +303,7 @@ void OnSetupMainScreen()
 
 void OnAfterDrawGui()
 {
-	if (!MMAPI::Game::WindowHasFocus() || MMAPI::Game::IsPaused() || processing_user_input)
+	if (!MMAPI::Engine::WindowHasFocus() || MMAPI::Game::IsPaused() || processing_user_input)
 		return;
 
 	if (!activation_keybind || !MMAPI::Input::IsKeybindPressed(*activation_keybind))
@@ -411,7 +411,7 @@ EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path&
 	MMAPI::Instance::Hooks::OnObjectCall(MMAPI::Instance::Objects::Ari, HandleAri);
 	MMAPI::Weather::Hooks::AfterRoomStart(OnAfterRoomStart);
 	MMAPI::Game::Hooks::BeforeSetupMainScreen(OnSetupMainScreen);
-	MMAPI::Game::Hooks::AfterDrawGui(OnAfterDrawGui);
+	MMAPI::Display::Hooks::AfterDrawGui(OnAfterDrawGui);
 	MMAPI::Game::Hooks::BeforeError(OnBeforeError);
 	MMAPI::Location::Hooks::BeforeGoToRoom(OnBeforeGoToRoom);
 	MMAPI::Location::Hooks::AfterGoToRoom(OnAfterGoToRoom);

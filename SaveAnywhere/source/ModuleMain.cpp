@@ -418,7 +418,7 @@ void OnGameActive()
 void OnAfterDrawGui()
 {
 	if (!game_is_active) return;
-	if (!MMAPI::Game::WindowHasFocus()) return;
+	if (!MMAPI::Engine::WindowHasFocus()) return;
 	if (!keybind || !MMAPI::Input::IsKeybindPressed(*keybind)) return;
 
 	TriggerSave();
@@ -449,7 +449,7 @@ EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path&
 	MMAPI::Game::Hooks::AfterEndDay(OnAfterEndDay);
 	MMAPI::Game::Hooks::BeforeSaveGame(OnBeforeSaveGame);
 	MMAPI::Game::Hooks::AfterLoadGame(OnAfterLoadGame);
-	MMAPI::Game::Hooks::AfterDrawGui(OnAfterDrawGui);
+	MMAPI::Display::Hooks::AfterDrawGui(OnAfterDrawGui);
 	MMAPI::Location::Hooks::AfterShowRoomTitle(OnAfterShowRoomTitle);
 	MMAPI::Instance::Hooks::OnObjectCall(MMAPI::Instance::Objects::Ari, OnAriTick);
 

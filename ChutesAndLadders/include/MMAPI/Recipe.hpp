@@ -171,8 +171,6 @@ namespace MMAPI::Recipe
 	/// @param item_id The item ID for the recipe to check.
 	inline bool IsUnlocked(int item_id)
 	{
-		MMAPI_REQUIRE_ENABLED("Recipe", false);
-
 		if (item_id < 0)
 			return false;
 
@@ -245,8 +243,6 @@ namespace MMAPI::Recipe
 	/// @param count The new required component count.
 	inline void SetComponentCount(int item_id, size_t component_index, int count)
 	{
-		MMAPI_REQUIRE_ENABLED_VOID("Recipe");
-
 		YYTK::RValue component = Internal::GetRecipeComponent(item_id, component_index);
 		if (component.m_Kind == YYTK::VALUE_UNDEFINED)
 			return;
@@ -260,13 +256,43 @@ namespace MMAPI::Recipe
 	/// @param duration The new component duration value.
 	inline void SetComponentDuration(int item_id, size_t component_index, int duration)
 	{
-		MMAPI_REQUIRE_ENABLED_VOID("Recipe");
-
 		YYTK::RValue component = Internal::GetRecipeComponent(item_id, component_index);
 		if (component.m_Kind == YYTK::VALUE_UNDEFINED)
 			return;
 
 		MMAPI::Engine::StructVariableSet(component, "duration", duration);
+	}
+
+	/// Invokes fn(component_index, component) with each component in the item's recipe, in
+	/// buffer order. Use with SetComponentDuration / SetComponentCount for per-component
+	/// mutation, or just inspect the component struct fields directly.
+	///
+	/// No-op if the item has no recipe or the recipe has no components buffer.
+	template <typename Fn>
+	inline void ForEachComponent(int item_id, Fn fn)
+	{
+		YYTK::RValue item = MMAPI::Item::GetItemData(item_id);
+		if (item.m_Kind == YYTK::VALUE_UNDEFINED) return;
+		if (!MMAPI::Engine::StructVariableExists(item, "recipe")) return;
+
+		YYTK::RValue recipe = item.GetMember("recipe");
+		if (recipe.m_Kind != YYTK::VALUE_OBJECT) return;
+		if (!MMAPI::Engine::StructVariableExists(recipe, "components")) return;
+
+		YYTK::RValue components = recipe.GetMember("components");
+		if (components.m_Kind != YYTK::VALUE_OBJECT) return;
+		if (!MMAPI::Engine::StructVariableExists(components, "__buffer")) return;
+
+		YYTK::RValue buffer = components.GetMember("__buffer");
+		size_t count = 0;
+		MMAPI::Internal::module_interface->GetArraySize(buffer, count);
+
+		for (size_t i = 0; i < count; ++i)
+		{
+			YYTK::RValue* entry = nullptr;
+			MMAPI::Internal::module_interface->GetArrayEntry(buffer, i, entry);
+			if (entry) fn(i, *entry);
+		}
 	}
 
 	namespace Hooks

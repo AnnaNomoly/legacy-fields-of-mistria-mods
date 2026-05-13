@@ -423,7 +423,7 @@ EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path&
 	MMAPI::Game::Hooks::BeforeSetupMainScreen(OnSetupMainScreen);
 	MMAPI::Game::Hooks::AfterEndDay(OnAfterEndDay);
 	MMAPI::Game::Hooks::BeforeSaveGame(OnBeforeSaveGame);
-	MMAPI::Game::Hooks::AfterDrawGui(OnAfterDrawGui);
+	MMAPI::Display::Hooks::AfterDrawGui(OnAfterDrawGui);
 	MMAPI::Location::Hooks::BeforeGoToRoom(OnBeforeGoToRoom);
 	MMAPI::Spell::Hooks::AfterCanCastSpell(OnAfterCanCastSpell);
 	MMAPI::Spell::Hooks::BeforeSpellCast(OnBeforeSpellCast);

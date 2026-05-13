@@ -774,8 +774,8 @@ EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path&
 	MMAPI::Text::Enable();
 
 	MMAPI::Game::Hooks::BeforeSetupMainScreen(OnSetupMainScreen);
-	MMAPI::Game::Hooks::AfterCraftingMenuOpen(OnAfterCraftingMenuOpen);
-	MMAPI::Game::Hooks::AfterCraftingMenuClose(OnAfterCraftingMenuClose);
+	MMAPI::Crafting::Hooks::AfterMenuOpen(OnAfterCraftingMenuOpen);
+	MMAPI::Crafting::Hooks::AfterMenuClose(OnAfterCraftingMenuClose);
 	MMAPI::Item::Hooks::AfterGetDisplayDescription(OnAfterGetDisplayDescription);
 	MMAPI::Text::Hooks::AfterLocalizedString(OnAfterLocalizedString);
 	MMAPI::Text::Hooks::BeforePlayText(OnBeforePlayText);

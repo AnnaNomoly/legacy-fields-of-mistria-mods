@@ -46,6 +46,17 @@ namespace MMAPI::Display
 		void Cancel() { m_cancelled = true; }
 	};
 
+	struct HudShouldShowContext
+	{
+		bool m_result = true;
+
+		/// Returns the hud-visibility result the game computed. True if the HUD should render.
+		bool GetResult() const { return m_result; }
+
+		/// Overrides whether the HUD renders this fire. Call SetResult(false) to hide the HUD.
+		void SetResult(bool result) { m_result = result; }
+	};
+
 	namespace Internal
 	{
 		inline bool enabled = false;
@@ -53,14 +64,20 @@ namespace MMAPI::Display
 		inline constexpr const char* GML_SCRIPT_DISPLAY_RESIZE           = "gml_Script_resize_amount@Display@Display";
 		inline constexpr const char* GML_SCRIPT_VERTIGO_DRAW_WITH_COLOR  = "gml_Script_vertigo_draw_with_color";
 		inline constexpr const char* GML_SCRIPT_PLAY_HEAL_VFX            = "gml_Script_play_heal_vfx";
+		inline constexpr const char* GML_SCRIPT_ON_DRAW_GUI              = "gml_Script_on_draw_gui@Display@Display";
+		inline constexpr const char* GML_SCRIPT_HUD_SHOULD_SHOW          = "gml_Script_hud_should_show";
 
 		using AfterDisplayResizeCallback         = void(*)(MMAPI::Display::DisplayResizeContext&);
 		using BeforeVertigoDrawWithColorCallback = void(*)(MMAPI::Display::VertigoDrawWithColorContext&);
 		using BeforePlayHealVfxCallback          = void(*)(MMAPI::Display::PlayHealVfxContext&);
+		using AfterDrawGuiCallback               = void(*)();
+		using AfterHudShouldShowCallback         = void(*)(MMAPI::Display::HudShouldShowContext&);
 
 		inline AfterDisplayResizeCallback         after_display_resize_callback           = nullptr;
 		inline BeforeVertigoDrawWithColorCallback before_vertigo_draw_with_color_callback = nullptr;
 		inline BeforePlayHealVfxCallback          before_play_heal_vfx_callback           = nullptr;
+		inline AfterDrawGuiCallback               after_draw_gui_callback                 = nullptr;
+		inline AfterHudShouldShowCallback         after_hud_should_show_callback          = nullptr;
 
 		inline YYTK::RValue& GmlScriptAfterDisplayResizeCallback(
 			IN YYTK::CInstance* Self,
@@ -148,12 +165,56 @@ namespace MMAPI::Display
 
 			return Result;
 		}
+
+		inline YYTK::RValue& GmlScriptAfterDrawGuiCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_ON_DRAW_GUI)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			if (after_draw_gui_callback)
+				after_draw_gui_callback();
+
+			return Result;
+		}
+
+		inline YYTK::RValue& GmlScriptHudShouldShowCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_HUD_SHOULD_SHOW)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			if (after_hud_should_show_callback)
+			{
+				MMAPI::Display::HudShouldShowContext context{ Result.ToBoolean() };
+				after_hud_should_show_callback(context);
+				Result = context.m_result;
+			}
+
+			return Result;
+		}
 	}
 
 	/// Activates Display hooks. Installs the `resize_amount@Display@Display`,
-	/// `vertigo_draw_with_color`, and `play_heal_vfx` script hooks so registered callbacks fire on
-	/// display resize, screen-space sprite draws, and heal visual effects respectively. Safe to call
-	/// before any Hooks::* registration — each callback no-ops until a user callback is bound.
+	/// `vertigo_draw_with_color`, `play_heal_vfx`, `on_draw_gui@Display@Display`, and
+	/// `hud_should_show` script hooks so registered callbacks fire on display resize, screen-space
+	/// sprite draws, heal visual effects, per-frame GUI draw, and HUD visibility checks
+	/// respectively. Safe to call before any Hooks::* registration — each callback no-ops until a
+	/// user callback is bound.
 	/// @return Status::Success if the hooks are installed (or already were); otherwise a failure status.
 	inline MMAPI::Status Enable()
 	{
@@ -166,6 +227,8 @@ namespace MMAPI::Display
 			{ Internal::GML_SCRIPT_DISPLAY_RESIZE,          reinterpret_cast<PVOID>(Internal::GmlScriptAfterDisplayResizeCallback) },
 			{ Internal::GML_SCRIPT_VERTIGO_DRAW_WITH_COLOR, reinterpret_cast<PVOID>(Internal::GmlScriptBeforeVertigoDrawWithColorCallback) },
 			{ Internal::GML_SCRIPT_PLAY_HEAL_VFX,           reinterpret_cast<PVOID>(Internal::GmlScriptBeforePlayHealVfxCallback) },
+			{ Internal::GML_SCRIPT_ON_DRAW_GUI,             reinterpret_cast<PVOID>(Internal::GmlScriptAfterDrawGuiCallback) },
+			{ Internal::GML_SCRIPT_HUD_SHOULD_SHOW,         reinterpret_cast<PVOID>(Internal::GmlScriptHudShouldShowCallback) },
 		});
 		if (!MMAPI::IsSuccess(status))
 			return status;
@@ -228,6 +291,42 @@ namespace MMAPI::Display
 			return MMAPI::Internal::RegisterHook(
 				"Display::BeforePlayHealVfx",
 				Internal::before_play_heal_vfx_callback,
+				callback
+			);
+		}
+
+		/// Registers a callback that runs after the game's `on_draw_gui@Display@Display` script —
+		/// the per-frame GUI draw pass. Use for input polling, overlay drawing, or any other
+		/// per-frame mod logic gated on the game being actively drawing.
+		/// @param callback A parameterless function called after each GUI draw step.
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterDrawGui(Internal::AfterDrawGuiCallback callback)
+		{
+			MMAPI::Status status = MMAPI::Display::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
+
+			return MMAPI::Internal::RegisterHook(
+				"Display::AfterDrawGui",
+				Internal::after_draw_gui_callback,
+				callback
+			);
+		}
+
+		/// Registers a callback that runs after the game's `hud_should_show` script — the
+		/// per-frame predicate that decides whether the HUD renders. Use `ctx.SetResult(false)`
+		/// to hide the HUD, or `ctx.GetResult()` to inspect the game's verdict.
+		/// @param callback A function called with a mutable `MMAPI::Display::HudShouldShowContext`.
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterHudShouldShow(Internal::AfterHudShouldShowCallback callback)
+		{
+			MMAPI::Status status = MMAPI::Display::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
+
+			return MMAPI::Internal::RegisterHook(
+				"Display::AfterHudShouldShow",
+				Internal::after_hud_should_show_callback,
 				callback
 			);
 		}

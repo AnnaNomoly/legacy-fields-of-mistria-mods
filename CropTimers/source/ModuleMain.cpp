@@ -264,7 +264,7 @@ void OnSetupMainScreen()
 // edge to retroactively apply/revert sprites that were set before the toggle.
 void OnAfterDrawGui()
 {
-	if (!MMAPI::Game::WindowHasFocus() || processing_user_input)
+	if (!MMAPI::Engine::WindowHasFocus() || processing_user_input)
 		return;
 
 	if (!activation_keybind || !MMAPI::Input::IsKeybindPressed(*activation_keybind))
@@ -340,7 +340,7 @@ EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path&
 	MMAPI::Object::Enable();
 
 	MMAPI::Game::Hooks::BeforeSetupMainScreen(OnSetupMainScreen);
-	MMAPI::Game::Hooks::AfterDrawGui(OnAfterDrawGui);
+	MMAPI::Display::Hooks::AfterDrawGui(OnAfterDrawGui);
 	MMAPI::Object::Hooks::BeforeNodeRendererSetSprite(OnBeforeNodeRendererSetSprite);
 
 	MMAPI::Log::Info("Plugin started!");

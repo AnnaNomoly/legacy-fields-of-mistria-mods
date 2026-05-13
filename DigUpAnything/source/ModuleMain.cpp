@@ -426,7 +426,7 @@ void OnAfterChooseRandomArtifact(MMAPI::Archaeology::AfterChooseRandomArtifactCo
 
 void OnAfterDrawGui()
 {
-	if (!MMAPI::Game::WindowHasFocus() || processing_user_input)
+	if (!MMAPI::Engine::WindowHasFocus() || processing_user_input)
 		return;
 
 	if (!activation_keybind || !MMAPI::Input::IsKeybindPressed(*activation_keybind))
@@ -507,7 +507,7 @@ EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path&
 
 	MMAPI::Game::Hooks::BeforeSetupMainScreen(OnSetupMainScreen);
 	MMAPI::Game::Hooks::AfterGameActive(OnAfterGameActive);
-	MMAPI::Game::Hooks::AfterDrawGui(OnAfterDrawGui);
+	MMAPI::Display::Hooks::AfterDrawGui(OnAfterDrawGui);
 	MMAPI::Item::Hooks::BeforeGiveItem(OnBeforeGiveItem);
 	MMAPI::Archaeology::Hooks::AfterChooseRandomArtifact(OnAfterChooseRandomArtifact);
 	MMAPI::Instance::Hooks::OnObjectCall(MMAPI::Instance::Objects::Ari, OnAriTick);

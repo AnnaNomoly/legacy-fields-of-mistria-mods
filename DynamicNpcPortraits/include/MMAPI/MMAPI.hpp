@@ -12,6 +12,7 @@
 #include "Calendar.hpp"
 // Config.hpp is opt-in — requires nlohmann/json.hpp. Include it explicitly if your mod uses MMAPI::Config.
 #include "Cosmetic.hpp"
+#include "Crafting.hpp"
 #include "CrossMod.hpp"
 #include "Cutscene.hpp"
 #include "Damage.hpp"

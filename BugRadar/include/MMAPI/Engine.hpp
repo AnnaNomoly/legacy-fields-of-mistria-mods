@@ -141,6 +141,12 @@ namespace MMAPI::Engine
 		return MMAPI::Internal::module_interface->CallBuiltin("window_get_height", {}).ToDouble();
 	}
 
+	/// Returns true if the game window currently has focus.
+	inline bool WindowHasFocus()
+	{
+		return MMAPI::Internal::module_interface->CallBuiltin("window_has_focus", {}).ToBoolean();
+	}
+
 	/// Returns the mouse's current X position in window pixels (0 = left edge).
 	inline double GetMouseX()
 	{

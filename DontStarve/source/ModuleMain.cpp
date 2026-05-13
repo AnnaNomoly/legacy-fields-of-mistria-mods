@@ -1025,7 +1025,7 @@ EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path&
 	MMAPI::Game::Hooks::BeforeSaveGame(OnBeforeSaveGame);
 	MMAPI::Game::Hooks::AfterLoadGame(OnAfterLoadGame);
 	MMAPI::Game::Hooks::AfterEndDay(OnAfterEndDay);
-	MMAPI::Game::Hooks::AfterDrawGui(OnAfterDrawGui);
+	MMAPI::Display::Hooks::AfterDrawGui(OnAfterDrawGui);
 	MMAPI::Calendar::Hooks::AfterClockUpdate(OnAfterClockUpdate);
 	MMAPI::Player::Hooks::BeforeHealthChange(OnBeforeHealthChange);
 	MMAPI::Player::Hooks::BeforeStaminaChange(OnBeforeStaminaChange);
