@@ -1,5 +1,9 @@
 #pragma once
 
+#if !__has_include(<nlohmann/json.hpp>)
+#error "MMAPI::Config requires nlohmann/json.hpp. Either vendor it at include/nlohmann/json.hpp in your mod project (the MMAPI sync flow ships a copy alongside the MMAPI headers), or remove #include <MMAPI/Config.hpp> — it's intentionally not pulled in by <MMAPI/MMAPI.hpp> by default."
+#endif
+
 #include <filesystem>
 #include <fstream>
 #include <iomanip>

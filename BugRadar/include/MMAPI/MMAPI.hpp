@@ -10,7 +10,7 @@
 #include "Bark.hpp"
 #include "Bug.hpp"
 #include "Calendar.hpp"
-#include "Config.hpp"
+// Config.hpp is opt-in — requires nlohmann/json.hpp. Include it explicitly if your mod uses MMAPI::Config.
 #include "Cosmetic.hpp"
 #include "Damage.hpp"
 #include "Display.hpp"
@@ -27,7 +27,7 @@
 #include "Location.hpp"
 #include "Mail.hpp"
 #include "Math.hpp"
-#include "ModSave.hpp"
+// ModSave.hpp is opt-in — requires nlohmann/json.hpp. Include it explicitly if your mod uses MMAPI::ModSave.
 #include "Monster.hpp"
 #include "NPC.hpp"
 #include "Object.hpp"

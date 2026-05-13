@@ -3,6 +3,7 @@
 #include <set>
 #include <YYToolkit/YYTK_Shared.hpp>
 #include <MMAPI/MMAPI.hpp>
+#include <MMAPI/Config.hpp>
 using namespace Aurie;
 using namespace YYTK;
 using json = nlohmann::json;

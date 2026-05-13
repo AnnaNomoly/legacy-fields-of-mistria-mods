@@ -8,6 +8,7 @@
 
 #include <YYToolkit/YYTK_Shared.hpp>
 #include <MMAPI/MMAPI.hpp>
+#include <MMAPI/ModSave.hpp>
 
 using namespace Aurie;
 using namespace YYTK;
