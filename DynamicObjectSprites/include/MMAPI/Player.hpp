@@ -56,6 +56,31 @@ namespace MMAPI::Player
 			fn(static_cast<States>(i));
 	}
 
+	/// Tool kinds that drive Ari's per-tool FSM actions in `AriFsm`. Each value corresponds to one
+	/// of the anonymous closures the game registers as the tool-action handler for that tool
+	/// (e.g. `Tool::Hoe` ↔ `gml_Script_hoe@anon@84872@AriFsm@AriFsm`).
+	enum class Tool : int
+	{
+		Hoe         = 0,
+		Axe         = 1,
+		PickAxe     = 2,
+		Shovel      = 3,
+		Net         = 4,
+		WateringCan = 5,
+		Sow         = 6,
+	};
+
+	/// Total number of enumerators in Tool. Iterating [0, ToolCount) covers every Tool value.
+	inline constexpr int ToolCount = 7;
+
+	/// Invokes fn with every Tool value, in ascending order.
+	template <typename Fn>
+	inline void ForEachTool(Fn fn)
+	{
+		for (int i = 0; i < ToolCount; ++i)
+			fn(static_cast<Tool>(i));
+	}
+
 	/// Compass direction Ari can face. The integer values match the game's `cardinal` field used by
 	/// `obj_ari.set_cardinal` — East=0, North=1, West=2, South=3 (GameMaker convention: 0°=right,
 	/// 90°=up, counterclockwise).
@@ -140,6 +165,39 @@ namespace MMAPI::Player
 		void SetAmount(double amount) { m_amount = amount; }
 	};
 
+	struct AfterStaminaChangeContext
+	{
+		double m_amount = 0.0;
+
+		/// Returns the stamina change amount the game's modify_stamina script saw (post any
+		/// BeforeStaminaChange mutations). Useful as a "did stamina actually get consumed?" signal —
+		/// if a BeforeStaminaChange callback zeroed the amount, this returns 0, otherwise the live
+		/// applied value.
+		double GetAmount() const { return m_amount; }
+	};
+
+	struct ToolActionContext
+	{
+		MMAPI::Player::Tool m_tool = MMAPI::Player::Tool::Hoe;
+
+		/// Returns the tool whose AriFsm action just fired.
+		MMAPI::Player::Tool GetTool() const { return m_tool; }
+	};
+
+	struct NodeInteractionContext
+	{
+		double m_damage_modifier = 0.0;
+
+		/// Returns the damage modifier the game is about to apply to the node interaction
+		/// (Arguments[4] on pick_node / chop_node). Negative values are the "charged tool damage
+		/// penalty" the game applies when the action covers a wider area at reduced per-hit damage.
+		double GetDamageModifier() const { return m_damage_modifier; }
+
+		/// Overrides the damage modifier — writes through to the script's Arguments[4]. Use to
+		/// clamp the penalty (e.g. `SetDamageModifier(0.0)` to neutralize negative penalties).
+		void SetDamageModifier(double value) { m_damage_modifier = value; }
+	};
+
 	struct BeforeManaChangeContext
 	{
 		double m_amount = 0.0;
@@ -214,25 +272,49 @@ namespace MMAPI::Player
 		inline constexpr const char* GML_SCRIPT_FACE_DIR               = "gml_Script_face_dir@gml_Object_obj_ari_Create_0";
 		inline constexpr const char* GML_SCRIPT_SET_CARDINAL           = "gml_Script_set_cardinal@gml_Object_obj_ari_Create_0";
 		inline constexpr const char* GML_SCRIPT_SHOULD_DIE             = "gml_Script_should_die@gml_Object_obj_ari_Create_0";
+
+		// AriFsm tool-action closures. The `@anon@84872@AriFsm@AriFsm` suffix is the compiler-assigned
+		// anonymous-function id for the action handler registered in AriFsm's Tool-state dispatch
+		// table. The numeric id is stable across game patches that don't reorder AriFsm's scripts —
+		// re-dump from globalInstance if a patch shifts the id and these constants stop resolving.
+		inline constexpr const char* GML_SCRIPT_TOOL_HOE          = "gml_Script_hoe@anon@84872@AriFsm@AriFsm";
+		inline constexpr const char* GML_SCRIPT_TOOL_AXE          = "gml_Script_axe@anon@84872@AriFsm@AriFsm";
+		inline constexpr const char* GML_SCRIPT_TOOL_PICK_AXE     = "gml_Script_pick_axe@anon@84872@AriFsm@AriFsm";
+		inline constexpr const char* GML_SCRIPT_TOOL_SHOVEL       = "gml_Script_shovel@anon@84872@AriFsm@AriFsm";
+		inline constexpr const char* GML_SCRIPT_TOOL_NET          = "gml_Script_net@anon@84872@AriFsm@AriFsm";
+		inline constexpr const char* GML_SCRIPT_TOOL_WATERING_CAN = "gml_Script_watering_can@anon@84872@AriFsm@AriFsm";
+		inline constexpr const char* GML_SCRIPT_TOOL_SOW          = "gml_Script_sow@anon@84872@AriFsm@AriFsm";
+
+		inline constexpr const char* GML_SCRIPT_PICK_NODE = "gml_Script_pick_node";
+		inline constexpr const char* GML_SCRIPT_CHOP_NODE = "gml_Script_chop_node";
 		using AfterMoveSpeedCallback     = void(*)(MMAPI::Player::MoveSpeedContext&);
 		using BeforeHealthChangeCallback  = void(*)(MMAPI::Player::BeforeHealthChangeContext&);
 		using AfterHealthChangeCallback   = void(*)(MMAPI::Player::AfterHealthChangeContext&);
 		using BeforeStaminaChangeCallback = void(*)(MMAPI::Player::BeforeStaminaChangeContext&);
+		using AfterStaminaChangeCallback  = void(*)(MMAPI::Player::AfterStaminaChangeContext&);
 		using BeforeManaChangeCallback    = void(*)(MMAPI::Player::BeforeManaChangeContext&);
 		using BeforeFaceDirCallback       = void(*)(MMAPI::Player::FaceDirContext&);
 		using AfterHeldItemCallback           = void(*)(MMAPI::Player::HeldItemContext&);
 		using AfterUseActionCompleteCallback  = void(*)(MMAPI::Player::AfterUseActionContext&);
 		using AfterShouldDieCallback          = void(*)(MMAPI::Player::AfterShouldDieContext&);
+		using BeforeToolActionCallback        = void(*)(MMAPI::Player::ToolActionContext&);
+		using AfterToolActionCallback         = void(*)(MMAPI::Player::ToolActionContext&);
+		using BeforeNodeInteractionCallback   = void(*)(MMAPI::Player::NodeInteractionContext&);
 
 		inline AfterMoveSpeedCallback         after_move_speed_callback             = nullptr;
 		inline BeforeHealthChangeCallback     before_health_change_callback         = nullptr;
 		inline AfterHealthChangeCallback      after_health_change_callback          = nullptr;
 		inline BeforeStaminaChangeCallback    before_stamina_change_callback        = nullptr;
+		inline AfterStaminaChangeCallback     after_stamina_change_callback         = nullptr;
 		inline BeforeManaChangeCallback       before_mana_change_callback           = nullptr;
 		inline BeforeFaceDirCallback          before_face_dir_callback              = nullptr;
 		inline AfterHeldItemCallback          after_held_item_callback              = nullptr;
 		inline AfterUseActionCompleteCallback after_use_action_complete_callback    = nullptr;
 		inline AfterShouldDieCallback         after_should_die_callback             = nullptr;
+		inline BeforeToolActionCallback       before_tool_action_callback           = nullptr;
+		inline AfterToolActionCallback        after_tool_action_callback            = nullptr;
+		inline BeforeNodeInteractionCallback  before_pick_node_callback             = nullptr;
+		inline BeforeNodeInteractionCallback  before_chop_node_callback             = nullptr;
 
 		// Edge-detect state for the use-action-complete signal: true when the previous obj_ari tick
 		// observed (state == HoldToUse && state.did_action). Cleared on return to title.
@@ -341,7 +423,117 @@ namespace MMAPI::Player
 			);
 
 			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			if (after_stamina_change_callback && Arguments && ArgumentCount >= 1 && Arguments[0] && MMAPI::Engine::IsNumeric(*Arguments[0]))
+			{
+				MMAPI::Player::AfterStaminaChangeContext context{ Arguments[0]->ToDouble() };
+				after_stamina_change_callback(context);
+			}
+
 			return Result;
+		}
+
+		// Shared dispatcher for the 7 AriFsm tool-action closures. The thunks below pin the Tool kind
+		// and script name; the helper just fires the Before/After user callbacks around the trampoline.
+		inline YYTK::RValue& DispatchToolAction(
+			MMAPI::Player::Tool tool,
+			const char* script_name,
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			if (before_tool_action_callback)
+			{
+				MMAPI::Player::ToolActionContext context{ tool };
+				before_tool_action_callback(context);
+			}
+
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, script_name)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			if (after_tool_action_callback)
+			{
+				MMAPI::Player::ToolActionContext context{ tool };
+				after_tool_action_callback(context);
+			}
+
+			return Result;
+		}
+
+		inline YYTK::RValue& GmlScriptHoeToolActionCallback(IN YYTK::CInstance* Self, IN YYTK::CInstance* Other, OUT YYTK::RValue& Result, IN int ArgumentCount, IN YYTK::RValue** Arguments)
+		{
+			return DispatchToolAction(MMAPI::Player::Tool::Hoe, GML_SCRIPT_TOOL_HOE, Self, Other, Result, ArgumentCount, Arguments);
+		}
+
+		inline YYTK::RValue& GmlScriptAxeToolActionCallback(IN YYTK::CInstance* Self, IN YYTK::CInstance* Other, OUT YYTK::RValue& Result, IN int ArgumentCount, IN YYTK::RValue** Arguments)
+		{
+			return DispatchToolAction(MMAPI::Player::Tool::Axe, GML_SCRIPT_TOOL_AXE, Self, Other, Result, ArgumentCount, Arguments);
+		}
+
+		inline YYTK::RValue& GmlScriptPickAxeToolActionCallback(IN YYTK::CInstance* Self, IN YYTK::CInstance* Other, OUT YYTK::RValue& Result, IN int ArgumentCount, IN YYTK::RValue** Arguments)
+		{
+			return DispatchToolAction(MMAPI::Player::Tool::PickAxe, GML_SCRIPT_TOOL_PICK_AXE, Self, Other, Result, ArgumentCount, Arguments);
+		}
+
+		inline YYTK::RValue& GmlScriptShovelToolActionCallback(IN YYTK::CInstance* Self, IN YYTK::CInstance* Other, OUT YYTK::RValue& Result, IN int ArgumentCount, IN YYTK::RValue** Arguments)
+		{
+			return DispatchToolAction(MMAPI::Player::Tool::Shovel, GML_SCRIPT_TOOL_SHOVEL, Self, Other, Result, ArgumentCount, Arguments);
+		}
+
+		inline YYTK::RValue& GmlScriptNetToolActionCallback(IN YYTK::CInstance* Self, IN YYTK::CInstance* Other, OUT YYTK::RValue& Result, IN int ArgumentCount, IN YYTK::RValue** Arguments)
+		{
+			return DispatchToolAction(MMAPI::Player::Tool::Net, GML_SCRIPT_TOOL_NET, Self, Other, Result, ArgumentCount, Arguments);
+		}
+
+		inline YYTK::RValue& GmlScriptWateringCanToolActionCallback(IN YYTK::CInstance* Self, IN YYTK::CInstance* Other, OUT YYTK::RValue& Result, IN int ArgumentCount, IN YYTK::RValue** Arguments)
+		{
+			return DispatchToolAction(MMAPI::Player::Tool::WateringCan, GML_SCRIPT_TOOL_WATERING_CAN, Self, Other, Result, ArgumentCount, Arguments);
+		}
+
+		inline YYTK::RValue& GmlScriptSowToolActionCallback(IN YYTK::CInstance* Self, IN YYTK::CInstance* Other, OUT YYTK::RValue& Result, IN int ArgumentCount, IN YYTK::RValue** Arguments)
+		{
+			return DispatchToolAction(MMAPI::Player::Tool::Sow, GML_SCRIPT_TOOL_SOW, Self, Other, Result, ArgumentCount, Arguments);
+		}
+
+		// pick_node / chop_node share a context shape but live as separate game scripts. Both expose
+		// the damage modifier as Arguments[4]; mods read/write it via the shared NodeInteractionContext.
+		inline YYTK::RValue& DispatchNodeInteraction(
+			BeforeNodeInteractionCallback callback,
+			const char* script_name,
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			if (callback && Arguments && ArgumentCount >= 5 && Arguments[4] && MMAPI::Engine::IsNumeric(*Arguments[4]))
+			{
+				MMAPI::Player::NodeInteractionContext context{ Arguments[4]->ToDouble() };
+				callback(context);
+				*Arguments[4] = context.m_damage_modifier;
+			}
+
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, script_name)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+			return Result;
+		}
+
+		inline YYTK::RValue& GmlScriptBeforePickNodeCallback(IN YYTK::CInstance* Self, IN YYTK::CInstance* Other, OUT YYTK::RValue& Result, IN int ArgumentCount, IN YYTK::RValue** Arguments)
+		{
+			return DispatchNodeInteraction(before_pick_node_callback, GML_SCRIPT_PICK_NODE, Self, Other, Result, ArgumentCount, Arguments);
+		}
+
+		inline YYTK::RValue& GmlScriptBeforeChopNodeCallback(IN YYTK::CInstance* Self, IN YYTK::CInstance* Other, OUT YYTK::RValue& Result, IN int ArgumentCount, IN YYTK::RValue** Arguments)
+		{
+			return DispatchNodeInteraction(before_chop_node_callback, GML_SCRIPT_CHOP_NODE, Self, Other, Result, ArgumentCount, Arguments);
 		}
 
 		inline YYTK::RValue& GmlScriptModifyManaCallback(
@@ -1039,13 +1231,22 @@ namespace MMAPI::Player
 			return status;
 
 		status = MMAPI::Internal::InstallScriptHooks({
-			{ Internal::GML_SCRIPT_GET_MOVE_SPEED, reinterpret_cast<PVOID>(Internal::GmlScriptGetMoveSpeedCallback) },
-			{ Internal::GML_SCRIPT_MODIFY_HEALTH,  reinterpret_cast<PVOID>(Internal::GmlScriptModifyHealthCallback) },
-			{ Internal::GML_SCRIPT_MODIFY_STAMINA, reinterpret_cast<PVOID>(Internal::GmlScriptModifyStaminaCallback) },
-			{ Internal::GML_SCRIPT_MODIFY_MANA,    reinterpret_cast<PVOID>(Internal::GmlScriptModifyManaCallback) },
-			{ Internal::GML_SCRIPT_FACE_DIR,       reinterpret_cast<PVOID>(Internal::GmlScriptBeforeFaceDirCallback) },
-			{ Internal::GML_SCRIPT_HELD_ITEM,      reinterpret_cast<PVOID>(Internal::GmlScriptAfterHeldItemCallback) },
-			{ Internal::GML_SCRIPT_SHOULD_DIE,     reinterpret_cast<PVOID>(Internal::GmlScriptAfterShouldDieCallback) },
+			{ Internal::GML_SCRIPT_GET_MOVE_SPEED,      reinterpret_cast<PVOID>(Internal::GmlScriptGetMoveSpeedCallback) },
+			{ Internal::GML_SCRIPT_MODIFY_HEALTH,       reinterpret_cast<PVOID>(Internal::GmlScriptModifyHealthCallback) },
+			{ Internal::GML_SCRIPT_MODIFY_STAMINA,      reinterpret_cast<PVOID>(Internal::GmlScriptModifyStaminaCallback) },
+			{ Internal::GML_SCRIPT_MODIFY_MANA,         reinterpret_cast<PVOID>(Internal::GmlScriptModifyManaCallback) },
+			{ Internal::GML_SCRIPT_FACE_DIR,            reinterpret_cast<PVOID>(Internal::GmlScriptBeforeFaceDirCallback) },
+			{ Internal::GML_SCRIPT_HELD_ITEM,           reinterpret_cast<PVOID>(Internal::GmlScriptAfterHeldItemCallback) },
+			{ Internal::GML_SCRIPT_SHOULD_DIE,          reinterpret_cast<PVOID>(Internal::GmlScriptAfterShouldDieCallback) },
+			{ Internal::GML_SCRIPT_TOOL_HOE,            reinterpret_cast<PVOID>(Internal::GmlScriptHoeToolActionCallback) },
+			{ Internal::GML_SCRIPT_TOOL_AXE,            reinterpret_cast<PVOID>(Internal::GmlScriptAxeToolActionCallback) },
+			{ Internal::GML_SCRIPT_TOOL_PICK_AXE,       reinterpret_cast<PVOID>(Internal::GmlScriptPickAxeToolActionCallback) },
+			{ Internal::GML_SCRIPT_TOOL_SHOVEL,         reinterpret_cast<PVOID>(Internal::GmlScriptShovelToolActionCallback) },
+			{ Internal::GML_SCRIPT_TOOL_NET,            reinterpret_cast<PVOID>(Internal::GmlScriptNetToolActionCallback) },
+			{ Internal::GML_SCRIPT_TOOL_WATERING_CAN,   reinterpret_cast<PVOID>(Internal::GmlScriptWateringCanToolActionCallback) },
+			{ Internal::GML_SCRIPT_TOOL_SOW,            reinterpret_cast<PVOID>(Internal::GmlScriptSowToolActionCallback) },
+			{ Internal::GML_SCRIPT_PICK_NODE,           reinterpret_cast<PVOID>(Internal::GmlScriptBeforePickNodeCallback) },
+			{ Internal::GML_SCRIPT_CHOP_NODE,           reinterpret_cast<PVOID>(Internal::GmlScriptBeforeChopNodeCallback) },
 		});
 		if (!MMAPI::IsSuccess(status))
 			return status;
@@ -1131,6 +1332,99 @@ namespace MMAPI::Player
 			return MMAPI::Internal::RegisterHook(
 				"Player::BeforeStaminaChange",
 				Internal::before_stamina_change_callback,
+				callback
+			);
+		}
+
+		/// Registers a callback that runs after the game's modify_stamina script. Read `ctx.GetAmount()`
+		/// for the amount actually applied (post any BeforeStaminaChange mutations) — useful as a
+		/// "stamina was really consumed this fire" signal for mods that bookkeep per-action costs.
+		/// @param callback A function called with a `MMAPI::Player::AfterStaminaChangeContext`.
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterStaminaChange(Internal::AfterStaminaChangeCallback callback)
+		{
+			MMAPI::Status status = MMAPI::Player::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
+
+			return MMAPI::Internal::RegisterHook(
+				"Player::AfterStaminaChange",
+				Internal::after_stamina_change_callback,
+				callback
+			);
+		}
+
+		/// Registers a callback that runs before each AriFsm tool-action closure. Fires for every
+		/// `Tool` (Hoe, Axe, PickAxe, Shovel, Net, WateringCan, Sow) — branch on `ctx.GetTool()` to
+		/// route per-tool logic. Use this for pre-action state setup; pair with `AfterToolAction`
+		/// for post-action observation (e.g. detecting whether stamina was consumed during the action).
+		/// @param callback A function called with a `MMAPI::Player::ToolActionContext` before each tool action.
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforeToolAction(Internal::BeforeToolActionCallback callback)
+		{
+			MMAPI::Status status = MMAPI::Player::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
+
+			return MMAPI::Internal::RegisterHook(
+				"Player::BeforeToolAction",
+				Internal::before_tool_action_callback,
+				callback
+			);
+		}
+
+		/// Registers a callback that runs after each AriFsm tool-action closure. Fires for every
+		/// `Tool` (Hoe, Axe, PickAxe, Shovel, Net, WateringCan, Sow) — branch on `ctx.GetTool()` to
+		/// route per-tool logic. Pair with `Player::Hooks::AfterStaminaChange` if you need to know
+		/// whether stamina was consumed during the action.
+		/// @param callback A function called with a `MMAPI::Player::ToolActionContext` after each tool action.
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterToolAction(Internal::AfterToolActionCallback callback)
+		{
+			MMAPI::Status status = MMAPI::Player::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
+
+			return MMAPI::Internal::RegisterHook(
+				"Player::AfterToolAction",
+				Internal::after_tool_action_callback,
+				callback
+			);
+		}
+
+		/// Registers a callback that runs before the game's `pick_node` script — the resource-node
+		/// interaction routine for pickable nodes (ores, rocks, etc.). Use `ctx.GetDamageModifier()` /
+		/// `ctx.SetDamageModifier(value)` to inspect or mutate the damage modifier (Arguments[4]). The
+		/// game applies negative modifiers as the "charged tool damage penalty" — set to 0 to clamp.
+		/// @param callback A function called with a mutable `MMAPI::Player::NodeInteractionContext`.
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforePickNode(Internal::BeforeNodeInteractionCallback callback)
+		{
+			MMAPI::Status status = MMAPI::Player::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
+
+			return MMAPI::Internal::RegisterHook(
+				"Player::BeforePickNode",
+				Internal::before_pick_node_callback,
+				callback
+			);
+		}
+
+		/// Registers a callback that runs before the game's `chop_node` script — the resource-node
+		/// interaction routine for choppable nodes (trees). Uses the same `NodeInteractionContext`
+		/// shape as `BeforePickNode`; Arguments[4] is the damage modifier.
+		/// @param callback A function called with a mutable `MMAPI::Player::NodeInteractionContext`.
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforeChopNode(Internal::BeforeNodeInteractionCallback callback)
+		{
+			MMAPI::Status status = MMAPI::Player::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
+
+			return MMAPI::Internal::RegisterHook(
+				"Player::BeforeChopNode",
+				Internal::before_chop_node_callback,
 				callback
 			);
 		}

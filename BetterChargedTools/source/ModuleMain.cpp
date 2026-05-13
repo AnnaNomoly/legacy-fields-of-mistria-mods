@@ -1,1010 +1,173 @@
 #include <map>
-#include <fstream>
-#include <iostream>
-#include <filesystem>
-#include <nlohmann/json.hpp>
-#include <YYToolkit/YYTK_Shared.hpp> // YYTK v4
+
+#include <YYToolkit/YYTK_Shared.hpp>
+#include <MMAPI/MMAPI.hpp>
+#include <MMAPI/Config.hpp>
+
 using namespace Aurie;
 using namespace YYTK;
-using json = nlohmann::json;
+namespace fs = std::filesystem;
+
+// ----- Mod metadata -----
 
 static const char* const MOD_NAME = "BetterChargedTools";
-static const char* const VERSION = "1.0.0";
-static const char* const GML_SCRIPT_USE_ITEM = "gml_Script_use_item";
-static const char* const GML_SCRIPT_PICK_NODE = "gml_Script_pick_node";
-static const char* const GML_SCRIPT_CHOP_NODE = "gml_Script_chop_node";
-static const char* const GML_SCRIPT_ARI_FSM_HOE = "gml_Script_hoe@anon@84872@AriFsm@AriFsm";
-static const char* const GML_SCRIPT_ARI_FSM_AXE = "gml_Script_axe@anon@84872@AriFsm@AriFsm";
-static const char* const GML_SCRIPT_ARI_FSM_PICK_AXE = "gml_Script_pick_axe@anon@84872@AriFsm@AriFsm";
-static const char* const GML_SCRIPT_ARI_FSM_SHOVEL = "gml_Script_shovel@anon@84872@AriFsm@AriFsm";
-static const char* const GML_SCRIPT_ARI_FSM_NET = "gml_Script_net@anon@84872@AriFsm@AriFsm";
-static const char* const GML_SCRIPT_ARI_FSM_WATERING_CAN = "gml_Script_watering_can@anon@84872@AriFsm@AriFsm";
-static const char* const GML_SCRIPT_ARI_FSM_SOW = "gml_Script_sow@anon@84872@AriFsm@AriFsm";
-static const char* const GML_SCRIPT_MODIFY_STAMINA = "gml_Script_modify_stamina@Ari@Ari";
-static const char* const GML_SCRIPT_SETUP_MAIN_SCREEN = "gml_Script_setup_main_screen@TitleMenu@TitleMenu";
-static const char* const REDUCE_CHARGED_STAMINA_USAGE_JSON_KEY = "reduce_charged_stamina_usage";
-static const char* const REMOVE_CHARGED_DAMAGE_PENALTY_JSON_KEY = "remove_charged_damage_penalty";
-static const bool DEFAULT_REDUCE_CHARGED_STAMINA_USAGE = true;
-static const bool DEFAULT_REMOVE_CHARGED_DAMAGE_PENALTY = true;
+static const char* const VERSION  = "1.1.0";
 
-static struct Configuration {
-	bool reduce_charged_stamina_usage = DEFAULT_REDUCE_CHARGED_STAMINA_USAGE;
-	bool remove_charged_damage_penalty = DEFAULT_REMOVE_CHARGED_DAMAGE_PENALTY;
+// ----- Config keys -----
+
+static const char* const KEY_REDUCE_STAMINA  = "reduce_charged_stamina_usage";
+static const char* const KEY_REMOVE_PENALTY  = "remove_charged_damage_penalty";
+
+// ----- Tuning -----
+
+// Refund 1 stamina every Nth tool-action consumption (or every Nth modify_stamina call for the
+// watering can). N=3 yields a ~33% stamina reduction.
+static constexpr int STAMINA_REFUND_PERIOD = 3;
+
+// ----- Config -----
+
+struct Config
+{
+	bool reduce_charged_stamina_usage  = true;
+	bool remove_charged_damage_penalty = true;
 };
 
-static YYTKInterface* g_ModuleInterface = nullptr;
-static CInstance* global_instance = nullptr;
-static Configuration configuration = Configuration();
-static bool load_on_start = true;
-static bool stamina_consumed = false;
-static std::map<std::string, int> script_name_to_stamina_consumed_map = {};
-static std::map<std::string, std::vector<CInstance*>> script_name_to_reference_map = {};
+// ----- State -----
 
-void PrintError(std::exception_ptr eptr)
+static bool   startup_loaded = false;
+static Config config;
+
+// Per-tool counter of stamina-consuming events within the current use_item. Reset on every
+// BeforeUseItem fire so the refund cadence applies within a single charged-tool swing/sweep.
+//   - Non-watering-can tools: incremented in AfterToolAction when stamina was actually consumed
+//     during the action; every Nth increment triggers a +1 stamina refund.
+//   - Watering can: incremented in BeforeToolAction (pre-action); BeforeStaminaChange consults
+//     the count and zeros the cost on every Nth modify_stamina fire, decrementing afterward.
+// Two patterns because the watering can fires modify_stamina multiple times mid-action while the
+// other tools fire it once after — the watering can needs *cancellation* timed against that flow,
+// the others can get the same effect via a *refund* after the fact.
+static std::map<MMAPI::Player::Tool, int> tool_action_count;
+
+// Latched in AfterStaminaChange when the post-Before amount was negative. Read in AfterToolAction
+// to gate the refund — we don't want to refund if no real cost was applied this fire.
+static bool stamina_consumed_this_action = false;
+
+// ----- Config -----
+
+static void LoadConfig()
 {
-	try {
-		if (eptr) {
-			std::rethrow_exception(eptr);
-		}
-	}
-	catch (const std::exception& e) {
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Error: %s", MOD_NAME, VERSION, e.what());
-	}
+	fs::path path = MMAPI::Config::GetConfigPath(MOD_NAME);
+	nlohmann::json doc = MMAPI::Config::Load(path);
+
+	config.reduce_charged_stamina_usage  = MMAPI::Config::GetValue<bool>(doc, KEY_REDUCE_STAMINA, true);
+	config.remove_charged_damage_penalty = MMAPI::Config::GetValue<bool>(doc, KEY_REMOVE_PENALTY, true);
+
+	nlohmann::json roundtrip;
+	roundtrip[KEY_REDUCE_STAMINA] = config.reduce_charged_stamina_usage;
+	roundtrip[KEY_REMOVE_PENALTY] = config.remove_charged_damage_penalty;
+	MMAPI::Config::Save(path, roundtrip);
+
+	MMAPI::Log::Info("reduce_charged_stamina_usage=%s, remove_charged_damage_penalty=%s",
+		config.reduce_charged_stamina_usage  ? "true" : "false",
+		config.remove_charged_damage_penalty ? "true" : "false");
 }
 
-json CreateConfigJson(bool use_defaults)
+// ----- Hooks -----
+
+void OnBeforeUseItem(MMAPI::Item::UseItemContext& /*ctx*/)
 {
-	json config_json = {
-		{ REDUCE_CHARGED_STAMINA_USAGE_JSON_KEY, use_defaults ? DEFAULT_REDUCE_CHARGED_STAMINA_USAGE : configuration.reduce_charged_stamina_usage },
-		{ REMOVE_CHARGED_DAMAGE_PENALTY_JSON_KEY, use_defaults ? DEFAULT_REMOVE_CHARGED_DAMAGE_PENALTY : configuration.remove_charged_damage_penalty }
-	};
-	return config_json;
+	tool_action_count.clear();
 }
 
-void CreateOrLoadConfigFile()
+void OnBeforeToolAction(MMAPI::Player::ToolActionContext& ctx)
 {
-	// Load config file.
-	std::exception_ptr eptr;
-	try
-	{
-		// Try to find the mod_data directory.
-		std::string current_dir = std::filesystem::current_path().string();
-		std::string mod_data_folder = current_dir + "\\mod_data";
-		if (!std::filesystem::exists(mod_data_folder))
-		{
-			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - The \"mod_data\" directory was not found. Creating directory: %s", MOD_NAME, VERSION, mod_data_folder.c_str());
-			std::filesystem::create_directory(mod_data_folder);
-		}
+	stamina_consumed_this_action = false;
 
-		// Try to find the mod_data/BetterChargedTools directory.
-		std::string better_charged_tools_folder = mod_data_folder + "\\BetterChargedTools";
-		if (!std::filesystem::exists(better_charged_tools_folder))
-		{
-			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - The \"BetterChargedTools\" directory was not found. Creating directory: %s", MOD_NAME, VERSION, better_charged_tools_folder.c_str());
-			std::filesystem::create_directory(better_charged_tools_folder);
-		}
-
-		// Try to find the mod_data/BetterChargedTools/BetterChargedTools.json config file.
-		bool update_config_file = false;
-		std::string config_file = better_charged_tools_folder + "\\" + "BetterChargedTools.json";
-		std::ifstream in_stream(config_file);
-		if (in_stream.good())
-		{
-			try
-			{
-				json json_object = json::parse(in_stream);
-
-				// Check if the json_object is empty.
-				if (json_object.empty())
-				{
-					g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - No values found in mod configuration file: %s!", MOD_NAME, VERSION, config_file.c_str());
-					g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Add your desired values to the configuration file, otherwise defaults will be used.", MOD_NAME, VERSION);
-				}
-				else
-				{
-					// Try loading the reduce_charged_stamina_usage value.
-					if (json_object.contains(REDUCE_CHARGED_STAMINA_USAGE_JSON_KEY))
-					{
-						configuration.reduce_charged_stamina_usage = json_object[REDUCE_CHARGED_STAMINA_USAGE_JSON_KEY];
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using CUSTOM \"%s\" value: %s!", MOD_NAME, VERSION, REDUCE_CHARGED_STAMINA_USAGE_JSON_KEY, configuration.reduce_charged_stamina_usage ? "true" : "false");
-					}
-					else
-					{
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, REDUCE_CHARGED_STAMINA_USAGE_JSON_KEY, config_file.c_str());
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, REDUCE_CHARGED_STAMINA_USAGE_JSON_KEY, DEFAULT_REDUCE_CHARGED_STAMINA_USAGE ? "true" : "false");
-					}
-
-					// Try loading the remove_charged_damage_penalty value.
-					if (json_object.contains(REMOVE_CHARGED_DAMAGE_PENALTY_JSON_KEY))
-					{
-						configuration.remove_charged_damage_penalty = json_object[REMOVE_CHARGED_DAMAGE_PENALTY_JSON_KEY];
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using CUSTOM \"%s\" value: %s!", MOD_NAME, VERSION, REMOVE_CHARGED_DAMAGE_PENALTY_JSON_KEY, configuration.remove_charged_damage_penalty ? "true" : "false");
-					}
-					else
-					{
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, REMOVE_CHARGED_DAMAGE_PENALTY_JSON_KEY, config_file.c_str());
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, REMOVE_CHARGED_DAMAGE_PENALTY_JSON_KEY, DEFAULT_REMOVE_CHARGED_DAMAGE_PENALTY ? "true" : "false");
-					}
-				}
-
-				update_config_file = true;
-			}
-			catch (...)
-			{
-				eptr = std::current_exception();
-				PrintError(eptr);
-
-				g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to parse JSON from configuration file: %s", MOD_NAME, VERSION, config_file.c_str());
-				g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Make sure the file is valid JSON!", MOD_NAME, VERSION);
-			}
-
-			in_stream.close();
-		}
-		else
-		{
-			in_stream.close();
-
-			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - The \"BetterChargedTools.json\" file was not found. Creating file: %s", MOD_NAME, VERSION, config_file.c_str());
-
-			json default_config_json = CreateConfigJson(true);
-			std::ofstream out_stream(config_file);
-			out_stream << std::setw(4) << default_config_json << std::endl;
-			out_stream.close();
-		}
-
-		if (update_config_file)
-		{
-			json config_json = CreateConfigJson(false);
-			std::ofstream out_stream(config_file);
-			out_stream << std::setw(4) << config_json << std::endl;
-			out_stream.close();
-		}
-	}
-	catch (...)
-	{
-		eptr = std::current_exception();
-		PrintError(eptr);
-
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - An error occurred loading the mod configuration file.", MOD_NAME, VERSION);
-	}
+	// Watering can: pre-increment so BeforeStaminaChange can decide whether to cancel the cost
+	// during the FSM action's modify_stamina fires.
+	if (ctx.GetTool() == MMAPI::Player::Tool::WateringCan)
+		tool_action_count[ctx.GetTool()] += 1;
 }
 
-bool IsNumeric(RValue value)
+void OnAfterToolAction(MMAPI::Player::ToolActionContext& ctx)
 {
-	return value.m_Kind == VALUE_INT32 || value.m_Kind == VALUE_INT64 || value.m_Kind == VALUE_REAL;
+	// Watering can is handled in BeforeStaminaChange — skip the after-action refund path.
+	if (ctx.GetTool() == MMAPI::Player::Tool::WateringCan) return;
+	if (!config.reduce_charged_stamina_usage) return;
+	if (!stamina_consumed_this_action) return;
+
+	tool_action_count[ctx.GetTool()] += 1;
+	if (tool_action_count[ctx.GetTool()] % STAMINA_REFUND_PERIOD == 0)
+		MMAPI::Player::ModifyStamina(1);
+
+	stamina_consumed_this_action = false;
 }
 
-void ModifyStamina(CInstance* Self, CInstance* Other, int value)
+void OnBeforeStaminaChange(MMAPI::Player::BeforeStaminaChangeContext& ctx)
 {
-	CScript* gml_script_modify_stamina = nullptr;
-	g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_MODIFY_STAMINA,
-		(PVOID*)&gml_script_modify_stamina
-	);
+	if (!config.reduce_charged_stamina_usage) return;
+	if (ctx.GetAmount() >= 0.0)                return;
 
-	RValue result;
-	RValue stamina_modifier = value;
-	RValue* stamina_modifier_ptr = &stamina_modifier;
+	auto& count = tool_action_count[MMAPI::Player::Tool::WateringCan];
+	if (count <= 0) return;
 
-	gml_script_modify_stamina->m_Functions->m_ScriptFunction(
-		Self,
-		Other,
-		result,
-		1,
-		{ &stamina_modifier_ptr }
-	);
+	if (count % STAMINA_REFUND_PERIOD == 0)
+		ctx.SetAmount(0.0);
+	count -= 1;
 }
 
-void ObjectCallback(
-	IN FWCodeEvent& CodeEvent
-)
+void OnAfterStaminaChange(MMAPI::Player::AfterStaminaChangeContext& ctx)
 {
-	auto& [self, other, code, argc, argv] = CodeEvent.Arguments();
-
-	if (!self)
-		return;
-
-	if (!self->m_Object)
-		return;
-
-	if (strstr(self->m_Object->m_Name, "obj_ari"))
-	{
-		if (!script_name_to_reference_map.contains("obj_ari"))
-			script_name_to_reference_map["obj_ari"] = { global_instance->GetRefMember("__ari")->ToInstance(), self };
-	}
+	if (ctx.GetAmount() < 0.0)
+		stamina_consumed_this_action = true;
 }
 
-RValue& GmlScriptUseItemCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
+void OnBeforeNodeInteraction(MMAPI::Player::NodeInteractionContext& ctx)
 {
-	script_name_to_stamina_consumed_map.clear();
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_USE_ITEM));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
+	if (config.remove_charged_damage_penalty && ctx.GetDamageModifier() < 0.0)
+		ctx.SetDamageModifier(0.0);
 }
 
-RValue& GmlScriptPickNodeCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
+void OnBeforeSetupMainScreen()
 {
-	if (configuration.remove_charged_damage_penalty && ArgumentCount >= 5 && IsNumeric(*Arguments[4]) && Arguments[4]->ToDouble() < 0)
-		*Arguments[4] = 0.0;
+	stamina_consumed_this_action = false;
+	tool_action_count.clear();
 
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_PICK_NODE));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
+	if (startup_loaded) return;
+	LoadConfig();
+	startup_loaded = true;
 }
 
-RValue& GmlScriptChopNodeCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
+// ----- Init -----
+
+EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path& ModulePath)
 {
-	if (configuration.remove_charged_damage_penalty && ArgumentCount >= 5 && IsNumeric(*Arguments[4]) && Arguments[4]->ToDouble() < 0)
-		*Arguments[4] = 0.0;
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_CHOP_NODE));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
-}
-
-RValue& GmlScriptAriFsmHoeCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	stamina_consumed = false;
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_ARI_FSM_HOE));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	if (configuration.reduce_charged_stamina_usage && stamina_consumed)
-	{
-		script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_HOE] += 1;
-		if (script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_HOE] % 3 == 0)
-			ModifyStamina(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], 1);
-	}
-	stamina_consumed = false;
-
-	return Result;
-}
-
-RValue& GmlScriptAriFsmAxeCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	stamina_consumed = false;
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_ARI_FSM_AXE));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	if (configuration.reduce_charged_stamina_usage && stamina_consumed)
-	{
-		script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_AXE] += 1;
-		if (script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_AXE] % 3 == 0)
-			ModifyStamina(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], 1);
-	}
-	stamina_consumed = false;
-
-	return Result;
-}
-
-RValue& GmlScriptAriFsmPickAxeCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	stamina_consumed = false;
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_ARI_FSM_PICK_AXE));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	if (configuration.reduce_charged_stamina_usage && stamina_consumed)
-	{
-		script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_PICK_AXE] += 1;
-		if (script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_PICK_AXE] % 3 == 0)
-			ModifyStamina(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], 1);
-	}
-	stamina_consumed = false;
-
-	return Result;
-}
-
-RValue& GmlScriptAriFsmShovelCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	stamina_consumed = false;
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_ARI_FSM_SHOVEL));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	if (configuration.reduce_charged_stamina_usage && stamina_consumed)
-	{
-		script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_SHOVEL] += 1;
-		if (script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_SHOVEL] % 3 == 0)
-			ModifyStamina(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], 1);
-	}
-	stamina_consumed = false;
-
-	return Result;
-}
-
-RValue& GmlScriptAriFsmNetCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	stamina_consumed = false;
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_ARI_FSM_NET));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	if (configuration.reduce_charged_stamina_usage && stamina_consumed)
-	{
-		script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_NET] += 1;
-		if (script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_NET] % 3 == 0)
-			ModifyStamina(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], 1);
-	}
-	stamina_consumed = false;
-
-	return Result;
-}
-
-RValue& GmlScriptAriFsmWateringCanCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_WATERING_CAN] += 1;
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_ARI_FSM_WATERING_CAN));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
-}
-
-RValue& GmlScriptAriFsmSowCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	stamina_consumed = false;
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_ARI_FSM_SOW));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	if (configuration.reduce_charged_stamina_usage && stamina_consumed)
-	{
-		script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_SOW] += 1;
-		if (script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_SOW] % 3 == 0)
-			ModifyStamina(script_name_to_reference_map["obj_ari"][0], script_name_to_reference_map["obj_ari"][1], 1);
-	}
-	stamina_consumed = false;
-
-	return Result;
-}
-
-RValue& GmlScriptModifyStaminaCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	if (configuration.reduce_charged_stamina_usage && Arguments[0]->ToInt64() < 0)
-	{
-		if (script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_WATERING_CAN] > 0)
-		{
-			if (script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_WATERING_CAN] % 3 == 0)
-				*Arguments[0] = 0;
-			script_name_to_stamina_consumed_map[GML_SCRIPT_ARI_FSM_WATERING_CAN] -= 1;
-		}
-	}
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_MODIFY_STAMINA));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	if (Arguments[0]->ToInt64() < 0)
-		stamina_consumed = true;
-
-	return Result;
-}
-
-RValue& GmlScriptSetupMainScreenCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	if (load_on_start)
-	{
-		load_on_start = false;
-		g_ModuleInterface->GetGlobalInstance(&global_instance);
-		CreateOrLoadConfigFile();
-	}
-
-	// Reset static fields
-	stamina_consumed = false;
-	script_name_to_stamina_consumed_map = {};
-	script_name_to_reference_map = {};
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_SETUP_MAIN_SCREEN));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
-}
-
-void CreateObjectCallback(AurieStatus& status)
-{
-	status = g_ModuleInterface->CreateCallback(
-		g_ArSelfModule,
-		EVENT_OBJECT_CALL,
-		ObjectCallback,
-		0
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook (EVENT_OBJECT_CALL)!", MOD_NAME, VERSION);
-	}
-}
-
-void CreateHookGmlScriptUseItem(AurieStatus& status)
-{
-	CScript* gml_script_use_item = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_USE_ITEM,
-		(PVOID*)&gml_script_use_item
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_USE_ITEM);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_USE_ITEM,
-		gml_script_use_item->m_Functions->m_ScriptFunction,
-		GmlScriptUseItemCallback,
-		nullptr
-	);
-
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_USE_ITEM);
-	}
-}
-
-void CreateHookGmlScriptPickNode(AurieStatus& status)
-{
-	CScript* gml_script_pick_node = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_PICK_NODE,
-		(PVOID*)&gml_script_pick_node
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_PICK_NODE);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_PICK_NODE,
-		gml_script_pick_node->m_Functions->m_ScriptFunction,
-		GmlScriptPickNodeCallback,
-		nullptr
-	);
-
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_PICK_NODE);
-	}
-}
-
-void CreateHookGmlScriptChopNode(AurieStatus& status)
-{
-	CScript* gml_script_chop_node = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_CHOP_NODE,
-		(PVOID*)&gml_script_chop_node
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_CHOP_NODE);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_CHOP_NODE,
-		gml_script_chop_node->m_Functions->m_ScriptFunction,
-		GmlScriptChopNodeCallback,
-		nullptr
-	);
-
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_CHOP_NODE);
-	}
-}
-
-void CreateHookGmlScriptAriFsmHoe(AurieStatus& status)
-{
-	CScript* gml_script_ari_fsm_hoe = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_ARI_FSM_HOE,
-		(PVOID*)&gml_script_ari_fsm_hoe
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ARI_FSM_HOE);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_ARI_FSM_HOE,
-		gml_script_ari_fsm_hoe->m_Functions->m_ScriptFunction,
-		GmlScriptAriFsmHoeCallback,
-		nullptr
-	);
-
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ARI_FSM_HOE);
-	}
-}
-
-void CreateHookGmlScriptAriFsmAxe(AurieStatus& status)
-{
-	CScript* gml_script_ari_fsm_axe = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_ARI_FSM_AXE,
-		(PVOID*)&gml_script_ari_fsm_axe
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ARI_FSM_AXE);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_ARI_FSM_AXE,
-		gml_script_ari_fsm_axe->m_Functions->m_ScriptFunction,
-		GmlScriptAriFsmAxeCallback,
-		nullptr
-	);
-
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ARI_FSM_AXE);
-	}
-}
-
-void CreateHookGmlScriptAriFsmPickAxe(AurieStatus& status)
-{
-	CScript* gml_script_ari_fsm_pick_axe = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_ARI_FSM_PICK_AXE,
-		(PVOID*)&gml_script_ari_fsm_pick_axe
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ARI_FSM_PICK_AXE);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_ARI_FSM_PICK_AXE,
-		gml_script_ari_fsm_pick_axe->m_Functions->m_ScriptFunction,
-		GmlScriptAriFsmPickAxeCallback,
-		nullptr
-	);
-
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ARI_FSM_PICK_AXE);
-	}
-}
-
-void CreateHookGmlScriptAriFsmShovel(AurieStatus& status)
-{
-	CScript* gml_script_ari_fsm_shovel = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_ARI_FSM_SHOVEL,
-		(PVOID*)&gml_script_ari_fsm_shovel
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ARI_FSM_SHOVEL);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_ARI_FSM_SHOVEL,
-		gml_script_ari_fsm_shovel->m_Functions->m_ScriptFunction,
-		GmlScriptAriFsmShovelCallback,
-		nullptr
-	);
-
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ARI_FSM_SHOVEL);
-	}
-}
-
-void CreateHookGmlScriptAriFsmNet(AurieStatus& status)
-{
-	CScript* gml_script_ari_fsm_net = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_ARI_FSM_NET,
-		(PVOID*)&gml_script_ari_fsm_net
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ARI_FSM_NET);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_ARI_FSM_NET,
-		gml_script_ari_fsm_net->m_Functions->m_ScriptFunction,
-		GmlScriptAriFsmNetCallback,
-		nullptr
-	);
-
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ARI_FSM_NET);
-	}
-}
-
-void CreateHookGmlScriptAriFsmWateringCan(AurieStatus& status)
-{
-	CScript* gml_script_ari_fsm_watering_can = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_ARI_FSM_WATERING_CAN,
-		(PVOID*)&gml_script_ari_fsm_watering_can
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ARI_FSM_WATERING_CAN);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_ARI_FSM_WATERING_CAN,
-		gml_script_ari_fsm_watering_can->m_Functions->m_ScriptFunction,
-		GmlScriptAriFsmWateringCanCallback,
-		nullptr
-	);
-
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ARI_FSM_WATERING_CAN);
-	}
-}
-
-void CreateHookGmlScriptAriFsmSow(AurieStatus& status)
-{
-	CScript* gml_script_ari_fsm_sow = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_ARI_FSM_SOW,
-		(PVOID*)&gml_script_ari_fsm_sow
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ARI_FSM_SOW);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_ARI_FSM_SOW,
-		gml_script_ari_fsm_sow->m_Functions->m_ScriptFunction,
-		GmlScriptAriFsmSowCallback,
-		nullptr
-	);
-
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_ARI_FSM_SOW);
-	}
-}
-
-void CreateHookGmlScriptModifyStamina(AurieStatus& status)
-{
-	CScript* gml_script_modify_stamina = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_MODIFY_STAMINA,
-		(PVOID*)&gml_script_modify_stamina
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_MODIFY_STAMINA);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_MODIFY_STAMINA,
-		gml_script_modify_stamina->m_Functions->m_ScriptFunction,
-		GmlScriptModifyStaminaCallback,
-		nullptr
-	);
-
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_MODIFY_STAMINA);
-	}
-}
-
-void CreateHookGmlScriptSetupMainScreen(AurieStatus& status)
-{
-	CScript* gml_script_setup_main_screen = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_SETUP_MAIN_SCREEN,
-		(PVOID*)&gml_script_setup_main_screen
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SETUP_MAIN_SCREEN);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_SETUP_MAIN_SCREEN,
-		gml_script_setup_main_screen->m_Functions->m_ScriptFunction,
-		GmlScriptSetupMainScreenCallback,
-		nullptr
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SETUP_MAIN_SCREEN);
-	}
-}
-
-EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path& ModulePath) {
 	UNREFERENCED_PARAMETER(ModulePath);
 
-	AurieStatus status = AURIE_SUCCESS;
-
-	status = ObGetInterface(
-		"YYTK_Main",
-		(AurieInterfaceBase*&)(g_ModuleInterface)
-	);
-
+	YYTKInterface* module_interface = nullptr;
+	AurieStatus status = ObGetInterface("YYTK_Main", (AurieInterfaceBase*&)module_interface);
 	if (!AurieSuccess(status))
 		return AURIE_MODULE_DEPENDENCY_NOT_RESOLVED;
 
-	g_ModuleInterface->Print(CM_LIGHTAQUA, "[%s %s] - Plugin starting...", MOD_NAME, VERSION);
+	module_interface->Print(CM_LIGHTAQUA, "[%s %s] - Plugin starting...", MOD_NAME, VERSION);
 
-	CreateObjectCallback(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
+	CInstance* global_instance = nullptr;
+	module_interface->GetGlobalInstance(&global_instance);
+	MMAPI::Initialize(module_interface, global_instance, g_ArSelfModule, MOD_NAME, VERSION);
 
-	CreateHookGmlScriptUseItem(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
+	MMAPI::Game::Enable();
+	MMAPI::Item::Enable();
+	MMAPI::Player::Enable();
 
-	CreateHookGmlScriptPickNode(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
+	MMAPI::Game::Hooks::BeforeSetupMainScreen(OnBeforeSetupMainScreen);
+	MMAPI::Item::Hooks::BeforeUseItem(OnBeforeUseItem);
+	MMAPI::Player::Hooks::BeforeToolAction(OnBeforeToolAction);
+	MMAPI::Player::Hooks::AfterToolAction(OnAfterToolAction);
+	MMAPI::Player::Hooks::BeforeStaminaChange(OnBeforeStaminaChange);
+	MMAPI::Player::Hooks::AfterStaminaChange(OnAfterStaminaChange);
+	MMAPI::Player::Hooks::BeforePickNode(OnBeforeNodeInteraction);
+	MMAPI::Player::Hooks::BeforeChopNode(OnBeforeNodeInteraction);
 
-	CreateHookGmlScriptChopNode(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	CreateHookGmlScriptAriFsmHoe(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	CreateHookGmlScriptAriFsmAxe(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	CreateHookGmlScriptAriFsmPickAxe(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	CreateHookGmlScriptAriFsmShovel(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	CreateHookGmlScriptAriFsmNet(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	CreateHookGmlScriptAriFsmWateringCan(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	CreateHookGmlScriptAriFsmSow(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	CreateHookGmlScriptModifyStamina(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	CreateHookGmlScriptSetupMainScreen(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Plugin started!", MOD_NAME, VERSION);
+	MMAPI::Log::Info("Plugin started!");
 	return AURIE_SUCCESS;
 }
