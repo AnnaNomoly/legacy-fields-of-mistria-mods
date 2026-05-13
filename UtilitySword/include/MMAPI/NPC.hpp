@@ -90,6 +90,7 @@ namespace MMAPI::NPC
 		inline constexpr const char* GML_SCRIPT_ADD_HEART_POINTS     = "gml_Script_add_heart_points@Npc@Npc";
 		inline constexpr const char* GML_SCRIPT_NPC_RECEIVE_GIFT     = "gml_Script_receive_gift@gml_Object_par_NPC_Create_0";
 		inline constexpr const char* GML_SCRIPT_FIND_NPC_BLIP_NOISE  = "gml_Script_find_npc_blip_noise";
+		inline constexpr const char* GML_SCRIPT_HEART_LEVEL          = "gml_Script_heart_level@Npc@Npc";
 
 		using BeforeHeartPointsChangeCallback = void(*)(MMAPI::NPC::HeartPointsChangedContext&);
 		using BeforeReceiveGiftCallback       = void(*)(YYTK::CInstance* npc, int item_id);
@@ -442,6 +443,39 @@ namespace MMAPI::NPC
 		if (!MMAPI::Engine::StructVariableExists(npc_data, "gift_flag"))
 			return false;
 		return npc_data.GetMember("gift_flag").ToBoolean();
+	}
+
+	/// Returns the NPC's current heart level (0-10) by invoking the game's bound
+	/// `heart_level@Npc@Npc` script on the NPC's `__npc_database` struct (each entry doubles as a
+	/// callable instance with its method-script pointers populated). Defers to the game's own
+	/// heart-points → heart-level ladder, so this stays correct across patches that re-tune the
+	/// thresholds.
+	/// @param npc The NPC to read.
+	/// @return The heart level (0-10), or 0 if the NPC database entry can't be resolved.
+	inline int GetHeartLevel(MMAPI::NPC::Ids npc)
+	{
+		YYTK::RValue npc_data = GetData(npc);
+		if (npc_data.m_Kind != YYTK::VALUE_OBJECT)
+			return 0;
+
+		YYTK::CInstance* self = npc_data.ToInstance();
+		if (!self)
+			return 0;
+
+		YYTK::CScript* gml_script = nullptr;
+		MMAPI::Internal::module_interface->GetNamedRoutinePointer(
+			Internal::GML_SCRIPT_HEART_LEVEL,
+			reinterpret_cast<PVOID*>(&gml_script)
+		);
+		if (!gml_script)
+			return 0;
+
+		YYTK::RValue result;
+		gml_script->m_Functions->m_ScriptFunction(self, self, result, 0, nullptr);
+		if (!MMAPI::Engine::IsNumeric(result))
+			return 0;
+
+		return static_cast<int>(result.ToInt64());
 	}
 
 	/// Gets an NPC's heart points.

@@ -6,6 +6,7 @@
 #include "Hook.hpp"
 #include "Instance.hpp"
 #include "Log.hpp"
+#include "Spell.hpp"
 #include "Status.hpp"
 
 #include <optional>
@@ -867,6 +868,34 @@ namespace MMAPI::Player
 		YYTK::RValue result;
 		YYTK::RValue* args[1] = { &modifier };
 		gml_script->m_Functions->m_ScriptFunction(Self, Other, result, 1, args);
+	}
+
+	/// Returns the spell Ari currently has pinned to her quick-cast slot, read directly off
+	/// `globalInstance.__ari.pinned_spell`. Mirrors how `SetMaxHealth` reads `base_health` — no
+	/// game script call, no calling context required.
+	/// @attention Requires MMAPI::Player::Enable() to have been called.
+	/// @return The pinned spell, or std::nullopt if global_instance isn't set, the field is missing
+	///         or non-numeric, or the value is outside the documented `Spell::Ids` range.
+	inline std::optional<MMAPI::Spell::Ids> GetPinnedSpell()
+	{
+		MMAPI_REQUIRE_ENABLED("Player", std::nullopt);
+
+		if (!MMAPI::Internal::global_instance)
+			return std::nullopt;
+
+		YYTK::RValue ari = *MMAPI::Internal::global_instance->GetRefMember("__ari");
+		if (!MMAPI::Engine::StructVariableExists(ari, "pinned_spell"))
+			return std::nullopt;
+
+		YYTK::RValue pinned = ari.GetMember("pinned_spell");
+		if (!MMAPI::Engine::IsNumeric(pinned))
+			return std::nullopt;
+
+		int id = static_cast<int>(pinned.ToInt64());
+		if (id < 0 || id >= MMAPI::Spell::IdCount)
+			return std::nullopt;
+
+		return static_cast<MMAPI::Spell::Ids>(id);
 	}
 
 	/// Forces Ari to face the given direction (in GameMaker degrees: 0°=right, 90°=up, counterclockwise).
