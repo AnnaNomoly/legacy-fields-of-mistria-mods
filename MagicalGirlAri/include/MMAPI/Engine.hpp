@@ -193,6 +193,14 @@ namespace MMAPI::Engine
 		MMAPI::Internal::module_interface->CallBuiltin("audio_stop_sound", { sound_index });
 	}
 
+	/// Stops a currently playing game sound effect by its asset index. Use this overload when you
+	/// already have the index cached (e.g. resolved once at startup) to skip the per-call name lookup.
+	/// @param sound_effect_index The sound effect asset index.
+	inline void StopSoundEffect(YYTK::RValue sound_effect_index)
+	{
+		MMAPI::Internal::module_interface->CallBuiltin("audio_stop_sound", { sound_effect_index });
+	}
+
 	/// Gets the value of a GML built-in instance variable by name.
 	/// @param instance The instance to read from.
 	/// @param variable_name The built-in variable name (e.g. "sprite_index", "x", "depth").
