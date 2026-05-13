@@ -4,6 +4,7 @@
 #include "Engine.hpp"
 
 #include <string>
+#include <utility>
 
 #include "YYToolkit/YYTK_Shared.hpp"
 
@@ -86,5 +87,36 @@ namespace MMAPI::Cosmetic
 
 		MMAPI::Engine::StructVariableSet(cosmetic_unlocks, cosmetic_name.c_str(), 0.0);
 		return true;
+	}
+
+	/// Invokes fn with every known cosmetic by walking `globalInstance.__pad.player_assets.inner` —
+	/// the game's master cosmetic table. fn is called as `fn(cosmetic_name, cosmetic_data)` where
+	/// `cosmetic_data` is the per-cosmetic struct (its `name` member holds the localization key for
+	/// the cosmetic's display name).
+	///
+	/// No Enable required — this is a pure read of globalInstance.
+	template <typename Fn>
+	inline void ForEachCosmetic(Fn fn)
+	{
+		if (!MMAPI::Internal::global_instance)
+			return;
+
+		YYTK::RValue pad = MMAPI::Internal::global_instance->GetMember("__pad");
+		if (pad.m_Kind == YYTK::VALUE_UNDEFINED) return;
+
+		YYTK::RValue player_assets = pad.GetMember("player_assets");
+		if (player_assets.m_Kind == YYTK::VALUE_UNDEFINED) return;
+
+		YYTK::RValue inner = player_assets.GetMember("inner");
+		if (inner.m_Kind == YYTK::VALUE_UNDEFINED) return;
+
+		MMAPI::Internal::module_interface->EnumInstanceMembers(inner,
+			[&fn](const char* member_name, YYTK::RValue* value)
+			{
+				if (member_name && value)
+					fn(std::string(member_name), *value);
+				return false;
+			}
+		);
 	}
 }
