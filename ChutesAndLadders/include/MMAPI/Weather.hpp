@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core.hpp"
+#include "Engine.hpp"
 #include "Hook.hpp"
 #include "Log.hpp"
 #include "Status.hpp"
@@ -23,6 +24,22 @@ namespace MMAPI::Weather
 		YYTK::CInstance* GetOther() const { return m_other; }
 	};
 
+	/// Forward-declared; full definition follows the Ids enum.
+	enum class Ids : int;
+
+	struct AfterGetWeatherContext
+	{
+		int m_weather_id = -1;
+
+		/// Returns the weather kind the game's get_weather script just resolved. Unknown if the
+		/// raw result was out of the documented range (e.g. a value introduced by a future patch).
+		MMAPI::Weather::Ids GetWeather() const;
+
+		/// Returns the raw weather id as the script produced it. Useful when a new weather id
+		/// shows up that isn't in `Weather::Ids` yet.
+		int GetRawId() const { return m_weather_id; }
+	};
+
 	namespace Internal
 	{
 		inline bool enabled = false;
@@ -31,8 +48,10 @@ namespace MMAPI::Weather
 		inline constexpr const char* GML_SCRIPT_ON_ROOM_START  = "gml_Script_on_room_start@WeatherManager@Weather";
 
 		using BeforeGetWeatherCallback = void(*)();
+		using AfterGetWeatherCallback  = void(*)(MMAPI::Weather::AfterGetWeatherContext&);
 		using AfterRoomStartCallback   = void(*)(MMAPI::Weather::AfterRoomStartContext&);
 		inline BeforeGetWeatherCallback before_get_weather_callback = nullptr;
+		inline AfterGetWeatherCallback  after_get_weather_callback  = nullptr;
 		inline AfterRoomStartCallback   after_room_start_callback   = nullptr;
 
 		// Live WeatherManager Self/Other, latched from the get_weather hook.
@@ -111,6 +130,13 @@ namespace MMAPI::Weather
 
 			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_GET_WEATHER));
 			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			if (after_get_weather_callback && MMAPI::Engine::IsNumeric(Result))
+			{
+				MMAPI::Weather::AfterGetWeatherContext context{ static_cast<int>(Result.ToInt64()) };
+				after_get_weather_callback(context);
+			}
+
 			return Result;
 		}
 	}
@@ -150,6 +176,14 @@ namespace MMAPI::Weather
 
 	/// Total number of enumerators in Ids. Iterating [0, IdCount) covers every Ids value.
 	inline constexpr int IdCount = 4;
+
+	inline MMAPI::Weather::Ids AfterGetWeatherContext::GetWeather() const
+	{
+		if (m_weather_id < static_cast<int>(MMAPI::Weather::Ids::Calm)
+		    || m_weather_id > static_cast<int>(MMAPI::Weather::Ids::Special))
+			return MMAPI::Weather::Ids::Calm;  // safest default for out-of-range values
+		return static_cast<MMAPI::Weather::Ids>(m_weather_id);
+	}
 
 	/// Invokes fn with every Ids value, in ascending order.
 	template <typename Fn>
@@ -226,6 +260,25 @@ namespace MMAPI::Weather
 			return MMAPI::Internal::RegisterHook(
 				"Weather::BeforeGetWeather",
 				Internal::before_get_weather_callback,
+				callback
+			);
+		}
+
+		/// Registers a callback that runs after the game's WeatherManager get_weather script.
+		/// Read `ctx.GetWeather()` to see what kind of weather just resolved. Useful for tracking
+		/// the current weather state without re-calling the script (which would recurse if done
+		/// from inside `BeforeGetWeather`).
+		/// @param callback A function called with a `MMAPI::Weather::AfterGetWeatherContext`.
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterGetWeather(Internal::AfterGetWeatherCallback callback)
+		{
+			MMAPI::Status status = MMAPI::Weather::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
+
+			return MMAPI::Internal::RegisterHook(
+				"Weather::AfterGetWeather",
+				Internal::after_get_weather_callback,
 				callback
 			);
 		}

@@ -143,6 +143,14 @@ namespace MMAPI::Player
 		int GetItemId() const { return m_item_id; }
 	};
 
+	struct AfterShouldDieContext
+	{
+		bool m_will_die = false;
+
+		/// Returns the game's verdict — true if Ari is about to die from this hit/event.
+		bool GetWillDie() const { return m_will_die; }
+	};
+
 	struct AfterUseActionContext
 	{
 		int               m_item_id = -1;
@@ -178,6 +186,7 @@ namespace MMAPI::Player
 		inline constexpr const char* GML_SCRIPT_GET_MOVE_SPEED         = "gml_Script_get_move_speed@Ari@Ari";
 		inline constexpr const char* GML_SCRIPT_HELD_ITEM              = "gml_Script_held_item@Ari@Ari";
 		inline constexpr const char* GML_SCRIPT_FACE_DIR               = "gml_Script_face_dir@gml_Object_obj_ari_Create_0";
+		inline constexpr const char* GML_SCRIPT_SHOULD_DIE             = "gml_Script_should_die@gml_Object_obj_ari_Create_0";
 		using AfterMoveSpeedCallback     = void(*)(MMAPI::Player::MoveSpeedContext&);
 		using BeforeHealthChangeCallback  = void(*)(MMAPI::Player::BeforeHealthChangeContext&);
 		using AfterHealthChangeCallback   = void(*)(MMAPI::Player::AfterHealthChangeContext&);
@@ -186,6 +195,7 @@ namespace MMAPI::Player
 		using BeforeFaceDirCallback       = void(*)(MMAPI::Player::FaceDirContext&);
 		using AfterHeldItemCallback           = void(*)(MMAPI::Player::HeldItemContext&);
 		using AfterUseActionCompleteCallback  = void(*)(MMAPI::Player::AfterUseActionContext&);
+		using AfterShouldDieCallback          = void(*)(MMAPI::Player::AfterShouldDieContext&);
 
 		inline AfterMoveSpeedCallback         after_move_speed_callback             = nullptr;
 		inline BeforeHealthChangeCallback     before_health_change_callback         = nullptr;
@@ -195,6 +205,7 @@ namespace MMAPI::Player
 		inline BeforeFaceDirCallback          before_face_dir_callback              = nullptr;
 		inline AfterHeldItemCallback          after_held_item_callback              = nullptr;
 		inline AfterUseActionCompleteCallback after_use_action_complete_callback    = nullptr;
+		inline AfterShouldDieCallback         after_should_die_callback             = nullptr;
 
 		// Edge-detect state for the use-action-complete signal: true when the previous obj_ari tick
 		// observed (state == HoldToUse && state.did_action). Cleared on return to title.
@@ -437,6 +448,28 @@ namespace MMAPI::Player
 			// still latched true is not misread as a fresh rising edge.
 			if (in_hold_to_use)
 				was_in_use_action = in_use_action;
+		}
+
+		inline YYTK::RValue& GmlScriptAfterShouldDieCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_SHOULD_DIE)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			if (after_should_die_callback)
+			{
+				MMAPI::Player::AfterShouldDieContext context{ Result.ToBoolean() };
+				after_should_die_callback(context);
+			}
+
+			return Result;
 		}
 	}
 
@@ -871,6 +904,7 @@ namespace MMAPI::Player
 			{ Internal::GML_SCRIPT_MODIFY_MANA,    reinterpret_cast<PVOID>(Internal::GmlScriptModifyManaCallback) },
 			{ Internal::GML_SCRIPT_FACE_DIR,       reinterpret_cast<PVOID>(Internal::GmlScriptBeforeFaceDirCallback) },
 			{ Internal::GML_SCRIPT_HELD_ITEM,      reinterpret_cast<PVOID>(Internal::GmlScriptAfterHeldItemCallback) },
+			{ Internal::GML_SCRIPT_SHOULD_DIE,     reinterpret_cast<PVOID>(Internal::GmlScriptAfterShouldDieCallback) },
 		});
 		if (!MMAPI::IsSuccess(status))
 			return status;
@@ -1038,6 +1072,26 @@ namespace MMAPI::Player
 			return MMAPI::Internal::RegisterHook(
 				"Player::AfterUseActionComplete",
 				Internal::after_use_action_complete_callback,
+				callback
+			);
+		}
+
+		/// Registers a callback that runs after the game's `should_die@gml_Object_obj_ari_Create_0`
+		/// script — the check the game runs when something would otherwise kill Ari. Read
+		/// `ctx.GetWillDie()` to see the game's verdict: `true` means Ari is about to die from
+		/// this event, `false` means the death was prevented (e.g. by an invulnerability shield).
+		/// Useful as an "Ari died" signal for mods that need to reset state on death.
+		/// @param callback A function called with a `MMAPI::Player::AfterShouldDieContext`.
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterShouldDie(Internal::AfterShouldDieCallback callback)
+		{
+			MMAPI::Status status = MMAPI::Player::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
+
+			return MMAPI::Internal::RegisterHook(
+				"Player::AfterShouldDie",
+				Internal::after_should_die_callback,
 				callback
 			);
 		}

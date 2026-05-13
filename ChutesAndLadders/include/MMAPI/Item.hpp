@@ -198,6 +198,36 @@ namespace MMAPI::Item
 		void SetSpriteAsset(YYTK::RValue sprite_asset) { m_sprite_asset = sprite_asset; }
 	};
 
+	struct GetDisplayNameContext
+	{
+		YYTK::CInstance* m_self     = nullptr;
+		std::string      m_resolved;
+
+		/// The live item the display name was resolved for.
+		YYTK::CInstance* GetSelf() const { return m_self; }
+
+		/// The localized display name the game's get_display_name script produced.
+		std::string_view GetResolved() const { return m_resolved; }
+
+		/// Overrides the display name the game receives — e.g. to append a "Penalty: 30%" tag.
+		void SetResolved(std::string resolved) { m_resolved = std::move(resolved); }
+	};
+
+	struct GetDisplayDescriptionContext
+	{
+		YYTK::CInstance* m_self     = nullptr;
+		std::string      m_resolved;
+
+		/// The live item the description was resolved for.
+		YYTK::CInstance* GetSelf() const { return m_self; }
+
+		/// The localized description the game's get_display_description script produced.
+		std::string_view GetResolved() const { return m_resolved; }
+
+		/// Overrides the description the game receives — e.g. to prepend "Recently Eaten: 3".
+		void SetResolved(std::string resolved) { m_resolved = std::move(resolved); }
+	};
+
 	namespace Internal
 	{
 		inline bool enabled = false;
@@ -207,6 +237,8 @@ namespace MMAPI::Item
 		inline constexpr const char* GML_SCRIPT_GIVE_ITEM                     = "gml_Script_give_item@Ari@Ari";
 		inline constexpr const char* GML_SCRIPT_USE_ITEM                      = "gml_Script_use_item";
 		inline constexpr const char* GML_SCRIPT_GET_UI_ICON                   = "gml_Script_get_ui_icon@anon@4244@LiveItem@LiveItem";
+		inline constexpr const char* GML_SCRIPT_GET_DISPLAY_NAME              = "gml_Script_get_display_name@anon@2420@LiveItem@LiveItem";
+		inline constexpr const char* GML_SCRIPT_GET_DISPLAY_DESCRIPTION       = "gml_Script_get_display_description@anon@3696@LiveItem@LiveItem";
 		inline constexpr const char* GML_SCRIPT_CREATE_ITEM_PROTOTYPES        = "gml_Script_create_item_prototypes";
 		inline constexpr const char* GML_SCRIPT_GET_TREASURE_FROM_DISTRIBUTION = "gml_Script_get_treasure_from_distribution";
 
@@ -216,6 +248,8 @@ namespace MMAPI::Item
 		using BeforeGetTreasureCallback            = void(*)(MMAPI::Item::GetTreasureContext&);
 		using BeforeDropItemCallback               = void(*)(MMAPI::Item::DropItemContext&);
 		using BeforeGiveItemCallback               = void(*)(MMAPI::Item::GiveItemContext&);
+		using AfterGetDisplayNameCallback          = void(*)(MMAPI::Item::GetDisplayNameContext&);
+		using AfterGetDisplayDescriptionCallback   = void(*)(MMAPI::Item::GetDisplayDescriptionContext&);
 
 		inline BeforeUseItemCallback                before_use_item_callback                = nullptr;
 		inline AfterGetUiIconCallback               after_get_ui_icon_callback              = nullptr;
@@ -223,6 +257,8 @@ namespace MMAPI::Item
 		inline BeforeGetTreasureCallback            before_get_treasure_callback            = nullptr;
 		inline BeforeDropItemCallback               before_drop_item_callback               = nullptr;
 		inline BeforeGiveItemCallback               before_give_item_callback               = nullptr;
+		inline AfterGetDisplayNameCallback          after_get_display_name_callback         = nullptr;
+		inline AfterGetDisplayDescriptionCallback   after_get_display_description_callback  = nullptr;
 
 		// Item prototype cache, populated by GmlScriptAfterCreateItemPrototypesCallback when the game's
 		// create_item_prototypes script runs once at startup. The prototype struct is what `LiveItem.prototype`
@@ -377,6 +413,52 @@ namespace MMAPI::Item
 				MMAPI::Item::GetUiIconContext context{ Self, item_id, Result };
 				after_get_ui_icon_callback(context);
 				Result = context.m_sprite_asset;
+			}
+
+			return Result;
+		}
+
+		inline YYTK::RValue& GmlScriptAfterGetDisplayNameCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_GET_DISPLAY_NAME)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			if (after_get_display_name_callback && Result.m_Kind == YYTK::VALUE_STRING)
+			{
+				MMAPI::Item::GetDisplayNameContext context{ Self, Result.ToString() };
+				after_get_display_name_callback(context);
+				Result = YYTK::RValue(context.m_resolved);
+			}
+
+			return Result;
+		}
+
+		inline YYTK::RValue& GmlScriptAfterGetDisplayDescriptionCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_GET_DISPLAY_DESCRIPTION)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			if (after_get_display_description_callback && Result.m_Kind == YYTK::VALUE_STRING)
+			{
+				MMAPI::Item::GetDisplayDescriptionContext context{ Self, Result.ToString() };
+				after_get_display_description_callback(context);
+				Result = YYTK::RValue(context.m_resolved);
 			}
 
 			return Result;
@@ -951,6 +1033,8 @@ namespace MMAPI::Item
 			{ Internal::GML_SCRIPT_DROP_ITEM,                      reinterpret_cast<PVOID>(Internal::GmlScriptBeforeDropItemCallback) },
 			{ Internal::GML_SCRIPT_GIVE_ITEM,                      reinterpret_cast<PVOID>(Internal::GmlScriptBeforeGiveItemCallback) },
 			{ Internal::GML_SCRIPT_GET_UI_ICON,                    reinterpret_cast<PVOID>(Internal::GmlScriptAfterGetUiIconCallback) },
+			{ Internal::GML_SCRIPT_GET_DISPLAY_NAME,               reinterpret_cast<PVOID>(Internal::GmlScriptAfterGetDisplayNameCallback) },
+			{ Internal::GML_SCRIPT_GET_DISPLAY_DESCRIPTION,        reinterpret_cast<PVOID>(Internal::GmlScriptAfterGetDisplayDescriptionCallback) },
 			{ Internal::GML_SCRIPT_CREATE_ITEM_PROTOTYPES,         reinterpret_cast<PVOID>(Internal::GmlScriptAfterCreateItemPrototypesCallback) },
 			{ Internal::GML_SCRIPT_GET_TREASURE_FROM_DISTRIBUTION, reinterpret_cast<PVOID>(Internal::GmlScriptBeforeGetTreasureCallback) },
 		});
@@ -1158,6 +1242,43 @@ namespace MMAPI::Item
 			return MMAPI::Internal::RegisterHook(
 				"Item::AfterGetUiIcon",
 				Internal::after_get_ui_icon_callback,
+				callback
+			);
+		}
+
+		/// Registers a callback that runs after the game's `get_display_name` script for a live item.
+		/// Read `ctx.GetResolved()` to see the localized name the game produced and call
+		/// `ctx.SetResolved(...)` to override it (e.g. append a "[Penalty]" tag). Useful for
+		/// reflecting mod state in the inventory UI.
+		/// @param callback A function called with a mutable `MMAPI::Item::GetDisplayNameContext`.
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterGetDisplayName(Internal::AfterGetDisplayNameCallback callback)
+		{
+			MMAPI::Status status = MMAPI::Item::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
+
+			return MMAPI::Internal::RegisterHook(
+				"Item::AfterGetDisplayName",
+				Internal::after_get_display_name_callback,
+				callback
+			);
+		}
+
+		/// Registers a callback that runs after the game's `get_display_description` script for a
+		/// live item. Read `ctx.GetResolved()` to see the localized description and call
+		/// `ctx.SetResolved(...)` to override it (e.g. prepend "Recently Eaten: 3" to a food item).
+		/// @param callback A function called with a mutable `MMAPI::Item::GetDisplayDescriptionContext`.
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterGetDisplayDescription(Internal::AfterGetDisplayDescriptionCallback callback)
+		{
+			MMAPI::Status status = MMAPI::Item::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
+
+			return MMAPI::Internal::RegisterHook(
+				"Item::AfterGetDisplayDescription",
+				Internal::after_get_display_description_callback,
 				callback
 			);
 		}
