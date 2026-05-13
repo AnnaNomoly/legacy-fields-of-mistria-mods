@@ -20,6 +20,7 @@
 #include "Equipment.hpp"
 #include "Fish.hpp"
 #include "Game.hpp"
+#include "Gossip.hpp"
 #include "Infusion.hpp"
 #include "Input.hpp"
 #include "Inventory.hpp"
