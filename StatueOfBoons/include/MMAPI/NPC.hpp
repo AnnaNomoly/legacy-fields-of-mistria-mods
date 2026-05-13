@@ -6,6 +6,7 @@
 #include "Log.hpp"
 #include "Status.hpp"
 
+#include <optional>
 #include <string>
 
 #include "YYToolkit/YYTK_Shared.hpp"
@@ -328,6 +329,41 @@ namespace MMAPI::NPC
 	inline int GetId(MMAPI::NPC::Ids npc)
 	{
 		return static_cast<int>(npc);
+	}
+
+	/// Resolves an NPC's game-internal name string (e.g. "adeline", "balor") by reading
+	/// `globalInstance.__npc_id__[id]`.
+	/// @param npc The NPC to resolve.
+	/// @return The internal name as a string, or empty if the id is out of bounds.
+	inline std::string GetInternalName(MMAPI::NPC::Ids npc)
+	{
+		YYTK::RValue npc_ids = MMAPI::Internal::global_instance->GetMember("__npc_id__");
+		size_t npc_count = 0;
+		MMAPI::Internal::module_interface->GetArraySize(npc_ids, npc_count);
+
+		int npc_id = static_cast<int>(npc);
+		if (npc_id < 0 || npc_id >= static_cast<int>(npc_count))
+			return {};
+
+		YYTK::RValue* internal_name = nullptr;
+		MMAPI::Internal::module_interface->GetArrayEntry(npc_ids, npc_id, internal_name);
+		if (!internal_name || internal_name->m_Kind != YYTK::VALUE_STRING)
+			return {};
+
+		return internal_name->ToString();
+	}
+
+	/// Resolves an NPC::Ids from its game-internal name string. Useful for mods that persist NPC
+	/// references by name (e.g. in JSON mod-save files) and need to round-trip back to the enum
+	/// for the heart-points / data helpers.
+	/// @param internal_name The game-internal NPC name (e.g. "adeline", "balor").
+	/// @return The NPC::Ids enum value, or std::nullopt if no NPC matches.
+	inline std::optional<MMAPI::NPC::Ids> TryFromInternalName(const std::string& internal_name)
+	{
+		YYTK::RValue id = Internal::GetIdFromInternalName(internal_name);
+		if (!MMAPI::Engine::IsNumeric(id))
+			return std::nullopt;
+		return static_cast<MMAPI::NPC::Ids>(id.ToInt64());
 	}
 
 	/// Gets the NPC database entry for an NPC.

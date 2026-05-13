@@ -6,6 +6,7 @@
 #include "Hook.hpp"
 #include "Anchor.hpp"
 #include "Animal.hpp"
+#include "Archaeology.hpp"
 #include "Bark.hpp"
 #include "Bug.hpp"
 #include "Calendar.hpp"
