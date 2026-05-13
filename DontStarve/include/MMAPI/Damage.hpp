@@ -80,6 +80,46 @@ namespace MMAPI::Damage
 			MMAPI::Engine::StructVariableSet(*damage_data, "knockback", knockback);
 		}
 
+		/// Returns true if the damage source is permitted to break "pickable" grid objects
+		/// (stones, dig spots, etc.). The game sets this per-tool — pickaxes get true, swords get
+		/// false by default. Mods can flip it on for non-pickaxe tools (e.g. a utility sword).
+		bool GetCanPickGridObjects() const
+		{
+			if (!damage_data || !MMAPI::Engine::StructVariableExists(*damage_data, "can_pick_grid_objects"))
+				return false;
+
+			return damage_data->GetMember("can_pick_grid_objects").ToBoolean();
+		}
+
+		/// Sets whether the damage source is permitted to break "pickable" grid objects.
+		void SetCanPickGridObjects(bool can_pick)
+		{
+			if (!damage_data)
+				return;
+
+			MMAPI::Engine::StructVariableSet(*damage_data, "can_pick_grid_objects", can_pick);
+		}
+
+		/// Returns true if the damage source is permitted to chop "choppable" grid objects
+		/// (trees, bushes, etc.). The game sets this per-tool — axes get true, swords get false
+		/// by default. Mods can flip it on for non-axe tools.
+		bool GetCanChopGridObjects() const
+		{
+			if (!damage_data || !MMAPI::Engine::StructVariableExists(*damage_data, "can_chop_grid_objects"))
+				return false;
+
+			return damage_data->GetMember("can_chop_grid_objects").ToBoolean();
+		}
+
+		/// Sets whether the damage source is permitted to chop "choppable" grid objects.
+		void SetCanChopGridObjects(bool can_chop)
+		{
+			if (!damage_data)
+				return;
+
+			MMAPI::Engine::StructVariableSet(*damage_data, "can_chop_grid_objects", can_chop);
+		}
+
 		/// Gets the target value from the damage packet.
 		YYTK::RValue GetTarget() const
 		{
