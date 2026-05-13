@@ -430,6 +430,20 @@ namespace MMAPI::NPC
 		MMAPI::Engine::StructVariableSet(known_gift_preferences, item_id, 0.0);
 	}
 
+	/// Returns true if the NPC is currently able to receive a gift today.
+	/// Reads `gift_flag` on the NPC's `__npc_database` entry — the game clears this when
+	/// the NPC has already accepted their daily gift.
+	/// @param npc The NPC to check.
+	inline bool IsGiftable(MMAPI::NPC::Ids npc)
+	{
+		YYTK::RValue npc_data = GetData(npc);
+		if (npc_data.m_Kind != YYTK::VALUE_OBJECT)
+			return false;
+		if (!MMAPI::Engine::StructVariableExists(npc_data, "gift_flag"))
+			return false;
+		return npc_data.GetMember("gift_flag").ToBoolean();
+	}
+
 	/// Gets an NPC's heart points.
 	/// @param npc The NPC to read.
 	/// @return The NPC's heart points, or 0 if the NPC is not found.
