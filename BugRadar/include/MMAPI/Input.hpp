@@ -253,6 +253,16 @@ namespace MMAPI::Input
 		return pressed.ToBoolean();
 	}
 
+	/// Returns true if the keyboard key is currently held down.
+	/// Use for "while held" semantics (e.g. a modifier like Shift); for press-edge events that fire
+	/// once on the press transition, prefer `KeyboardCheckPressed`.
+	/// @param key The GameMaker virtual key code to check.
+	inline bool KeyboardCheck(int key)
+	{
+		YYTK::RValue down = MMAPI::Internal::module_interface->CallBuiltin("keyboard_check", { key });
+		return down.ToBoolean();
+	}
+
 	/// Returns true if a gamepad is connected in the given slot.
 	/// @param gamepad_slot The gamepad slot to check.
 	inline bool GamepadIsConnected(int gamepad_slot)
@@ -280,6 +290,16 @@ namespace MMAPI::Input
 	{
 		YYTK::RValue pressed = MMAPI::Internal::module_interface->CallBuiltin("gamepad_button_check_pressed", { gamepad_slot, button });
 		return pressed.ToBoolean();
+	}
+
+	/// Returns true if the gamepad button is currently held down.
+	/// Use for "while held" semantics; for press-edge events, prefer `GamepadButtonCheckPressed`.
+	/// @param gamepad_slot The gamepad slot to check.
+	/// @param button The GameMaker gamepad button constant to check.
+	inline bool GamepadButtonCheck(int gamepad_slot, int button)
+	{
+		YYTK::RValue down = MMAPI::Internal::module_interface->CallBuiltin("gamepad_button_check", { gamepad_slot, button });
+		return down.ToBoolean();
 	}
 
 	/// Parses a keybind name string (typically from a mod's config file) into a `Keybind` runtime
@@ -321,6 +341,25 @@ namespace MMAPI::Input
 		}
 
 		return KeyboardCheckPressed(keybind.code);
+	}
+
+	/// Returns true if the keybind is currently held down. Held-state variant of `IsKeybindPressed`.
+	/// Dispatches to `KeyboardCheck` or `GamepadButtonCheck` based on `keybind.is_gamepad`. For
+	/// gamepad keybinds, automatically resolves the first connected gamepad slot — returns false if
+	/// no gamepad is connected.
+	/// @param keybind The keybind to check, typically produced by `TryParseKeybind`.
+	inline bool IsKeybindDown(const Keybind& keybind)
+	{
+		if (!keybind.IsValid())
+			return false;
+
+		if (keybind.is_gamepad)
+		{
+			int slot = GetFirstConnectedGamepadSlot();
+			return slot >= 0 && GamepadButtonCheck(slot, keybind.code);
+		}
+
+		return KeyboardCheck(keybind.code);
 	}
 
 	namespace Hooks

@@ -113,6 +113,21 @@ namespace MMAPI::Game
 		void Cancel() { m_cancelled = true; }
 	};
 
+	struct AfterStoreMenuAddItemContext
+	{
+		int m_repeat_count = 0;
+
+		/// Schedules N additional invocations of the game's store-menu add-item script with the same
+		/// arguments and calling context. The script has already run once before this callback fires,
+		/// so passing 9 here makes the player's single click purchase 10 items total. Use for
+		/// bulk-purchase mods (e.g. "click + hold Shift" buys a stack of an item).
+		void RepeatOriginal(int additional_count) { m_repeat_count = additional_count; }
+
+		/// Returns the additional-invocation count currently scheduled. Zero means the original ran
+		/// once with no extras.
+		int GetRepeatCount() const { return m_repeat_count; }
+	};
+
 	struct BeforeErrorContext
 	{
 		std::string m_message;
@@ -143,6 +158,7 @@ namespace MMAPI::Game
 		inline constexpr const char* GML_SCRIPT_JOURNAL_MENU_CLOSE      = "gml_Script_on_close@JournalMenu@JournalMenu";
 		inline constexpr const char* GML_SCRIPT_STORE_MENU_OPEN         = "gml_Script_init@StoreMenu@StoreMenu";
 		inline constexpr const char* GML_SCRIPT_STORE_MENU_CLOSE        = "gml_Script_anon@10878@StoreMenu@StoreMenu";
+		inline constexpr const char* GML_SCRIPT_STORE_MENU_ADD_ITEM     = "gml_Script_anon@6279@StoreMenu@StoreMenu";
 		inline constexpr const char* GML_SCRIPT_ERROR                   = "gml_Script_error";
 
 		using EndDayCallback = void(*)();
@@ -165,11 +181,13 @@ namespace MMAPI::Game
 		using AfterJournalMenuCloseCallback  = void(*)();
 		using AfterStoreMenuOpenCallback     = void(*)();
 		using AfterStoreMenuCloseCallback    = void(*)();
+		using AfterStoreMenuAddItemCallback  = void(*)(MMAPI::Game::AfterStoreMenuAddItemContext&);
 
-		inline AfterJournalMenuOpenCallback   after_journal_menu_open_callback   = nullptr;
-		inline AfterJournalMenuCloseCallback  after_journal_menu_close_callback  = nullptr;
-		inline AfterStoreMenuOpenCallback     after_store_menu_open_callback     = nullptr;
-		inline AfterStoreMenuCloseCallback    after_store_menu_close_callback    = nullptr;
+		inline AfterJournalMenuOpenCallback   after_journal_menu_open_callback     = nullptr;
+		inline AfterJournalMenuCloseCallback  after_journal_menu_close_callback    = nullptr;
+		inline AfterStoreMenuOpenCallback     after_store_menu_open_callback       = nullptr;
+		inline AfterStoreMenuCloseCallback    after_store_menu_close_callback      = nullptr;
+		inline AfterStoreMenuAddItemCallback  after_store_menu_add_item_callback   = nullptr;
 
 		inline constexpr const char* ToGameKey(MMAPI::Game::XpValues value)
 		{
@@ -399,6 +417,32 @@ namespace MMAPI::Game
 			return Result;
 		}
 
+		inline YYTK::RValue& GmlScriptStoreMenuAddItemCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_STORE_MENU_ADD_ITEM)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			if (after_store_menu_add_item_callback)
+			{
+				MMAPI::Game::AfterStoreMenuAddItemContext context;
+				after_store_menu_add_item_callback(context);
+				// Replays go through the trampoline as well, so the hook doesn't re-enter on each
+				// loop iteration — the user callback fires exactly once per real player click.
+				for (int i = 0; i < context.m_repeat_count; ++i)
+					original(Self, Other, Result, ArgumentCount, Arguments);
+			}
+
+			return Result;
+		}
+
 		inline YYTK::RValue& GmlScriptBeforeErrorCallback(
 			IN YYTK::CInstance* Self,
 			IN YYTK::CInstance* Other,
@@ -541,6 +585,7 @@ namespace MMAPI::Game
 			{ Internal::GML_SCRIPT_JOURNAL_MENU_CLOSE,      reinterpret_cast<PVOID>(Internal::GmlScriptJournalMenuCloseCallback) },
 			{ Internal::GML_SCRIPT_STORE_MENU_OPEN,         reinterpret_cast<PVOID>(Internal::GmlScriptStoreMenuOpenCallback) },
 			{ Internal::GML_SCRIPT_STORE_MENU_CLOSE,        reinterpret_cast<PVOID>(Internal::GmlScriptStoreMenuCloseCallback) },
+			{ Internal::GML_SCRIPT_STORE_MENU_ADD_ITEM,     reinterpret_cast<PVOID>(Internal::GmlScriptStoreMenuAddItemCallback) },
 			{ Internal::GML_SCRIPT_ERROR,                   reinterpret_cast<PVOID>(Internal::GmlScriptBeforeErrorCallback) },
 		});
 		if (!MMAPI::IsSuccess(status))
@@ -716,6 +761,27 @@ namespace MMAPI::Game
 			return MMAPI::Internal::RegisterHook(
 				"Game::AfterStoreMenuClose",
 				Internal::after_store_menu_close_callback,
+				callback
+			);
+		}
+
+		/// Registers a callback that runs after the player adds an item to their store cart. The script
+		/// hooked is the anonymous "buy" handler — it fires once per click on a store entry, after the
+		/// game has applied the standard 1-item purchase. Call `ctx.RepeatOriginal(N)` to fire N more
+		/// invocations with the same arguments, multiplying the purchase quantity by `N + 1` (useful for
+		/// bulk-purchase mods that key off a held modifier). Replays run through the trampoline, so the
+		/// user callback never re-fires from within its own scope.
+		/// @param callback A function called with a mutable `MMAPI::Game::AfterStoreMenuAddItemContext`.
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterStoreMenuAddItem(Internal::AfterStoreMenuAddItemCallback callback)
+		{
+			MMAPI::Status status = MMAPI::Game::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
+
+			return MMAPI::Internal::RegisterHook(
+				"Game::AfterStoreMenuAddItem",
+				Internal::after_store_menu_add_item_callback,
 				callback
 			);
 		}
