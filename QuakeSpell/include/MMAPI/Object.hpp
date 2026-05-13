@@ -69,20 +69,49 @@ namespace MMAPI::Object
 		std::optional<MMAPI::Object::Position> GetTopLeftPosition() const;
 	};
 
+	struct NodeRendererSetSpriteContext
+	{
+		YYTK::CInstance* m_self          = nullptr;
+		YYTK::RValue*    m_sprite_asset  = nullptr;
+		bool             m_cancelled     = false;
+
+		/// The live obj_node_renderer instance whose sprite is being set. Use `MMAPI::Object::GetNode(self)`
+		/// to read the node data (prototype, day_count, etc.) backing this renderer.
+		YYTK::CInstance* GetSelf() const { return m_self; }
+
+		/// The sprite asset (VALUE_REF) the renderer is about to switch to. Empty RValue if unavailable.
+		YYTK::RValue GetSpriteAsset() const { return m_sprite_asset ? *m_sprite_asset : YYTK::RValue(); }
+
+		/// Substitutes the sprite asset the renderer will use this fire. Typically populated with
+		/// `MMAPI::Engine::AssetGetIndex("spr_...")`. Writes through to the script's Arguments[0] so
+		/// the trampoline sees the new asset.
+		void SetSpriteAsset(YYTK::RValue sprite_asset)
+		{
+			if (m_sprite_asset)
+				*m_sprite_asset = sprite_asset;
+		}
+
+		/// Prevents the game's set_sprite script from running this fire — the renderer keeps its previous sprite.
+		void Cancel() { m_cancelled = true; }
+	};
+
 	namespace Internal
 	{
 		inline bool enabled = false;
 
 		inline constexpr const char* GML_SCRIPT_WRITE_FURNITURE_TO_LOCATION = "gml_Script_write_furniture_to_location";
 		inline constexpr const char* GML_SCRIPT_ERASE_OBJECT_RENDERER       = "gml_Script_erase_object_renderer";
+		inline constexpr const char* GML_SCRIPT_NODE_RENDERER_SET_SPRITE    = "gml_Script_set_sprite@gml_Object_obj_node_renderer_Create_0";
 
-		using BeforeFurniturePlacedCallback = void(*)(MMAPI::Object::BeforeFurniturePlacedContext&);
-		using AfterFurniturePlacedCallback  = void(*)(MMAPI::Object::FurniturePlacedContext&);
-		using AfterObjectErasedCallback     = void(*)(MMAPI::Object::ObjectErasedContext&);
+		using BeforeFurniturePlacedCallback        = void(*)(MMAPI::Object::BeforeFurniturePlacedContext&);
+		using AfterFurniturePlacedCallback         = void(*)(MMAPI::Object::FurniturePlacedContext&);
+		using AfterObjectErasedCallback            = void(*)(MMAPI::Object::ObjectErasedContext&);
+		using BeforeNodeRendererSetSpriteCallback  = void(*)(MMAPI::Object::NodeRendererSetSpriteContext&);
 
-		inline BeforeFurniturePlacedCallback before_furniture_placed_callback = nullptr;
-		inline AfterFurniturePlacedCallback  after_furniture_placed_callback  = nullptr;
-		inline AfterObjectErasedCallback     after_object_erased_callback     = nullptr;
+		inline BeforeFurniturePlacedCallback       before_furniture_placed_callback        = nullptr;
+		inline AfterFurniturePlacedCallback        after_furniture_placed_callback         = nullptr;
+		inline AfterObjectErasedCallback           after_object_erased_callback            = nullptr;
+		inline BeforeNodeRendererSetSpriteCallback before_node_renderer_set_sprite_callback = nullptr;
 
 		inline std::map<int, std::string> object_id_to_internal_name_map;
 		inline std::map<std::string, int> internal_name_to_object_id_map;
@@ -510,6 +539,31 @@ namespace MMAPI::Object
 
 			return Result;
 		}
+
+		inline YYTK::RValue& GmlScriptBeforeNodeRendererSetSpriteCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			if (before_node_renderer_set_sprite_callback && Arguments && ArgumentCount >= 1 && Arguments[0])
+			{
+				MMAPI::Object::NodeRendererSetSpriteContext context{ Self, Arguments[0] };
+				before_node_renderer_set_sprite_callback(context);
+
+				if (context.m_cancelled)
+					return Result;
+			}
+
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_NODE_RENDERER_SET_SPRITE)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			return Result;
+		}
 	}
 
 	/// Activates Object utility hooks. Eagerly installs the write_furniture_to_location and
@@ -527,6 +581,7 @@ namespace MMAPI::Object
 		MMAPI::Status status = MMAPI::Internal::InstallScriptHooks({
 			{ Internal::GML_SCRIPT_WRITE_FURNITURE_TO_LOCATION, reinterpret_cast<PVOID>(Internal::GmlScriptWriteFurnitureCallback) },
 			{ Internal::GML_SCRIPT_ERASE_OBJECT_RENDERER,       reinterpret_cast<PVOID>(Internal::GmlScriptAfterEraseObjectRendererCallback) },
+			{ Internal::GML_SCRIPT_NODE_RENDERER_SET_SPRITE,    reinterpret_cast<PVOID>(Internal::GmlScriptBeforeNodeRendererSetSpriteCallback) },
 		});
 		if (!MMAPI::IsSuccess(status))
 			return status;
@@ -590,6 +645,29 @@ namespace MMAPI::Object
 			return MMAPI::Internal::RegisterHook(
 				"Object::AfterObjectErased",
 				Internal::after_object_erased_callback,
+				callback
+			);
+		}
+
+		/// Registers a callback that runs before an `obj_node_renderer` instance changes its sprite —
+		/// fires every time a crop/forage/flower node (and similar node-rendered objects) wants to
+		/// transition to a new sprite (e.g. growth stage advance, harvest, day rollover).
+		///
+		/// Use `ctx.GetSelf()` for the renderer instance (read `MMAPI::Object::GetNode(self)` for the
+		/// underlying node data — prototype, day_count, regrow_cycle, etc.), `ctx.GetSpriteAsset()` for
+		/// the sprite the game is about to switch to, `ctx.SetSpriteAsset(...)` to substitute a
+		/// different sprite (e.g. an overlay variant), and `ctx.Cancel()` to keep the previous sprite.
+		/// @param callback A function called with a mutable `MMAPI::Object::NodeRendererSetSpriteContext`.
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status BeforeNodeRendererSetSprite(Internal::BeforeNodeRendererSetSpriteCallback callback)
+		{
+			MMAPI::Status status = MMAPI::Object::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
+
+			return MMAPI::Internal::RegisterHook(
+				"Object::BeforeNodeRendererSetSprite",
+				Internal::before_node_renderer_set_sprite_callback,
 				callback
 			);
 		}
