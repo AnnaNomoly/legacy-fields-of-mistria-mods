@@ -1,837 +1,399 @@
-#include <set>
+#include <filesystem>
 #include <map>
 #include <random>
-#include <fstream>
-#include <nlohmann/json.hpp>
+#include <set>
+#include <string>
+#include <vector>
+
 #include <YYToolkit/YYTK_Shared.hpp>
+#include <MMAPI/MMAPI.hpp>
+#include <MMAPI/Config.hpp>
+
 using namespace Aurie;
 using namespace YYTK;
 using json = nlohmann::json;
 
-static const char* const VERSION = "1.1.2";
+// ----- Mod metadata -----
+
 static const char* const MOD_NAME = "Curator";
-static const char* const GML_SCRIPT_CHOOSE_RANDOM_ARTIFACT = "gml_Script_choose_random_artifact@Archaeology@Archaeology";
-static const char* const GML_SCRIPT_SETUP_MAIN_SCREEN = "gml_Script_setup_main_screen@TitleMenu@TitleMenu";
+static const char* const VERSION  = "1.2.0";
+
+// Compile-time toggle: when true, the artifact swap only fires if Ari has the Unpeatable perk active.
+// When false, the swap always fires on duplicate artifacts. The original mod shipped both variants;
+// this build is the perk-gated one. Flip to `false` to build the non-perk variant.
+static constexpr bool PERK_GATED = true;
+
+// ----- Config keys + defaults -----
+
 static const char* const ALLOW_ARTIFACTS_FROM_ANY_SET_KEY = "allow_artifacts_from_any_set";
-static const char* const DISABLE_COMMON_FINDS_KEY = "disable_common_finds";
-static const char* const YYTK_KEY = "__YYTK";
-static const char* const VERSION_KEY = "version";
-static const char* const IGNORE_NEXT_DIG_SPOT_KEY = "ignore_next_dig_spot";
-static const char* const UNPEATABLE = "unpeatable";
-static const std::vector<std::string> DISABLED_ITEMS = { }; // TODO: Update as needed in future patches
-static const std::vector<std::string> COMMON_FINDS_SET_ITEMS = { "clay", "peat", "shard_mass", "shards", "sod" };
-static const bool PERK_MOD_VARIANT = true; // Indicates if the mod uses the custom perk.
+static const char* const DISABLE_COMMON_FINDS_KEY         = "disable_common_finds";
+
 static const bool DEFAULT_ALLOW_ARTIFACTS_FROM_ANY_SET = false;
-static const bool DEFAULT_DISABLE_COMMON_FINDS = false;
+static const bool DEFAULT_DISABLE_COMMON_FINDS         = false;
 
-static YYTKInterface* g_ModuleInterface = nullptr;
-static std::map<std::string, std::vector<int>> archaeology_set_to_items = {};
-static std::map<int, std::string> item_id_to_archaeology_set = {};
-static std::vector<std::string> struct_field_names = {};
-static std::set<int> all_archaeology_items = {};
-static std::vector<int> disabled_item_ids = {};
-static std::vector<int> common_finds_item_ids = {};
-static bool load_on_start = true;
-static RValue __YYTK;
-static std::mt19937 generator(std::random_device{}());
-static std::map<std::string, bool> active_perk_map = {}; // Tracks which mod specific perks are active.
-static std::map<std::string, int64_t> perk_name_to_id_map = {};
-static bool allow_artifacts_from_any_set = DEFAULT_ALLOW_ARTIFACTS_FROM_ANY_SET;
-static bool disable_common_finds = DEFAULT_DISABLE_COMMON_FINDS;
+// Internal names of items considered "common finds" — excluded from the all-sets fallback pool
+// when `disable_common_finds` is enabled.
+static const std::vector<std::string> COMMON_FINDS_ITEMS = {
+	"clay", "peat", "shard_mass", "shards", "sod",
+};
 
-void PrintError(std::exception_ptr eptr)
+// Internal names of items explicitly disabled from the candidate pool. Empty for now; placeholder
+// for future game-patch reactions.
+static const std::vector<std::string> DISABLED_ITEMS = { };
+
+static const std::string ARCHAEOLOGY_WING_NAME = "archaeology";
+
+// ----- Cross-mod IPC (consumed by DigUpAnything to suppress this mod's artifact substitution) -----
+
+static const char* const YYTK_KEY                 = "__YYTK";
+static const char* const IGNORE_NEXT_DIG_SPOT_KEY = "ignore_next_dig_spot";
+
+// ----- Config -----
+
+struct CuratorConfig
 {
-	try {
-		if (eptr) {
-			std::rethrow_exception(eptr);
-		}
-	}
-	catch (const std::exception& e) {
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Error: %s", MOD_NAME, VERSION, e.what());
-	}
+	bool allow_artifacts_from_any_set = DEFAULT_ALLOW_ARTIFACTS_FROM_ANY_SET;
+	bool disable_common_finds         = DEFAULT_DISABLE_COMMON_FINDS;
+};
+
+void to_json(json& j, const CuratorConfig& c)
+{
+	j = json{
+		{ ALLOW_ARTIFACTS_FROM_ANY_SET_KEY, c.allow_artifacts_from_any_set },
+		{ DISABLE_COMMON_FINDS_KEY,         c.disable_common_finds         },
+	};
 }
 
-std::string RValueKindAsString(RValue value)
+void from_json(const json& j, CuratorConfig& c)
 {
-	if (value.m_Kind == VALUE_REAL)
-		return "VALUE_REAL";
-	if (value.m_Kind == VALUE_STRING)
-		return "VALUE_STRING";
-	if (value.m_Kind == VALUE_ARRAY)
-		return "VALUE_ARRAY";
-	if (value.m_Kind == VALUE_PTR)
-		return "VALUE_PTR";
-	if (value.m_Kind == VALUE_VEC3)
-		return "VALUE_VEC3";
-	if (value.m_Kind == VALUE_UNDEFINED)
-		return "VALUE_UNDEFINED";
-	if (value.m_Kind == VALUE_OBJECT)
-		return "VALUE_OBJECT";
-	if (value.m_Kind == VALUE_INT32)
-		return "VALUE_INT32";
-	if (value.m_Kind == VALUE_VEC4)
-		return "VALUE_VEC4";
-	if (value.m_Kind == VALUE_VEC44)
-		return "VALUE_VEC44";
-	if (value.m_Kind == VALUE_INT64)
-		return "VALUE_INT64";
-	if (value.m_Kind == VALUE_ACCESSOR)
-		return "VALUE_ACCESSOR";
-	if (value.m_Kind == VALUE_NULL)
-		return "VALUE_NULL";
-	if (value.m_Kind == VALUE_BOOL)
-		return "VALUE_BOOL";
-	if (value.m_Kind == VALUE_ITERATOR)
-		return "VALUE_ITERATOR";
-	if (value.m_Kind == VALUE_REF)
-		return "VALUE_REF";
-	if (value.m_Kind == VALUE_UNSET)
-		return "VALUE_UNSET";
+	c.allow_artifacts_from_any_set = MMAPI::Config::GetValue<bool>(j, ALLOW_ARTIFACTS_FROM_ANY_SET_KEY, DEFAULT_ALLOW_ARTIFACTS_FROM_ANY_SET);
+	c.disable_common_finds         = MMAPI::Config::GetValue<bool>(j, DISABLE_COMMON_FINDS_KEY,         DEFAULT_DISABLE_COMMON_FINDS);
 }
 
-bool RValueAsBool(RValue value)
+// ----- State -----
+
+static CuratorConfig config{};
+static bool startup_loaded = false;
+
+// Maps populated once at startup from `__museum_data.data[archaeology_wing].sets.inner.*.items`.
+// archaeology_set_to_items: set internal name (e.g. "rare", "common") → item ids in that set.
+// item_id_to_archaeology_set: reverse lookup.
+// all_archaeology_items: flat set of every archaeology item id, minus disabled / (optionally) common-find items.
+static std::map<std::string, std::vector<int>> archaeology_set_to_items;
+static std::map<int, std::string>              item_id_to_archaeology_set;
+static std::set<int>                           all_archaeology_items;
+
+// Pre-resolved item ids for the disabled / common-find item-name lists. Both are conceptually sets
+// (deduplicated, queried by membership rather than iterated in order).
+static std::set<int> disabled_item_ids;
+static std::set<int> common_finds_item_ids;
+
+static std::mt19937 rng(std::random_device{}());
+
+// ----- Helpers -----
+
+void LoadOrCreateConfigFile()
 {
-	if (value.m_Kind == VALUE_BOOL && value.m_Real == 1)
-		return true;
-	return false;
-}
-
-bool GlobalVariableExists(const char* variable_name)
-{
-	RValue global_variable_exists = g_ModuleInterface->CallBuiltin(
-		"variable_global_exists",
-		{ variable_name }
-	);
-
-	return RValueAsBool(global_variable_exists);
-}
-
-RValue GlobalVariableGet(const char* variable_name)
-{
-	return g_ModuleInterface->CallBuiltin(
-		"variable_global_get",
-		{ variable_name }
-	);
-}
-
-RValue GlobalVariableSet(const char* variable_name, RValue value)
-{
-	return g_ModuleInterface->CallBuiltin(
-		"variable_global_set",
-		{ variable_name, value }
-	);
-}
-
-bool StructVariableExists(RValue the_struct, const char* variable_name)
-{
-	RValue struct_exists = g_ModuleInterface->CallBuiltin(
-		"struct_exists",
-		{ the_struct, variable_name }
-	);
-
-	return RValueAsBool(struct_exists);
-}
-
-RValue StructVariableGet(RValue the_struct, const char* variable_name)
-{
-	return g_ModuleInterface->CallBuiltin(
-		"struct_get",
-		{ the_struct, variable_name }
-	);
-}
-
-RValue StructVariableSet(RValue the_struct, const char* variable_name, RValue value)
-{
-	return g_ModuleInterface->CallBuiltin(
-		"struct_set",
-		{ the_struct, variable_name, value }
-	);
-}
-
-void CreateOrGetGlobalYYTKVariable()
-{
-	if (!GlobalVariableExists("__YYTK"))
+	try
 	{
-		g_ModuleInterface->GetRunnerInterface().StructCreate(&__YYTK);
-		GlobalVariableSet("__YYTK", __YYTK);
-	}
-	else
-		__YYTK = GlobalVariableGet("__YYTK");
-}
+		auto path = MMAPI::Config::GetConfigPath(MOD_NAME);
+		bool existed = std::filesystem::exists(path);
+		json j = MMAPI::Config::Load(path);
 
-void CreateModInfoInGlobalYYTKVariable()
-{
-	if (!StructVariableExists(__YYTK, MOD_NAME))
-	{
-		RValue mod;
-		RValue version = VERSION;
-		RValue ignore_next_dig_spot = false;
-		g_ModuleInterface->GetRunnerInterface().StructCreate(&mod);
-		g_ModuleInterface->GetRunnerInterface().StructAddRValue(&mod, VERSION_KEY, &version);
-		g_ModuleInterface->GetRunnerInterface().StructAddRValue(&mod, IGNORE_NEXT_DIG_SPOT_KEY, &ignore_next_dig_spot);
-		g_ModuleInterface->GetRunnerInterface().StructAddRValue(&__YYTK, MOD_NAME, &mod);
-	}
-}
+		if (!existed)
+			MMAPI::Log::Warn("Configuration file was not found. Creating file: %s", path.string().c_str());
 
-void ResetStaticFields()
-{
-	active_perk_map = {};
-}
-
-bool GetStructFieldNames(
-	IN const char* MemberName,
-	IN OUT RValue* Value
-)
-{
-	struct_field_names.push_back(MemberName);
-	return false;
-}
-
-bool IgnoreNextDigSpot()
-{
-	if (GlobalVariableExists(YYTK_KEY))
-	{
-		RValue __YYTK = GlobalVariableGet(YYTK_KEY);
-		if (StructVariableExists(__YYTK, MOD_NAME))
+		if (j.empty())
 		{
-			RValue Curator = StructVariableGet(__YYTK, MOD_NAME);
-			if (StructVariableExists(Curator, IGNORE_NEXT_DIG_SPOT_KEY))
-			{
-				RValue ignore_next_dig_spot = StructVariableGet(Curator, IGNORE_NEXT_DIG_SPOT_KEY);
-				return RValueAsBool(ignore_next_dig_spot);
-			}
+			if (existed)
+				MMAPI::Log::Error("No readable values in configuration file: %s!", path.string().c_str());
+			config = CuratorConfig{};
 		}
-	}
-
-	return false;
-}
-
-void ParseDisabledItemAndCommonFindItemIds(CInstance* Self, CInstance* Other)
-{
-	CScript* gml_script_try_string_to_item_id = nullptr;
-	g_ModuleInterface->GetNamedRoutinePointer(
-		"gml_Script_try_string_to_item_id",
-		(PVOID*)&gml_script_try_string_to_item_id
-	);
-
-	for (int i = 0; i < DISABLED_ITEMS.size(); i++)
-	{
-		RValue item_id;
-		RValue item_name = RValue(DISABLED_ITEMS[i]);
-		RValue* item_name_ptr = &item_name;
-		
-		gml_script_try_string_to_item_id->m_Functions->m_ScriptFunction(
-			Self,
-			Other,
-			item_id,
-			1,
-			{ &item_name_ptr }
-		);
-
-		if (item_id.m_Kind == VALUE_INT32)
-			disabled_item_ids.push_back(item_id.m_i32);
-		if (item_id.m_Kind == VALUE_INT64)
-			disabled_item_ids.push_back(item_id.m_i64);
-		if (item_id.m_Kind == VALUE_REAL)
-			disabled_item_ids.push_back(item_id.m_Real);
-	}
-
-	for (int i = 0; i < COMMON_FINDS_SET_ITEMS.size(); i++)
-	{
-		RValue item_id;
-		RValue item_name = RValue(COMMON_FINDS_SET_ITEMS[i]);
-		RValue* item_name_ptr = &item_name;
-
-		gml_script_try_string_to_item_id->m_Functions->m_ScriptFunction(
-			Self,
-			Other,
-			item_id,
-			1,
-			{ &item_name_ptr }
-		);
-
-		if (item_id.m_Kind == VALUE_INT32)
-			common_finds_item_ids.push_back(item_id.m_i32);
-		if (item_id.m_Kind == VALUE_INT64)
-			common_finds_item_ids.push_back(item_id.m_i64);
-		if (item_id.m_Kind == VALUE_REAL)
-			common_finds_item_ids.push_back(item_id.m_Real);
-	}
-}
-
-void ParsePerks()
-{
-	CInstance* global_instance = nullptr;
-	g_ModuleInterface->GetGlobalInstance(&global_instance);
-
-	size_t array_length;
-	RValue perks = *global_instance->GetRefMember("__perk__");
-	g_ModuleInterface->GetArraySize(perks, array_length);
-	for (size_t i = 0; i < array_length; i++)
-	{
-		RValue* array_element;
-		g_ModuleInterface->GetArrayEntry(perks, i, array_element);
-
-		perk_name_to_id_map[array_element->ToString()] = i;
-	}
-}
-
-void ParseMuseumData()
-{
-	CInstance* global_instance = nullptr;
-	g_ModuleInterface->GetGlobalInstance(&global_instance);
-
-	// Find out the index for the archaeology museum wing.
-	int archaeology_index = 0;
-	RValue __museum_wing__ = *global_instance->GetRefMember("__museum_wing__");
-	RValue __museum_wing__length = g_ModuleInterface->CallBuiltin("array_length", { __museum_wing__ });
-	for (int i = 0; i < __museum_wing__length.m_Real; i++)
-	{
-		RValue array_entry = g_ModuleInterface->CallBuiltin("array_get", { __museum_wing__, i });
-		if (array_entry.ToString() == "archaeology")
+		else
 		{
-			archaeology_index = i;
+			config = j.get<CuratorConfig>();
+		}
+
+		MMAPI::Config::Save(path, config);
+		MMAPI::Log::Info("Loaded configuration file: %s", path.string().c_str());
+	}
+	catch (const std::exception& e)
+	{
+		MMAPI::Log::Error("Error loading config: %s", e.what());
+		config = CuratorConfig{};
+	}
+}
+
+// Resolves internal item names → item ids via the canonical MMAPI lookup. Skips names that don't
+// resolve (they're either misspelled or removed from the game).
+std::set<int> ResolveItemNames(const std::vector<std::string>& names)
+{
+	std::set<int> ids;
+	for (const auto& name : names)
+	{
+		YYTK::RValue id = MMAPI::Item::GetIdFromInternalName(name);
+		if (MMAPI::Engine::IsNumeric(id))
+			ids.insert(static_cast<int>(id.ToInt64()));
+	}
+	return ids;
+}
+
+// Builds the archaeology-wing set lookup maps by walking
+// `globalInstance.__museum_data.data[archaeology_wing_index].sets.inner.*.items`. The "archaeology"
+// wing's index isn't fixed across game versions, so we resolve it by name from `__museum_wing__`.
+void ParseArchaeologyMuseumData()
+{
+	archaeology_set_to_items.clear();
+	item_id_to_archaeology_set.clear();
+	all_archaeology_items.clear();
+
+	YYTK::RValue museum_wing = MMAPI::Internal::global_instance->GetMember("__museum_wing__");
+	size_t wing_count = 0;
+	MMAPI::Internal::module_interface->GetArraySize(museum_wing, wing_count);
+
+	int archaeology_wing_index = -1;
+	for (size_t i = 0; i < wing_count; i++)
+	{
+		YYTK::RValue* entry = nullptr;
+		MMAPI::Internal::module_interface->GetArrayEntry(museum_wing, i, entry);
+		if (entry && entry->m_Kind == YYTK::VALUE_STRING && entry->ToString() == ARCHAEOLOGY_WING_NAME)
+		{
+			archaeology_wing_index = static_cast<int>(i);
 			break;
 		}
 	}
 
-	// Get the archaeology sets.
-	RValue __museum_data = *global_instance->GetRefMember("__museum_data");
-	RValue data = *__museum_data.GetRefMember("data");
-	RValue archaeology_wing = g_ModuleInterface->CallBuiltin("array_get", { data, archaeology_index });
-	RValue archaeology_sets = *archaeology_wing.GetRefMember("sets");
-	RValue archaeology_sets_inner = *archaeology_sets.GetRefMember("inner");
-
-	struct_field_names = {};
-	g_ModuleInterface->EnumInstanceMembers(archaeology_sets_inner, GetStructFieldNames);
-	for (int i = 0; i < struct_field_names.size(); i++)
+	if (archaeology_wing_index < 0)
 	{
-		archaeology_set_to_items[struct_field_names[i]] = {};
-		RValue archaeology_set = *archaeology_sets_inner.GetRefMember(struct_field_names[i]);
-		RValue items = *archaeology_set.GetRefMember("items");
-		RValue items_length = g_ModuleInterface->CallBuiltin("array_length", { items });
-		for (int j = 0; j < items_length.m_Real; j++)
+		MMAPI::Log::Error("Failed to find the \"%s\" museum wing!", ARCHAEOLOGY_WING_NAME.c_str());
+		return;
+	}
+
+	YYTK::RValue museum_data = MMAPI::Internal::global_instance->GetMember("__museum_data");
+	YYTK::RValue data = museum_data.GetMember("data");
+
+	YYTK::RValue* archaeology_wing = nullptr;
+	MMAPI::Internal::module_interface->GetArrayEntry(data, archaeology_wing_index, archaeology_wing);
+	if (!archaeology_wing) return;
+
+	YYTK::RValue sets_inner = archaeology_wing->GetMember("sets").GetMember("inner");
+
+	// `sets.inner` is keyed by set names ("rare", "common", etc.). Enumerate, then iterate each
+	// set's items array.
+	std::vector<std::string> set_names;
+	MMAPI::Internal::module_interface->EnumInstanceMembers(sets_inner,
+		[&set_names](const char* name, YYTK::RValue* /*value*/) {
+			set_names.emplace_back(name);
+			return false;
+		});
+
+	for (const auto& set_name : set_names)
+	{
+		YYTK::RValue set = sets_inner.GetMember(set_name.c_str());
+		YYTK::RValue items = set.GetMember("items");
+
+		size_t item_count = 0;
+		MMAPI::Internal::module_interface->GetArraySize(items, item_count);
+		for (size_t j = 0; j < item_count; j++)
 		{
-			RValue item = g_ModuleInterface->CallBuiltin("array_get", { items, j });
-			if (item.m_Kind == VALUE_REAL)
-			{
-				archaeology_set_to_items[struct_field_names[i]].push_back(item.m_Real);
-				item_id_to_archaeology_set[item.m_Real] = struct_field_names[i];
-				all_archaeology_items.insert(item.m_Real);
-			}
-			if (item.m_Kind == VALUE_INT64)
-			{
-				archaeology_set_to_items[struct_field_names[i]].push_back(item.m_i64);
-				item_id_to_archaeology_set[item.m_i64] = struct_field_names[i];
-				all_archaeology_items.insert(item.m_i64);
-			}
+			YYTK::RValue* entry = nullptr;
+			MMAPI::Internal::module_interface->GetArrayEntry(items, j, entry);
+			if (!entry || !MMAPI::Engine::IsNumeric(*entry)) continue;
+
+			int item_id = static_cast<int>(entry->ToInt64());
+			archaeology_set_to_items[set_name].push_back(item_id);
+			item_id_to_archaeology_set[item_id] = set_name;
+			all_archaeology_items.insert(item_id);
 		}
 	}
 
-	// Remove any disabled items from the all_archaeology_items list.
-	for (int disabled_item : disabled_item_ids)
-	{
-		all_archaeology_items.erase(disabled_item);
-	}
+	for (int id : disabled_item_ids)
+		all_archaeology_items.erase(id);
 
-	// Remove any common find set items from the all_archaeology_items list.
-	if (disable_common_finds)
-	{
-		for (int common_find_item : common_finds_item_ids)
-		{
-			all_archaeology_items.erase(common_find_item);
-		}
-	}
+	if (config.disable_common_finds)
+		for (int id : common_finds_item_ids)
+			all_archaeology_items.erase(id);
 }
 
-RValue GetMuseumProgress()
+// Reads + clears `__YYTK.Curator.ignore_next_dig_spot`. Returns true if it was set (DigUpAnything is
+// taking over this dig). The flag is consume-once.
+bool ConsumeIgnoreNextDigSpot()
 {
-	CInstance* global_instance = nullptr;
-	g_ModuleInterface->GetGlobalInstance(&global_instance);
-	return *global_instance->GetRefMember("__museum_progress_data");
-}
-
-bool PerkActive(CInstance* Self, CInstance* Other, std::string perk_name)
-{
-	int64_t perk_id = perk_name_to_id_map[perk_name];
-
-	CScript* gml_script_perk_active = nullptr;
-	g_ModuleInterface->GetNamedRoutinePointer(
-		"gml_Script_perk_active@Ari@Ari",
-		(PVOID*)&gml_script_perk_active
-	);
-
-	RValue result;
-	RValue input = perk_id;
-	RValue* input_ptr = &input;
-	gml_script_perk_active->m_Functions->m_ScriptFunction(
-		Self,
-		Other,
-		result,
-		1,
-		{ &input_ptr }
-	);
-
-	if (result.m_Kind == VALUE_BOOL && result.m_Real == 1.0)
-		return true;
-	return false;
-}
-
-json CreateModConfigJson(bool use_defaults)
-{
-	json config_json = {
-		{ ALLOW_ARTIFACTS_FROM_ANY_SET_KEY, use_defaults ? DEFAULT_ALLOW_ARTIFACTS_FROM_ANY_SET : allow_artifacts_from_any_set },
-		{ DISABLE_COMMON_FINDS_KEY, use_defaults ? DEFAULT_DISABLE_COMMON_FINDS : disable_common_finds }
-	};
-	return config_json;
-}
-
-void LogDefaultModConfigValues()
-{
-	allow_artifacts_from_any_set = DEFAULT_ALLOW_ARTIFACTS_FROM_ANY_SET;
-	disable_common_finds = DEFAULT_DISABLE_COMMON_FINDS;
-
-	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, ALLOW_ARTIFACTS_FROM_ANY_SET_KEY, allow_artifacts_from_any_set ? "true" : "false");
-	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, DISABLE_COMMON_FINDS_KEY, disable_common_finds ? "true" : "false");
-}
-
-bool CreateOrLoadModConfigFile()
-{
-	std::exception_ptr eptr;
-	try
-	{
-		// Try to find the mod_data directory.
-		std::string current_dir = std::filesystem::current_path().string();
-		std::string mod_data_folder = current_dir + "\\mod_data";
-		if (!std::filesystem::exists(mod_data_folder))
-		{
-			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - The \"mod_data\" directory was not found. Creating directory: %s", MOD_NAME, VERSION, mod_data_folder.c_str());
-			std::filesystem::create_directory(mod_data_folder);
-
-			// Verify the directory now exists.
-			if (!std::filesystem::exists(mod_data_folder))
-			{
-				g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to create the \"mod_data\" directory: ", MOD_NAME, VERSION, mod_data_folder.c_str());
-				return false;
-			}
-		}
-
-		// Try to find the mod_data/Curator directory.
-		std::string curator_folder = mod_data_folder + "\\Curator";
-		if (!std::filesystem::exists(curator_folder))
-		{
-			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - The \"Curator\" directory was not found. Creating directory: %s", MOD_NAME, VERSION, curator_folder.c_str());
-			std::filesystem::create_directory(curator_folder);
-
-			// Verify the directory now exists.
-			if (!std::filesystem::exists(curator_folder))
-			{
-				g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to create the \"Curator\" directory: ", MOD_NAME, VERSION, curator_folder.c_str());
-				return false;
-			}
-		}
-
-		// Try to find the mod_data/Curator/Curator.json config file.
-		bool update_config_file = false;
-		std::string config_file = curator_folder + "\\" + "Curator.json";
-		std::ifstream in_stream(config_file);
-		if (in_stream.good())
-		{
-			try
-			{
-				json json_object = json::parse(in_stream);
-
-				// Check if the json_object is empty.
-				if (json_object.empty())
-				{
-					g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - No values found in mod configuration file: %s!", MOD_NAME, VERSION, config_file.c_str());
-					g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Add your desired values to the configuration file, otherwise defaults will be used.", MOD_NAME, VERSION);
-					LogDefaultModConfigValues();
-				}
-				else
-				{
-					// Try loading the allow_artifacts_from_any_set value.
-					if (json_object.contains(ALLOW_ARTIFACTS_FROM_ANY_SET_KEY))
-					{
-						allow_artifacts_from_any_set = json_object[ALLOW_ARTIFACTS_FROM_ANY_SET_KEY];
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using CUSTOM \"%s\" value: %s!", MOD_NAME, VERSION, ALLOW_ARTIFACTS_FROM_ANY_SET_KEY, allow_artifacts_from_any_set ? "true" : "false");
-					}
-					else
-					{
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, ALLOW_ARTIFACTS_FROM_ANY_SET_KEY, config_file.c_str());
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, ALLOW_ARTIFACTS_FROM_ANY_SET_KEY, DEFAULT_ALLOW_ARTIFACTS_FROM_ANY_SET ? "true" : "false");
-					}
-
-					// Try loading the disable_common_finds value.
-					if (json_object.contains(DISABLE_COMMON_FINDS_KEY))
-					{
-						disable_common_finds = json_object[DISABLE_COMMON_FINDS_KEY];
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using CUSTOM \"%s\" value: %s!", MOD_NAME, VERSION, DISABLE_COMMON_FINDS_KEY, disable_common_finds ? "true" : "false");
-					}
-					else
-					{
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, DISABLE_COMMON_FINDS_KEY, config_file.c_str());
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, DISABLE_COMMON_FINDS_KEY, DEFAULT_DISABLE_COMMON_FINDS ? "true" : "false");
-					}
-				}
-
-				update_config_file = true;
-			}
-			catch (...)
-			{
-				eptr = std::current_exception();
-				PrintError(eptr);
-
-				g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to parse JSON from configuration file: %s", MOD_NAME, VERSION, config_file.c_str());
-				g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Make sure the file is valid JSON!", MOD_NAME, VERSION);
-				LogDefaultModConfigValues();
-			}
-
-			in_stream.close();
-		}
-		else
-		{
-			in_stream.close();
-
-			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - The \"Curator.json\" file was not found. Creating file: %s", MOD_NAME, VERSION, config_file.c_str());
-
-			json default_config_json = CreateModConfigJson(true);
-			std::ofstream out_stream(config_file);
-			out_stream << std::setw(4) << default_config_json << std::endl;
-			out_stream.close();
-
-			// Verify the file now exists.
-			if (!std::filesystem::exists(config_file))
-			{
-				g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to create the \"Curator.json\" file: ", MOD_NAME, VERSION, config_file.c_str());
-				return false;
-			}
-
-			LogDefaultModConfigValues();
-		}
-
-		if (update_config_file)
-		{
-			json config_json = CreateModConfigJson(false);
-			std::ofstream out_stream(config_file);
-			out_stream << std::setw(4) << config_json << std::endl;
-			out_stream.close();
-		}
-	}
-	catch (...)
-	{
-		eptr = std::current_exception();
-		PrintError(eptr);
-
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - An error occurred loading the mod configuration file.", MOD_NAME, VERSION);
+	if (!MMAPI::Internal::module_interface->CallBuiltin("variable_global_exists", { YYTK_KEY }).ToBoolean())
 		return false;
-	}
 
-	return true;
+	YYTK::RValue __YYTK = MMAPI::Engine::GlobalVariableGet(YYTK_KEY);
+	if (!MMAPI::Engine::StructVariableExists(__YYTK, MOD_NAME))
+		return false;
+
+	YYTK::RValue mod_struct = MMAPI::Engine::StructVariableGet(__YYTK, MOD_NAME);
+	if (!MMAPI::Engine::StructVariableExists(mod_struct, IGNORE_NEXT_DIG_SPOT_KEY))
+		return false;
+
+	bool was_set = MMAPI::Engine::StructVariableGet(mod_struct, IGNORE_NEXT_DIG_SPOT_KEY).ToBoolean();
+	if (was_set)
+		MMAPI::Engine::StructVariableSet(mod_struct, IGNORE_NEXT_DIG_SPOT_KEY, false);
+	return was_set;
 }
 
-void ObjectCallback(
-	IN FWCodeEvent& CodeEvent
-)
+// Initializes the `__YYTK.Curator` cross-mod struct (`version` + `ignore_next_dig_spot`). DigUpAnything
+// sets the flag when it's about to substitute the next dig spot, so this mod knows to step aside.
+void EnsureCrossModStructExists()
 {
-	auto& [self, other, code, argc, argv] = CodeEvent.Arguments();
+	YYTK::RValue __YYTK;
+	if (!MMAPI::Internal::module_interface->CallBuiltin("variable_global_exists", { YYTK_KEY }).ToBoolean())
+	{
+		MMAPI::Internal::module_interface->GetRunnerInterface().StructCreate(&__YYTK);
+		MMAPI::Engine::GlobalVariableSet(YYTK_KEY, __YYTK);
+	}
+	else
+	{
+		__YYTK = MMAPI::Engine::GlobalVariableGet(YYTK_KEY);
+	}
 
-	if (!self)
+	if (!MMAPI::Engine::StructVariableExists(__YYTK, MOD_NAME))
+	{
+		YYTK::RValue mod_struct;
+		YYTK::RValue version_rv = VERSION;
+		YYTK::RValue ignore_next_dig_spot = false;
+		MMAPI::Internal::module_interface->GetRunnerInterface().StructCreate(&mod_struct);
+		MMAPI::Internal::module_interface->GetRunnerInterface().StructAddRValue(&mod_struct, "version",                  &version_rv);
+		MMAPI::Internal::module_interface->GetRunnerInterface().StructAddRValue(&mod_struct, IGNORE_NEXT_DIG_SPOT_KEY,   &ignore_next_dig_spot);
+		MMAPI::Internal::module_interface->GetRunnerInterface().StructAddRValue(&__YYTK,     MOD_NAME,                   &mod_struct);
+	}
+}
+
+// Picks an un-donated item from `candidates`. Returns -1 if every candidate has been donated.
+int PickUndonated(const std::vector<int>& candidates)
+{
+	std::vector<int> available;
+	available.reserve(candidates.size());
+	for (int id : candidates)
+		if (!MMAPI::Item::HasBeenDonated(id)) available.push_back(id);
+
+	if (available.empty()) return -1;
+	std::uniform_int_distribution<size_t> dist(0, available.size() - 1);
+	return available[dist(rng)];
+}
+
+// Same as PickUndonated but for a set-based source. Lifted to a separate overload to avoid copying
+// `all_archaeology_items` into a vector at the call site.
+int PickUndonated(const std::set<int>& candidates)
+{
+	std::vector<int> available;
+	available.reserve(candidates.size());
+	for (int id : candidates)
+		if (!MMAPI::Item::HasBeenDonated(id)) available.push_back(id);
+
+	if (available.empty()) return -1;
+	std::uniform_int_distribution<size_t> dist(0, available.size() - 1);
+	return available[dist(rng)];
+}
+
+// ----- Hooks -----
+
+void OnSetupMainScreen()
+{
+	if (startup_loaded) return;
+
+	LoadOrCreateConfigFile();
+	EnsureCrossModStructExists();
+	disabled_item_ids     = ResolveItemNames(DISABLED_ITEMS);
+	common_finds_item_ids = ResolveItemNames(COMMON_FINDS_ITEMS);
+	ParseArchaeologyMuseumData();
+
+	startup_loaded = true;
+}
+
+// The artifact-substitution logic. Fires after the game's choose_random_artifact roll. If the rolled
+// item is an already-donated archaeology item, swap it for an un-donated one from the same set —
+// falling back to any set, then to "anything not common-finds" (if configured).
+void OnAfterChooseRandomArtifact(MMAPI::Archaeology::AfterChooseRandomArtifactContext& ctx)
+{
+	// Cross-mod IPC: DigUpAnything signaled it's about to take over this dig — step aside.
+	if (ConsumeIgnoreNextDigSpot())
 		return;
 
-	if (!self->m_Object)
+	if (PERK_GATED && !MMAPI::Perk::IsActive(MMAPI::Perk::Ids::Unpeatable))
 		return;
 
-	if (strstr(self->m_Object->m_Name, "obj_ari"))
-	{
-		CInstance* global_instance = nullptr;
-		g_ModuleInterface->GetGlobalInstance(&global_instance);
+	int rolled_id = ctx.GetItemId();
+	if (rolled_id < 0) return;
 
-		// Update active perks.
-		if (PerkActive(global_instance->GetRefMember("__ari")->ToInstance(), self, UNPEATABLE))
-			active_perk_map[UNPEATABLE] = true;
-		else
-			active_perk_map[UNPEATABLE] = false;
+	// Only act on archaeology items the player has already donated.
+	auto set_it = item_id_to_archaeology_set.find(rolled_id);
+	if (set_it == item_id_to_archaeology_set.end()) return;
+	if (!MMAPI::Item::HasBeenDonated(rolled_id)) return;
+
+	const std::string& set_name = set_it->second;
+
+	// First try: pick an un-donated item from the same set.
+	std::vector<int> set_candidates;
+	set_candidates.reserve(archaeology_set_to_items[set_name].size());
+	for (int id : archaeology_set_to_items[set_name])
+		if (!disabled_item_ids.contains(id))
+			set_candidates.push_back(id);
+
+	int replacement = PickUndonated(set_candidates);
+	if (replacement >= 0)
+	{
+		ctx.SetItemId(replacement);
+		MMAPI::Log::Info("Changed the donated artifact to a missing one from the matching set: %s!", set_name.c_str());
+		return;
 	}
-}
 
-RValue& GmlScriptChooseRandomArtifactCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_CHOOSE_RANDOM_ARTIFACT));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	bool modify_dig_spot = false;
-	if (!IgnoreNextDigSpot())
+	// Fallback 1: same-set is exhausted. Try any archaeology item from any set.
+	if (config.allow_artifacts_from_any_set)
 	{
-		if (PERK_MOD_VARIANT)
+		replacement = PickUndonated(all_archaeology_items);
+		if (replacement >= 0)
 		{
-			if (active_perk_map[UNPEATABLE])
-			{
-				modify_dig_spot = true;
-			}
+			ctx.SetItemId(replacement);
+			MMAPI::Log::Info("Changed the donated artifact to a missing one from any set!");
+			return;
 		}
-		else
+
+		// Fallback 2: literally everything donated. If disable_common_finds is on, pick anything from
+		// the (common-finds-excluded) set; otherwise let the dupe stand.
+		if (config.disable_common_finds && !all_archaeology_items.empty())
 		{
-			modify_dig_spot = true;
+			std::uniform_int_distribution<size_t> dist(0, all_archaeology_items.size() - 1);
+			auto it = std::next(all_archaeology_items.begin(), dist(rng));
+			ctx.SetItemId(*it);
+			MMAPI::Log::Info("All artifacts have been donated! The artifact was a Common Finds item and was randomly replaced.");
+			return;
 		}
-	}
-	else
-	{
-		RValue Curator = StructVariableGet(__YYTK, MOD_NAME);
-		RValue ignore_next_dig_spot = false;
-		StructVariableSet(Curator, "ignore_next_dig_spot", ignore_next_dig_spot);
+
+		MMAPI::Log::Info("All artifacts have been donated! The dig spot was unmodified.");
+		return;
 	}
 
-	if (modify_dig_spot)
-	{
-		if (Result.m_Kind == VALUE_INT64)
-		{
-			// Check if the artifact is a museum item.
-			if (item_id_to_archaeology_set.count(Result.m_i64) > 0)
-			{
-				// Check if the artifact has already been donated.
-				RValue museum_progress = GetMuseumProgress();
-				RValue item_donated = g_ModuleInterface->CallBuiltin("array_get", { museum_progress, Result.m_i64 });
-				if (RValueAsBool(item_donated))
-				{
-					// Make a list of candidate replacements from the set.
-					std::string archaeology_set = item_id_to_archaeology_set[Result.m_i64];
-					std::vector<int> archaeology_set_items = archaeology_set_to_items[archaeology_set];
-					std::vector<int> candidate_replacement_items = {};
-					for (int i = 0; i < archaeology_set_items.size(); i++)
-					{
-						RValue set_item_donated = g_ModuleInterface->CallBuiltin("array_get", { museum_progress, archaeology_set_items[i] });
-						if (!RValueAsBool(set_item_donated) && std::find(disabled_item_ids.begin(), disabled_item_ids.end(), archaeology_set_items[i]) == disabled_item_ids.end())
-						{
-							candidate_replacement_items.push_back(archaeology_set_items[i]);
-						}
-					}
-
-					if (candidate_replacement_items.size() > 0)
-					{
-						// Pick a random artifact from the candidates.
-						std::uniform_int_distribution<int> distribution(0, candidate_replacement_items.size() - 1);
-						int random = distribution(generator);
-						Result.m_i64 = candidate_replacement_items[random];
-
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Changed the donated artifact to a missing one from the matching set: %s!", MOD_NAME, VERSION, archaeology_set.c_str());
-					}
-					else if (allow_artifacts_from_any_set)
-					{
-						// Pick a new artifact randomly from any set.
-						RValue museum_progress = GetMuseumProgress();
-						std::vector<int64_t> possible_artifacts = {};
-
-						for (int64_t item_id : all_archaeology_items)
-						{
-							RValue item_donated = g_ModuleInterface->CallBuiltin("array_get", { museum_progress, item_id });
-							if (!RValueAsBool(item_donated))
-							{
-								possible_artifacts.push_back(item_id);
-							}
-						}
-
-						if (possible_artifacts.size() > 0)
-						{
-							std::uniform_int_distribution<int> distribution(0, possible_artifacts.size() - 1);
-							int random = distribution(generator);
-							Result.m_i64 = possible_artifacts[random];
-
-							g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Changed the donated artifact to a missing one from any set!", MOD_NAME, VERSION, archaeology_set.c_str());
-						}
-						else if (disable_common_finds)
-						{
-							std::uniform_int_distribution<int> distribution(0, all_archaeology_items.size() - 1);
-							int random = distribution(generator);
-							Result.m_i64 = *std::next(all_archaeology_items.begin(), random);
-
-							g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - All artifacts have been donated! The artifact was a Common Finds item and was randomly replaced.", MOD_NAME, VERSION, archaeology_set.c_str());
-						}
-						else
-						{
-							g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - All artifacts have been donated! The dig spot was unmodified.", MOD_NAME, VERSION, archaeology_set.c_str());
-						}
-					}
-					else
-					{
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - All artifacts have been already donated for the matching set: %s!", MOD_NAME, VERSION, archaeology_set.c_str());
-					}
-				}
-			}
-		}
-		else
-		{
-			g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Expected gml_Script_choose_random_artifact Result to be type INT64, but it was %s!", MOD_NAME, VERSION, RValueKindAsString(Result).c_str());
-		}
-	}
-	else
-	{
-		RValue Curator = StructVariableGet(__YYTK, MOD_NAME);
-		RValue ignore_next_dig_spot = false;
-		StructVariableSet(Curator, IGNORE_NEXT_DIG_SPOT_KEY, ignore_next_dig_spot);
-	}
-
-	return Result;
+	MMAPI::Log::Warn("All artifacts have been already donated for the matching set: %s!", set_name.c_str());
 }
 
-RValue& GmlScriptSetupMainScreenCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	if (load_on_start)
-	{
-		CreateOrGetGlobalYYTKVariable();
-		CreateModInfoInGlobalYYTKVariable();
-		ParseDisabledItemAndCommonFindItemIds(Self, Other);
-		ParseMuseumData();
-		ParsePerks();
-		CreateOrLoadModConfigFile();
-		load_on_start = false;
-	}
-	else
-	{
-		ResetStaticFields();
-	}
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_SETUP_MAIN_SCREEN));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
-}
-
-void CreateObjectCallback(AurieStatus& status)
-{
-	status = g_ModuleInterface->CreateCallback(
-		g_ArSelfModule,
-		EVENT_OBJECT_CALL,
-		ObjectCallback,
-		0
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook (EVENT_OBJECT_CALL)!", MOD_NAME, VERSION);
-	}
-}
-
-void CreateHookGmlScriptChooseRandomArtifact(AurieStatus& status)
-{
-	CScript* gml_script_choose_random_artifact = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_CHOOSE_RANDOM_ARTIFACT,
-		(PVOID*)&gml_script_choose_random_artifact
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_CHOOSE_RANDOM_ARTIFACT);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_CHOOSE_RANDOM_ARTIFACT,
-		gml_script_choose_random_artifact->m_Functions->m_ScriptFunction,
-		GmlScriptChooseRandomArtifactCallback,
-		nullptr
-	);
-
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_CHOOSE_RANDOM_ARTIFACT);
-	}
-}
-
-void CreateHookGmlScriptSetupMainScreen(AurieStatus& status)
-{
-	CScript* gml_script_setup_main_screen = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_SETUP_MAIN_SCREEN,
-		(PVOID*)&gml_script_setup_main_screen
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SETUP_MAIN_SCREEN);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_SETUP_MAIN_SCREEN,
-		gml_script_setup_main_screen->m_Functions->m_ScriptFunction,
-		GmlScriptSetupMainScreenCallback,
-		nullptr
-	);
-
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SETUP_MAIN_SCREEN);
-	}
-}
-
-EXPORTED AurieStatus ModuleInitialize(
-	IN AurieModule* Module,
-	IN const fs::path& ModulePath
-)
+EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path& ModulePath)
 {
 	UNREFERENCED_PARAMETER(ModulePath);
 
-	AurieStatus status = AURIE_SUCCESS;
-	
-	status = ObGetInterface(
-		"YYTK_Main", 
-		(AurieInterfaceBase*&)(g_ModuleInterface)
-	);
-
+	YYTKInterface* module_interface = nullptr;
+	AurieStatus status = ObGetInterface("YYTK_Main", (AurieInterfaceBase*&)module_interface);
 	if (!AurieSuccess(status))
 		return AURIE_MODULE_DEPENDENCY_NOT_RESOLVED;
 
-	g_ModuleInterface->Print(CM_LIGHTAQUA, "[%s %s] - Plugin starting...", MOD_NAME, VERSION);
+	module_interface->Print(CM_LIGHTAQUA, "[%s %s] - Plugin starting...", MOD_NAME, VERSION);
 
-	CreateObjectCallback(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
+	CInstance* global_instance = nullptr;
+	module_interface->GetGlobalInstance(&global_instance);
+	MMAPI::Initialize(module_interface, global_instance, g_ArSelfModule, MOD_NAME, VERSION);
 
-	CreateHookGmlScriptChooseRandomArtifact(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
+	MMAPI::Archaeology::Enable();
+	MMAPI::Game::Enable();
+	MMAPI::Item::Enable();
+	MMAPI::Perk::Enable();
 
-	CreateHookGmlScriptSetupMainScreen(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
+	MMAPI::Game::Hooks::BeforeSetupMainScreen(OnSetupMainScreen);
+	MMAPI::Archaeology::Hooks::AfterChooseRandomArtifact(OnAfterChooseRandomArtifact);
 
-	g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Plugin started!", MOD_NAME, VERSION);
+	MMAPI::Log::Info("Plugin started!");
 	return AURIE_SUCCESS;
 }
