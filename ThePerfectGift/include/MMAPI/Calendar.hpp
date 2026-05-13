@@ -6,6 +6,9 @@
 #include "Log.hpp"
 #include "Status.hpp"
 
+#include <optional>
+#include <string>
+
 #include "YYToolkit/YYTK_Shared.hpp"
 
 namespace MMAPI::Calendar
@@ -252,6 +255,32 @@ namespace MMAPI::Calendar
 		return current_weekday == weekday;
 	}
 
+	/// Resolves a Weekdays from its game-internal name string by consulting `globalInstance.__day__`.
+	/// Useful for mods that take user-supplied day names from JSON config and need to round-trip
+	/// back to the enum.
+	/// @param internal_name The game-internal day name (lowercase, e.g. "monday"). Match is case-sensitive.
+	/// @return The Weekdays enum value, or std::nullopt if no weekday matches.
+	inline std::optional<MMAPI::Calendar::Weekdays> TryWeekdayFromInternalName(const std::string& internal_name)
+	{
+		if (!MMAPI::Internal::global_instance)
+			return std::nullopt;
+
+		YYTK::RValue days = MMAPI::Internal::global_instance->GetMember("__day__");
+		if (days.m_Kind == YYTK::VALUE_UNDEFINED)
+			return std::nullopt;
+
+		size_t count = 0;
+		MMAPI::Internal::module_interface->GetArraySize(days, count);
+		for (size_t i = 0; i < count; ++i)
+		{
+			YYTK::RValue* entry = nullptr;
+			MMAPI::Internal::module_interface->GetArrayEntry(days, i, entry);
+			if (entry && entry->m_Kind == YYTK::VALUE_STRING && entry->ToString() == internal_name)
+				return static_cast<MMAPI::Calendar::Weekdays>(i);
+		}
+		return std::nullopt;
+	}
+
 	/// Gets the current season from the Calendar script context.
 	/// @attention Requires MMAPI::Calendar::Enable() to have been called.
 	/// @param season The current season.
@@ -283,6 +312,32 @@ namespace MMAPI::Calendar
 			return false;
 
 		return current_season == season;
+	}
+
+	/// Resolves a Seasons from its game-internal name string by consulting `globalInstance.__season__`.
+	/// Useful for mods that take user-supplied season names from JSON config and need to round-trip
+	/// back to the enum.
+	/// @param internal_name The game-internal season name (lowercase, e.g. "spring", "summer", "fall", "winter").
+	/// @return The Seasons enum value, or std::nullopt if no season matches.
+	inline std::optional<MMAPI::Calendar::Seasons> TrySeasonFromInternalName(const std::string& internal_name)
+	{
+		if (!MMAPI::Internal::global_instance)
+			return std::nullopt;
+
+		YYTK::RValue seasons = MMAPI::Internal::global_instance->GetMember("__season__");
+		if (seasons.m_Kind == YYTK::VALUE_UNDEFINED)
+			return std::nullopt;
+
+		size_t count = 0;
+		MMAPI::Internal::module_interface->GetArraySize(seasons, count);
+		for (size_t i = 0; i < count; ++i)
+		{
+			YYTK::RValue* entry = nullptr;
+			MMAPI::Internal::module_interface->GetArrayEntry(seasons, i, entry);
+			if (entry && entry->m_Kind == YYTK::VALUE_STRING && entry->ToString() == internal_name)
+				return static_cast<MMAPI::Calendar::Seasons>(i);
+		}
+		return std::nullopt;
 	}
 
 	/// Gets the current 1-indexed calendar year from the Calendar script context.

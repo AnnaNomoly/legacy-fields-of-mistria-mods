@@ -6,6 +6,9 @@
 #include "Log.hpp"
 #include "Status.hpp"
 
+#include <optional>
+#include <string>
+
 #include "YYToolkit/YYTK_Shared.hpp"
 
 namespace MMAPI::Weather
@@ -242,6 +245,32 @@ namespace MMAPI::Weather
 
 		return weather != MMAPI::Weather::Ids::HeavyInclement &&
 		       weather != MMAPI::Weather::Ids::Inclement;
+	}
+
+	/// Resolves a weather Ids from its game-internal name string by consulting `globalInstance.__weather__`.
+	/// Useful for mods that take user-supplied weather names from JSON config and need to round-trip
+	/// back to the enum.
+	/// @param internal_name The game-internal weather name (lowercase, e.g. "calm", "rainy"). Match is case-sensitive.
+	/// @return The Ids enum value, or std::nullopt if no weather matches.
+	inline std::optional<MMAPI::Weather::Ids> TryFromInternalName(const std::string& internal_name)
+	{
+		if (!MMAPI::Internal::global_instance)
+			return std::nullopt;
+
+		YYTK::RValue weather = MMAPI::Internal::global_instance->GetMember("__weather__");
+		if (weather.m_Kind == YYTK::VALUE_UNDEFINED)
+			return std::nullopt;
+
+		size_t count = 0;
+		MMAPI::Internal::module_interface->GetArraySize(weather, count);
+		for (size_t i = 0; i < count; ++i)
+		{
+			YYTK::RValue* entry = nullptr;
+			MMAPI::Internal::module_interface->GetArrayEntry(weather, i, entry);
+			if (entry && entry->m_Kind == YYTK::VALUE_STRING && entry->ToString() == internal_name)
+				return static_cast<MMAPI::Weather::Ids>(i);
+		}
+		return std::nullopt;
 	}
 
 	namespace Hooks
