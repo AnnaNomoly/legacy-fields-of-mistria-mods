@@ -73,11 +73,16 @@ namespace MMAPI::Object
 	{
 		YYTK::CInstance* m_self          = nullptr;
 		YYTK::RValue*    m_sprite_asset  = nullptr;
+		std::string      m_sprite_name;
 		bool             m_cancelled     = false;
 
 		/// The live obj_node_renderer instance whose sprite is being set. Use `MMAPI::Object::GetNode(self)`
 		/// to read the node data (prototype, day_count, etc.) backing this renderer.
 		YYTK::CInstance* GetSelf() const { return m_self; }
+
+		/// The sprite name the renderer is about to switch to, resolved via `sprite_get_name`
+		/// on Arguments[0]. Empty if Arguments[0] isn't a sprite asset.
+		std::string_view GetSpriteName() const { return m_sprite_name; }
 
 		/// The sprite asset (VALUE_REF) the renderer is about to switch to. Empty RValue if unavailable.
 		YYTK::RValue GetSpriteAsset() const { return m_sprite_asset ? *m_sprite_asset : YYTK::RValue(); }
@@ -550,7 +555,22 @@ namespace MMAPI::Object
 		{
 			if (before_node_renderer_set_sprite_callback && Arguments && ArgumentCount >= 1 && Arguments[0])
 			{
-				MMAPI::Object::NodeRendererSetSpriteContext context{ Self, Arguments[0] };
+				// Pre-resolve the sprite name once for the callback; arg0 can be any asset, so we
+				// only attempt the sprite_get_name lookup when it's actually a sprite.
+				std::string sprite_name;
+				YYTK::RValue asset_type = MMAPI::Internal::module_interface->CallBuiltin(
+					"asset_get_type", { *Arguments[0] }
+				);
+				if (asset_type.ToInt64() == static_cast<int64_t>(MMAPI::Engine::AssetType::Sprite))
+				{
+					YYTK::RValue name = MMAPI::Internal::module_interface->CallBuiltin(
+						"sprite_get_name", { *Arguments[0] }
+					);
+					if (name.m_Kind == YYTK::VALUE_STRING)
+						sprite_name = name.ToString();
+				}
+
+				MMAPI::Object::NodeRendererSetSpriteContext context{ Self, Arguments[0], std::move(sprite_name) };
 				before_node_renderer_set_sprite_callback(context);
 
 				if (context.m_cancelled)
