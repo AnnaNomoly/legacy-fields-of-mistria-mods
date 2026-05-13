@@ -201,6 +201,40 @@ namespace MMAPI::Engine
 		MMAPI::Internal::module_interface->CallBuiltin("audio_stop_sound", { sound_effect_index });
 	}
 
+	/// Sets the active GameMaker draw color. Subsequent draw calls (rectangles, lines, text) use
+	/// this color until it changes again. Color is a GM-format integer where the byte order is
+	/// 0xBBGGRR (e.g. 0x00FF00 = green, 0x0000FF = red).
+	/// @param color The GM-format color integer.
+	inline void DrawSetColor(int color)
+	{
+		MMAPI::Internal::module_interface->CallBuiltin("draw_set_color", { color });
+	}
+
+	/// Draws a filled or outlined rectangle in the current draw target. Sets the draw color first,
+	/// then issues the rectangle — pair-and-call is the typical usage pattern.
+	/// @param color The GM-format color integer (see `DrawSetColor`).
+	/// @param x1 Left edge in pixels.
+	/// @param y1 Top edge in pixels.
+	/// @param x2 Right edge in pixels.
+	/// @param y2 Bottom edge in pixels.
+	/// @param outline When true, draws only the rectangle border; otherwise draws a filled rectangle.
+	inline void DrawRectangle(int color, double x1, double y1, double x2, double y2, bool outline)
+	{
+		DrawSetColor(color);
+		MMAPI::Internal::module_interface->CallBuiltin("draw_rectangle", { x1, y1, x2, y2, outline });
+	}
+
+	/// Draws a sprite from its asset index. For the common "play the default frame" case, pass
+	/// `subimg = -1` so the game advances animation normally.
+	/// @param sprite_asset The sprite asset index (typically from `AssetGetIndex("spr_...")`).
+	/// @param subimg The sprite sub-image to draw, or -1 to use the sprite's current animation frame.
+	/// @param x X position in pixels.
+	/// @param y Y position in pixels.
+	inline void DrawSprite(YYTK::RValue sprite_asset, int subimg, double x, double y)
+	{
+		MMAPI::Internal::module_interface->CallBuiltin("draw_sprite", { sprite_asset, subimg, x, y });
+	}
+
 	/// Gets the value of a GML built-in instance variable by name.
 	/// @param instance The instance to read from.
 	/// @param variable_name The built-in variable name (e.g. "sprite_index", "x", "depth").

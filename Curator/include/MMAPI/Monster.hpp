@@ -7,6 +7,9 @@
 #include "Log.hpp"
 #include "Status.hpp"
 
+#include <optional>
+#include <string>
+
 #include "YYToolkit/YYTK_Shared.hpp"
 
 namespace MMAPI::Monster
@@ -194,10 +197,13 @@ namespace MMAPI::Monster
 		inline bool enabled = false;
 
 		inline constexpr const char* GML_SCRIPT_SPAWN_MONSTER = "gml_Script_spawn_monster";
+		inline constexpr const char* GML_SCRIPT_DRAW_MONSTER  = "gml_Script_draw@gml_Object_par_monster_Create_0";
 
 		using BeforeMonsterSpawnCallback = void(*)(MMAPI::Monster::SpawnMonsterContext&);
+		using AfterDrawMonsterCallback   = void(*)(YYTK::CInstance* monster);
 
 		inline BeforeMonsterSpawnCallback before_monster_spawn_callback = nullptr;
+		inline AfterDrawMonsterCallback   after_draw_monster_callback   = nullptr;
 
 		inline YYTK::RValue& GmlScriptSpawnMonsterCallback(
 			IN YYTK::CInstance* Self,
@@ -225,6 +231,25 @@ namespace MMAPI::Monster
 
 			return Result;
 		}
+
+		inline YYTK::RValue& GmlScriptAfterDrawMonsterCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_DRAW_MONSTER)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			if (after_draw_monster_callback)
+				after_draw_monster_callback(Self);
+
+			return Result;
+		}
 	}
 
 	/// Activates Monster utility functions. Cascades to MMAPI::Dungeon::Enable so SpawnMonster can resolve
@@ -242,10 +267,10 @@ namespace MMAPI::Monster
 		if (!MMAPI::IsSuccess(status))
 			return status;
 
-		status = MMAPI::Internal::InstallScriptHook(
-			Internal::GML_SCRIPT_SPAWN_MONSTER,
-			reinterpret_cast<PVOID>(Internal::GmlScriptSpawnMonsterCallback)
-		);
+		status = MMAPI::Internal::InstallScriptHooks({
+			{ Internal::GML_SCRIPT_SPAWN_MONSTER, reinterpret_cast<PVOID>(Internal::GmlScriptSpawnMonsterCallback) },
+			{ Internal::GML_SCRIPT_DRAW_MONSTER,  reinterpret_cast<PVOID>(Internal::GmlScriptAfterDrawMonsterCallback) },
+		});
 		if (!MMAPI::IsSuccess(status))
 			return status;
 
@@ -303,6 +328,74 @@ namespace MMAPI::Monster
 				callback
 			);
 		}
+
+		/// Registers a callback that runs after the game's `draw@gml_Object_par_monster_Create_0`
+		/// script — fires once per monster per frame when the monster is visible and rendering. The
+		/// callback receives the live monster instance, which exposes `monster_id`, `hit_points`, and
+		/// the built-in position variables via `MMAPI::Engine::InstanceVariableGet(instance, "x"|"y")`.
+		/// Use for in-world overlays drawn relative to the monster (health bars, status indicators,
+		/// debug markers).
+		/// @param callback A function called with the monster instance after each draw.
+		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
+		inline MMAPI::Status AfterDrawMonster(Internal::AfterDrawMonsterCallback callback)
+		{
+			MMAPI::Status status = MMAPI::Monster::Enable();
+			if (!MMAPI::IsSuccess(status))
+				return status;
+
+			return MMAPI::Internal::RegisterHook(
+				"Monster::AfterDrawMonster",
+				Internal::after_draw_monster_callback,
+				callback
+			);
+		}
+	}
+
+	/// Resolves a monster's game-internal name string (e.g. "bat", "bat_blue") by reading
+	/// `globalInstance.__monster_id__[id]`.
+	/// @param monster The monster to resolve.
+	/// @return The internal name, or empty if the id is out of bounds.
+	inline std::string GetInternalName(MMAPI::Monster::Ids monster)
+	{
+		YYTK::RValue monster_ids = MMAPI::Internal::global_instance->GetMember("__monster_id__");
+		size_t count = 0;
+		MMAPI::Internal::module_interface->GetArraySize(monster_ids, count);
+
+		int id = static_cast<int>(monster);
+		if (id < 0 || id >= static_cast<int>(count))
+			return {};
+
+		YYTK::RValue* internal_name = nullptr;
+		MMAPI::Internal::module_interface->GetArrayEntry(monster_ids, id, internal_name);
+		if (!internal_name || internal_name->m_Kind != YYTK::VALUE_STRING)
+			return {};
+
+		return internal_name->ToString();
+	}
+
+	/// Resolves a Monster::Ids from its game-internal name string. Useful for mods that take
+	/// monster names from JSON config and need to round-trip back to the enum.
+	/// @param internal_name The game-internal monster name (e.g. "bat", "bat_blue").
+	/// @return The Monster::Ids enum value, or std::nullopt if no monster matches.
+	inline std::optional<MMAPI::Monster::Ids> TryFromInternalName(const std::string& internal_name)
+	{
+		if (!MMAPI::Internal::global_instance)
+			return std::nullopt;
+
+		YYTK::RValue monster_ids = MMAPI::Internal::global_instance->GetMember("__monster_id__");
+		if (monster_ids.m_Kind == YYTK::VALUE_UNDEFINED)
+			return std::nullopt;
+
+		size_t count = 0;
+		MMAPI::Internal::module_interface->GetArraySize(monster_ids, count);
+		for (size_t i = 0; i < count; ++i)
+		{
+			YYTK::RValue* entry = nullptr;
+			MMAPI::Internal::module_interface->GetArrayEntry(monster_ids, i, entry);
+			if (entry && entry->m_Kind == YYTK::VALUE_STRING && entry->ToString() == internal_name)
+				return static_cast<MMAPI::Monster::Ids>(i);
+		}
+		return std::nullopt;
 	}
 
 	/// Spawns a monster at the given room coordinates on the current dungeon floor.

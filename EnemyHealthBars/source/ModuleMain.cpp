@@ -1,522 +1,235 @@
-#include <fstream>
-#include <iomanip>
-#include <iostream>
-#include <filesystem>
-#include <unordered_set>
-#include <nlohmann/json.hpp>
-#include <YYToolkit/YYTK_Shared.hpp> // YYTK v4
+#include <cmath>
+#include <map>
+#include <string>
+
+#include <YYToolkit/YYTK_Shared.hpp>
+#include <MMAPI/MMAPI.hpp>
+#include <MMAPI/Config.hpp>
+
 using namespace Aurie;
 using namespace YYTK;
 using json = nlohmann::json;
+namespace fs = std::filesystem;
+
+// ----- Mod metadata -----
 
 static const char* const MOD_NAME = "EnemyHealthBars";
-static const char* const VERSION = "1.1.0";
-static const char* const GML_SCRIPT_DRAW_MONSTER = "gml_Script_draw@gml_Object_par_monster_Create_0";
-static const char* const GML_SCRIPT_SETUP_MAIN_SCREEN = "gml_Script_setup_main_screen@TitleMenu@TitleMenu";
-static const char* const SMALLER_HEALTH_BAR_JSON_KEY = "smaller_health_bar";
-static const char* const RED_HEALTH_BAR_JSON_KEY = "red_health_bar";
-static const char* const MONSTER_HEALTH_BAR_VERTICAL_OFFSETS_JSON_KEY = "monster_health_bar_vertical_offsets";
-static const bool DEFAULT_SMALLER_HEALTH_BAR = false;
-static const bool DEFAULT_RED_HEALTH_BAR = false;
-static const int HEALTH_BAR_HEIGHT = 9;
-static const int HEALTH_BAR_WIDTH = 40;
-static const int SMALL_HEALTH_BAR_HEIGHT = 9;
-static const int SMALL_HEALTH_BAR_WIDTH = 30;
-static const std::map<std::string, int> DEFAULT_MONSTER_HEALTH_BAR_VERTICAL_OFFSETS = { // Uses the monster's "idle south" sprite, divided by 2 or 3
-	{ "bat", 40 * 0.65 }, // spr_monster_essence_bat_main_idle_south
-	{ "bat_blue", 40 * 0.65 }, // spr_monster_essence_bat_blue_main_idle_south
-	{ "cat", 48 * 0.50 }, // spr_monster_lava_cat_main_idle_south
-	{ "cat_void", 48 * 0.50 }, // spr_monster_void_cat_main_idle_south
-	{ "copperclod", 40 * 0.55 }, // spr_monster_copperclod_main_idle_south
-	{ "enchantern", 64 * 0.55 }, // spr_monster_enchantern_off_idle_south
-	{ "enchantern_blue", 64 * 0.55 }, // spr_monster_enchantern_blue_off_idle_south
-	{ "goldclod", 40 * 0.50 }, // spr_monster_goldclod_main_idle_south
-	{ "griffin_statue", 80 * 0.65 }, // spr_monster_living_griffin_statue_main_idle_south
-	{ "ironclod", 40 * 0.55 }, // spr_monster_ironclod_main_idle_south
-	{ "mimic", 40 * 0.50 }, // spr_monster_mimic_main_idle_south
-	{ "mistrilclod", 40 * 0.55 }, // spr_monster_mistrilclod_main_idle_south
-	{ "mushroom", 40 * 0.55 }, // spr_monster_mushroom_main_idle_south
-	{ "mushroom_blue", 40 * 0.55 }, // spr_monster_mushroom_blue_main_idle_south
-	{ "mushroom_green", 40 * 0.55 }, // spr_monster_mushroom_green_main_idle_south
-	{ "mushroom_purple", 40 * 0.55 }, // spr_monster_mushroom_purple_main_idle_south
-	{ "rock_stack", 40 * 0.55 }, // spr_monster_rock_stack_main_idle_south
-	{ "rockclod", 40 * 0.55 }, // spr_monster_rockclod_main_idle_south
-	{ "rockclod_blue", 40 * 0.55 }, // spr_monster_rockclod_blue_main_idle_south
-	{ "rockclod_green", 40 * 0.55 }, // spr_monster_rockclod_green_main_idle_south
-	{ "rockclod_purple", 40 * 0.55 }, // spr_monster_rockclod_purple_main_idle_south
-	{ "rockclod_red", 40 * 0.55 }, // spr_monster_rockclod_red_main_idle_south
-	{ "sapling", 40 * 0.55 }, // spr_monster_sapling_main_idle_south
-	{ "sapling_blue", 40 * 0.55 }, // spr_monster_sapling_blue_main_idle_south
-	{ "sapling_cool", 40 * 0.55 }, // spr_monster_sapling_cool_main_idle_south
-	{ "sapling_orange", 40 * 0.55 }, // spr_monster_sapling_orange_main_idle_south
-	{ "sapling_orange_mini", 40 * 0.50 }, // spr_monster_sapling_orange_mini_main_idle_south
-	{ "sapling_pink", 40 * 0.55 }, // spr_monster_sapling_pink_main_idle_south
-	{ "sapling_purple", 40 * 0.55 }, // spr_monster_sapling_purple_main_idle_south
-	{ "silverclod", 40 * 0.55 }, // spr_monster_silverclod_main_idle_south
-	{ "spirit", 40 * 0.70 }, // spr_monster_flame_spirit_main_idle_south
-	{ "spirit_purple", 40 * 0.70 }, // spr_monster_flame_spirit_purple_main_idle_south
-	{ "stalagmite", 40 * 0.50 }, // spr_monster_stalagmite_blue_tired
-	{ "stalagmite_green", 40 * 0.50 }, // spr_monster_stalagmite_green_tired
-	{ "stalagmite_purple", 40 * 0.50 }, // spr_monster_stalagmite_purple_tired
-	{ "tome", 64 * 0.60 }, // spr_monster_flying_tome_main_idle_south
-	//{ "",  }, // 
+static const char* const VERSION  = "1.2.0";
+
+// ----- Config keys -----
+
+static const char* const KEY_SMALLER_HEALTH_BAR = "smaller_health_bar";
+static const char* const KEY_RED_HEALTH_BAR     = "red_health_bar";
+static const char* const KEY_VERTICAL_OFFSETS   = "monster_health_bar_vertical_offsets";
+
+// ----- Per-monster cached state field names -----
+
+static const char* const FIELD_CAPTURED_MAX_HEALTH      = "__enemy_health_bars_max_health";
+static const char* const FIELD_DEEP_DUNGEON_MAX_HEALTH  = "__deep_dungeon__default_hit_points";
+
+// ----- Bar geometry & colors -----
+
+static constexpr int HEALTH_BAR_WIDTH        = 40;
+static constexpr int HEALTH_BAR_HEIGHT       = 9;
+static constexpr int SMALL_HEALTH_BAR_WIDTH  = 30;
+static constexpr int SMALL_HEALTH_BAR_HEIGHT = 9;
+
+// GM color format is 0xBBGGRR — so 0x00FF00 is green, 0x0000FF is red, 0 is black.
+static constexpr int COLOR_BLACK = 0;
+static constexpr int COLOR_GREEN = 65280;
+static constexpr int COLOR_RED   = 255;
+
+// ----- Default per-monster vertical offsets -----
+// Computed from each monster's "idle south" sprite height multiplied by ~0.5-0.7, placing the bar
+// above the monster's head. Keyed by internal monster name from globalInstance.__monster_id__.
+static const std::map<std::string, int> DEFAULT_VERTICAL_OFFSETS = {
+	{ "bat",                 26 }, // 40 * 0.65, spr_monster_essence_bat_main_idle_south
+	{ "bat_blue",            26 }, // 40 * 0.65
+	{ "cat",                 24 }, // 48 * 0.50
+	{ "cat_void",            24 }, // 48 * 0.50
+	{ "copperclod",          22 }, // 40 * 0.55
+	{ "enchantern",          35 }, // 64 * 0.55
+	{ "enchantern_blue",     35 }, // 64 * 0.55
+	{ "goldclod",            20 }, // 40 * 0.50
+	{ "griffin_statue",      52 }, // 80 * 0.65
+	{ "ironclod",            22 }, // 40 * 0.55
+	{ "mimic",               20 }, // 40 * 0.50
+	{ "mistrilclod",         22 }, // 40 * 0.55
+	{ "mushroom",            22 }, // 40 * 0.55
+	{ "mushroom_blue",       22 },
+	{ "mushroom_green",      22 },
+	{ "mushroom_purple",     22 },
+	{ "rock_stack",          22 },
+	{ "rockclod",            22 },
+	{ "rockclod_blue",       22 },
+	{ "rockclod_green",      22 },
+	{ "rockclod_purple",     22 },
+	{ "rockclod_red",        22 },
+	{ "sapling",             22 },
+	{ "sapling_blue",        22 },
+	{ "sapling_cool",        22 },
+	{ "sapling_orange",      22 },
+	{ "sapling_orange_mini", 20 }, // 40 * 0.50
+	{ "sapling_pink",        22 },
+	{ "sapling_purple",      22 },
+	{ "silverclod",          22 },
+	{ "spirit",              28 }, // 40 * 0.70
+	{ "spirit_purple",       28 },
+	{ "stalagmite",          20 }, // 40 * 0.50
+	{ "stalagmite_green",    20 },
+	{ "stalagmite_purple",   20 },
+	{ "tome",                38 }, // 64 * 0.60
 };
 
-struct Configuration {
-	bool smaller_health_bar = DEFAULT_SMALLER_HEALTH_BAR;
-	bool red_health_bar = DEFAULT_RED_HEALTH_BAR;
-	std::map<std::string, int> monster_health_bar_vertical_offsets = DEFAULT_MONSTER_HEALTH_BAR_VERTICAL_OFFSETS;
+// ----- Config -----
+
+struct Config
+{
+	bool smaller_health_bar = false;
+	bool red_health_bar     = false;
 };
 
-static YYTKInterface* g_ModuleInterface = nullptr;
-static CInstance* global_instance = nullptr;
-static Configuration configuration = Configuration();
-static bool load_on_start = true;
-static std::map<std::string, int> monster_name_to_id_map = {};
-static std::map<int, std::string> monster_id_to_name_map = {};
+static bool                                   startup_loaded = false;
+static Config                                 config;
+static std::map<MMAPI::Monster::Ids, int>     vertical_offsets_by_id;
 
-void PrintError(std::exception_ptr eptr)
+static void LoadConfig()
 {
-	try {
-		if (eptr) {
-			std::rethrow_exception(eptr);
-		}
-	}
-	catch (const std::exception& e) {
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Error: %s", MOD_NAME, VERSION, e.what());
-	}
-}
+	fs::path config_path = MMAPI::Config::GetConfigPath(MOD_NAME);
+	json doc = MMAPI::Config::Load(config_path);
 
-json CreateConfigJson(bool use_defaults)
-{
-	json config_json = {
-		{ SMALLER_HEALTH_BAR_JSON_KEY, use_defaults ? DEFAULT_SMALLER_HEALTH_BAR : configuration.smaller_health_bar },
-		{ RED_HEALTH_BAR_JSON_KEY, use_defaults ? DEFAULT_RED_HEALTH_BAR : configuration.red_health_bar },
-		{ MONSTER_HEALTH_BAR_VERTICAL_OFFSETS_JSON_KEY, use_defaults ? DEFAULT_MONSTER_HEALTH_BAR_VERTICAL_OFFSETS : configuration.monster_health_bar_vertical_offsets }
-	};
-	return config_json;
-}
+	config.smaller_health_bar = MMAPI::Config::GetValue<bool>(doc, KEY_SMALLER_HEALTH_BAR, false);
+	config.red_health_bar     = MMAPI::Config::GetValue<bool>(doc, KEY_RED_HEALTH_BAR,     false);
 
-void CreateOrLoadConfigFile()
-{
-	std::exception_ptr eptr;
-	try
+	std::map<std::string, int> offsets_by_name = DEFAULT_VERTICAL_OFFSETS;
+	if (doc.contains(KEY_VERTICAL_OFFSETS) && doc[KEY_VERTICAL_OFFSETS].is_object())
+		offsets_by_name = doc[KEY_VERTICAL_OFFSETS].get<std::map<std::string, int>>();
+
+	vertical_offsets_by_id.clear();
+	for (const auto& [internal_name, offset] : offsets_by_name)
 	{
-		std::string current_dir = std::filesystem::current_path().string();
-		std::string mod_data_folder = current_dir + "\\mod_data";
-		if (!std::filesystem::exists(mod_data_folder))
+		auto monster = MMAPI::Monster::TryFromInternalName(internal_name);
+		if (!monster)
 		{
-			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - The \"mod_data\" directory was not found. Creating directory: %s", MOD_NAME, VERSION, mod_data_folder.c_str());
-			std::filesystem::create_directory(mod_data_folder);
+			MMAPI::Log::Warn("Unknown monster \"%s\" in %s; skipped.", internal_name.c_str(), KEY_VERTICAL_OFFSETS);
+			continue;
 		}
-
-		std::string enemy_health_bars_folder = mod_data_folder + "\\EnemyHealthBars";
-		if (!std::filesystem::exists(enemy_health_bars_folder))
-		{
-			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - The \"EnemyHealthBars\" directory was not found. Creating directory: %s", MOD_NAME, VERSION, enemy_health_bars_folder.c_str());
-			std::filesystem::create_directory(enemy_health_bars_folder);
-		}
-
-		bool update_config_file = false;
-		std::string config_file = enemy_health_bars_folder + "\\" + "EnemyHealthBars.json";
-		std::ifstream in_stream(config_file);
-		if (in_stream.good())
-		{
-			try
-			{
-				json json_object = json::parse(in_stream);
-
-				if (json_object.empty())
-				{
-					g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - No values found in mod configuration file: %s!", MOD_NAME, VERSION, config_file.c_str());
-					g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Add your desired values to the configuration file, otherwise defaults will be used.", MOD_NAME, VERSION);
-				}
-				else
-				{
-					if (json_object.contains(SMALLER_HEALTH_BAR_JSON_KEY))
-					{
-						configuration.smaller_health_bar = json_object[SMALLER_HEALTH_BAR_JSON_KEY];
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using CUSTOM \"%s\" value: %s!", MOD_NAME, VERSION, SMALLER_HEALTH_BAR_JSON_KEY, configuration.smaller_health_bar ? "true" : "false");
-					}
-					else
-					{
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, SMALLER_HEALTH_BAR_JSON_KEY, config_file.c_str());
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, SMALLER_HEALTH_BAR_JSON_KEY, DEFAULT_SMALLER_HEALTH_BAR ? "true" : "false");
-					}
-
-					if (json_object.contains(RED_HEALTH_BAR_JSON_KEY))
-					{
-						configuration.red_health_bar = json_object[RED_HEALTH_BAR_JSON_KEY];
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using CUSTOM \"%s\" value: %s!", MOD_NAME, VERSION, RED_HEALTH_BAR_JSON_KEY, configuration.red_health_bar ? "true" : "false");
-					}
-					else
-					{
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, RED_HEALTH_BAR_JSON_KEY, config_file.c_str());
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, RED_HEALTH_BAR_JSON_KEY, DEFAULT_RED_HEALTH_BAR ? "true" : "false");
-					}
-
-					if (json_object.contains(MONSTER_HEALTH_BAR_VERTICAL_OFFSETS_JSON_KEY))
-					{
-						configuration.monster_health_bar_vertical_offsets = json_object[MONSTER_HEALTH_BAR_VERTICAL_OFFSETS_JSON_KEY].get<std::map<std::string, int>>();
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using CUSTOM \"%s\" value with %d entries!", MOD_NAME, VERSION, MONSTER_HEALTH_BAR_VERTICAL_OFFSETS_JSON_KEY, (int)configuration.monster_health_bar_vertical_offsets.size());
-					}
-					else
-					{
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, MONSTER_HEALTH_BAR_VERTICAL_OFFSETS_JSON_KEY, config_file.c_str());
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value with %d entries!", MOD_NAME, VERSION, MONSTER_HEALTH_BAR_VERTICAL_OFFSETS_JSON_KEY, (int)DEFAULT_MONSTER_HEALTH_BAR_VERTICAL_OFFSETS.size());
-					}
-				}
-
-				update_config_file = true;
-			}
-			catch (...)
-			{
-				eptr = std::current_exception();
-				PrintError(eptr);
-
-				g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to parse JSON from configuration file: %s", MOD_NAME, VERSION, config_file.c_str());
-				g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Make sure the file is valid JSON!", MOD_NAME, VERSION);
-			}
-
-			in_stream.close();
-		}
-		else
-		{
-			in_stream.close();
-
-			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - The \"EnemyHealthBars.json\" file was not found. Creating file: %s", MOD_NAME, VERSION, config_file.c_str());
-
-			json default_config_json = CreateConfigJson(true);
-			std::ofstream out_stream(config_file);
-			out_stream << std::setw(4) << default_config_json << std::endl;
-			out_stream.close();
-		}
-
-		if (update_config_file)
-		{
-			json config_json = CreateConfigJson(false);
-			std::ofstream out_stream(config_file);
-			out_stream << std::setw(4) << config_json << std::endl;
-			out_stream.close();
-		}
+		vertical_offsets_by_id[*monster] = offset;
 	}
-	catch (...)
+
+	json roundtrip;
+	roundtrip[KEY_SMALLER_HEALTH_BAR] = config.smaller_health_bar;
+	roundtrip[KEY_RED_HEALTH_BAR]     = config.red_health_bar;
+	roundtrip[KEY_VERTICAL_OFFSETS]   = offsets_by_name;
+	MMAPI::Config::Save(config_path, roundtrip);
+
+	MMAPI::Log::Info("Tracking %zu monster types.", vertical_offsets_by_id.size());
+}
+
+// ----- Draw -----
+
+void OnAfterDrawMonster(YYTK::CInstance* monster)
+{
+	if (!monster) return;
+
+	YYTK::RValue monster_rv = monster->ToRValue();
+	if (!MMAPI::Engine::StructVariableExists(monster_rv, "monster_id")) return;
+	if (!MMAPI::Engine::StructVariableExists(monster_rv, "hit_points")) return;
+
+	YYTK::RValue monster_id_rv = monster_rv.GetMember("monster_id");
+	if (!MMAPI::Engine::IsNumeric(monster_id_rv)) return;
+
+	auto monster_enum = static_cast<MMAPI::Monster::Ids>(monster_id_rv.ToInt64());
+	auto offset_it = vertical_offsets_by_id.find(monster_enum);
+	if (offset_it == vertical_offsets_by_id.end()) return;
+
+	YYTK::RValue hit_points_rv = monster_rv.GetMember("hit_points");
+	if (!MMAPI::Engine::IsNumeric(hit_points_rv)) return;
+	double current_hp = hit_points_rv.ToDouble();
+	if (!std::isfinite(current_hp)) return;
+
+	// Resolve max HP. The DeepDungeon mod stamps its own field on monsters in its dungeon — prefer
+	// that when present so HP bars in DeepDungeon runs scale correctly. Otherwise capture the first
+	// observed HP as the max (the monster is visible on this fire, so it hasn't been engaged yet in
+	// the typical flow).
+	double max_hp = 0.0;
+	if (MMAPI::Engine::StructVariableExists(monster_rv, FIELD_DEEP_DUNGEON_MAX_HEALTH))
 	{
-		eptr = std::current_exception();
-		PrintError(eptr);
-
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - An error occurred loading the mod configuration file.", MOD_NAME, VERSION);
+		max_hp = monster_rv.GetMember(FIELD_DEEP_DUNGEON_MAX_HEALTH).ToDouble();
 	}
-}
-
-bool IsNumeric(RValue value)
-{
-	return value.m_Kind == VALUE_INT32 || value.m_Kind == VALUE_INT64 || value.m_Kind == VALUE_REAL;
-}
-
-bool IsObject(RValue value)
-{
-	return value.m_Kind == VALUE_OBJECT;
-}
-
-bool StructVariableExists(RValue the_struct, const char* variable_name)
-{
-	RValue struct_exists = g_ModuleInterface->CallBuiltin(
-		"struct_exists",
-		{ the_struct, variable_name }
-	);
-
-	return struct_exists.ToBoolean();
-}
-
-RValue StructVariableSet(RValue the_struct, const char* variable_name, RValue value)
-{
-	return g_ModuleInterface->CallBuiltin(
-		"struct_set",
-		{ the_struct, variable_name, value }
-	);
-}
-
-void LoadMonsters()
-{
-	size_t array_length;
-	RValue monster_names = global_instance->GetMember("__monster_id__");
-	g_ModuleInterface->GetArraySize(monster_names, array_length);
-
-	for (size_t i = 0; i < array_length; i++)
+	else if (MMAPI::Engine::StructVariableExists(monster_rv, FIELD_CAPTURED_MAX_HEALTH))
 	{
-		RValue* monster_name;
-		g_ModuleInterface->GetArrayEntry(monster_names, i, monster_name);
-
-		monster_name_to_id_map[monster_name->ToString()] = i;
-		monster_id_to_name_map[i] = monster_name->ToString();
+		max_hp = monster_rv.GetMember(FIELD_CAPTURED_MAX_HEALTH).ToDouble();
 	}
-}
-
-void DrawRectangle(int color, float x1, float y1, float x2, float y2, bool outline)
-{
-	g_ModuleInterface->CallBuiltin(
-		"draw_set_color", {
-		 color
-		}
-	);
-
-	g_ModuleInterface->CallBuiltin(
-		"draw_rectangle", {
-			x1, y1, x2, y2, outline
-		}
-	);
-}
-
-void ObjectCallback(
-	IN FWCodeEvent& CodeEvent
-)
-{
-	auto& [self, other, code, argc, argv] = CodeEvent.Arguments();
-
-	if (!self)
-		return;
-
-	if (!self->m_Object)
-		return;
-
-	if (strstr(self->m_Object->m_Name, "obj_monster"))
-	{
-		RValue monster = self->ToRValue();
-		if (StructVariableExists(monster, "__enemy_health_bars_max_health") || !StructVariableExists(monster, "monster_id") || !StructVariableExists(monster, "hit_points"))
-			return;
-
-		RValue monster_id = monster.GetMember("monster_id");
-		if (!IsNumeric(monster_id) || !monster_id_to_name_map.contains(monster_id.ToInt64()) || !configuration.monster_health_bar_vertical_offsets.contains(monster_id_to_name_map[monster_id.ToInt64()]))
-			return;
-
-		RValue hit_points = monster.GetMember("hit_points");
-		if (!IsNumeric(hit_points) || !std::isfinite(hit_points.ToDouble()))
-			return;
-
-		StructVariableSet(monster, "__enemy_health_bars_max_health", hit_points.ToInt64());
-	}
-}
-
-RValue& GmlScriptDrawMonsterCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_DRAW_MONSTER));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	if (!StructVariableExists(Self, "monster_id") || !StructVariableExists(Self, "hit_points") || (!StructVariableExists(Self, "__enemy_health_bars_max_health") && !StructVariableExists(Self, "__deep_dungeon__default_hit_points")))
-		return Result;
-	
-	RValue monster_id = Self->GetMember("monster_id");
-	if (!IsNumeric(monster_id) || !monster_id_to_name_map.contains(monster_id.ToInt64()) || !configuration.monster_health_bar_vertical_offsets.contains(monster_id_to_name_map[monster_id.ToInt64()]))
-		return Result;
-
-	RValue health = Self->GetMember("hit_points");
-	if (!IsNumeric(health) || !std::isfinite(health.ToDouble()))
-		return Result;
-
-	bool deep_dungeon = StructVariableExists(Self, "__deep_dungeon__default_hit_points");
-	RValue max_health = deep_dungeon ? Self->GetMember("__deep_dungeon__default_hit_points") : Self->GetMember("__enemy_health_bars_max_health");
-
-	RValue x, y;
-	g_ModuleInterface->GetBuiltin("x", Self, NULL_INDEX, x);
-	g_ModuleInterface->GetBuiltin("y", Self, NULL_INDEX, y);
-
-	int sprite_height = configuration.monster_health_bar_vertical_offsets.at(monster_id_to_name_map[monster_id.ToInt64()]);
-	int bar_x = x.ToInt64();
-	int bar_y = y.ToInt64() - sprite_height;
-	int health_bar_width = configuration.smaller_health_bar ? SMALL_HEALTH_BAR_WIDTH : HEALTH_BAR_WIDTH;
-	int health_bar_height = configuration.smaller_health_bar ? SMALL_HEALTH_BAR_HEIGHT : HEALTH_BAR_HEIGHT;
-
-	double hp_percent = health.ToDouble() / max_health.ToDouble();
-	hp_percent = std::clamp(hp_percent, 0.0, 1.0);
-
-	// Centered bounds
-	int left = bar_x - health_bar_width / 2;
-	int right = bar_x + health_bar_width / 2;
-	int top = bar_y - health_bar_height / 2;
-	int bottom = bar_y + health_bar_height / 2;
-
-	// Fill only middle rows
-	int fill_top = top + health_bar_height / 3;
-	int fill_bottom = top + (health_bar_height * 2) / 3;
-
-	// Compute fill width
-	int fill_right = left + (int)(health_bar_width * hp_percent) - 1;
-
-	// Draw fill (black background first)
-	DrawRectangle(0, left, fill_top, right - 1, fill_bottom, false);
-
-	// Draw HP
-	int health_bar_color = configuration.red_health_bar ? 255 : 65280;
-	DrawRectangle(health_bar_color, left, fill_top, fill_right, fill_bottom, false);
-
-	RValue sprite_index;
-	if (configuration.smaller_health_bar)
-		sprite_index = g_ModuleInterface->CallBuiltin("asset_get_index", { "enemy_health_bar_small" });
 	else
-		sprite_index = g_ModuleInterface->CallBuiltin("asset_get_index", { "enemy_health_bar" });
+	{
+		MMAPI::Engine::StructVariableSet(monster_rv, FIELD_CAPTURED_MAX_HEALTH, current_hp);
+		max_hp = current_hp;
+	}
+	if (max_hp <= 0.0) return;
 
-	// Draw sprite on top (centered)
-	g_ModuleInterface->CallBuiltin(
-		"draw_sprite",
-		{
-			RValue(sprite_index),
-			RValue(-1),
-			RValue(left),
-			RValue(top)
-		}
+	double x = MMAPI::Engine::InstanceVariableGet(monster, "x").ToDouble();
+	double y = MMAPI::Engine::InstanceVariableGet(monster, "y").ToDouble();
+
+	int bar_width  = config.smaller_health_bar ? SMALL_HEALTH_BAR_WIDTH  : HEALTH_BAR_WIDTH;
+	int bar_height = config.smaller_health_bar ? SMALL_HEALTH_BAR_HEIGHT : HEALTH_BAR_HEIGHT;
+	int bar_x      = static_cast<int>(x);
+	int bar_y      = static_cast<int>(y) - offset_it->second;
+
+	double hp_percent = current_hp / max_hp;
+	if (hp_percent < 0.0) hp_percent = 0.0;
+	if (hp_percent > 1.0) hp_percent = 1.0;
+
+	int left   = bar_x - bar_width / 2;
+	int right  = bar_x + bar_width / 2;
+	int top    = bar_y - bar_height / 2;
+	int fill_top    = top + bar_height / 3;
+	int fill_bottom = top + (bar_height * 2) / 3;
+	int fill_right  = left + static_cast<int>(bar_width * hp_percent) - 1;
+
+	MMAPI::Engine::DrawRectangle(COLOR_BLACK, left, fill_top, right - 1, fill_bottom, false);
+
+	int fill_color = config.red_health_bar ? COLOR_RED : COLOR_GREEN;
+	MMAPI::Engine::DrawRectangle(fill_color, left, fill_top, fill_right, fill_bottom, false);
+
+	YYTK::RValue sprite_asset = MMAPI::Engine::AssetGetIndex(
+		config.smaller_health_bar ? "enemy_health_bar_small" : "enemy_health_bar"
 	);
-
-	return Result;
+	MMAPI::Engine::DrawSprite(sprite_asset, -1, left, top);
 }
 
-RValue& GmlScriptSetupMainScreenCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
+// ----- Hooks -----
+
+void OnBeforeSetupMainScreen()
 {
-	if (load_on_start)
-	{
-		load_on_start = false;
-		g_ModuleInterface->GetGlobalInstance(&global_instance);
-		LoadMonsters();
-		CreateOrLoadConfigFile();
-	}
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_SETUP_MAIN_SCREEN));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
+	if (startup_loaded) return;
+	LoadConfig();
+	startup_loaded = true;
 }
 
-void CreateObjectCallback(AurieStatus& status)
+// ----- Init -----
+
+EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path& ModulePath)
 {
-	status = g_ModuleInterface->CreateCallback(
-		g_ArSelfModule,
-		EVENT_OBJECT_CALL,
-		ObjectCallback,
-		0
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook (EVENT_OBJECT_CALL)!", MOD_NAME, VERSION);
-	}
-}
-
-void CreateHookGmlScriptDrawMonster(AurieStatus& status)
-{
-	CScript* gml_script_draw_monster = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_DRAW_MONSTER,
-		(PVOID*)&gml_script_draw_monster
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_DRAW_MONSTER);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_DRAW_MONSTER,
-		gml_script_draw_monster->m_Functions->m_ScriptFunction,
-		GmlScriptDrawMonsterCallback,
-		nullptr
-	);
-
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_DRAW_MONSTER);
-	}
-}
-
-void CreateHookGmlScriptSetupMainScreen(AurieStatus& status)
-{
-	CScript* gml_script_setup_main_screen = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_SETUP_MAIN_SCREEN,
-		(PVOID*)&gml_script_setup_main_screen
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SETUP_MAIN_SCREEN);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_SETUP_MAIN_SCREEN,
-		gml_script_setup_main_screen->m_Functions->m_ScriptFunction,
-		GmlScriptSetupMainScreenCallback,
-		nullptr
-	);
-
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SETUP_MAIN_SCREEN);
-	}
-}
-
-EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path& ModulePath) {
 	UNREFERENCED_PARAMETER(ModulePath);
 
-	AurieStatus status = AURIE_SUCCESS;
-
-	status = ObGetInterface(
-		"YYTK_Main",
-		(AurieInterfaceBase*&)(g_ModuleInterface)
-	);
-
+	YYTKInterface* module_interface = nullptr;
+	AurieStatus status = ObGetInterface("YYTK_Main", (AurieInterfaceBase*&)module_interface);
 	if (!AurieSuccess(status))
 		return AURIE_MODULE_DEPENDENCY_NOT_RESOLVED;
 
-	g_ModuleInterface->Print(CM_LIGHTAQUA, "[%s %s] - Plugin starting...", MOD_NAME, VERSION);
+	module_interface->Print(CM_LIGHTAQUA, "[%s %s] - Plugin starting...", MOD_NAME, VERSION);
 
-	CreateObjectCallback(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
+	CInstance* global_instance = nullptr;
+	module_interface->GetGlobalInstance(&global_instance);
+	MMAPI::Initialize(module_interface, global_instance, g_ArSelfModule, MOD_NAME, VERSION);
 
-	CreateHookGmlScriptDrawMonster(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
+	MMAPI::Game::Enable();
+	MMAPI::Monster::Enable();
 
-	CreateHookGmlScriptSetupMainScreen(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
+	MMAPI::Game::Hooks::BeforeSetupMainScreen(OnBeforeSetupMainScreen);
+	MMAPI::Monster::Hooks::AfterDrawMonster(OnAfterDrawMonster);
 
-	g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Plugin started!", MOD_NAME, VERSION);
+	MMAPI::Log::Info("Plugin started!");
 	return AURIE_SUCCESS;
 }
