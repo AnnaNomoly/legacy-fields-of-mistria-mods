@@ -1,4 +1,5 @@
 #include <filesystem>
+#include <optional>
 #include <random>
 #include <YYToolkit/YYTK_Shared.hpp>
 #include <MMAPI/MMAPI.hpp>
@@ -24,15 +25,6 @@ static const std::string INVALID_LOCATION_LOCALIZATION_KEY = "mods/ChutesAndLadd
 static const int DEFAULT_RITUAL_CHAMBER_ADDITIONAL_SPAWN_CHANCE = 0;
 static const bool DEFAULT_SPAWN_LADDER_AT_PLAYER_POSITION = true;
 static const std::string DEFAULT_ACTIVATION_BUTTON = "PAGE_DOWN";
-
-static const std::string ALLOWED_ACTIVATION_BUTTONS[] = {
-	"F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12",
-	"NUMPAD_0", "NUMPAD_1", "NUMPAD_2", "NUMPAD_3", "NUMPAD_4", "NUMPAD_5", "NUMPAD_6", "NUMPAD_7", "NUMPAD_8", "NUMPAD_9",
-	"0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
-	"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
-	"INSERT", "DELETE", "HOME", "PAGE_UP", "PAGE_DOWN", "NUM_LOCK", "SCROLL_LOCK", "CAPS_LOCK", "PAUSE_BREAK",
-	"GAMEPAD_A", "GAMEPAD_B", "GAMEPAD_X", "GAMEPAD_Y", "GAMEPAD_LEFT_SHOULDER", "GAMEPAD_RIGHT_SHOULDER", "GAMEPAD_LEFT_TRIGGER", "GAMEPAD_RIGHT_TRIGGER", "GAMEPAD_DPAD_UP", "GAMEPAD_DPAD_DOWN", "GAMEPAD_DPAD_LEFT", "GAMEPAD_DPAD_RIGHT", "GAMEPAD_LEFT_STICK", "GAMEPAD_RIGHT_STICK", "GAMEPAD_SELECT", "GAMEPAD_START"
-};
 
 static const std::map<std::string, std::vector<int>> LADDER_SPAWN_POINTS = { // As of 0.14.0
 	{ "rm_mines_tide_fork", { 544, 640 }},
@@ -188,8 +180,7 @@ void to_json(json& json_object, const ChutesAndLaddersConfig& config)
 void from_json(const json& json_object, ChutesAndLaddersConfig& config)
 {
 	config.activation_button = MMAPI::Config::GetValue<std::string>(json_object, ACTIVATION_BUTTON_KEY, DEFAULT_ACTIVATION_BUTTON);
-	auto allowed_button = std::find(std::begin(ALLOWED_ACTIVATION_BUTTONS), std::end(ALLOWED_ACTIVATION_BUTTONS), config.activation_button);
-	if (allowed_button == std::end(ALLOWED_ACTIVATION_BUTTONS))
+	if (!MMAPI::Input::TryParseKeybind(config.activation_button))
 	{
 		MMAPI::Log::Error("Invalid \"%s\" value (%s) — not one of the supported keys", ACTIVATION_BUTTON_KEY, config.activation_button.c_str());
 		config.activation_button = DEFAULT_ACTIVATION_BUTTON;
@@ -202,8 +193,7 @@ void from_json(const json& json_object, ChutesAndLaddersConfig& config)
 }
 
 static ChutesAndLaddersConfig config = {};
-static bool activation_button_is_controller_key = false;
-static int activation_button_int_value = -1;
+static std::optional<MMAPI::Input::Keybind> activation_keybind;
 static bool processing_user_input = false;
 static std::string ari_current_gm_room = "";
 static int ari_x = -1;
@@ -213,91 +203,6 @@ static bool ari_is_teleporting = false;
 static bool create_ritual_altar = false;
 static bool lost_to_history_active = false;
 static std::mt19937 generator(std::random_device{}());
-
-int ActivationButtonToVirtualKey()
-{
-	// Function Keys
-	if (config.activation_button == "F1")  return VK_F1;
-	if (config.activation_button == "F2")  return VK_F2;
-	if (config.activation_button == "F3")  return VK_F3;
-	if (config.activation_button == "F4")  return VK_F4;
-	if (config.activation_button == "F5")  return VK_F5;
-	if (config.activation_button == "F6")  return VK_F6;
-	if (config.activation_button == "F7")  return VK_F7;
-	if (config.activation_button == "F8")  return VK_F8;
-	if (config.activation_button == "F9")  return VK_F9;
-	if (config.activation_button == "F10") return VK_F10;
-	if (config.activation_button == "F11") return VK_F11;
-	if (config.activation_button == "F12") return VK_F12;
-
-	// Numpad
-	if (config.activation_button == "NUMPAD_0") return VK_NUMPAD0;
-	if (config.activation_button == "NUMPAD_1") return VK_NUMPAD1;
-	if (config.activation_button == "NUMPAD_2") return VK_NUMPAD2;
-	if (config.activation_button == "NUMPAD_3") return VK_NUMPAD3;
-	if (config.activation_button == "NUMPAD_4") return VK_NUMPAD4;
-	if (config.activation_button == "NUMPAD_5") return VK_NUMPAD5;
-	if (config.activation_button == "NUMPAD_6") return VK_NUMPAD6;
-	if (config.activation_button == "NUMPAD_7") return VK_NUMPAD7;
-	if (config.activation_button == "NUMPAD_8") return VK_NUMPAD8;
-	if (config.activation_button == "NUMPAD_9") return VK_NUMPAD9;
-
-	// Numbers / Letters — single-character buttons map to their ASCII codepoint (matches GameMaker's vk_* convention)
-	if (config.activation_button.size() == 1)
-	{
-		char c = config.activation_button[0];
-		if ((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z'))
-			return static_cast<int>(c);
-	}
-
-	// Special
-	if (config.activation_button == "INSERT")      return VK_INSERT;
-	if (config.activation_button == "DELETE")      return VK_DELETE;
-	if (config.activation_button == "HOME")        return VK_HOME;
-	if (config.activation_button == "PAGE_UP")     return VK_PRIOR;
-	if (config.activation_button == "PAGE_DOWN")   return VK_NEXT;
-	if (config.activation_button == "NUM_LOCK")    return VK_NUMLOCK;
-	if (config.activation_button == "SCROLL_LOCK") return VK_SCROLL;
-	if (config.activation_button == "CAPS_LOCK")   return VK_CAPITAL;
-	if (config.activation_button == "PAUSE_BREAK") return VK_PAUSE;
-
-	return -1;
-}
-
-int ActivationButtonToControllerKey()
-{
-	if (config.activation_button == "GAMEPAD_A")              return 0x8001;
-	if (config.activation_button == "GAMEPAD_B")              return 0x8002;
-	if (config.activation_button == "GAMEPAD_X")              return 0x8003;
-	if (config.activation_button == "GAMEPAD_Y")              return 0x8004;
-	if (config.activation_button == "GAMEPAD_LEFT_SHOULDER")  return 0x8005;
-	if (config.activation_button == "GAMEPAD_RIGHT_SHOULDER") return 0x8006;
-	if (config.activation_button == "GAMEPAD_LEFT_TRIGGER")   return 0x8007;
-	if (config.activation_button == "GAMEPAD_RIGHT_TRIGGER")  return 0x8008;
-	if (config.activation_button == "GAMEPAD_SELECT")         return 0x8009;
-	if (config.activation_button == "GAMEPAD_START")          return 0x800A;
-	if (config.activation_button == "GAMEPAD_LEFT_STICK")     return 0x800B;
-	if (config.activation_button == "GAMEPAD_RIGHT_STICK")    return 0x800C;
-	if (config.activation_button == "GAMEPAD_DPAD_UP")        return 0x800D;
-	if (config.activation_button == "GAMEPAD_DPAD_DOWN")      return 0x800E;
-	if (config.activation_button == "GAMEPAD_DPAD_LEFT")      return 0x800F;
-	if (config.activation_button == "GAMEPAD_DPAD_RIGHT")     return 0x8010;
-	return -1;
-}
-
-void ConfigureActivationButton()
-{
-	if (config.activation_button.find("GAMEPAD") != std::string::npos)
-	{
-		activation_button_is_controller_key = true;
-		activation_button_int_value = ActivationButtonToControllerKey();
-	}
-	else
-	{
-		activation_button_is_controller_key = false;
-		activation_button_int_value = ActivationButtonToVirtualKey();
-	}
-}
 
 void LogDefaultConfigValues()
 {
@@ -401,24 +306,14 @@ void OnAfterDrawGui()
 	if (!MMAPI::Game::WindowHasFocus() || MMAPI::Game::IsPaused() || processing_user_input)
 		return;
 
-	bool activate = false;
-	if (activation_button_is_controller_key)
-	{
-		int slot = MMAPI::Input::GetFirstConnectedGamepadSlot();
-		if (slot != -1 && MMAPI::Input::GamepadButtonCheckPressed(slot, activation_button_int_value))
-			activate = true;
-	}
-	else if (MMAPI::Input::KeyboardCheckPressed(activation_button_int_value))
-	{
-		processing_user_input = true;
-		activate = true;
-	}
-
-	if (!activate)
-	{
-		processing_user_input = false;
+	if (!activation_keybind || !MMAPI::Input::IsKeybindPressed(*activation_keybind))
 		return;
-	}
+
+	// Keyboard presses can re-fire on the next AfterDrawGui tick; gate via the processing flag for
+	// keyboard so an in-progress action doesn't stack. Gamepad presses are debounced by the runtime,
+	// so the flag is harmless there.
+	if (!activation_keybind->is_gamepad)
+		processing_user_input = true;
 
 	if (ari_current_gm_room.contains("rm_mines") && ari_current_gm_room != "rm_mines_entry" && !ari_current_gm_room.contains("seal"))
 	{
@@ -522,7 +417,7 @@ EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path&
 	MMAPI::Location::Hooks::AfterGoToRoom(OnAfterGoToRoom);
 
 	LoadOrCreateConfigFile();
-	ConfigureActivationButton();
+	activation_keybind = MMAPI::Input::TryParseKeybind(config.activation_button);
 
 	MMAPI::Log::Info("Plugin started!");
 	return AURIE_SUCCESS;
