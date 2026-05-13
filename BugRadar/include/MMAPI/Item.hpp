@@ -201,10 +201,14 @@ namespace MMAPI::Item
 	struct GetDisplayNameContext
 	{
 		YYTK::CInstance* m_self     = nullptr;
+		int              m_item_id  = -1;
 		std::string      m_resolved;
 
 		/// The live item the display name was resolved for.
 		YYTK::CInstance* GetSelf() const { return m_self; }
+
+		/// The item_id read from the live item struct, or -1 if Self is null or the struct lacks an `item_id` member.
+		int GetItemId() const { return m_item_id; }
 
 		/// The localized display name the game's get_display_name script produced.
 		std::string_view GetResolved() const { return m_resolved; }
@@ -216,10 +220,14 @@ namespace MMAPI::Item
 	struct GetDisplayDescriptionContext
 	{
 		YYTK::CInstance* m_self     = nullptr;
+		int              m_item_id  = -1;
 		std::string      m_resolved;
 
 		/// The live item the description was resolved for.
 		YYTK::CInstance* GetSelf() const { return m_self; }
+
+		/// The item_id read from the live item struct, or -1 if Self is null or the struct lacks an `item_id` member.
+		int GetItemId() const { return m_item_id; }
 
 		/// The localized description the game's get_display_description script produced.
 		std::string_view GetResolved() const { return m_resolved; }
@@ -433,7 +441,15 @@ namespace MMAPI::Item
 
 			if (after_get_display_name_callback && Result.m_Kind == YYTK::VALUE_STRING)
 			{
-				MMAPI::Item::GetDisplayNameContext context{ Self, Result.ToString() };
+				int item_id = -1;
+				if (Self)
+				{
+					YYTK::RValue self_rv = Self->ToRValue();
+					if (MMAPI::Engine::StructVariableExists(self_rv, "item_id"))
+						item_id = static_cast<int>(self_rv.GetMember("item_id").ToInt64());
+				}
+
+				MMAPI::Item::GetDisplayNameContext context{ Self, item_id, Result.ToString() };
 				after_get_display_name_callback(context);
 				Result = YYTK::RValue(context.m_resolved);
 			}
@@ -456,7 +472,15 @@ namespace MMAPI::Item
 
 			if (after_get_display_description_callback && Result.m_Kind == YYTK::VALUE_STRING)
 			{
-				MMAPI::Item::GetDisplayDescriptionContext context{ Self, Result.ToString() };
+				int item_id = -1;
+				if (Self)
+				{
+					YYTK::RValue self_rv = Self->ToRValue();
+					if (MMAPI::Engine::StructVariableExists(self_rv, "item_id"))
+						item_id = static_cast<int>(self_rv.GetMember("item_id").ToInt64());
+				}
+
+				MMAPI::Item::GetDisplayDescriptionContext context{ Self, item_id, Result.ToString() };
 				after_get_display_description_callback(context);
 				Result = YYTK::RValue(context.m_resolved);
 			}

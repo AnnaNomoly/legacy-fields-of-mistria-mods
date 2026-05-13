@@ -1,75 +1,88 @@
+#include <algorithm>
+#include <cctype>
 #include <map>
-#include <fstream>
-#include <nlohmann/json.hpp>
-#include <YYToolkit/YYTK_Shared.hpp> // YYTK v4
+#include <sstream>
+#include <string>
+#include <vector>
+
+#include <YYToolkit/YYTK_Shared.hpp>
+#include <MMAPI/MMAPI.hpp>
+
 using namespace Aurie;
 using namespace YYTK;
 using json = nlohmann::json;
 
+// ----- Mod metadata -----
+
 static const char* const MOD_NAME = "ThePerfectGift";
-static const char* const VERSION = "1.3.0";
-static const char* const UNLOCK_ALL_GIFT_PREFERENCES_KEY = "unlock_all_gift_preferences";
+static const char* const VERSION  = "1.4.0";
+
+// ----- Config keys + defaults -----
+
+static const char* const UNLOCK_ALL_GIFT_PREFERENCES_KEY            = "unlock_all_gift_preferences";
 static const char* const SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS_KEY = "show_gift_preferences_on_item_tooltips";
-static const char* const DISABLE_DAILY_TALK_LIMIT_KEY = "disable_daily_talk_limit";
-static const char* const DISABLE_DAILY_GIFT_LIMIT_KEY = "disable_daily_gift_limit";
-static const char* const GML_SCRIPT_TRY_ITEM_ID_TO_STRING = "gml_Script_try_item_id_to_string";
-static const char* const GML_SCRIPT_CREATE_NOTIFICATION = "gml_Script_create_notification";
-static const char* const GML_SCRIPT_GET_LOCALIZER = "gml_Script_get@Localizer@Localizer";
-static const char* const GML_SCRIPT_LIVE_ITEM_GET_DISPLAY_NAME = "gml_Script_get_display_name@anon@2420@LiveItem@LiveItem";
-static const char* const GML_SCRIPT_LIVE_ITEM_GET_DISPLAY_DESCRIPTION = "gml_Script_get_display_description@anon@3696@LiveItem@LiveItem";
-static const char* const GML_SCRIPT_LOCALIZER_GET = "gml_Script_get@Localizer@Localizer";
-static const char* const GML_SCRIPT_SETUP_MAIN_SCREEN = "gml_Script_setup_main_screen@TitleMenu@TitleMenu";
-static const char* const GML_SCRIPT_TEXTBOX_SAY = "gml_Script_say@TextboxMenu@TextboxMenu";
-static const char* const GML_SCRIPT_CRAFTING_MENU_CLOSE = "gml_Script_on_close@CraftingMenu@CraftingMenu";
-static const char* const GML_SCRIPT_CRAFTING_MENU_INITIALIZE = "gml_Script_initialize@CraftingMenu@CraftingMenu";
+static const char* const DISABLE_DAILY_TALK_LIMIT_KEY               = "disable_daily_talk_limit";
+static const char* const DISABLE_DAILY_GIFT_LIMIT_KEY               = "disable_daily_gift_limit";
+
+static const bool DEFAULT_UNLOCK_ALL_GIFT_PREFERENCES            = false;
+static const bool DEFAULT_SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS = false;
+static const bool DEFAULT_DISABLE_DAILY_TALK_LIMIT               = false;
+static const bool DEFAULT_DISABLE_DAILY_GIFT_LIMIT               = false;
+
+// ----- Notification localization keys -----
+
 static const std::string GIFT_PREFERENCE_DETECTED_LOCALIZATION_KEY = "mods/ThePerfectGift/gift_preference_detected";
 static const std::string GIFT_PREFERENCE_UNLOCKED_LOCALIZATION_KEY = "mods/ThePerfectGift/gift_preference_unlocked";
-static const std::string ITEM_PLACEHOLDER_TEXT = "<ITEM>";
-static const std::string NPC_PLACEHOLDER_TEXT = "<NPC>";
-static const std::string ADELINE = "adeline";
-static const std::string BALOR = "balor";
-static const std::string CALDARUS = "caldarus";
-static const std::string CELINE = "celine";
-static const std::string DARCY = "darcy";
-static const std::string DELL = "dell";
-static const std::string DOZY = "dozy";
-static const std::string EILAND = "eiland";
-static const std::string ELSIE = "elsie";
-static const std::string ERROL = "errol";
-static const std::string HAYDEN = "hayden";
-static const std::string HEMLOCK = "hemlock";
+static const std::string ITEM_PLACEHOLDER_TEXT                     = "<ITEM>";
+static const std::string NPC_PLACEHOLDER_TEXT                      = "<NPC>";
+
+// ----- NPC name constants (lowercase, matching the game's internal NPC keys) -----
+
+static const std::string ADELINE   = "adeline";
+static const std::string BALOR     = "balor";
+static const std::string CALDARUS  = "caldarus";
+static const std::string CELINE    = "celine";
+static const std::string DARCY     = "darcy";
+static const std::string DELL      = "dell";
+static const std::string DOZY      = "dozy";
+static const std::string EILAND    = "eiland";
+static const std::string ELSIE     = "elsie";
+static const std::string ERROL     = "errol";
+static const std::string HAYDEN    = "hayden";
+static const std::string HEMLOCK   = "hemlock";
 static const std::string HENRIETTA = "henrietta";
-static const std::string HOLT = "holt";
+static const std::string HOLT      = "holt";
 static const std::string JOSEPHINE = "josephine";
-static const std::string JUNIPER = "juniper";
-static const std::string LANDEN = "landen";
-static const std::string LOUIS = "louis";
-static const std::string LUC = "luc";
-static const std::string MAPLE = "maple";
-static const std::string MARCH = "march";
-static const std::string MERRI = "merri";
-static const std::string NORA = "nora";
-static const std::string OLRIC = "olric";
-static const std::string REINA = "reina";
-static const std::string RYIS = "ryis";
-static const std::string SERIDIA = "seridia";
-//static const std::string STILLWELL = "stillwell";
+static const std::string JUNIPER   = "juniper";
+static const std::string LANDEN    = "landen";
+static const std::string LOUIS     = "louis";
+static const std::string LUC       = "luc";
+static const std::string MAPLE     = "maple";
+static const std::string MARCH     = "march";
+static const std::string MERRI     = "merri";
+static const std::string NORA      = "nora";
+static const std::string OLRIC     = "olric";
+static const std::string REINA     = "reina";
+static const std::string RYIS      = "ryis";
+static const std::string SERIDIA   = "seridia";
 static const std::string TALIFERRO = "taliferro";
-static const std::string TERITHIA = "terithia";
-static const std::string VALEN = "valen";
-static const std::string VERA = "vera";
-static const std::string WHEEDLE = "wheedle";
-//static const std::string ZOREL = "zorel";
-static const bool DEFAULT_UNLOCK_ALL_GIFT_PREFERENCES = false;
-static const bool DEFAULT_SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS = false;
-static const bool DEFAULT_DISABLE_DAILY_TALK_LIMIT = false;
-static const bool DEFAULT_DISABLE_DAILY_GIFT_LIMIT = false;
-static const std::vector<std::string> ACTIVE_NPC_LIST = { // As of 0.15.1
+static const std::string TERITHIA  = "terithia";
+static const std::string VALEN     = "valen";
+static const std::string VERA      = "vera";
+static const std::string WHEEDLE   = "wheedle";
+
+// ACTIVE_NPC_LIST is the set the original "unlock all" feature iterates. Stillwell and Zorel are
+// intentionally excluded — they aren't in the live game data yet.
+static const std::vector<std::string> ACTIVE_NPC_LIST = {
 	ADELINE, BALOR, CALDARUS, CELINE, DARCY, DELL, DOZY, EILAND, ELSIE, ERROL,
 	HAYDEN, HEMLOCK, HENRIETTA, HOLT, JOSEPHINE, JUNIPER, LANDEN, LOUIS, LUC, MAPLE,
 	MARCH, MERRI, NORA, OLRIC, REINA, RYIS, SERIDIA, TALIFERRO, TERITHIA, VALEN, VERA, WHEEDLE
 };
-static const std::multimap<std::string, std::vector<std::string>> GIFT_DIALOG_MAP = { // As of 0.15.3
+
+// Each entry: {dialogue_key, {npc_name, item_internal_name_1, item_internal_name_2, ...}}.
+// When `say@TextboxMenu` plays a line matching the dialogue_key, queue each listed item for unlock
+// on the named NPC. Source: game version 0.15.3.
+static const std::multimap<std::string, std::vector<std::string>> GIFT_DIALOG_MAP = {
 	// Adeline
 	{ "Cutscenes/Heart Events/Adeline/adeline_eight_hearts/adeline_eight_hearts/3", { ADELINE, "lemon_pie" }},
 	{ "Conversations/Bank/Adeline/Relationship Lines/Relationship/post_8h_lines_romantic/adeline_post_8h_romantic_7/init", { ADELINE, "middlemist" }},
@@ -78,10 +91,10 @@ static const std::multimap<std::string, std::vector<std::string>> GIFT_DIALOG_MA
 	{ "Conversations/Bank/Adeline/Banked Lines/loves_paperwork/loves_paperwork/init", { ADELINE, "paper" }},
 	{ "Conversations/Bank/Adeline/Banked Lines/wine_cellar/wine_cellar/1", { ADELINE, "red_wine" }},
 	{ "Conversations/Bank/Adeline/Banked Lines/wine_cellar/wine_cellar/init", { ADELINE, "coffee", "white_wine" }},
-	{ "Conversations/Bank/Adeline/Gift Lines/gift_lines/lemon_pie/init", { ADELINE, "lemon_pie" }}, // Gift Line
-	{ "Conversations/Bank/Adeline/Gift Lines/gift_lines/middlemist/init", { ADELINE, "middlemist" }}, // Gift Line
-	{ "Conversations/Bank/Adeline/Gift Lines/gift_lines/paper/init", { ADELINE, "paper" }}, // Gift Line
-	{ "Conversations/Bank/Adeline/Gift Lines/gift_lines/perfect_pink_diamond/init", { ADELINE, "perfect_pink_diamond" }}, // Gift Line
+	{ "Conversations/Bank/Adeline/Gift Lines/gift_lines/lemon_pie/init", { ADELINE, "lemon_pie" }},
+	{ "Conversations/Bank/Adeline/Gift Lines/gift_lines/middlemist/init", { ADELINE, "middlemist" }},
+	{ "Conversations/Bank/Adeline/Gift Lines/gift_lines/paper/init", { ADELINE, "paper" }},
+	{ "Conversations/Bank/Adeline/Gift Lines/gift_lines/perfect_pink_diamond/init", { ADELINE, "perfect_pink_diamond" }},
 	{ "Conversations/Bank/Adeline/Market Lines/market_darcy_1/market_darcy_1/init", { ADELINE, "coffee" }},
 	{ "Conversations/Bank/Adeline/Market Lines/market_darcy_2/market_darcy_2/init", { ADELINE, "coffee" }},
 	{ "Conversations/Bank/Adeline/Market Lines/market_darcy_4/market_darcy_4/init", { ADELINE, "spicy_cheddar_biscuit" }},
@@ -93,7 +106,7 @@ static const std::multimap<std::string, std::vector<std::string>> GIFT_DIALOG_MA
 	// Balor
 	{ "Conversations/Bank/Balor/Relationship Lines/Relationship/post_8h_lines_romantic/balor_post_8h_romantic_3/init", { BALOR, "ore_diamond", "ore_ruby"}},
 	{ "Conversations/Bank/Balor/Banked Lines/bath_smelled_nice/bath_smelled_nice/1", { BALOR, "jasmine" }},
-	{ "Conversations/Bank/Balor/Gift Lines/gift_lines/perfect_diamond/init", { BALOR, "perfect_diamond" }}, // Gift Line
+	{ "Conversations/Bank/Balor/Gift Lines/gift_lines/perfect_diamond/init", { BALOR, "perfect_diamond" }},
 	{ "Conversations/Bank/Balor/Museum Lines/alda_gem_bracelet/alda_gem_bracelet/init", { BALOR, "alda_gem_bracelet" }},
 	{ "Conversations/Bank/Balor/Museum Lines/family_crest_pendant/family_crest_pendant/init", { BALOR, "family_crest_pendant" }},
 	{ "Conversations/Bank/Balor/Museum Lines/perfect_emerald/perfect_emerald/init", { BALOR, "perfect_emerald" }},
@@ -109,9 +122,9 @@ static const std::multimap<std::string, std::vector<std::string>> GIFT_DIALOG_MA
 	{ "Conversations/Bank/Caldarus/Statue Lines/general_lines/general_lines_29/1", { CALDARUS, "beet_soup" }},
 	{ "Conversations/Bank/Caldarus/Statue Lines/general_lines/general_lines_30/1", { CALDARUS, "mont_blanc" }},
 	{ "Conversations/Bank/Caldarus/Banked Lines/items/spirit_mushroom_0/1", { CALDARUS, "spirit_mushroom_tea" }},
-	{ "Conversations/Bank/Caldarus/Gift Lines/gift_lines/fried_rice/init", { CALDARUS, "fried_rice" }}, // Gift Line
-	{ "Conversations/Bank/Caldarus/Gift Lines/gift_lines/mont_blanc/init", { CALDARUS, "mont_blanc" }}, // Gift Line
-	{ "Conversations/Bank/Caldarus/Gift Lines/gift_lines/sushi_platter/init", { CALDARUS, "sushi_platter" }}, // Gift Line
+	{ "Conversations/Bank/Caldarus/Gift Lines/gift_lines/fried_rice/init", { CALDARUS, "fried_rice" }},
+	{ "Conversations/Bank/Caldarus/Gift Lines/gift_lines/mont_blanc/init", { CALDARUS, "mont_blanc" }},
+	{ "Conversations/Bank/Caldarus/Gift Lines/gift_lines/sushi_platter/init", { CALDARUS, "sushi_platter" }},
 	{ "Conversations/Bank/Caldarus/Relationship Lines/post_8h_lines_romantic/caldarus_post_8h_romantic_4/1", { CALDARUS, "mont_blanc" }},
 	{ "Conversations/fetch_quests_follow_ups/request_for_mont_blanc_follow_up_caldarus/init", { CALDARUS, "mont_blanc" }},
 	{ "Conversations/fetch_quests_follow_ups/request_for_pumpkin_pie_follow_up_eiland/1", { CALDARUS, "pumpkin_pie" }},
@@ -122,13 +135,13 @@ static const std::multimap<std::string, std::vector<std::string>> GIFT_DIALOG_MA
 	{ "Conversations/Bank/Celine/Date Lines/deep_woods_picnic/deep_woods_picnic_accept_2/3", { CELINE, "temple_flower", "marigold" }},
 	{ "Conversations/Bank/Celine/Relationship Lines/Relationship/post_8h_lines_best_friend/celine_post_8h_best_friend_8/init", { CELINE, "heather" }},
 	{ "Conversations/Bank/Celine/Banked Lines/daisies/daisies/init", { CELINE, "daisy" }},
-	{ "Conversations/Bank/Celine/Gift Lines/gift_lines/chrysanthemum/init", { CELINE, "chrysanthemum" }}, // Gift Line
-	{ "Conversations/Bank/Celine/Gift Lines/gift_lines/plum_blossom/init", { CELINE, "plum_blossom" }}, // Gift Line
-	{ "Conversations/Bank/Celine/Gift Lines/gift_lines/rose/init", { CELINE, "rose" }}, // Gift Line
-	{ "Conversations/Bank/Celine/Gift Lines/gift_lines/temple_flower_0/1", { CELINE, "temple_flower" }}, // Gift Line
-	{ "Conversations/Bank/Celine/Gift Lines/gift_lines/temple_flower_1/init", { CELINE, "temple_flower" }}, // Gift Line
+	{ "Conversations/Bank/Celine/Gift Lines/gift_lines/chrysanthemum/init", { CELINE, "chrysanthemum" }},
+	{ "Conversations/Bank/Celine/Gift Lines/gift_lines/plum_blossom/init", { CELINE, "plum_blossom" }},
+	{ "Conversations/Bank/Celine/Gift Lines/gift_lines/rose/init", { CELINE, "rose" }},
+	{ "Conversations/Bank/Celine/Gift Lines/gift_lines/temple_flower_0/1", { CELINE, "temple_flower" }},
+	{ "Conversations/Bank/Celine/Gift Lines/gift_lines/temple_flower_1/init", { CELINE, "temple_flower" }},
 	{ "Conversations/Bank/Celine/Market Lines/market_darcy_3/market_darcy_3/init", { CELINE, "rose_tea" }},
-	{ "Conversations/Group Conversations/Celine_Reina/foraging/foraging/1", { CELINE, "frost_lily" }},	
+	{ "Conversations/Group Conversations/Celine_Reina/foraging/foraging/1", { CELINE, "frost_lily" }},
 	// Darcy
 	{ "Conversations/General Dialogue/birthday_anticipation/darcy_birthday_anticipation_dell/1", { DARCY, "apple" }},
 	{ "Conversations/General Dialogue/birthday_anticipation/darcy_birthday_anticipation_luc/1", { DARCY, "apple" }},
@@ -143,7 +156,6 @@ static const std::multimap<std::string, std::vector<std::string>> GIFT_DIALOG_MA
 	{ "Conversations/General Dialogue/birthday_anticipation/dell_birthday_anticipation_celine/init", { DELL, "chocolate" }},
 	{ "Conversations/Tutorial Dialogue/misc_quest_lines/gossip_for_elsie_dell/12", { DELL, "chocolate" }},
 	{ "Conversations/Tutorial Dialogue/misc_quest_lines/gossip_for_elsie_turn_in/2", { DELL, "chocolate" }},
-	// Dozy
 	// Eiland
 	{ "Conversations/Bank/Eiland/Relationship Lines/Relationship/post_8h_lines_romantic/eiland_post_8h_romantic_4/2", { EILAND, "golden_cheesecake" }},
 	{ "Conversations/Bank/Eiland/Banked Lines/pumpkin_pie/pumpkin_pie/init", { EILAND, "pumpkin_pie" }},
@@ -169,8 +181,8 @@ static const std::multimap<std::string, std::vector<std::string>> GIFT_DIALOG_MA
 	{ "Conversations/Festival Lines/Hayden/shooting_star/shooting_star_romantic_follow_up_A/1", { HAYDEN, "apple_pie" }},
 	// Hemlock
 	{ "Conversations/Bank/Hemlock/Market Lines/market_wheedle_1/market_wheedle_1/1", { HEMLOCK, "white_wine" }},
-	{ "Conversations/Bank/Hemlock/Gift Lines/gift_lines/crayfish_etouffee/init", { HEMLOCK, "crayfish_etouffee" }}, // Gift Line
-	{ "Conversations/Bank/Josephine/Gift Lines/gift_lines/crayfish_etouffee/init", { HEMLOCK, "crayfish_etouffee" }}, // Gift Line
+	{ "Conversations/Bank/Hemlock/Gift Lines/gift_lines/crayfish_etouffee/init", { HEMLOCK, "crayfish_etouffee" }},
+	{ "Conversations/Bank/Josephine/Gift Lines/gift_lines/crayfish_etouffee/init", { HEMLOCK, "crayfish_etouffee" }},
 	{ "Conversations/Bank/Hemlock/Market Lines/market_darcy_1/market_darcy_1/init", { HEMLOCK, "coffee", "beer"}},
 	{ "Conversations/Bank/Hemlock/Market Lines/market_darcy_2/market_darcy_2/init", { HEMLOCK, "coffee" }},
 	{ "Conversations/Bank/Hemlock/Market Lines/market_darcy_4/market_darcy_4/init", { HEMLOCK, "coffee" }},
@@ -184,13 +196,13 @@ static const std::multimap<std::string, std::vector<std::string>> GIFT_DIALOG_MA
 	{ "Conversations/General Dialogue/birthday_anticipation/holt_birthday_anticipation_dell/1", { HOLT, "hard_wood" }},
 	{ "Conversations/General Dialogue/birthday_anticipation/holt_birthday_anticipation_celine/1", { HOLT, "hard_wood" }},
 	// Josephine
-	{ "Conversations/Bank/Hemlock/Gift Lines/gift_lines/crayfish_etouffee/init", { JOSEPHINE, "crayfish_etouffee" }}, // Gift Line
-	{ "Conversations/Bank/Josephine/Gift Lines/gift_lines/crayfish_etouffee/init", { JOSEPHINE, "crayfish_etouffee" }}, // Gift Line
+	{ "Conversations/Bank/Hemlock/Gift Lines/gift_lines/crayfish_etouffee/init", { JOSEPHINE, "crayfish_etouffee" }},
+	{ "Conversations/Bank/Josephine/Gift Lines/gift_lines/crayfish_etouffee/init", { JOSEPHINE, "crayfish_etouffee" }},
 	{ "Conversations/Bank/Josephine/Banked Lines/quiche/quiche/init", { JOSEPHINE, "quiche" }},
 	{ "Conversations/Bank/Josephine/Market Lines/market_darcy_1/market_darcy_1/init", { JOSEPHINE, "cup_of_tea", "green_tea", "jasmine_tea", "lavender_tea", "roasted_rice_tea", "rose_tea", "tea"}},
 	{ "Conversations/Bank/Josephine/Market Lines/market_darcy_2/market_darcy_2/init", { JOSEPHINE, "cup_of_tea", "green_tea", "jasmine_tea", "lavender_tea", "roasted_rice_tea", "rose_tea", "tea" }},
 	{ "Conversations/Bank/Josephine/Market Lines/market_darcy_4/market_darcy_4/init", { JOSEPHINE, "cup_of_tea", "green_tea", "jasmine_tea", "lavender_tea", "roasted_rice_tea", "rose_tea", "tea" }},
-	{ "Conversations/Bank/Hemlock/Market Lines/market_darcy_2/market_darcy_2/init", { JOSEPHINE, "cup_of_tea", "green_tea", "jasmine_tea", "lavender_tea", "roasted_rice_tea", "rose_tea", "tea" }}, // Indicates Josephine likes tea, but without the highlighting hint.
+	{ "Conversations/Bank/Hemlock/Market Lines/market_darcy_2/market_darcy_2/init", { JOSEPHINE, "cup_of_tea", "green_tea", "jasmine_tea", "lavender_tea", "roasted_rice_tea", "rose_tea", "tea" }},
 	// Juniper
 	{ "Conversations/Bank/Juniper/Banked Lines/breakfast/breakfast/1", { JUNIPER, "latte" }},
 	{ "Conversations/Bank/Juniper/Banked Lines/foraging/foraging_3/1", { JUNIPER, "nettle" }},
@@ -198,8 +210,8 @@ static const std::multimap<std::string, std::vector<std::string>> GIFT_DIALOG_MA
 	{ "Conversations/Bank/Juniper/Banked Lines/middlemist_red/middlemist_red/init", { JUNIPER, "middlemist" }},
 	{ "Conversations/Bank/Juniper/Banked Lines/new_potion/new_potion/init", { JUNIPER, "newt" }},
 	{ "Conversations/Bank/Juniper/Banked Lines/orb_viewing/orb_viewing_2/1", { JUNIPER, "water_chestnut_fritters" }},
-	{ "Conversations/Bank/Juniper/Gift Lines/gift_lines/ancient_royal_scepter/init", { JUNIPER, "ancient_royal_scepter" }}, // Gift Line
-	{ "Conversations/Bank/Juniper/Gift Lines/gift_lines/crystal_rose/init", { JUNIPER, "crystal_rose" }}, // Gift Line
+	{ "Conversations/Bank/Juniper/Gift Lines/gift_lines/ancient_royal_scepter/init", { JUNIPER, "ancient_royal_scepter" }},
+	{ "Conversations/Bank/Juniper/Gift Lines/gift_lines/crystal_rose/init", { JUNIPER, "crystal_rose" }},
 	{ "Conversations/Bank/Juniper/Market Lines/market_darcy_1/market_darcy_1/init", { JUNIPER, "latte" }},
 	{ "Conversations/Bank/Juniper/Museum Lines/ancient_royal_scepter/ancient_royal_scepter/init", { JUNIPER, "ancient_royal_scepter" }},
 	{ "Conversations/Bank/Valen/Market Lines/market_darcy_4/market_darcy_4/init", { JUNIPER, "latte" }},
@@ -215,7 +227,7 @@ static const std::multimap<std::string, std::vector<std::string>> GIFT_DIALOG_MA
 	{ "Cutscenes/Story Events/Town Repair/upgrade_the_carpenters_shop/upgrade_the_carpenters_shop_pt_2_follow_up_landen/1", { LANDEN, "vegetable_pot_pie" }},
 	// Luc
 	{ "Conversations/fetch_quests_follow_ups/request_for_cheese_follow_up_hemlock/init", { LUC, "cheese" }},
-	{ "Conversations/Bank/Luc/Gift Lines/gift_lines/grilled_cheese/init", { LUC, "grilled_cheese" }}, // Gift Line
+	{ "Conversations/Bank/Luc/Gift Lines/gift_lines/grilled_cheese/init", { LUC, "grilled_cheese" }},
 	{ "Conversations/Bank/Luc/Market Lines/market_darcy_1/market_darcy_1/init", { LUC, "hot_cocoa" }},
 	{ "Conversations/Bank/Luc/Museum Lines/amber_trapped_insect/amber_trapped_insect/init", { LUC, "amber_trapped_insect" }},
 	{ "Conversations/Bank/Luc/Museum Lines/cave_shrimp/cave_shrimp/init", { LUC, "cave_shrimp" }},
@@ -228,12 +240,12 @@ static const std::multimap<std::string, std::vector<std::string>> GIFT_DIALOG_MA
 	{ "Conversations/Bank/Reina/Banked Lines/luc_and_maple_cheese/luc_and_maple_cheese/init", { LUC, "cheese" }},
 	{ "Conversations/Bank/Luc/Museum Lines/bumblebee/bumblebee/init", { LUC, "bumblebee" }},
 	// Louis
-	{ "Conversations/Bank/Louis/Gift Lines/gift_lines/crystal/init", { LOUIS, "crystal" }}, // Gift Line
-	{ "Conversations/Bank/Louis/Gift Lines/gift_lines/lilac/init", { LOUIS, "lilac" }}, // Gift Line
-	{ "Conversations/Bank/Louis/Gift Lines/gift_lines/red_wine/init", { LOUIS, "red_wine" }}, // Gift Line
-	{ "Conversations/Bank/Louis/Gift Lines/gift_lines/white_wine/init", { LOUIS, "white_wine" }}, // Gift Line
+	{ "Conversations/Bank/Louis/Gift Lines/gift_lines/crystal/init", { LOUIS, "crystal" }},
+	{ "Conversations/Bank/Louis/Gift Lines/gift_lines/lilac/init", { LOUIS, "lilac" }},
+	{ "Conversations/Bank/Louis/Gift Lines/gift_lines/red_wine/init", { LOUIS, "red_wine" }},
+	{ "Conversations/Bank/Louis/Gift Lines/gift_lines/white_wine/init", { LOUIS, "white_wine" }},
 	// Maple
-	{ "Conversations/Bank/Maple/Gift Lines/gift_lines/berries_and_cream/init", { MAPLE, "berries_and_cream" }}, // Gift Line
+	{ "Conversations/Bank/Maple/Gift Lines/gift_lines/berries_and_cream/init", { MAPLE, "berries_and_cream" }},
 	{ "Conversations/Bank/Maple/Market Lines/market_darcy_2/market_darcy_2/init", { MAPLE, "hot_cocoa" }},
 	{ "Conversations/Bank/Maple/Market Lines/market_darcy_4/market_darcy_4/init", { MAPLE, "hot_cocoa" }},
 	{ "Conversations/Bank/Maple/Museum Lines/stone_shell/stone_shell/init", { MAPLE, "stone_shell" }},
@@ -244,9 +256,9 @@ static const std::multimap<std::string, std::vector<std::string>> GIFT_DIALOG_MA
 	{ "Conversations/Bank/March/Banked Lines/beer/beer/init", { MARCH, "beer" }},
 	{ "Conversations/Bank/March/Banked Lines/chocolate/chocolate/init", { MARCH, "chocolate" }},
 	{ "Conversations/Bank/March/Banked Lines/cold_beer_long_day/cold_beer_long_day/init", { MARCH, "beer" }},
-	{ "Conversations/Bank/March/Gift Lines/gift_lines/gold_ingot/init", { MARCH, "gold_ingot" }}, // Gift Line
-	{ "Conversations/Bank/March/Gift Lines/gift_lines/mocha/init", { MARCH, "mocha" }}, // Gift Line
-	{ "Conversations/Bank/March/Gift Lines/gift_lines/red_snapper_sushi/init", { MARCH, "red_snapper_sushi" }}, // Gift Line
+	{ "Conversations/Bank/March/Gift Lines/gift_lines/gold_ingot/init", { MARCH, "gold_ingot" }},
+	{ "Conversations/Bank/March/Gift Lines/gift_lines/mocha/init", { MARCH, "mocha" }},
+	{ "Conversations/Bank/March/Gift Lines/gift_lines/red_snapper_sushi/init", { MARCH, "red_snapper_sushi" }},
 	{ "Conversations/Bank/March/Market Lines/market_darcy_1/market_darcy_1/init", { MARCH, "hot_cocoa" }},
 	{ "Conversations/Bank/March/Market Lines/market_darcy_3/market_darcy_3/init", { MARCH, "hot_cocoa" }},
 	{ "Conversations/Bank/March/Museum Lines/meteorite/meteorite/init", { MARCH, "meteorite" }},
@@ -256,19 +268,19 @@ static const std::multimap<std::string, std::vector<std::string>> GIFT_DIALOG_MA
 	{ "Conversations/Festival Lines/March/animal_festival/animal_festival_0/init", { MARCH, "hot_cocoa" }},
 	{ "Conversations/Group Conversations/Elsie_March_Olric_Ryis/breakfast/breakfast_3/1", { MARCH, "coffee" }},
 	// Merri
-	{ "Conversations/Bank/Merri/Gift Lines/gift_lines/glass/init", { MERRI, "glass" }}, // Gift Line
-	{ "Conversations/Bank/Merri/Gift Lines/gift_lines/hard_wood/init", { MERRI, "hard_wood" }}, // Gift Line
-	{ "Conversations/Bank/Merri/Gift Lines/gift_lines/latte/init", { MERRI, "latte" }}, // Gift Line
+	{ "Conversations/Bank/Merri/Gift Lines/gift_lines/glass/init", { MERRI, "glass" }},
+	{ "Conversations/Bank/Merri/Gift Lines/gift_lines/hard_wood/init", { MERRI, "hard_wood" }},
+	{ "Conversations/Bank/Merri/Gift Lines/gift_lines/latte/init", { MERRI, "latte" }},
 	// Nora
-	{ "Conversations/Bank/Nora/Gift Lines/gift_lines/ancient_gold_coin/init", { NORA, "ancient_gold_coin" }}, // Gift Line
-	{ "Conversations/Bank/Nora/Gift Lines/gift_lines/coffee/init", { NORA, "coffee" }}, // Gift Line
+	{ "Conversations/Bank/Nora/Gift Lines/gift_lines/ancient_gold_coin/init", { NORA, "ancient_gold_coin" }},
+	{ "Conversations/Bank/Nora/Gift Lines/gift_lines/coffee/init", { NORA, "coffee" }},
 	{ "Conversations/Bank/Nora/Market Lines/market_darcy_4/market_darcy_4/init", { NORA, "latte" }},
 	{ "Conversations/Bank/Nora/Museum Lines/ancient_gold_coin/ancient_gold_coin/init", { NORA, "ancient_gold_coin" }},
 	{ "Conversations/General Dialogue/birthday_anticipation/nora_birthday_anticipation_dell/1", { NORA, "baked_potato" }},
 	{ "Conversations/General Dialogue/birthday_anticipation/nora_birthday_anticipation_celine/1", { NORA, "baked_potato" }},
 	// Olric
 	{ "Conversations/Bank/March/Banked Lines/hardboiled_egg/hardboiled_egg/init", { OLRIC, "hard_boiled_egg" }},
-	{ "Conversations/Bank/Olric/Gift Lines/gift_lines/hard_boiled_egg/init", { OLRIC, "hard_boiled_egg" }}, // Gift Line
+	{ "Conversations/Bank/Olric/Gift Lines/gift_lines/hard_boiled_egg/init", { OLRIC, "hard_boiled_egg" }},
 	{ "Conversations/Group Conversations/Elsie_March_Olric_Ryis/breakfast/breakfast_3/3", { OLRIC, "hard_boiled_egg" }},
 	{ "Conversations/Bank/March/Banked Lines/olric_stone/olric_stone/init", { OLRIC, "ore_stone" }},
 	{ "Conversations/Bank/Olric/Market Lines/market_wheedle_1/market_wheedle_1/init", { OLRIC, "ore_stone" }},
@@ -278,7 +290,7 @@ static const std::multimap<std::string, std::vector<std::string>> GIFT_DIALOG_MA
 	{ "Conversations/Bank/Reina/Banked Lines/garlic/garlic/init", { REINA, "garlic" }},
 	{ "Conversations/Bank/Reina/Banked Lines/garlic/garlic_2/init", { REINA, "garlic" }},
 	{ "Conversations/Bank/Reina/Banked Lines/general_store_shopping/general_store_shopping_3/init", { REINA, "garlic" }},
-	{ "Conversations/Bank/Reina/Gift Lines/gift_lines/daffodil/init", { REINA, "daffodil" }}, // Gift Line
+	{ "Conversations/Bank/Reina/Gift Lines/gift_lines/daffodil/init", { REINA, "daffodil" }},
 	{ "Conversations/Bank/Reina/Market Lines/market_darcy_1/market_darcy_1/init", { REINA, "coffee", "iced_coffee"}},
 	{ "Conversations/Bank/Reina/Market Lines/market_darcy_4/market_darcy_4/init", { REINA, "coffee" }},
 	{ "Cutscenes/Heart Events/Reina/reina_six_hearts/reina_six_hearts/37", { REINA, "grilled_cheese" }},
@@ -290,7 +302,7 @@ static const std::multimap<std::string, std::vector<std::string>> GIFT_DIALOG_MA
 	{ "Conversations/Bank/Ryis/Relationship Lines/Relationship/post_8h_lines_best_friend/ryis_post_8h_best_friend_12/4", { RYIS, "golden_horse_hair" }},
 	{ "Conversations/Bank/Ryis/Relationship Lines/Relationship/post_8h_lines_best_friend/ryis_post_8h_best_friend_2/1", { RYIS, "iced_coffee" }},
 	{ "Conversations/Bank/Ryis/Banked Lines/bath_smells_like_lavender/bath_smells_like_lavender/init", { RYIS, "lilac" }},
-	{ "Conversations/Bank/Ryis/Gift Lines/gift_lines/hard_wood/1", { RYIS, "hard_wood" }}, // Gift Line
+	{ "Conversations/Bank/Ryis/Gift Lines/gift_lines/hard_wood/1", { RYIS, "hard_wood" }},
 	{ "Conversations/Bank/Ryis/Market Lines/market_darcy_1/market_darcy_1/init", { RYIS, "iced_coffee" }},
 	{ "Conversations/Bank/Ryis/Market Lines/market_darcy_2/market_darcy_2/init", { RYIS, "iced_coffee" }},
 	{ "Conversations/Bank/Ryis/Market Lines/market_darcy_3/market_darcy_3/init", { RYIS, "iced_coffee" }},
@@ -300,12 +312,11 @@ static const std::multimap<std::string, std::vector<std::string>> GIFT_DIALOG_MA
 	// Seridia
 	{ "Conversations/Group Conversations/Juniper_Seridia/disciple/disciple_5/init", { SERIDIA, "night_queen" }},
 	{ "Conversations/fetch_quests_follow_ups/request_for_monster_mash_follow_up_seridia/init", { SERIDIA, "monster_mash" }},
-	// Stillwell
 	// Taliferro
 	{ "Conversations/Bank/Taliferro/Banked Lines/challenge_completed_lines/incredibly_hot_pot_terithia/init", { TALIFERRO, "incredibly_hot_pot" }},
 	{ "Conversations/Bank/Taliferro/Banked Lines/challenge_completed_lines/veggie_sub_sandwich_holt/init", { TALIFERRO, "veggie_sub_sandwich" }},
 	// Terithia
-	{ "Conversations/Bank/Terithia/Gift Lines/gift_lines/fish_stew/init", { TERITHIA, "fish_stew" }}, // Gift Line
+	{ "Conversations/Bank/Terithia/Gift Lines/gift_lines/fish_stew/init", { TERITHIA, "fish_stew" }},
 	{ "Conversations/Bank/Valen/Banked Lines/terithia_fish_jerky/terithia_fish_jerky/init", { TERITHIA, "canned_sardines" }},
 	{ "Conversations/General Dialogue/birthday_anticipation/terithia_birthday_anticipation_errol/1", { TERITHIA, "dried_squid" }},
 	{ "Conversations/General Dialogue/birthday_anticipation/terithia_birthday_anticipation_landen/1", { TERITHIA, "dried_squid" }},
@@ -324,14 +335,12 @@ static const std::multimap<std::string, std::vector<std::string>> GIFT_DIALOG_MA
 	{ "Conversations/Bank/Reina/Banked Lines/general_store_shopping/general_store_shopping_3/init", { VALEN, "garlic" }},
 	{ "Conversations/General Dialogue/ari_birthday/ari_birthday_valen_high_hearts/1", { VALEN, "green_tea" }},
 	// Vera
-	{ "Conversations/Bank/Vera/Gift Lines/gift_lines/coconut_milk/init", { VERA, "coconut_milk" }}, // Gift Line
-	{ "Conversations/Bank/Vera/Gift Lines/gift_lines/cranberry_juice/init", { VERA, "cranberry_juice" }}, // Gift Line
-	{ "Conversations/Bank/Vera/Gift Lines/gift_lines/gazpacho/init", { VERA, "gazpacho" }}, // Gift Line
-	{ "Conversations/Bank/Vera/Gift Lines/gift_lines/orange_juice/init", { VERA, "orange_juice" }}, // Gift Line
-	{ "Conversations/Bank/Vera/Gift Lines/gift_lines/pomegranate/init", { VERA, "pomegranate" }}, // Gift Line
-	{ "Conversations/Bank/Vera/Gift Lines/gift_lines/summer_salad/init", { VERA, "summer_salad" }}, // Gift Line
-	// Wheedle
-	// Zorel
+	{ "Conversations/Bank/Vera/Gift Lines/gift_lines/coconut_milk/init", { VERA, "coconut_milk" }},
+	{ "Conversations/Bank/Vera/Gift Lines/gift_lines/cranberry_juice/init", { VERA, "cranberry_juice" }},
+	{ "Conversations/Bank/Vera/Gift Lines/gift_lines/gazpacho/init", { VERA, "gazpacho" }},
+	{ "Conversations/Bank/Vera/Gift Lines/gift_lines/orange_juice/init", { VERA, "orange_juice" }},
+	{ "Conversations/Bank/Vera/Gift Lines/gift_lines/pomegranate/init", { VERA, "pomegranate" }},
+	{ "Conversations/Bank/Vera/Gift Lines/gift_lines/summer_salad/init", { VERA, "summer_salad" }},
 	// MOD: Talkative Celine
 	{ "conversations/talkative_celine/frost lily/init", { CELINE, "frost_lily" }},
 	{ "conversations/talkative_celine/plum blossom/init", { ADELINE, "plum_blossom" }},
@@ -350,7 +359,7 @@ static const std::multimap<std::string, std::vector<std::string>> GIFT_DIALOG_MA
 	{ "conversations/talkative_celine/dandelion/init", { CELINE, "dandelion" }},
 	{ "conversations/talkative_celine/dandelion/init", { VALEN, "dandelion" }},
 	{ "conversations/talkative_celine/tulip/init", { CELINE, "tulip" }},
-	{ "conversations/talkative_celine/spring galette/init", { ADELINE, "spring_galette" }}, // Verify this mentions Adeline
+	{ "conversations/talkative_celine/spring galette/init", { ADELINE, "spring_galette" }},
 	{ "conversations/talkative_celine/rose tea/init", { CELINE, "rose_tea" }},
 	{ "conversations/talkative_celine/spring salad/init", { CELINE, "spring_salad" }},
 	{ "conversations/talkative_celine/hydrangea/init", { CELINE, "hydrangea" }},
@@ -373,1185 +382,415 @@ static const std::multimap<std::string, std::vector<std::string>> GIFT_DIALOG_MA
 	{ "conversations/talkative_celine/crystal rose/init", { CELINE, "crystal_rose" }},
 };
 
-static YYTKInterface* g_ModuleInterface = nullptr;
-static bool load_on_start = true;
-static bool localize_items = true;
-static bool crafting_menu_open = false;
-static bool unlock_all_gift_preferences = DEFAULT_UNLOCK_ALL_GIFT_PREFERENCES;
-static bool show_gift_preferences_on_item_tooltips = DEFAULT_SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS;
-static bool disable_daily_talk_limit = DEFAULT_DISABLE_DAILY_TALK_LIMIT;
-static bool disable_daily_gift_limit = DEFAULT_DISABLE_DAILY_GIFT_LIMIT;
-static std::map<std::string, std::vector<std::string>> gifts_to_unlock = {};
-static std::map<std::string, INT64> item_name_to_id_map = {};
-static std::map<INT64, std::string> item_id_to_name_map = {};
-static std::map<std::string, std::string> internal_item_name_to_localized_item_name_map = {};
-static std::map<std::string, std::string> localized_item_name_to_internal_item_name_map = {};
-static std::string localized_item_name = "";
-static std::string gift_preference_npc_name = "";
-static std::string gift_preference_internal_item_name = "";
-static std::map<int, std::string> npc_id_to_name_map = {};
-static std::map<std::string, std::vector<int>> npc_name_to_liked_gifts_map = {};
-static std::map<std::string, std::vector<int>> npc_name_to_loved_gifts_map = {};
+// ----- Config -----
 
-bool GameIsPaused()
+struct ThePerfectGiftConfig
 {
-	CInstance* global_instance = nullptr;
-	g_ModuleInterface->GetGlobalInstance(&global_instance);
-	RValue paused = *global_instance->GetRefMember("__pause_status");
-	return paused.m_i64 > 0;
-}
+	bool unlock_all_gift_preferences            = DEFAULT_UNLOCK_ALL_GIFT_PREFERENCES;
+	bool show_gift_preferences_on_item_tooltips = DEFAULT_SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS;
+	bool disable_daily_talk_limit               = DEFAULT_DISABLE_DAILY_TALK_LIMIT;
+	bool disable_daily_gift_limit               = DEFAULT_DISABLE_DAILY_GIFT_LIMIT;
+};
 
-int RValueAsInt(RValue value)
+void to_json(json& j, const ThePerfectGiftConfig& c)
 {
-	if (value.m_Kind == VALUE_REAL)
-		return static_cast<int>(value.m_Real);
-	if (value.m_Kind == VALUE_INT64)
-		return static_cast<int>(value.m_i64);
-	if (value.m_Kind == VALUE_INT32)
-		return static_cast<int>(value.m_i32);
-}
-
-bool RValueAsBool(RValue value)
-{
-	if (value.m_Kind == VALUE_REAL && value.m_Real == 1)
-		return true;
-	if (value.m_Kind == VALUE_BOOL && value.m_Real == 1)
-		return true;
-	return false;
-}
-
-bool StructVariableExists(RValue the_struct, const char* variable_name)
-{
-	RValue struct_exists = g_ModuleInterface->CallBuiltin(
-		"struct_exists",
-		{ the_struct, variable_name }
-	);
-
-	return RValueAsBool(struct_exists);
-}
-
-RValue StructVariableGet(RValue the_struct, const char* variable_name)
-{
-	return g_ModuleInterface->CallBuiltin(
-		"struct_get",
-		{ the_struct, variable_name }
-	);
-}
-
-RValue StructVariableSet(RValue the_struct, const char* variable_name, RValue value)
-{
-	return g_ModuleInterface->CallBuiltin(
-		"struct_set",
-		{ the_struct, variable_name, value }
-	);
-}
-
-void PrintError(std::exception_ptr eptr)
-{
-	try {
-		if (eptr) {
-			std::rethrow_exception(eptr);
-		}
-	}
-	catch (const std::exception& e) {
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Error: %s", MOD_NAME, VERSION, e.what());
-	}
-}
-
-json CreateConfigJson(bool use_defaults)
-{
-	json config_json = {
-		{ UNLOCK_ALL_GIFT_PREFERENCES_KEY, use_defaults ? DEFAULT_UNLOCK_ALL_GIFT_PREFERENCES : unlock_all_gift_preferences },
-		{ SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS_KEY, use_defaults ? DEFAULT_SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS : show_gift_preferences_on_item_tooltips },
-		{ DISABLE_DAILY_TALK_LIMIT_KEY, use_defaults ? DEFAULT_DISABLE_DAILY_TALK_LIMIT : disable_daily_talk_limit },
-		{ DISABLE_DAILY_GIFT_LIMIT_KEY, use_defaults ? DEFAULT_DISABLE_DAILY_GIFT_LIMIT : disable_daily_gift_limit }
+	j = json{
+		{ UNLOCK_ALL_GIFT_PREFERENCES_KEY,            c.unlock_all_gift_preferences            },
+		{ SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS_KEY, c.show_gift_preferences_on_item_tooltips },
+		{ DISABLE_DAILY_TALK_LIMIT_KEY,               c.disable_daily_talk_limit               },
+		{ DISABLE_DAILY_GIFT_LIMIT_KEY,               c.disable_daily_gift_limit               },
 	};
-	return config_json;
 }
 
-void LogDefaultConfigValues()
+void from_json(const json& j, ThePerfectGiftConfig& c)
 {
-	unlock_all_gift_preferences = DEFAULT_UNLOCK_ALL_GIFT_PREFERENCES;
-	show_gift_preferences_on_item_tooltips = DEFAULT_SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS;
-	disable_daily_talk_limit = DEFAULT_DISABLE_DAILY_TALK_LIMIT;
-	disable_daily_gift_limit = DEFAULT_DISABLE_DAILY_GIFT_LIMIT;
-	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, UNLOCK_ALL_GIFT_PREFERENCES_KEY, DEFAULT_UNLOCK_ALL_GIFT_PREFERENCES ? "true" : "false");
-	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS_KEY, DEFAULT_SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS ? "true" : "false");
-	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, DISABLE_DAILY_TALK_LIMIT_KEY, DEFAULT_DISABLE_DAILY_TALK_LIMIT ? "true" : "false");
-	g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, DISABLE_DAILY_GIFT_LIMIT_KEY, DEFAULT_DISABLE_DAILY_GIFT_LIMIT ? "true" : "false");
+	c.unlock_all_gift_preferences            = MMAPI::Config::GetValue<bool>(j, UNLOCK_ALL_GIFT_PREFERENCES_KEY,            DEFAULT_UNLOCK_ALL_GIFT_PREFERENCES);
+	c.show_gift_preferences_on_item_tooltips = MMAPI::Config::GetValue<bool>(j, SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS_KEY, DEFAULT_SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS);
+	c.disable_daily_talk_limit               = MMAPI::Config::GetValue<bool>(j, DISABLE_DAILY_TALK_LIMIT_KEY,               DEFAULT_DISABLE_DAILY_TALK_LIMIT);
+	c.disable_daily_gift_limit               = MMAPI::Config::GetValue<bool>(j, DISABLE_DAILY_GIFT_LIMIT_KEY,               DEFAULT_DISABLE_DAILY_GIFT_LIMIT);
 }
 
-void CreateOrLoadConfigFile()
+// ----- State -----
+
+static ThePerfectGiftConfig config{};
+static bool startup_loaded     = false;
+static bool crafting_menu_open = false;
+
+// Cached item lookup, built once at title-screen setup (Item::ForEachItem + Item::GetInternalName).
+static std::map<std::string, int> item_name_to_id_cache;
+
+// Gifts queued for unlocking on next NPC interaction. Keyed by lowercase NPC internal name.
+static std::map<std::string, std::vector<std::string>> gifts_to_unlock;
+
+// Notification placeholder substitution context. Set immediately before CreateNotification,
+// consumed by the AfterLocalizedString hook when it sees the notification key.
+static std::string gift_preference_npc_name;
+static std::string gift_preference_internal_item_name;
+
+// ----- Helpers -----
+
+void LoadOrCreateConfigFile()
 {
-	// Load config file.
-	std::exception_ptr eptr;
 	try
 	{
-		// Try to find the mod_data directory.
-		std::string current_dir = std::filesystem::current_path().string();
-		std::string mod_data_folder = current_dir + "\\mod_data";
-		if (!std::filesystem::exists(mod_data_folder))
+		auto path = MMAPI::Config::GetConfigPath(MOD_NAME);
+		bool existed = std::filesystem::exists(path);
+		json j = MMAPI::Config::Load(path);
+
+		if (!existed)
+			MMAPI::Log::Warn("Configuration file was not found. Creating file: %s", path.string().c_str());
+
+		if (j.empty())
 		{
-			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - The \"mod_data\" directory was not found. Creating directory: %s", MOD_NAME, VERSION, mod_data_folder.c_str());
-			std::filesystem::create_directory(mod_data_folder);
-		}
-
-		// Try to find the mod_data/ThePerfectGift directory.
-		std::string the_perfect_gift_folder = mod_data_folder + "\\ThePerfectGift";
-		if (!std::filesystem::exists(the_perfect_gift_folder))
-		{
-			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - The \"ThePerfectGift\" directory was not found. Creating directory: %s", MOD_NAME, VERSION, the_perfect_gift_folder.c_str());
-			std::filesystem::create_directory(the_perfect_gift_folder);
-		}
-
-		// Try to find the mod_data/ThePerfectGift/ThePerfectGift.json config file.
-		bool update_config_file = false;
-		std::string config_file = the_perfect_gift_folder + "\\" + "ThePerfectGift.json";
-		std::ifstream in_stream(config_file);
-		if (in_stream.good())
-		{
-			try
-			{
-				json json_object = json::parse(in_stream);
-
-				// Check if the json_object is empty.
-				if (json_object.empty())
-				{
-					g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - No values found in mod configuration file: %s!", MOD_NAME, VERSION, config_file.c_str());
-					g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Add your desired values to the configuration file, otherwise defaults will be used.", MOD_NAME, VERSION);
-					LogDefaultConfigValues();
-				}
-				else
-				{
-					// Try loading the unlock_all_gift_preferences value.
-					if (json_object.contains(UNLOCK_ALL_GIFT_PREFERENCES_KEY))
-					{
-						unlock_all_gift_preferences = json_object[UNLOCK_ALL_GIFT_PREFERENCES_KEY];
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using CUSTOM \"%s\" value: %s!", MOD_NAME, VERSION, UNLOCK_ALL_GIFT_PREFERENCES_KEY, unlock_all_gift_preferences ? "true" : "false");
-					}
-					else
-					{
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, UNLOCK_ALL_GIFT_PREFERENCES_KEY, config_file.c_str());
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, UNLOCK_ALL_GIFT_PREFERENCES_KEY, DEFAULT_UNLOCK_ALL_GIFT_PREFERENCES ? "true" : "false");
-					}
-
-					// Try loading the show_gift_preferences_on_item_tooltips value.
-					if (json_object.contains(SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS_KEY))
-					{
-						show_gift_preferences_on_item_tooltips = json_object[SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS_KEY];
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using CUSTOM \"%s\" value: %s!", MOD_NAME, VERSION, SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS_KEY, show_gift_preferences_on_item_tooltips ? "true" : "false");
-					}
-					else
-					{
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS_KEY, config_file.c_str());
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS_KEY, DEFAULT_SHOW_GIFT_PREFERENCES_ON_ITEM_TOOLTIPS ? "true" : "false");
-					}
-
-					// Try loading the disable_daily_talk_limit value.
-					if (json_object.contains(DISABLE_DAILY_TALK_LIMIT_KEY))
-					{
-						disable_daily_talk_limit = json_object[DISABLE_DAILY_TALK_LIMIT_KEY];
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using CUSTOM \"%s\" value: %s!", MOD_NAME, VERSION, DISABLE_DAILY_TALK_LIMIT_KEY, disable_daily_talk_limit ? "true" : "false");
-					}
-					else
-					{
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, DISABLE_DAILY_TALK_LIMIT_KEY, config_file.c_str());
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, DISABLE_DAILY_TALK_LIMIT_KEY, DEFAULT_DISABLE_DAILY_TALK_LIMIT ? "true" : "false");
-					}
-
-					// Try loading the disable_daily_gift_limit value.
-					if (json_object.contains(DISABLE_DAILY_GIFT_LIMIT_KEY))
-					{
-						disable_daily_gift_limit = json_object[DISABLE_DAILY_GIFT_LIMIT_KEY];
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using CUSTOM \"%s\" value: %s!", MOD_NAME, VERSION, DISABLE_DAILY_GIFT_LIMIT_KEY, disable_daily_gift_limit ? "true" : "false");
-					}
-					else
-					{
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, DISABLE_DAILY_GIFT_LIMIT_KEY, config_file.c_str());
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, DISABLE_DAILY_GIFT_LIMIT_KEY, DEFAULT_DISABLE_DAILY_GIFT_LIMIT ? "true" : "false");
-					}
-				}
-
-				update_config_file = true;
-			}
-			catch (...)
-			{
-				eptr = std::current_exception();
-				PrintError(eptr);
-
-				g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to parse JSON from configuration file: %s", MOD_NAME, VERSION, config_file.c_str());
-				g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Make sure the file is valid JSON!", MOD_NAME, VERSION);
-				LogDefaultConfigValues();
-			}
-
-			in_stream.close();
+			if (existed)
+				MMAPI::Log::Error("No readable values in configuration file: %s!", path.string().c_str());
+			config = ThePerfectGiftConfig{};
 		}
 		else
 		{
-			in_stream.close();
-
-			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - The \"ThePerfectGift.json\" file was not found. Creating file: %s", MOD_NAME, VERSION, config_file.c_str());
-			json default_json = CreateConfigJson(true);
-
-			std::ofstream out_stream(config_file);
-			out_stream << std::setw(4) << default_json << std::endl;
-			out_stream.close();
-
-			LogDefaultConfigValues();
+			config = j.get<ThePerfectGiftConfig>();
 		}
 
-		if (update_config_file)
-		{
-			json config_json = CreateConfigJson(false);
-			std::ofstream out_stream(config_file);
-			out_stream << std::setw(4) << config_json << std::endl;
-			out_stream.close();
-		}
+		MMAPI::Config::Save(path, config);
+		MMAPI::Log::Info("Loaded configuration file: %s", path.string().c_str());
 	}
-	catch (...)
+	catch (const std::exception& e)
 	{
-		eptr = std::current_exception();
-		PrintError(eptr);
-
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - An error occurred loading the mod configuration file.", MOD_NAME, VERSION);
-		LogDefaultConfigValues();
+		MMAPI::Log::Error("Error loading config: %s", e.what());
+		config = ThePerfectGiftConfig{};
 	}
 }
 
-void LoadNpcData()
+void BuildItemNameCache()
 {
-	CInstance* global_instance = nullptr;
-	g_ModuleInterface->GetGlobalInstance(&global_instance);
-
-	// Load NPC IDs
-	size_t npc_ids_length;
-	RValue npc_ids = *global_instance->GetRefMember("__npc_id__");
-	g_ModuleInterface->GetArraySize(npc_ids, npc_ids_length);
-	for (size_t i = 0; i < npc_ids_length; i++)
-	{
-		RValue* npc_name = nullptr;
-		g_ModuleInterface->GetArrayEntry(npc_ids, i, npc_name);
-		npc_id_to_name_map[i] = npc_name->ToString();
-	}
-
-	// Load NPC Gift Preferences
-	size_t npc_prototypes_length;
-	RValue npc_prototypes = *global_instance->GetRefMember("__npc_prototypes");
-	g_ModuleInterface->GetArraySize(npc_prototypes, npc_prototypes_length);
-	for (size_t i = 0; i < npc_prototypes_length; i++)
-	{
-		RValue* npc_prototype = nullptr;
-		g_ModuleInterface->GetArrayEntry(npc_prototypes, i, npc_prototype);
-
-		RValue liked_gifts = *npc_prototype->GetRefMember("liked_gifts")->GetRefMember("__buffer");
-		RValue loved_gifts = *npc_prototype->GetRefMember("loved_gifts")->GetRefMember("__buffer");
-
-		// Liked Gifts
-		size_t liked_gifts_length;
-		g_ModuleInterface->GetArraySize(liked_gifts, liked_gifts_length);
-		for (size_t j = 0; j < liked_gifts_length; j++)
-		{
-			RValue* item_id;
-			g_ModuleInterface->GetArrayEntry(liked_gifts, j, item_id);
-			npc_name_to_liked_gifts_map[npc_id_to_name_map[i]].push_back(RValueAsInt(*item_id));
-		}
-
-		// Loved Gifts
-		size_t loved_gifts_length;
-		g_ModuleInterface->GetArraySize(loved_gifts, loved_gifts_length);
-		for (size_t j = 0; j < loved_gifts_length; j++)
-		{
-			RValue* item_id;
-			g_ModuleInterface->GetArrayEntry(loved_gifts, j, item_id);
-			npc_name_to_loved_gifts_map[npc_id_to_name_map[i]].push_back(RValueAsInt(*item_id));
-		}
-	}
+	item_name_to_id_cache.clear();
+	MMAPI::Item::ForEachItem([](int id) {
+		YYTK::RValue name = MMAPI::Item::GetInternalName(id);
+		if (name.m_Kind == YYTK::VALUE_STRING)
+			item_name_to_id_cache[name.ToString()] = id;
+	});
 }
 
-// TODO: Update this to use the item info in global instance
-void LoadItemData(CInstance* Self, CInstance* Other)
+// Capitalizes the first character of `s` (in-place) — used for "<NPC>" placeholder substitution.
+std::string CapitalizeFirst(std::string s)
 {
-	for (int64_t i = 0; i < 5000; i++)
-	{
-		CScript* gml_script_try_item_id_to_string = nullptr;
-		g_ModuleInterface->GetNamedRoutinePointer(
-			GML_SCRIPT_TRY_ITEM_ID_TO_STRING,
-			(PVOID*)&gml_script_try_item_id_to_string
-		);
-
-		RValue* item_id = new RValue(i);
-		RValue item_name;
-		gml_script_try_item_id_to_string->m_Functions->m_ScriptFunction(
-			Self,
-			Other,
-			item_name,
-			1,
-			{ &item_id }
-		);
-		delete item_id;
-
-		if (item_name.m_Kind != VALUE_NULL && item_name.m_Kind != VALUE_UNSET && item_name.m_Kind != VALUE_UNDEFINED)
-		{
-			std::string item_name_str = item_name.ToString();
-			if (item_name_to_id_map.count(item_name_str) <= 0)
-				item_name_to_id_map[item_name_str] = i;
-			if (item_id_to_name_map.count(i) <= 0)
-				item_id_to_name_map[i] = item_name_str;
-		}
-	}
-	if (item_name_to_id_map.size() > 0 && item_id_to_name_map.size() > 0)
-	{
-		g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Successfully loaded item data!", MOD_NAME, VERSION);
-	}
-	else {
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to load data for items!", MOD_NAME, VERSION);
-	}
+	if (!s.empty())
+		s[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(s[0])));
+	return s;
 }
 
-void DisplayNotification(CInstance* Self, CInstance* Other, std::string localization_key)
+void DisplayNotification(CInstance* self, const std::string& localization_key, const std::string& npc_name, const std::string& item_internal_name)
 {
-	CScript* gml_script_create_notification = nullptr;
-	g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_CREATE_NOTIFICATION,
-		(PVOID*)&gml_script_create_notification
-	);
-
-	RValue result;
-	RValue notification = RValue(localization_key);
-	RValue* notification_ptr = &notification;
-	gml_script_create_notification->m_Functions->m_ScriptFunction(
-		Self,
-		Other,
-		result,
-		1,
-		{ &notification_ptr }
-	);
-
-	gift_preference_npc_name = "";
-	gift_preference_internal_item_name = "";
+	// Stash the placeholder values where AfterLocalizedString can find them, then trigger the
+	// notification — the localizer hook will fire synchronously and substitute <ITEM> / <NPC>.
+	gift_preference_npc_name           = npc_name;
+	gift_preference_internal_item_name = item_internal_name;
+	MMAPI::Game::CreateNotification(false, localization_key);
+	gift_preference_npc_name.clear();
+	gift_preference_internal_item_name.clear();
 }
 
-void UnlockGifts(CInstance* npc, std::string npc_name, bool silent)
+void UnlockGiftsForNpc(CInstance* npc, const std::string& npc_name, bool silent)
 {
-	if (!gifts_to_unlock[npc_name].empty())
-	{
-		RValue me_exists = g_ModuleInterface->CallBuiltin("struct_exists", { npc, "me" });
-		if (me_exists.m_Kind == VALUE_BOOL && me_exists.m_Real == 1)
-		{
-			RValue me = g_ModuleInterface->CallBuiltin("struct_get", { npc, "me" });
+	auto it = gifts_to_unlock.find(npc_name);
+	if (it == gifts_to_unlock.end() || it->second.empty()) return;
 
-			RValue known_gift_preferences_exists = g_ModuleInterface->CallBuiltin("struct_exists", { me, "known_gift_preferences" });
-			if (known_gift_preferences_exists.m_Kind == VALUE_BOOL && known_gift_preferences_exists.m_Real == 1)
+	for (const std::string& item_internal_name : it->second)
+	{
+		auto cache_it = item_name_to_id_cache.find(item_internal_name);
+		if (cache_it == item_name_to_id_cache.end()) continue;
+		int item_id = cache_it->second;
+
+		if (MMAPI::NPC::KnowsGiftPreference(npc, item_id))
+			continue;
+
+		MMAPI::NPC::LearnGiftPreference(npc, item_id);
+
+		if (!silent)
+			DisplayNotification(npc, GIFT_PREFERENCE_UNLOCKED_LOCALIZATION_KEY, npc_name, item_internal_name);
+	}
+
+	if (!config.unlock_all_gift_preferences)
+		it->second.clear();
+}
+
+void QueueAllGiftPreferences()
+{
+	for (const std::string& npc_name : ACTIVE_NPC_LIST)
+	{
+		auto npc_id = MMAPI::NPC::TryFromInternalName(npc_name);
+		if (!npc_id) continue;
+
+		YYTK::RValue liked = MMAPI::NPC::GetLikedGifts(*npc_id);
+		YYTK::RValue loved = MMAPI::NPC::GetLovedGifts(*npc_id);
+
+		auto append_buffer = [&npc_name](YYTK::RValue buf) {
+			if (buf.m_Kind == YYTK::VALUE_UNDEFINED) return;
+			size_t count = 0;
+			MMAPI::Internal::module_interface->GetArraySize(buf, count);
+			for (size_t i = 0; i < count; i++)
 			{
-				RValue known_gift_preferences = g_ModuleInterface->CallBuiltin("struct_get", { me, "known_gift_preferences" });				
-				RValue inner_exists = g_ModuleInterface->CallBuiltin("struct_exists", { known_gift_preferences, "inner" });
-				if (inner_exists.m_Kind == VALUE_BOOL && inner_exists.m_Real == 1)
-				{
-					RValue inner = g_ModuleInterface->CallBuiltin("struct_get", { known_gift_preferences, "inner" });
-					for (int i = 0; i < gifts_to_unlock[npc_name].size(); i++)
-					{
-						// Check if this preference has already been learned.
-						RValue already_set = g_ModuleInterface->CallBuiltin("struct_exists", { inner, item_name_to_id_map[gifts_to_unlock[npc_name][i]] });
-						if (already_set.m_Kind == VALUE_BOOL && already_set.m_Real == 0)
-						{
-							// Set the gift preference.
-							RValue set = 0.0;
-							g_ModuleInterface->CallBuiltin("struct_set", { inner, item_name_to_id_map[gifts_to_unlock[npc_name][i]], set });
-
-							if (!silent)
-							{
-								// Display the notification.
-								gift_preference_npc_name = npc_name;
-								gift_preference_internal_item_name = gifts_to_unlock[npc_name][i];
-								DisplayNotification(npc, npc, GIFT_PREFERENCE_UNLOCKED_LOCALIZATION_KEY);
-							}
-						}
-					}
-
-					if(!unlock_all_gift_preferences)
-						gifts_to_unlock[npc_name].clear();
-				}
+				YYTK::RValue* entry = nullptr;
+				MMAPI::Internal::module_interface->GetArrayEntry(buf, i, entry);
+				if (!entry || !MMAPI::Engine::IsNumeric(*entry)) continue;
+				YYTK::RValue name = MMAPI::Item::GetInternalName(static_cast<int>(entry->ToInt64()));
+				if (name.m_Kind == YYTK::VALUE_STRING)
+					gifts_to_unlock[npc_name].push_back(name.ToString());
 			}
-		}
+		};
+
+		append_buffer(liked);
+		append_buffer(loved);
 	}
 }
 
-void AutomaticallyUnlockAllGifts()
+// Parses a custom-mod dialogue key of the form:
+//   conversations/mods/<modname>/gift_hint_<n>/<npc>/<item>/[gift_hint_<n>/<npc>/<item>/]...<conversation>
+// Each (gift_hint_*, npc, item) triple queues an item for unlock on the named NPC.
+void ParseCustomModDialogue(CInstance* self, const std::string& dialogue_key)
 {
-	for (std::string npc_name : ACTIVE_NPC_LIST)
-	{
-		for (int item_id : npc_name_to_liked_gifts_map[npc_name])
-			gifts_to_unlock[npc_name].push_back(item_id_to_name_map[item_id]);
-		for (int item_id : npc_name_to_loved_gifts_map[npc_name])
-			gifts_to_unlock[npc_name].push_back(item_id_to_name_map[item_id]);
-	}
-}
-
-void ParseCustomModDialogue(CInstance* Self, CInstance* Other, std::string dialogue_key)
-{
-	std::string token;
-	std::istringstream iss(dialogue_key);
 	std::vector<std::string> tokens;
-
-	// Split the input string by '/'
-	while (std::getline(iss, token, '/')) {
+	std::stringstream ss(dialogue_key);
+	std::string token;
+	while (std::getline(ss, token, '/'))
 		tokens.push_back(token);
-	}
 
-	if (tokens.size() < 7 || tokens[0] != "conversations" || tokens[1] != "mods") {
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Invalid custom mod dialogue key detected: %s", MOD_NAME, VERSION, dialogue_key.c_str());
+	if (tokens.size() < 7 || tokens[0] != "conversations" || tokens[1] != "mods")
+	{
+		MMAPI::Log::Error("Invalid custom mod dialogue key: %s", dialogue_key.c_str());
 		return;
 	}
 
-	//std::string mod_name = tokens[2];
-
-	// Gift hint groups are found in the tokens from index 3 up to tokens.size() - 2.
-	size_t gift_hint_token_count = tokens.size() - 4; // Exclude the 3 initial tokens and the last conversation token
-	if (gift_hint_token_count % 3 != 0) {
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Invalid custom mod dialogue key detected: %s", MOD_NAME, VERSION, dialogue_key.c_str());
+	const size_t triple_token_count = tokens.size() - 4;
+	if (triple_token_count % 3 != 0)
+	{
+		MMAPI::Log::Error("Invalid custom mod dialogue key: %s", dialogue_key.c_str());
 		return;
 	}
 
-	// Iterate over each group of gift hint tokens.
-	for (size_t i = 3; i < tokens.size() - 1; i += 3) {
-		// Validate that the first token of the group starts with "gift_hint_"
-		if (tokens[i].find("gift_hint_") != 0) {
-			g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Invalid custom mod dialogue key detected: %s", MOD_NAME, VERSION, dialogue_key.c_str());
+	// Each triple is (gift_hint_<n>, npc, item).
+	for (size_t i = 3; i < tokens.size() - 1; i += 3)
+	{
+		if (tokens[i].rfind("gift_hint_", 0) != 0)
+		{
+			MMAPI::Log::Error("Invalid custom mod dialogue key: %s", dialogue_key.c_str());
 			return;
 		}
 
-		std::string npc_name = tokens[i + 1];
-		if (gifts_to_unlock.count(npc_name) <= 0)
-			gifts_to_unlock[npc_name] = {};
+		const std::string& npc_name  = tokens[i + 1];
+		const std::string& item_name = tokens[i + 2];
 
-		std::string item_name = tokens[i + 2];
-		if (std::find(gifts_to_unlock[npc_name].begin(), gifts_to_unlock[npc_name].end(), item_name) == gifts_to_unlock[npc_name].end())
-			gifts_to_unlock[npc_name].push_back(item_name);
+		auto& list = gifts_to_unlock[npc_name];
+		if (std::find(list.begin(), list.end(), item_name) == list.end())
+			list.push_back(item_name);
 
-		// Display the notification.
-		gift_preference_npc_name = npc_name;
-		gift_preference_internal_item_name = item_name;
-		DisplayNotification(Self, Other, GIFT_PREFERENCE_DETECTED_LOCALIZATION_KEY);
+		DisplayNotification(self, GIFT_PREFERENCE_DETECTED_LOCALIZATION_KEY, npc_name, item_name);
 	}
 }
 
-RValue GetLocalizedString(CInstance* Self, CInstance* Other, std::string localization_key)
+// Sets `me.gift_flag = true` / `me.talk_flag = true` on the live NPC instance to bypass the daily
+// per-NPC interaction limit. The flags are normally cleared at end-of-day.
+void BypassDailyLimits(CInstance* self)
 {
-	CScript* gml_script_get_localizer = nullptr;
-	g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_GET_LOCALIZER,
-		(PVOID*)&gml_script_get_localizer
-	);
+	if (!self) return;
+	YYTK::RValue self_rv = self->ToRValue();
+	if (!MMAPI::Engine::StructVariableExists(self_rv, "me")) return;
+	YYTK::RValue me = self_rv.GetMember("me");
 
-	RValue result;
-	RValue input = RValue(localization_key);
-	RValue* input_ptr = &input;
-	gml_script_get_localizer->m_Functions->m_ScriptFunction(
-		Self,
-		Other,
-		result,
-		1,
-		{ &input_ptr }
-	);
+	if (config.disable_daily_gift_limit && MMAPI::Engine::StructVariableExists(me, "gift_flag"))
+		MMAPI::Engine::StructVariableSet(me, "gift_flag", true);
 
-	return result;
+	if (config.disable_daily_talk_limit && MMAPI::Engine::StructVariableExists(me, "talk_flag"))
+		MMAPI::Engine::StructVariableSet(me, "talk_flag", true);
 }
 
-void DisableDailyGiftLimit(CInstance* self)
+// Derives the NPC's internal name from its object name (e.g. "obj_adeline" → "adeline"). Returns
+// empty if the object name doesn't have the expected prefix or is malformed.
+std::string NpcNameFromObject(CInstance* self)
 {
-	if (StructVariableExists(self, "me"))
-	{
-		RValue me = *self->GetRefMember("me");
-		if (StructVariableExists(me, "gift_flag"))
-			StructVariableSet(me, "gift_flag", true);
-	}
+	if (!self || !self->m_Object || !self->m_Object->m_Name) return {};
+	std::string_view name = self->m_Object->m_Name;
+	constexpr std::string_view prefix = "obj_";
+	if (name.size() <= prefix.size() || name.substr(0, prefix.size()) != prefix) return {};
+	return std::string(name.substr(prefix.size()));
 }
 
-void DisableDailyTalkLimit(CInstance* self)
+// ----- Hooks -----
+
+void OnSetupMainScreen()
 {
-	if (StructVariableExists(self, "me"))
-	{
-		RValue me = *self->GetRefMember("me");
-		if (StructVariableExists(me, "talk_flag"))
-			StructVariableSet(me, "talk_flag", true);
-	}
-}
-
-void ObjectCallback(
-	IN FWCodeEvent& CodeEvent
-)
-{
-	auto& [self, other, code, argc, argv] = CodeEvent.Arguments();
-
-	if (!self)
-		return;
-
-	if (!self->m_Object)
-		return;
-
-	if (disable_daily_gift_limit)
-		DisableDailyGiftLimit(self);
-
-	if (disable_daily_talk_limit)
-		DisableDailyTalkLimit(self);
-
-	if (gifts_to_unlock.size() > 0 && !GameIsPaused())
-	{
-		if (gifts_to_unlock.contains(ADELINE) && strstr(self->m_Object->m_Name, "obj_adeline"))
-			UnlockGifts(self, ADELINE, unlock_all_gift_preferences);
-		if (gifts_to_unlock.contains(BALOR) && strstr(self->m_Object->m_Name, "obj_balor"))
-			UnlockGifts(self, BALOR, unlock_all_gift_preferences);
-		if (gifts_to_unlock.contains(CALDARUS) && strstr(self->m_Object->m_Name, "obj_caldarus"))
-			UnlockGifts(self, CALDARUS, unlock_all_gift_preferences);
-		if (gifts_to_unlock.contains(CELINE) && strstr(self->m_Object->m_Name, "obj_celine"))
-			UnlockGifts(self, CELINE, unlock_all_gift_preferences);
-		if (gifts_to_unlock.contains(DARCY) && strstr(self->m_Object->m_Name, "obj_darcy"))
-			UnlockGifts(self, DARCY, unlock_all_gift_preferences);
-		if (gifts_to_unlock.contains(DELL) && strstr(self->m_Object->m_Name, "obj_dell"))
-			UnlockGifts(self, DELL, unlock_all_gift_preferences);
-		if (gifts_to_unlock.contains(DOZY) && strstr(self->m_Object->m_Name, "obj_dozy"))
-			UnlockGifts(self, DOZY, unlock_all_gift_preferences);
-		if (gifts_to_unlock.contains(EILAND) && strstr(self->m_Object->m_Name, "obj_eiland"))
-			UnlockGifts(self, EILAND, unlock_all_gift_preferences);
-		if (gifts_to_unlock.contains(ELSIE) && strstr(self->m_Object->m_Name, "obj_elsie"))
-			UnlockGifts(self, ELSIE, unlock_all_gift_preferences);
-		if (gifts_to_unlock.contains(ERROL) && strstr(self->m_Object->m_Name, "obj_errol"))
-			UnlockGifts(self, ERROL, unlock_all_gift_preferences);
-		if (gifts_to_unlock.contains(HAYDEN) && strstr(self->m_Object->m_Name, "obj_hayden"))
-			UnlockGifts(self, HAYDEN, unlock_all_gift_preferences);
-		if (gifts_to_unlock.contains(HEMLOCK) && strstr(self->m_Object->m_Name, "obj_hemlock"))
-			UnlockGifts(self, HEMLOCK, unlock_all_gift_preferences);
-		if (gifts_to_unlock.contains(HENRIETTA) && strstr(self->m_Object->m_Name, "obj_henrietta"))
-			UnlockGifts(self, HENRIETTA, unlock_all_gift_preferences);
-		if (gifts_to_unlock.contains(HOLT) && strstr(self->m_Object->m_Name, "obj_holt"))
-			UnlockGifts(self, HOLT, unlock_all_gift_preferences);
-		if (gifts_to_unlock.contains(JOSEPHINE) && strstr(self->m_Object->m_Name, "obj_josephine"))
-			UnlockGifts(self, JOSEPHINE, unlock_all_gift_preferences);
-		if (gifts_to_unlock.contains(JUNIPER) && strstr(self->m_Object->m_Name, "obj_juniper"))
-			UnlockGifts(self, JUNIPER, unlock_all_gift_preferences);
-		if (gifts_to_unlock.contains(LANDEN) && strstr(self->m_Object->m_Name, "obj_landen"))
-			UnlockGifts(self, LANDEN, unlock_all_gift_preferences);
-		if (gifts_to_unlock.contains(LOUIS) && strstr(self->m_Object->m_Name, "obj_louis"))
-			UnlockGifts(self, LOUIS, unlock_all_gift_preferences);
-		if (gifts_to_unlock.contains(LUC) && strstr(self->m_Object->m_Name, "obj_luc"))
-			UnlockGifts(self, LUC, unlock_all_gift_preferences);
-		if (gifts_to_unlock.contains(MAPLE) && strstr(self->m_Object->m_Name, "obj_maple"))
-			UnlockGifts(self, MAPLE, unlock_all_gift_preferences);
-		if (gifts_to_unlock.contains(MARCH) && strstr(self->m_Object->m_Name, "obj_march"))
-			UnlockGifts(self, MARCH, unlock_all_gift_preferences);
-		if (gifts_to_unlock.contains(MERRI) && strstr(self->m_Object->m_Name, "obj_merri"))
-			UnlockGifts(self, MERRI, unlock_all_gift_preferences);
-		if (gifts_to_unlock.contains(NORA) && strstr(self->m_Object->m_Name, "obj_nora"))
-			UnlockGifts(self, NORA, unlock_all_gift_preferences);
-		if (gifts_to_unlock.contains(OLRIC) && strstr(self->m_Object->m_Name, "obj_olric"))
-			UnlockGifts(self, OLRIC, unlock_all_gift_preferences);
-		if (gifts_to_unlock.contains(REINA) && strstr(self->m_Object->m_Name, "obj_reina"))
-			UnlockGifts(self, REINA, unlock_all_gift_preferences);
-		if (gifts_to_unlock.contains(RYIS) && strstr(self->m_Object->m_Name, "obj_ryis"))
-			UnlockGifts(self, RYIS, unlock_all_gift_preferences);
-		if (gifts_to_unlock.contains(SERIDIA) && strstr(self->m_Object->m_Name, "obj_seridia"))
-			UnlockGifts(self, SERIDIA, unlock_all_gift_preferences);
-		//if (gifts_to_unlock.contains(STILLWELL) && strstr(self->m_Object->m_Name, "obj_stillwell"))
-		//	UnlockGifts(self, STILLWELL, unlock_all_gift_preferences);
-		if (gifts_to_unlock.contains(TALIFERRO) && strstr(self->m_Object->m_Name, "obj_taliferro"))
-			UnlockGifts(self, TALIFERRO, unlock_all_gift_preferences);
-		if (gifts_to_unlock.contains(TERITHIA) && strstr(self->m_Object->m_Name, "obj_terithia"))
-			UnlockGifts(self, TERITHIA, unlock_all_gift_preferences);
-		if (gifts_to_unlock.contains(VALEN) && strstr(self->m_Object->m_Name, "obj_valen"))
-			UnlockGifts(self, VALEN, unlock_all_gift_preferences);
-		if (gifts_to_unlock.contains(VERA) && strstr(self->m_Object->m_Name, "obj_vera"))
-			UnlockGifts(self, VERA, unlock_all_gift_preferences);
-		if (gifts_to_unlock.contains(WHEEDLE) && strstr(self->m_Object->m_Name, "obj_wheedle"))
-			UnlockGifts(self, WHEEDLE, unlock_all_gift_preferences);
-		//if (gifts_to_unlock.contains(ZOREL) && strstr(self->m_Object->m_Name, "obj_zorel"))
-		//	UnlockGifts(self, ZOREL, unlock_all_gift_preferences);
-	}
-}
-
-RValue& GmlScriptCraftingMenuInitializeCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_CRAFTING_MENU_INITIALIZE));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	crafting_menu_open = true;
-	return Result;
-}
-
-RValue& GmlScriptCraftingMenuCloseCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_CRAFTING_MENU_CLOSE));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	crafting_menu_open = false;
-	return Result;
-}
-
-RValue& GmlScriptGetDisplayNameCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_LIVE_ITEM_GET_DISPLAY_NAME));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	localized_item_name = Result.ToString();
-	return Result;
-}
-
-RValue& GmlScriptGetDisplayDescriptionCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_LIVE_ITEM_GET_DISPLAY_DESCRIPTION));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	if (show_gift_preferences_on_item_tooltips && !crafting_menu_open)
-	{
-		if (localized_item_name.size() > 0)
-		{
-			if (localized_item_name_to_internal_item_name_map.count(localized_item_name) > 0)
-			{
-				int item_id = item_name_to_id_map[localized_item_name_to_internal_item_name_map[localized_item_name]];
-
-				std::vector<std::string> npcs_who_like_the_gift = {};
-				for (const auto& map_entry : npc_name_to_liked_gifts_map)
-				{
-					const auto it = std::find(map_entry.second.begin(), map_entry.second.end(), item_id);
-					if (it != map_entry.second.end())
-						npcs_who_like_the_gift.push_back(map_entry.first);
-				}
-
-				std::string liked_by_string = "";
-				if (npcs_who_like_the_gift.size() > 0)
-				{
-					liked_by_string += "Liked By: ";
-					for (int i = 0; i < npcs_who_like_the_gift.size(); i++)
-					{
-						liked_by_string += npcs_who_like_the_gift[i];
-						if (i < npcs_who_like_the_gift.size() - 1)
-							liked_by_string += ", ";
-					}
-					liked_by_string += "\n\n";
-				}
-
-				std::vector<std::string> npcs_who_love_the_gift = {};
-				for (const auto& map_entry : npc_name_to_loved_gifts_map)
-				{
-					const auto it = std::find(map_entry.second.begin(), map_entry.second.end(), item_id);
-					if (it != map_entry.second.end())
-						npcs_who_love_the_gift.push_back(map_entry.first);
-				}
-
-				std::string loved_by_string = "";
-				if (npcs_who_love_the_gift.size() > 0)
-				{
-					loved_by_string += "Loved By: ";
-					for (int i = 0; i < npcs_who_love_the_gift.size(); i++)
-					{
-						loved_by_string += npcs_who_love_the_gift[i];
-						if (i < npcs_who_love_the_gift.size() - 1)
-							loved_by_string += ", ";
-					}
-					loved_by_string += "\n\n";
-				}
-
-				if (liked_by_string.size() > 0)
-					Result = RValue(liked_by_string + Result.ToString());
-				if (loved_by_string.size() > 0)
-					Result = RValue(loved_by_string + Result.ToString());
-			}
-		}
-	}
-
-	return Result;
-}
-
-RValue& GmlScriptTextboxTranslateCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	// Load localized item names.
-	if (localize_items)
-	{
-		localize_items = false;
-
-		// Load items.
-		CInstance* global_instance = nullptr;
-		g_ModuleInterface->GetGlobalInstance(&global_instance);
-
-		RValue __item_data = *global_instance->GetRefMember("__item_data");
-
-		size_t array_length;
-		g_ModuleInterface->GetArraySize(__item_data, array_length);
-
-		for (size_t i = 0; i < array_length; i++)
-		{
-			RValue* array_element;
-			g_ModuleInterface->GetArrayEntry(__item_data, i, array_element);
-
-			RValue name_key = *array_element->GetRefMember("name_key");
-			if (name_key.m_Kind != VALUE_NULL && name_key.m_Kind != VALUE_UNDEFINED && name_key.m_Kind != VALUE_UNSET)
-			{
-				RValue recipe_key = *array_element->GetRefMember("recipe_key");
-				RValue localized_name = GetLocalizedString(Self, Other, name_key.ToString());
-				localized_item_name_to_internal_item_name_map[localized_name.ToString()] = recipe_key.ToString();
-				internal_item_name_to_localized_item_name_map[recipe_key.ToString()] = localized_name.ToString();
-			}
-		}
-	}
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_LOCALIZER_GET));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	if (ArgumentCount == 1 && Arguments[0]->m_Kind == VALUE_STRING)
-	{
-		std::string localization_key = Arguments[0]->ToString();
-		if (localization_key.compare(GIFT_PREFERENCE_DETECTED_LOCALIZATION_KEY) == 0 || localization_key.compare(GIFT_PREFERENCE_UNLOCKED_LOCALIZATION_KEY) == 0)
-		{
-			std::string result_str = Result.ToString();
-
-			// Replace the <ITEM> placeholder text.
-			size_t item_placeholder_index = result_str.find(ITEM_PLACEHOLDER_TEXT);
-			if (item_placeholder_index != std::string::npos) {
-				result_str.replace(item_placeholder_index, ITEM_PLACEHOLDER_TEXT.length(), internal_item_name_to_localized_item_name_map[gift_preference_internal_item_name]);
-			}
-
-			// Replace the <NPC> placeholder text.
-			size_t npc_placeholder_index = result_str.find(NPC_PLACEHOLDER_TEXT);
-			if (npc_placeholder_index != std::string::npos) {
-				std::string npc_name = gift_preference_npc_name;
-				npc_name[0] = std::toupper(npc_name[0]);
-				result_str.replace(npc_placeholder_index, NPC_PLACEHOLDER_TEXT.length(), npc_name);
-			}
-
-			Result = RValue(result_str);
-		}
-	}
-	
-	return Result;
-}
-
-RValue& GmlScriptSetupMainScreenCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	gifts_to_unlock = {}; // { { EILAND, {"pumpkin_pie", "apple_pie"}} };
-	localized_item_name = "";
-	gift_preference_npc_name = "";
-	gift_preference_internal_item_name = "";
+	gifts_to_unlock.clear();
 	crafting_menu_open = false;
 
-	if (load_on_start)
+	if (!startup_loaded)
 	{
-		CreateOrLoadConfigFile();
-		LoadNpcData();
-		LoadItemData(Self, Other);
-
-		load_on_start = false;
+		LoadOrCreateConfigFile();
+		BuildItemNameCache();
+		startup_loaded = true;
 	}
 
-	if (unlock_all_gift_preferences)
-		AutomaticallyUnlockAllGifts();
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_SETUP_MAIN_SCREEN));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
+	if (config.unlock_all_gift_preferences)
+		QueueAllGiftPreferences();
 }
 
-RValue& GmlScriptTranslateCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
+void OnAfterCraftingMenuOpen()  { crafting_menu_open = true;  }
+void OnAfterCraftingMenuClose() { crafting_menu_open = false; }
+
+void OnNpcTick(CInstance* self)
 {
-	if (!unlock_all_gift_preferences)
-	{
-		std::string dialog_string = Arguments[0]->ToString();
-		std::string dialog_string_lowercase = Arguments[0]->ToString();
-		std::transform(dialog_string_lowercase.begin(), dialog_string_lowercase.end(), dialog_string_lowercase.begin(), [](unsigned char c) { return std::tolower(c); });
-		if (dialog_string_lowercase.find("conversations/mods") != std::string::npos && dialog_string_lowercase.find("gift_hint_") != std::string::npos)
+	BypassDailyLimits(self);
+
+	if (gifts_to_unlock.empty()) return;
+
+	std::string npc_name = NpcNameFromObject(self);
+	if (npc_name.empty()) return;
+	if (!gifts_to_unlock.contains(npc_name)) return;
+
+	UnlockGiftsForNpc(self, npc_name, config.unlock_all_gift_preferences);
+}
+
+void OnAfterGetDisplayDescription(MMAPI::Item::GetDisplayDescriptionContext& ctx)
+{
+	if (!config.show_gift_preferences_on_item_tooltips) return;
+	if (crafting_menu_open) return;
+	if (ctx.GetItemId() < 0) return;
+
+	int item_id = ctx.GetItemId();
+
+	// Collect "Liked By" / "Loved By" NPC lists by scanning each NPC's gift buffers.
+	std::vector<std::string> liked_by;
+	std::vector<std::string> loved_by;
+	MMAPI::NPC::ForEachId([&](MMAPI::NPC::Ids npc) {
+		std::string name = CapitalizeFirst(MMAPI::NPC::GetInternalName(npc));
+		if (name.empty()) return;
+		if (MMAPI::NPC::LikesGift(npc, item_id)) liked_by.push_back(name);
+		if (MMAPI::NPC::LovesGift(npc, item_id)) loved_by.push_back(name);
+	});
+
+	auto join = [](const std::vector<std::string>& names) {
+		std::string out;
+		for (size_t i = 0; i < names.size(); i++)
 		{
-			ParseCustomModDialogue(Self, Other, dialog_string);
+			out += names[i];
+			if (i + 1 < names.size()) out += ", ";
 		}
-		else if (GIFT_DIALOG_MAP.count(dialog_string) > 0)
+		return out;
+	};
+
+	std::string description(ctx.GetResolved());
+	// Apply in reverse order so the final result is "Loved By: ...\n\nLiked By: ...\n\n<description>"
+	// — matches the original mod's prepend ordering.
+	if (!liked_by.empty()) description = "Liked By: " + join(liked_by) + "\n\n" + description;
+	if (!loved_by.empty()) description = "Loved By: " + join(loved_by) + "\n\n" + description;
+	ctx.SetResolved(std::move(description));
+}
+
+void OnAfterLocalizedString(MMAPI::Text::AfterLocalizedStringContext& ctx)
+{
+	std::string_view key = ctx.GetKey();
+	if (key != GIFT_PREFERENCE_DETECTED_LOCALIZATION_KEY && key != GIFT_PREFERENCE_UNLOCKED_LOCALIZATION_KEY) return;
+	if (gift_preference_npc_name.empty() && gift_preference_internal_item_name.empty()) return;
+
+	std::string result(ctx.GetResolved());
+
+	// Replace <ITEM> with the localized item name (e.g. "Lemon Pie").
+	if (auto pos = result.find(ITEM_PLACEHOLDER_TEXT); pos != std::string::npos)
+	{
+		std::string localized_item;
+		auto cache_it = item_name_to_id_cache.find(gift_preference_internal_item_name);
+		if (cache_it != item_name_to_id_cache.end())
 		{
-			auto range = GIFT_DIALOG_MAP.equal_range(dialog_string);
-			for (auto it = range.first; it != range.second; ++it)
-			{
-				std::vector<std::string> gifts = it->second; // { REINA, "coffee", "iced_coffee"}}
-				std::string npc_name = gifts[0];
+			YYTK::RValue rv = MMAPI::Item::GetLocalizedName(cache_it->second);
+			if (rv.m_Kind == YYTK::VALUE_STRING)
+				localized_item = rv.ToString();
+		}
+		result.replace(pos, ITEM_PLACEHOLDER_TEXT.length(), localized_item.empty() ? gift_preference_internal_item_name : localized_item);
+	}
 
-				if (gifts_to_unlock.count(npc_name) <= 0)
-					gifts_to_unlock[npc_name] = {};
+	// Replace <NPC> with the capitalized NPC name (e.g. "adeline" → "Adeline").
+	if (auto pos = result.find(NPC_PLACEHOLDER_TEXT); pos != std::string::npos)
+		result.replace(pos, NPC_PLACEHOLDER_TEXT.length(), CapitalizeFirst(gift_preference_npc_name));
 
-				for (int i = 1; i < gifts.size(); i++)
-				{
-					gifts_to_unlock[npc_name].push_back(gifts[i]);
+	ctx.SetResolved(std::move(result));
+}
 
-					// Display the notification.
-					gift_preference_npc_name = npc_name;
-					gift_preference_internal_item_name = gifts[i];
-					DisplayNotification(Self, Other, GIFT_PREFERENCE_DETECTED_LOCALIZATION_KEY);
-				}
-			}
+void OnBeforeTextboxSay(MMAPI::Text::TextboxSayContext& ctx)
+{
+	if (config.unlock_all_gift_preferences) return;  // Everything's already queued; no per-line work.
+
+	std::string_view key = ctx.GetKey();
+
+	// Custom mod gift hint format: "conversations/mods/<modname>/gift_hint_<n>/<npc>/<item>/..."
+	std::string lower_key(key);
+	std::transform(lower_key.begin(), lower_key.end(), lower_key.begin(),
+		[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+	if (lower_key.find("conversations/mods") != std::string::npos
+	    && lower_key.find("gift_hint_") != std::string::npos)
+	{
+		ParseCustomModDialogue(nullptr, std::string(key));
+		return;
+	}
+
+	// Built-in dialogue map lookup (multimap — one key can have multiple gift hints).
+	auto range = GIFT_DIALOG_MAP.equal_range(std::string(key));
+	if (range.first == range.second) return;
+
+	for (auto it = range.first; it != range.second; ++it)
+	{
+		const std::vector<std::string>& entry = it->second;
+		if (entry.empty()) continue;
+
+		const std::string& npc_name = entry[0];
+		for (size_t i = 1; i < entry.size(); i++)
+		{
+			const std::string& item_name = entry[i];
+			auto& list = gifts_to_unlock[npc_name];
+			list.push_back(item_name);  // Original allowed duplicates here — preserved.
+			DisplayNotification(nullptr, GIFT_PREFERENCE_DETECTED_LOCALIZATION_KEY, npc_name, item_name);
 		}
 	}
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_TEXTBOX_SAY));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
 }
 
-void CreateHookGmlScriptCraftingMenuInitialize(AurieStatus& status)
+EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path& ModulePath)
 {
-	CScript* gml_script_get_display_name = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_CRAFTING_MENU_INITIALIZE,
-		(PVOID*)&gml_script_get_display_name
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_CRAFTING_MENU_INITIALIZE);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_CRAFTING_MENU_INITIALIZE,
-		gml_script_get_display_name->m_Functions->m_ScriptFunction,
-		GmlScriptCraftingMenuInitializeCallback,
-		nullptr
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_CRAFTING_MENU_INITIALIZE);
-	}
-}
-
-void CreateHookGmlScriptCraftingMenuClose(AurieStatus& status)
-{
-	CScript* gml_script_get_display_name = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_CRAFTING_MENU_CLOSE,
-		(PVOID*)&gml_script_get_display_name
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_CRAFTING_MENU_CLOSE);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_CRAFTING_MENU_CLOSE,
-		gml_script_get_display_name->m_Functions->m_ScriptFunction,
-		GmlScriptCraftingMenuCloseCallback,
-		nullptr
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_CRAFTING_MENU_CLOSE);
-	}
-}
-
-void CreateHookGmlScriptGetDisplayName(AurieStatus& status)
-{
-	CScript* gml_script_get_display_name = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_LIVE_ITEM_GET_DISPLAY_NAME,
-		(PVOID*)&gml_script_get_display_name
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_LIVE_ITEM_GET_DISPLAY_NAME);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_LIVE_ITEM_GET_DISPLAY_NAME,
-		gml_script_get_display_name->m_Functions->m_ScriptFunction,
-		GmlScriptGetDisplayNameCallback,
-		nullptr
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_LIVE_ITEM_GET_DISPLAY_NAME);
-	}
-}
-
-void CreateHookGmlScriptGetDisplayDescription(AurieStatus& status)
-{
-	CScript* gml_script_get_display_description = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_LIVE_ITEM_GET_DISPLAY_DESCRIPTION,
-		(PVOID*)&gml_script_get_display_description
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_LIVE_ITEM_GET_DISPLAY_DESCRIPTION);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_LIVE_ITEM_GET_DISPLAY_DESCRIPTION,
-		gml_script_get_display_description->m_Functions->m_ScriptFunction,
-		GmlScriptGetDisplayDescriptionCallback,
-		nullptr
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_LIVE_ITEM_GET_DISPLAY_DESCRIPTION);
-	}
-}
-
-void CreateHookGmlScriptTextboxTranslate(AurieStatus& status)
-{
-	CScript* gml_script_textbox_translate = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_GET_LOCALIZER,
-		(PVOID*)&gml_script_textbox_translate
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_LOCALIZER);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_GET_LOCALIZER,
-		gml_script_textbox_translate->m_Functions->m_ScriptFunction,
-		GmlScriptTextboxTranslateCallback,
-		nullptr
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_LOCALIZER);
-	}
-}
-
-void CreateHookGmlScriptSetupMainScreen(AurieStatus& status)
-{
-	CScript* gml_script_setup_main_screen = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_SETUP_MAIN_SCREEN,
-		(PVOID*)&gml_script_setup_main_screen
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SETUP_MAIN_SCREEN);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_SETUP_MAIN_SCREEN,
-		gml_script_setup_main_screen->m_Functions->m_ScriptFunction,
-		GmlScriptSetupMainScreenCallback,
-		nullptr
-	);
-
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SETUP_MAIN_SCREEN);
-	}
-}
-
-void CreateHookGmlScriptTranslate(AurieStatus& status)
-{
-	CScript* gml_script_translate = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_TEXTBOX_SAY,
-		(PVOID*)&gml_script_translate
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_TEXTBOX_SAY);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_TEXTBOX_SAY,
-		gml_script_translate->m_Functions->m_ScriptFunction,
-		GmlScriptTranslateCallback,
-		nullptr
-	);
-
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_TEXTBOX_SAY);
-	}
-}
-
-void CreateHookEventObject(AurieStatus& status)
-{
-	status = g_ModuleInterface->CreateCallback(
-		g_ArSelfModule,
-		EVENT_OBJECT_CALL,
-		ObjectCallback,
-		0
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook EVENT_OBJECT_CALL!", MOD_NAME, VERSION);
-	}
-}
-
-EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path& ModulePath) {
 	UNREFERENCED_PARAMETER(ModulePath);
 
-	AurieStatus status = AURIE_SUCCESS;
-	
-	status = ObGetInterface(
-		"YYTK_Main", 
-		(AurieInterfaceBase*&)(g_ModuleInterface)
-	);
-
+	YYTKInterface* module_interface = nullptr;
+	AurieStatus status = ObGetInterface("YYTK_Main", (AurieInterfaceBase*&)module_interface);
 	if (!AurieSuccess(status))
 		return AURIE_MODULE_DEPENDENCY_NOT_RESOLVED;
 
-	g_ModuleInterface->Print(CM_LIGHTAQUA, "[%s %s] - Plugin starting...", MOD_NAME, VERSION);
+	module_interface->Print(CM_LIGHTAQUA, "[%s %s] - Plugin starting...", MOD_NAME, VERSION);
 
-	CreateHookEventObject(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
+	CInstance* global_instance = nullptr;
+	module_interface->GetGlobalInstance(&global_instance);
+	MMAPI::Initialize(module_interface, global_instance, g_ArSelfModule, MOD_NAME, VERSION);
 
-	CreateHookGmlScriptTranslate(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
+	MMAPI::Game::Enable();
+	MMAPI::Item::Enable();
+	MMAPI::NPC::Enable();
+	MMAPI::Text::Enable();
 
-	CreateHookGmlScriptSetupMainScreen(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
+	MMAPI::Game::Hooks::BeforeSetupMainScreen(OnSetupMainScreen);
+	MMAPI::Game::Hooks::AfterCraftingMenuOpen(OnAfterCraftingMenuOpen);
+	MMAPI::Game::Hooks::AfterCraftingMenuClose(OnAfterCraftingMenuClose);
+	MMAPI::Item::Hooks::AfterGetDisplayDescription(OnAfterGetDisplayDescription);
+	MMAPI::Text::Hooks::AfterLocalizedString(OnAfterLocalizedString);
+	MMAPI::Text::Hooks::BeforeTextboxSay(OnBeforeTextboxSay);
 
-	CreateHookGmlScriptTextboxTranslate(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
+	// Register the same OnNpcTick callback for every NPC's obj_<name>. Each call uses a unique
+	// object name (the map key) so the registrations don't collide on the AlreadyRegistered check.
+	using O = MMAPI::Instance::Objects;
+	constexpr O npc_objects[] = {
+		O::Adeline, O::Balor, O::Caldarus, O::Celine, O::Darcy, O::Dell, O::Dozy, O::Eiland,
+		O::Elsie, O::Errol, O::Hayden, O::Hemlock, O::Henrietta, O::Holt, O::Josephine,
+		O::Juniper, O::Landen, O::Louis, O::Luc, O::Maple, O::March, O::Merri, O::Nora,
+		O::Olric, O::Reina, O::Ryis, O::Seridia, O::Taliferro, O::Terithia, O::Valen, O::Vera, O::Wheedle,
+	};
+	for (auto o : npc_objects)
+		MMAPI::Instance::Hooks::OnObjectCall(o, OnNpcTick);
 
-	CreateHookGmlScriptGetDisplayDescription(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	CreateHookGmlScriptGetDisplayName(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	CreateHookGmlScriptCraftingMenuClose(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	CreateHookGmlScriptCraftingMenuInitialize(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Plugin started!", MOD_NAME, VERSION);
+	MMAPI::Log::Info("Plugin started!");
 	return AURIE_SUCCESS;
 }
