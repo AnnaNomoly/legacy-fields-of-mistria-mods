@@ -5,6 +5,13 @@
 #include "Log.hpp"
 #include "Status.hpp"
 
+#include <map>
+#include <optional>
+#include <string>
+#include <string_view>
+
+#include <Windows.h>  // VK_* virtual-key constants used by the keybind name → code maps.
+
 #include "YYToolkit/YYTK_Shared.hpp"
 
 namespace MMAPI::Input
@@ -88,9 +95,71 @@ namespace MMAPI::Input
 		void SetAction(MMAPI::Input::Actions action) { m_action_id = static_cast<int>(action); }
 	};
 
+	/// A parsed, runtime-ready binding for a keyboard key or gamepad button — produced by
+	/// `TryParseKeybind` and consumed by `IsKeybindPressed`. Mods that take a user-configurable hotkey
+	/// (e.g. a JSON config field "activation_button": "F10") should:
+	///   1. Parse once at startup: `auto kb = MMAPI::Input::TryParseKeybind(name);`
+	///   2. Check per-frame: `if (kb && MMAPI::Input::IsKeybindPressed(*kb)) { ... }`
+	/// The struct is opaque-ish: the `code` and `is_gamepad` fields are exposed for inspection but
+	/// most callers only need IsValid() + IsKeybindPressed().
+	struct Keybind
+	{
+		int  code       = -1;     ///< Either a Win32 VK_* code (keyboard) or a 0x80xx gamepad-button code.
+		bool is_gamepad = false;  ///< When true, `code` is a gamepad button; otherwise a keyboard VK_ code.
+
+		/// Returns true if this keybind was resolved to a known key/button.
+		bool IsValid() const { return code >= 0; }
+	};
+
 	namespace Internal
 	{
 		inline bool enabled = false;
+
+		/// Canonical mapping of keyboard-keybind names (as used in user config files) to Win32 VK_*
+		/// codes. Names are uppercase and use underscores for compound keys ("PAGE_UP", "NUMPAD_0").
+		/// Lazily-initialized singleton.
+		inline const std::map<std::string, int>& KeyboardNameToVk()
+		{
+			static const std::map<std::string, int> m = {
+				{ "F1", VK_F1 }, { "F2", VK_F2 }, { "F3", VK_F3 }, { "F4", VK_F4 },
+				{ "F5", VK_F5 }, { "F6", VK_F6 }, { "F7", VK_F7 }, { "F8", VK_F8 },
+				{ "F9", VK_F9 }, { "F10", VK_F10 }, { "F11", VK_F11 }, { "F12", VK_F12 },
+				{ "NUMPAD_0", VK_NUMPAD0 }, { "NUMPAD_1", VK_NUMPAD1 }, { "NUMPAD_2", VK_NUMPAD2 },
+				{ "NUMPAD_3", VK_NUMPAD3 }, { "NUMPAD_4", VK_NUMPAD4 }, { "NUMPAD_5", VK_NUMPAD5 },
+				{ "NUMPAD_6", VK_NUMPAD6 }, { "NUMPAD_7", VK_NUMPAD7 }, { "NUMPAD_8", VK_NUMPAD8 },
+				{ "NUMPAD_9", VK_NUMPAD9 },
+				{ "0", '0' }, { "1", '1' }, { "2", '2' }, { "3", '3' }, { "4", '4' },
+				{ "5", '5' }, { "6", '6' }, { "7", '7' }, { "8", '8' }, { "9", '9' },
+				{ "A", 'A' }, { "B", 'B' }, { "C", 'C' }, { "D", 'D' }, { "E", 'E' },
+				{ "F", 'F' }, { "G", 'G' }, { "H", 'H' }, { "I", 'I' }, { "J", 'J' },
+				{ "K", 'K' }, { "L", 'L' }, { "M", 'M' }, { "N", 'N' }, { "O", 'O' },
+				{ "P", 'P' }, { "Q", 'Q' }, { "R", 'R' }, { "S", 'S' }, { "T", 'T' },
+				{ "U", 'U' }, { "V", 'V' }, { "W", 'W' }, { "X", 'X' }, { "Y", 'Y' },
+				{ "Z", 'Z' },
+				{ "INSERT", VK_INSERT }, { "DELETE", VK_DELETE }, { "HOME", VK_HOME },
+				{ "PAGE_UP", VK_PRIOR }, { "PAGE_DOWN", VK_NEXT }, { "NUM_LOCK", VK_NUMLOCK },
+				{ "SCROLL_LOCK", VK_SCROLL }, { "CAPS_LOCK", VK_CAPITAL }, { "PAUSE_BREAK", VK_PAUSE },
+			};
+			return m;
+		}
+
+		/// Canonical mapping of gamepad-button names to GameMaker gamepad button constants (0x80xx).
+		/// Names are uppercase and use the "GAMEPAD_*" prefix to disambiguate from keyboard names.
+		/// Lazily-initialized singleton.
+		inline const std::map<std::string, int>& GamepadNameToButton()
+		{
+			static const std::map<std::string, int> m = {
+				{ "GAMEPAD_A", 0x8001 }, { "GAMEPAD_B", 0x8002 },
+				{ "GAMEPAD_X", 0x8003 }, { "GAMEPAD_Y", 0x8004 },
+				{ "GAMEPAD_LEFT_SHOULDER",  0x8005 }, { "GAMEPAD_RIGHT_SHOULDER", 0x8006 },
+				{ "GAMEPAD_LEFT_TRIGGER",   0x8007 }, { "GAMEPAD_RIGHT_TRIGGER",  0x8008 },
+				{ "GAMEPAD_SELECT", 0x8009 }, { "GAMEPAD_START", 0x800A },
+				{ "GAMEPAD_LEFT_STICK", 0x800B }, { "GAMEPAD_RIGHT_STICK", 0x800C },
+				{ "GAMEPAD_DPAD_UP",    0x800D }, { "GAMEPAD_DPAD_DOWN",  0x800E },
+				{ "GAMEPAD_DPAD_LEFT",  0x800F }, { "GAMEPAD_DPAD_RIGHT", 0x8010 },
+			};
+			return m;
+		}
 
 		inline constexpr const char* GML_SCRIPT_TAKE_PRESS  = "gml_Script_take_press@Input@Input";
 		inline constexpr const char* GML_SCRIPT_CHECK_VALUE = "gml_Script_check_value@Input@Input";
@@ -215,6 +284,48 @@ namespace MMAPI::Input
 		MMAPI_REQUIRE_ENABLED("Input", false);
 		YYTK::RValue pressed = MMAPI::Internal::module_interface->CallBuiltin("gamepad_button_check_pressed", { gamepad_slot, button });
 		return pressed.ToBoolean();
+	}
+
+	/// Parses a keybind name string (typically from a mod's config file) into a `Keybind` runtime
+	/// representation. Accepts both keyboard names ("F1"-"F12", "A"-"Z", "0"-"9", "NUMPAD_0"-"NUMPAD_9",
+	/// "INSERT", "DELETE", "HOME", "PAGE_UP", "PAGE_DOWN", "NUM_LOCK", "SCROLL_LOCK", "CAPS_LOCK",
+	/// "PAUSE_BREAK") and gamepad names ("GAMEPAD_A", "GAMEPAD_B", "GAMEPAD_X", "GAMEPAD_Y",
+	/// "GAMEPAD_LEFT_SHOULDER", "GAMEPAD_RIGHT_SHOULDER", "GAMEPAD_LEFT_TRIGGER",
+	/// "GAMEPAD_RIGHT_TRIGGER", "GAMEPAD_SELECT", "GAMEPAD_START", "GAMEPAD_LEFT_STICK",
+	/// "GAMEPAD_RIGHT_STICK", "GAMEPAD_DPAD_UP", "GAMEPAD_DPAD_DOWN", "GAMEPAD_DPAD_LEFT",
+	/// "GAMEPAD_DPAD_RIGHT"). Names are case-sensitive (uppercase).
+	/// @param name The keybind name string to parse.
+	/// @return A `Keybind` on success, or `std::nullopt` if `name` doesn't match any known key/button.
+	inline std::optional<Keybind> TryParseKeybind(std::string_view name)
+	{
+		std::string key(name);
+
+		if (auto it = Internal::GamepadNameToButton().find(key); it != Internal::GamepadNameToButton().end())
+			return Keybind{ it->second, true };
+
+		if (auto it = Internal::KeyboardNameToVk().find(key); it != Internal::KeyboardNameToVk().end())
+			return Keybind{ it->second, false };
+
+		return std::nullopt;
+	}
+
+	/// Returns true if the keybind was pressed this frame. Dispatches to `KeyboardCheckPressed` or
+	/// `GamepadButtonCheckPressed` based on `keybind.is_gamepad`. For gamepad keybinds, automatically
+	/// resolves the first connected gamepad slot — returns false if no gamepad is connected.
+	/// @attention Requires MMAPI::Input::Enable() to have been called (inherited from the underlying check helpers).
+	/// @param keybind The keybind to check, typically produced by `TryParseKeybind`.
+	inline bool IsKeybindPressed(const Keybind& keybind)
+	{
+		if (!keybind.IsValid())
+			return false;
+
+		if (keybind.is_gamepad)
+		{
+			int slot = GetFirstConnectedGamepadSlot();
+			return slot >= 0 && GamepadButtonCheckPressed(slot, keybind.code);
+		}
+
+		return KeyboardCheckPressed(keybind.code);
 	}
 
 	namespace Hooks

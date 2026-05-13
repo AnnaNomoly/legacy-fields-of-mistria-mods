@@ -2,10 +2,8 @@
 #include <cctype>
 #include <filesystem>
 #include <map>
+#include <optional>
 #include <string>
-#include <unordered_set>
-
-#include <Windows.h>  // VK_* constants
 
 #include <YYToolkit/YYTK_Shared.hpp>
 #include <MMAPI/MMAPI.hpp>
@@ -35,39 +33,6 @@ static const bool        DEFAULT_UNLOCK_EVERYTHING = false;
 static const std::string UNRECOGNIZED_RECIPE_LOCALIZATION_KEY = "mods/Cookbook/unrecognized_recipe";
 static const std::string RECIPE_NOT_ACQUIRED_LOCALIZATION_KEY = "mods/Cookbook/recipe_not_acquired";
 
-// Activation-button name → input code. Keyboard names map to Win32 VK_* constants; gamepad names map
-// to GameMaker gamepad button constants (0x80xx).
-static const std::map<std::string, int> KEY_NAME_TO_VK = {
-	{ "F1", VK_F1 }, { "F2", VK_F2 }, { "F3", VK_F3 }, { "F4", VK_F4 },
-	{ "F5", VK_F5 }, { "F6", VK_F6 }, { "F7", VK_F7 }, { "F8", VK_F8 },
-	{ "F9", VK_F9 }, { "F10", VK_F10 }, { "F11", VK_F11 }, { "F12", VK_F12 },
-	{ "NUMPAD_0", VK_NUMPAD0 }, { "NUMPAD_1", VK_NUMPAD1 }, { "NUMPAD_2", VK_NUMPAD2 },
-	{ "NUMPAD_3", VK_NUMPAD3 }, { "NUMPAD_4", VK_NUMPAD4 }, { "NUMPAD_5", VK_NUMPAD5 },
-	{ "NUMPAD_6", VK_NUMPAD6 }, { "NUMPAD_7", VK_NUMPAD7 }, { "NUMPAD_8", VK_NUMPAD8 },
-	{ "NUMPAD_9", VK_NUMPAD9 },
-	{ "0", '0' }, { "1", '1' }, { "2", '2' }, { "3", '3' }, { "4", '4' },
-	{ "5", '5' }, { "6", '6' }, { "7", '7' }, { "8", '8' }, { "9", '9' },
-	{ "A", 'A' }, { "B", 'B' }, { "C", 'C' }, { "D", 'D' }, { "E", 'E' },
-	{ "F", 'F' }, { "G", 'G' }, { "H", 'H' }, { "I", 'I' }, { "J", 'J' },
-	{ "K", 'K' }, { "L", 'L' }, { "M", 'M' }, { "N", 'N' }, { "O", 'O' },
-	{ "P", 'P' }, { "Q", 'Q' }, { "R", 'R' }, { "S", 'S' }, { "T", 'T' },
-	{ "U", 'U' }, { "V", 'V' }, { "W", 'W' }, { "X", 'X' }, { "Y", 'Y' },
-	{ "Z", 'Z' },
-	{ "INSERT", VK_INSERT }, { "DELETE", VK_DELETE }, { "HOME", VK_HOME },
-	{ "PAGE_UP", VK_PRIOR }, { "PAGE_DOWN", VK_NEXT }, { "NUM_LOCK", VK_NUMLOCK },
-	{ "SCROLL_LOCK", VK_SCROLL }, { "CAPS_LOCK", VK_CAPITAL }, { "PAUSE_BREAK", VK_PAUSE },
-};
-
-static const std::map<std::string, int> KEY_NAME_TO_GAMEPAD = {
-	{ "GAMEPAD_A", 0x8001 }, { "GAMEPAD_B", 0x8002 }, { "GAMEPAD_X", 0x8003 }, { "GAMEPAD_Y", 0x8004 },
-	{ "GAMEPAD_LEFT_SHOULDER",  0x8005 }, { "GAMEPAD_RIGHT_SHOULDER", 0x8006 },
-	{ "GAMEPAD_LEFT_TRIGGER",   0x8007 }, { "GAMEPAD_RIGHT_TRIGGER",  0x8008 },
-	{ "GAMEPAD_SELECT", 0x8009 }, { "GAMEPAD_START", 0x800A },
-	{ "GAMEPAD_LEFT_STICK", 0x800B }, { "GAMEPAD_RIGHT_STICK", 0x800C },
-	{ "GAMEPAD_DPAD_UP",    0x800D }, { "GAMEPAD_DPAD_DOWN",  0x800E },
-	{ "GAMEPAD_DPAD_LEFT",  0x800F }, { "GAMEPAD_DPAD_RIGHT", 0x8010 },
-};
-
 // ----- Config -----
 
 struct CookbookConfig
@@ -92,8 +57,8 @@ void from_json(const json& j, CookbookConfig& c)
 	c.unlock_everything = MMAPI::Config::GetValue<bool>       (j, UNLOCK_EVERYTHING_KEY, DEFAULT_UNLOCK_EVERYTHING);
 	c.example_recipe    = MMAPI::Config::GetValue<std::string>(j, EXAMPLE_RECIPE_KEY,    DEFAULT_EXAMPLE_RECIPE);
 
-	// Validate activation_button against the known key sets; fall back to default if unrecognized.
-	if (!KEY_NAME_TO_VK.contains(c.activation_button) && !KEY_NAME_TO_GAMEPAD.contains(c.activation_button))
+	// Validate via the canonical MMAPI keybind parser; fall back to default if unrecognized.
+	if (!MMAPI::Input::TryParseKeybind(c.activation_button))
 		c.activation_button = DEFAULT_ACTIVATION_BUTTON;
 }
 
@@ -102,8 +67,7 @@ void from_json(const json& j, CookbookConfig& c)
 static CookbookConfig config{};
 static bool startup_loaded         = false;
 static bool recipes_unlocked_all   = false;  // One-shot guard for unlock-everything mode.
-static int  activation_button_code = -1;
-static bool activation_is_gamepad  = false;
+static std::optional<MMAPI::Input::Keybind> activation_keybind;
 static bool processing_user_input  = false;  // Prevents re-entry while the get_string modal is open.
 
 // Cooking recipes discovered in __item_data: internal name ↔ item_id.
@@ -147,19 +111,6 @@ void LoadOrCreateConfigFile()
 	}
 }
 
-void ConfigureActivationButton()
-{
-	if (auto it = KEY_NAME_TO_GAMEPAD.find(config.activation_button); it != KEY_NAME_TO_GAMEPAD.end())
-	{
-		activation_is_gamepad  = true;
-		activation_button_code = it->second;
-	}
-	else if (auto it = KEY_NAME_TO_VK.find(config.activation_button); it != KEY_NAME_TO_VK.end())
-	{
-		activation_is_gamepad  = false;
-		activation_button_code = it->second;
-	}
-}
 
 // Discovers every cooking recipe in `__item_data` and populates the internal-name ↔ item_id maps.
 // Filter mirrors the original mod: items whose `name_key` contains "cooked_dishes" or whose
@@ -264,21 +215,15 @@ void UnlockRecipe(int item_id, bool silent)
 
 bool CheckActivationPressed()
 {
-	if (activation_button_code < 0) return false;
+	if (!activation_keybind || !MMAPI::Input::IsKeybindPressed(*activation_keybind))
+		return false;
 
-	if (activation_is_gamepad)
-	{
-		int slot = MMAPI::Input::GetFirstConnectedGamepadSlot();
-		if (slot < 0) return false;
-		return MMAPI::Input::GamepadButtonCheckPressed(slot, activation_button_code);
-	}
-
-	if (MMAPI::Input::KeyboardCheckPressed(activation_button_code))
-	{
+	// Keyboard presses can re-fire on the next AfterDrawGui tick before the modal opens; gate via
+	// the processing flag to avoid stacking modals. Gamepad presses don't have this issue but the
+	// flag is harmless there.
+	if (!activation_keybind->is_gamepad)
 		processing_user_input = true;
-		return true;
-	}
-	return false;
+	return true;
 }
 
 // ----- Hooks -----
@@ -291,7 +236,7 @@ void OnSetupMainScreen()
 	if (startup_loaded) return;
 
 	LoadOrCreateConfigFile();
-	ConfigureActivationButton();
+	activation_keybind = MMAPI::Input::TryParseKeybind(config.activation_button);
 	LoadRecipeData();
 
 	startup_loaded = true;
