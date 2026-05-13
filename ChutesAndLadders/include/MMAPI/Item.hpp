@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cctype>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -1010,6 +1011,78 @@ namespace MMAPI::Item
 		YYTK::RValue* item_donated = nullptr;
 		MMAPI::Internal::module_interface->GetArrayEntry(museum_progress_data, static_cast<size_t>(item_id), item_donated);
 		return item_donated->ToBoolean();
+	}
+
+	/// Returns true if the item is eligible to be donated to the museum — i.e. it appears in
+	/// `globalInstance.__museum_data.data[*].sets.inner.*.items`. This is the static set of
+	/// donatable items, independent of whether Ari has actually donated each one. Pair with
+	/// `Item::HasBeenDonated` to check "still needs to be donated."
+	///
+	/// Lazily builds and caches the set of donatable item_ids on first call (the museum data is
+	/// part of the game's static asset table, so the set doesn't change during a session). The
+	/// first call after MMAPI::Initialize must occur once `global_instance` is populated; if it
+	/// fires before then, the cache stays empty and subsequent calls return false until the data
+	/// becomes available.
+	/// @param item_id The item ID to check.
+	inline bool IsDonatable(int item_id)
+	{
+		if (item_id < 0)
+			return false;
+
+		static std::set<int> donatable_ids;
+		static bool loaded = false;
+
+		if (!loaded && MMAPI::Internal::global_instance)
+		{
+			YYTK::RValue museum_data = MMAPI::Internal::global_instance->GetMember("__museum_data");
+			if (museum_data.m_Kind != YYTK::VALUE_UNDEFINED)
+			{
+				YYTK::RValue data = museum_data.GetMember("data");
+				size_t data_count = 0;
+				MMAPI::Internal::module_interface->GetArraySize(data, data_count);
+
+				for (size_t i = 0; i < data_count; i++)
+				{
+					YYTK::RValue* data_entry = nullptr;
+					MMAPI::Internal::module_interface->GetArrayEntry(data, i, data_entry);
+					if (!data_entry || data_entry->m_Kind != YYTK::VALUE_OBJECT) continue;
+
+					if (!MMAPI::Engine::StructVariableExists(*data_entry, "sets")) continue;
+					YYTK::RValue sets = data_entry->GetMember("sets");
+					if (!MMAPI::Engine::StructVariableExists(sets, "inner")) continue;
+					YYTK::RValue inner = sets.GetMember("inner");
+
+					// `sets.inner` is keyed by user-defined set names ("fish", "bugs", "artifacts", etc.).
+					// Enumerate its members to collect every set, then gather each set's items array.
+					std::vector<std::string> set_names;
+					MMAPI::Internal::module_interface->EnumInstanceMembers(inner,
+						[&set_names](const char* name, YYTK::RValue* /*value*/) {
+							set_names.emplace_back(name);
+							return false;
+						});
+
+					for (const auto& set_name : set_names)
+					{
+						YYTK::RValue set = inner.GetMember(set_name.c_str());
+						if (!MMAPI::Engine::StructVariableExists(set, "items")) continue;
+						YYTK::RValue items = set.GetMember("items");
+
+						size_t item_count = 0;
+						MMAPI::Internal::module_interface->GetArraySize(items, item_count);
+						for (size_t j = 0; j < item_count; j++)
+						{
+							YYTK::RValue* entry = nullptr;
+							MMAPI::Internal::module_interface->GetArrayEntry(items, j, entry);
+							if (entry && MMAPI::Engine::IsNumeric(*entry))
+								donatable_ids.insert(static_cast<int>(entry->ToInt64()));
+						}
+					}
+				}
+				loaded = !donatable_ids.empty();
+			}
+		}
+
+		return donatable_ids.contains(item_id);
 	}
 
 	/// Returns true if Ari has ever acquired the item (tracked in __ari.items_acquired).

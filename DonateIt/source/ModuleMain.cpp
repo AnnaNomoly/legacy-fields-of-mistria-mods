@@ -1,678 +1,309 @@
-#include <set>
-#include <map>
-#include <fstream>
-#include <nlohmann/json.hpp>
+#include <filesystem>
+#include <string>
+
 #include <YYToolkit/YYTK_Shared.hpp>
+#include <MMAPI/MMAPI.hpp>
+#include <MMAPI/Config.hpp>
+
 using namespace Aurie;
 using namespace YYTK;
 using json = nlohmann::json;
 
-static const char* const VERSION = "1.0.1";
+// ----- Mod metadata -----
+
 static const char* const MOD_NAME = "DonateIt";
-static const char* const GML_SCRIPT_GET_ITEM_UI_ICON = "gml_Script_get_ui_icon@anon@4244@LiveItem@LiveItem";
-static const char* const GML_SCRIPT_NODE_OBJECT_SET_SPRITE = "gml_Script_set_sprite@gml_Object_obj_node_renderer_Create_0";
-static const char* const GML_SCRIPT_SETUP_MAIN_SCREEN = "gml_Script_setup_main_screen@TitleMenu@TitleMenu";
-static const std::string HIGHLIGHT_ITEMS_IN_MENUS_JSON_KEY = "highlight_items_in_menus";
-static const std::string HIGHLIGHT_FISH_IN_WORLD_JSON_KEY = "highlight_fish_in_world";
-static const std::string HIGHLIGHT_BUGS_IN_WORLD_JSON_KEY = "highlight_bugs_in_world";
-static const std::string HIGHLIGHT_FORAGE_IN_WORLD_JSON_KEY = "highlight_forage_in_world";
-static const bool DEFAULT_HIGHLIGHT_ITEMS_IN_MENUS = true;
-static const bool DEFAULT_HIGHLIGHT_FISH_IN_WORLD = true;
-static const bool DEFAULT_HIGHLIGHT_BUGS_IN_WORLD = true;
+static const char* const VERSION  = "1.1.0";
+
+// ----- Config keys + defaults -----
+
+static const char* const HIGHLIGHT_ITEMS_IN_MENUS_KEY  = "highlight_items_in_menus";
+static const char* const HIGHLIGHT_FISH_IN_WORLD_KEY   = "highlight_fish_in_world";
+static const char* const HIGHLIGHT_BUGS_IN_WORLD_KEY   = "highlight_bugs_in_world";
+static const char* const HIGHLIGHT_FORAGE_IN_WORLD_KEY = "highlight_forage_in_world";
+
+static const bool DEFAULT_HIGHLIGHT_ITEMS_IN_MENUS  = true;
+static const bool DEFAULT_HIGHLIGHT_FISH_IN_WORLD   = true;
+static const bool DEFAULT_HIGHLIGHT_BUGS_IN_WORLD   = true;
 static const bool DEFAULT_HIGHLIGHT_FORAGE_IN_WORLD = true;
 
-static struct Configuration {
-	bool highlight_items_in_menus = DEFAULT_HIGHLIGHT_ITEMS_IN_MENUS;
-	bool highlight_fish_in_world = DEFAULT_HIGHLIGHT_FISH_IN_WORLD;
-	bool highlight_bugs_in_world = DEFAULT_HIGHLIGHT_BUGS_IN_WORLD;
+// Suffix appended to a sprite's name to produce its "this is donatable" highlight variant
+// (e.g. "spr_fish_bass" → "spr_fish_bass_donatable"). Conventional in the mod's sprite-pack.
+static const std::string DONATABLE_SPRITE_SUFFIX = "_donatable";
+
+// Per-instance struct tag set the first time DonateIt swaps a fish/bug's sprites — used as a
+// "we've already processed this one" guard so we don't redo the sprite work every tick, and so the
+// per-frame image_speed pinning can target only instances we modified.
+static const char* const PROCESSED_FISH_TAG = "__donate_it__processed_fish";
+static const char* const PROCESSED_BUG_TAG  = "__donate_it__processed_bug";
+
+// The image_speed value applied every frame to processed (donatable) fish and bugs. Slows their
+// animation noticeably as a visual cue that they're notable. Preserved from the original mod.
+static constexpr double DONATABLE_IMAGE_SPEED = 0.125;
+
+// ----- Config -----
+
+struct DonateItConfig
+{
+	bool highlight_items_in_menus  = DEFAULT_HIGHLIGHT_ITEMS_IN_MENUS;
+	bool highlight_fish_in_world   = DEFAULT_HIGHLIGHT_FISH_IN_WORLD;
+	bool highlight_bugs_in_world   = DEFAULT_HIGHLIGHT_BUGS_IN_WORLD;
 	bool highlight_forage_in_world = DEFAULT_HIGHLIGHT_FORAGE_IN_WORLD;
 };
 
-static YYTKInterface* g_ModuleInterface = nullptr;
-static CInstance* global_instance = nullptr;
-static bool load_on_start = true;
-static std::set<int> donatable_items = {};
-static std::set<std::string> donatable_item_names = {};
-static std::map<std::string, int> item_name_to_id_map = {};
-static std::map<int, std::string> item_id_to_name_map = {};
-static std::map<std::string, int> object_category_to_id_map = {};
-static Configuration configuration = Configuration();
-
-void PrintError(std::exception_ptr eptr)
+void to_json(json& j, const DonateItConfig& c)
 {
-	try {
-		if (eptr) {
-			std::rethrow_exception(eptr);
-		}
-	}
-	catch (const std::exception& e) {
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Error: %s", MOD_NAME, VERSION, e.what());
-	}
-}
-
-json CreateConfigJson(bool use_defaults)
-{
-	json config_json = {
-		{ HIGHLIGHT_ITEMS_IN_MENUS_JSON_KEY, use_defaults ? DEFAULT_HIGHLIGHT_ITEMS_IN_MENUS : configuration.highlight_items_in_menus },
-		{ HIGHLIGHT_FISH_IN_WORLD_JSON_KEY, use_defaults ? DEFAULT_HIGHLIGHT_FISH_IN_WORLD : configuration.highlight_fish_in_world },
-		{ HIGHLIGHT_BUGS_IN_WORLD_JSON_KEY, use_defaults ? DEFAULT_HIGHLIGHT_BUGS_IN_WORLD : configuration.highlight_bugs_in_world },
-		{ HIGHLIGHT_FORAGE_IN_WORLD_JSON_KEY, use_defaults ? DEFAULT_HIGHLIGHT_FORAGE_IN_WORLD : configuration.highlight_forage_in_world }
+	j = json{
+		{ HIGHLIGHT_ITEMS_IN_MENUS_KEY,  c.highlight_items_in_menus  },
+		{ HIGHLIGHT_FISH_IN_WORLD_KEY,   c.highlight_fish_in_world   },
+		{ HIGHLIGHT_BUGS_IN_WORLD_KEY,   c.highlight_bugs_in_world   },
+		{ HIGHLIGHT_FORAGE_IN_WORLD_KEY, c.highlight_forage_in_world },
 	};
-	return config_json;
 }
 
-void CreateOrLoadConfigFile()
+void from_json(const json& j, DonateItConfig& c)
 {
-	// Load config file.
-	std::exception_ptr eptr;
+	c.highlight_items_in_menus  = MMAPI::Config::GetValue<bool>(j, HIGHLIGHT_ITEMS_IN_MENUS_KEY,  DEFAULT_HIGHLIGHT_ITEMS_IN_MENUS);
+	c.highlight_fish_in_world   = MMAPI::Config::GetValue<bool>(j, HIGHLIGHT_FISH_IN_WORLD_KEY,   DEFAULT_HIGHLIGHT_FISH_IN_WORLD);
+	c.highlight_bugs_in_world   = MMAPI::Config::GetValue<bool>(j, HIGHLIGHT_BUGS_IN_WORLD_KEY,   DEFAULT_HIGHLIGHT_BUGS_IN_WORLD);
+	c.highlight_forage_in_world = MMAPI::Config::GetValue<bool>(j, HIGHLIGHT_FORAGE_IN_WORLD_KEY, DEFAULT_HIGHLIGHT_FORAGE_IN_WORLD);
+}
+
+// ----- State -----
+
+static DonateItConfig config{};
+static bool startup_loaded = false;
+
+// Category ids cached at startup from globalInstance.__object_category__ — used to identify forage
+// nodes (only objects in the "bush" and "crop" categories are eligible for the harvest-based
+// donatable check).
+static int bush_category_id = -1;
+static int crop_category_id = -1;
+
+// ----- Helpers -----
+
+void LoadOrCreateConfigFile()
+{
 	try
 	{
-		// Try to find the mod_data directory.
-		std::string current_dir = std::filesystem::current_path().string();
-		std::string mod_data_folder = current_dir + "\\mod_data";
-		if (!std::filesystem::exists(mod_data_folder))
+		auto path = MMAPI::Config::GetConfigPath(MOD_NAME);
+		bool existed = std::filesystem::exists(path);
+		json j = MMAPI::Config::Load(path);
+
+		if (!existed)
+			MMAPI::Log::Warn("Configuration file was not found. Creating file: %s", path.string().c_str());
+
+		if (j.empty())
 		{
-			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - The \"mod_data\" directory was not found. Creating directory: %s", MOD_NAME, VERSION, mod_data_folder.c_str());
-			std::filesystem::create_directory(mod_data_folder);
-		}
-
-		// Try to find the mod_data/DonateIt directory.
-		std::string donate_it_folder = mod_data_folder + "\\DonateIt";
-		if (!std::filesystem::exists(donate_it_folder))
-		{
-			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - The \"DonateIt\" directory was not found. Creating directory: %s", MOD_NAME, VERSION, donate_it_folder.c_str());
-			std::filesystem::create_directory(donate_it_folder);
-		}
-
-		// Try to find the mod_data/DonateIt/DonateIt.json config file.
-		bool update_config_file = false;
-		std::string config_file = donate_it_folder + "\\" + "DonateIt.json";
-		std::ifstream in_stream(config_file);
-		if (in_stream.good())
-		{
-			try
-			{
-				json json_object = json::parse(in_stream);
-
-				// Check if the json_object is empty.
-				if (json_object.empty())
-				{
-					g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - No values found in mod configuration file: %s!", MOD_NAME, VERSION, config_file.c_str());
-					g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Add your desired values to the configuration file, otherwise defaults will be used.", MOD_NAME, VERSION);
-				}
-				else
-				{
-					// Try loading the highlight_items_in_menus value.
-					if (json_object.contains(HIGHLIGHT_ITEMS_IN_MENUS_JSON_KEY))
-					{
-						configuration.highlight_items_in_menus = json_object[HIGHLIGHT_ITEMS_IN_MENUS_JSON_KEY];
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using CUSTOM \"%s\" value: %s!", MOD_NAME, VERSION, HIGHLIGHT_ITEMS_IN_MENUS_JSON_KEY, configuration.highlight_items_in_menus ? "true" : "false");
-					}
-					else
-					{
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, HIGHLIGHT_ITEMS_IN_MENUS_JSON_KEY, config_file.c_str());
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, HIGHLIGHT_ITEMS_IN_MENUS_JSON_KEY, DEFAULT_HIGHLIGHT_ITEMS_IN_MENUS ? "true" : "false");
-					}
-
-					// Try loading the highlight_fish_in_world value.
-					if (json_object.contains(HIGHLIGHT_FISH_IN_WORLD_JSON_KEY))
-					{
-						configuration.highlight_fish_in_world = json_object[HIGHLIGHT_FISH_IN_WORLD_JSON_KEY];
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using CUSTOM \"%s\" value: %s!", MOD_NAME, VERSION, HIGHLIGHT_FISH_IN_WORLD_JSON_KEY, configuration.highlight_fish_in_world ? "true" : "false");
-					}
-					else
-					{
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, HIGHLIGHT_FISH_IN_WORLD_JSON_KEY, config_file.c_str());
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, HIGHLIGHT_FISH_IN_WORLD_JSON_KEY, DEFAULT_HIGHLIGHT_FISH_IN_WORLD ? "true" : "false");
-					}
-
-					// Try loading the highlight_bugs_in_world value.
-					if (json_object.contains(HIGHLIGHT_BUGS_IN_WORLD_JSON_KEY))
-					{
-						configuration.highlight_bugs_in_world = json_object[HIGHLIGHT_BUGS_IN_WORLD_JSON_KEY];
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using CUSTOM \"%s\" value: %s!", MOD_NAME, VERSION, HIGHLIGHT_BUGS_IN_WORLD_JSON_KEY, configuration.highlight_bugs_in_world ? "true" : "false");
-					}
-					else
-					{
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, HIGHLIGHT_BUGS_IN_WORLD_JSON_KEY, config_file.c_str());
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, HIGHLIGHT_BUGS_IN_WORLD_JSON_KEY, DEFAULT_HIGHLIGHT_BUGS_IN_WORLD ? "true" : "false");
-					}
-
-					// Try loading the highlight_forage_in_world value.
-					if (json_object.contains(HIGHLIGHT_FORAGE_IN_WORLD_JSON_KEY))
-					{
-						configuration.highlight_forage_in_world = json_object[HIGHLIGHT_FORAGE_IN_WORLD_JSON_KEY];
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using CUSTOM \"%s\" value: %s!", MOD_NAME, VERSION, HIGHLIGHT_FORAGE_IN_WORLD_JSON_KEY, configuration.highlight_forage_in_world ? "true" : "false");
-					}
-					else
-					{
-						g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Missing \"%s\" value in mod configuration file: %s!", MOD_NAME, VERSION, HIGHLIGHT_FORAGE_IN_WORLD_JSON_KEY, config_file.c_str());
-						g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Using DEFAULT \"%s\" value: %s!", MOD_NAME, VERSION, HIGHLIGHT_FORAGE_IN_WORLD_JSON_KEY, DEFAULT_HIGHLIGHT_FORAGE_IN_WORLD ? "true" : "false");
-					}
-				}
-
-				update_config_file = true;
-			}
-			catch (...)
-			{
-				eptr = std::current_exception();
-				PrintError(eptr);
-
-				g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to parse JSON from configuration file: %s", MOD_NAME, VERSION, config_file.c_str());
-				g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - Make sure the file is valid JSON!", MOD_NAME, VERSION);
-			}
-
-			in_stream.close();
+			if (existed)
+				MMAPI::Log::Error("No readable values in configuration file: %s!", path.string().c_str());
+			config = DonateItConfig{};
 		}
 		else
 		{
-			in_stream.close();
-
-			g_ModuleInterface->Print(CM_LIGHTYELLOW, "[%s %s] - The \"DonateIt.json\" file was not found. Creating file: %s", MOD_NAME, VERSION, config_file.c_str());
-
-			json default_config_json = CreateConfigJson(true);
-			std::ofstream out_stream(config_file);
-			out_stream << std::setw(4) << default_config_json << std::endl;
-			out_stream.close();
+			config = j.get<DonateItConfig>();
 		}
 
-		if (update_config_file)
-		{
-			json config_json = CreateConfigJson(false);
-			std::ofstream out_stream(config_file);
-			out_stream << std::setw(4) << config_json << std::endl;
-			out_stream.close();
-		}
+		MMAPI::Config::Save(path, config);
+		MMAPI::Log::Info("Loaded configuration file: %s", path.string().c_str());
 	}
-	catch (...)
+	catch (const std::exception& e)
 	{
-		eptr = std::current_exception();
-		PrintError(eptr);
-
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - An error occurred loading the mod configuration file.", MOD_NAME, VERSION);
+		MMAPI::Log::Error("Error loading config: %s", e.what());
+		config = DonateItConfig{};
 	}
 }
 
-bool IsNumeric(RValue value)
+// Returns true if the given item_id is in the museum's donatable list AND hasn't been donated yet.
+// All three sprite-swap paths share this gate.
+bool NeedsDonating(int item_id)
 {
-	return value.m_Kind == VALUE_INT32 || value.m_Kind == VALUE_INT64 || value.m_Kind == VALUE_REAL;
+	return MMAPI::Item::IsDonatable(item_id) && !MMAPI::Item::HasBeenDonated(item_id);
 }
 
-bool RValueAsBool(RValue value)
+// Resolves the "_donatable" highlight variant of a sprite asset. Returns VALUE_UNDEFINED if the
+// input isn't a sprite or no variant exists in the asset table.
+YYTK::RValue ResolveDonatableSprite(YYTK::RValue sprite_asset)
 {
-	if (value.m_Kind == VALUE_BOOL && value.m_Real == 1)
-		return true;
-	return false;
+	if (sprite_asset.m_Kind != YYTK::VALUE_REF) return {};
+
+	YYTK::RValue asset_type = MMAPI::Internal::module_interface->CallBuiltin("asset_get_type", { sprite_asset });
+	if (asset_type.ToInt64() != static_cast<int64_t>(MMAPI::Engine::AssetType::Sprite)) return {};
+
+	YYTK::RValue name_rv = MMAPI::Internal::module_interface->CallBuiltin("sprite_get_name", { sprite_asset });
+	if (name_rv.m_Kind != YYTK::VALUE_STRING) return {};
+
+	std::string variant_name = name_rv.ToString() + DONATABLE_SPRITE_SUFFIX;
+	YYTK::RValue variant = MMAPI::Engine::AssetGetIndex(variant_name);
+	return variant.m_Kind == YYTK::VALUE_REF ? variant : YYTK::RValue();
 }
 
-bool StructVariableExists(RValue the_struct, const char* variable_name)
+// Swaps each sprite asset in an instance-variable sprite array (e.g. obj_fish's `move_sprites` /
+// `idle_sprites` GameMaker arrays) for its donatable variant, in place. No-op for entries that
+// don't have a `_donatable` counterpart.
+void SwapDonatableSpriteArrayInPlace(YYTK::RValue array)
 {
-	RValue struct_exists = g_ModuleInterface->CallBuiltin(
-		"struct_exists",
-		{ the_struct, variable_name }
-	);
-
-	return RValueAsBool(struct_exists);
-}
-
-RValue StructVariableGet(RValue the_struct, const char* variable_name)
-{
-	return g_ModuleInterface->CallBuiltin(
-		"struct_get",
-		{ the_struct, variable_name }
-	);
-}
-
-RValue StructVariableSet(RValue the_struct, const char* variable_name, RValue value)
-{
-	return g_ModuleInterface->CallBuiltin(
-		"struct_set",
-		{ the_struct, variable_name, value }
-	);
-}
-
-void LoadItemData()
-{
-	RValue __item_data = *global_instance->GetRefMember("__item_data");
-	size_t array_length;
-	g_ModuleInterface->GetArraySize(__item_data, array_length);
-
-	// Load all items.
-	for (size_t i = 0; i < array_length; i++)
+	size_t length = 0;
+	MMAPI::Internal::module_interface->GetArraySize(array, length);
+	for (size_t i = 0; i < length; i++)
 	{
-		RValue* array_element;
-		g_ModuleInterface->GetArrayEntry(__item_data, i, array_element);
+		YYTK::RValue* entry = nullptr;
+		MMAPI::Internal::module_interface->GetArrayEntry(array, i, entry);
+		if (!entry) continue;
 
-		RValue name_key = *array_element->GetRefMember("name_key"); // The item's localization key
-		if (name_key.m_Kind != VALUE_NULL && name_key.m_Kind != VALUE_UNDEFINED && name_key.m_Kind != VALUE_UNSET)
-		{
-			RValue item_id = *array_element->GetRefMember("item_id");
-			RValue recipe_key = *array_element->GetRefMember("recipe_key"); // The internal item original_sprite_name
-			item_name_to_id_map[recipe_key.ToString()] = item_id.ToInt64();
-			item_id_to_name_map[item_id.ToInt64()] = recipe_key.ToString();
-		}
+		YYTK::RValue variant = ResolveDonatableSprite(*entry);
+		if (variant.m_Kind == YYTK::VALUE_REF)
+			MMAPI::Internal::module_interface->CallBuiltin("array_set", { array, static_cast<int>(i), variant });
 	}
 }
 
-void LoadDonatableItems()
+// ----- Hooks -----
+
+void OnSetupMainScreen()
 {
-	RValue museum_data = global_instance->GetMember("__museum_data");
+	if (startup_loaded) return;
 
-	RValue data = museum_data.GetMember("data"); // array
-	RValue data_length = g_ModuleInterface->CallBuiltin("array_length", { data });
+	LoadOrCreateConfigFile();
 
-	for (size_t i = 0; i < data_length.ToInt64(); ++i)
+	// Cache the bush + crop category ids (used to filter forage nodes in BeforeNodeRendererSetSprite).
+	YYTK::RValue bush_rv = MMAPI::Object::GetCategoryIdFromInternalName("bush");
+	YYTK::RValue crop_rv = MMAPI::Object::GetCategoryIdFromInternalName("crop");
+	if (MMAPI::Engine::IsNumeric(bush_rv)) bush_category_id = static_cast<int>(bush_rv.ToInt64());
+	if (MMAPI::Engine::IsNumeric(crop_rv)) crop_category_id = static_cast<int>(crop_rv.ToInt64());
+
+	startup_loaded = true;
+}
+
+void OnAfterGetUiIcon(MMAPI::Item::GetUiIconContext& ctx)
+{
+	if (!config.highlight_items_in_menus) return;
+	if (!NeedsDonating(ctx.GetItemId())) return;
+
+	YYTK::RValue variant = ResolveDonatableSprite(ctx.GetSpriteAsset());
+	if (variant.m_Kind == YYTK::VALUE_REF)
+		ctx.SetSpriteAsset(variant);
+}
+
+void OnBeforeNodeRendererSetSprite(MMAPI::Object::NodeRendererSetSpriteContext& ctx)
+{
+	if (!config.highlight_forage_in_world) return;
+	if (bush_category_id < 0 && crop_category_id < 0) return;
+
+	YYTK::RValue node = MMAPI::Object::GetNode(ctx.GetSelf());
+	if (node.m_Kind == YYTK::VALUE_UNDEFINED) return;
+
+	YYTK::RValue prototype = MMAPI::Object::GetPrototype(node);
+	if (prototype.m_Kind == YYTK::VALUE_UNDEFINED) return;
+
+	// Only bushes and crops have a harvest item_id we care about.
+	YYTK::RValue category_rv = MMAPI::Object::GetCategoryId(prototype);
+	if (!MMAPI::Engine::IsNumeric(category_rv)) return;
+	int category_id = static_cast<int>(category_rv.ToInt64());
+	if (category_id != bush_category_id && category_id != crop_category_id) return;
+
+	if (!MMAPI::Engine::StructVariableExists(prototype, "harvest")) return;
+	YYTK::RValue harvest = prototype.GetMember("harvest");
+	if (!MMAPI::Engine::IsNumeric(harvest)) return;
+
+	int harvest_item_id = static_cast<int>(harvest.ToInt64());
+	if (!NeedsDonating(harvest_item_id)) return;
+
+	YYTK::RValue variant = ResolveDonatableSprite(ctx.GetSpriteAsset());
+	if (variant.m_Kind == YYTK::VALUE_REF)
+		ctx.SetSpriteAsset(variant);
+}
+
+// Handles obj_fish in the world: on first sight, swap its move/idle sprite arrays to the donatable
+// variants (one-shot, guarded by a struct tag). On every subsequent tick, pin image_speed so the
+// donatable animation plays at the slower visual-cue rate.
+void OnFishTick(CInstance* self)
+{
+	if (!self) return;
+
+	YYTK::RValue self_rv = self->ToRValue();
+
+	if (config.highlight_fish_in_world
+		&& !MMAPI::Engine::StructVariableExists(self_rv, PROCESSED_FISH_TAG)
+		&& MMAPI::Engine::StructVariableExists(self_rv, "fish_loot"))
 	{
-		RValue data_entry = g_ModuleInterface->CallBuiltin("array_get", { data, i });
-		RValue sets = data_entry.GetMember("sets");
-		RValue inner = sets.GetMember("inner");
+		MMAPI::Engine::StructVariableSet(self_rv, PROCESSED_FISH_TAG, true);
 
-		std::vector<std::string> struct_field_names = {};
-		auto GetStructFieldNames = [&](IN const char* MemberName, IN OUT RValue* Value) {
-			struct_field_names.push_back(MemberName);
-			return false;
-		};
-
-		g_ModuleInterface->EnumInstanceMembers(inner, GetStructFieldNames);
-		for (size_t j = 0; j < struct_field_names.size(); ++j)
+		int item_id = static_cast<int>(self_rv.GetMember("fish_loot").GetMember("item").GetMember("item_id").ToInt64());
+		if (NeedsDonating(item_id))
 		{
-			RValue set = inner.GetMember(struct_field_names[j]);
+			if (MMAPI::Engine::StructVariableExists(self_rv, "move_sprites"))
+				SwapDonatableSpriteArrayInPlace(self_rv.GetMember("move_sprites"));
+			if (MMAPI::Engine::StructVariableExists(self_rv, "idle_sprites"))
+				SwapDonatableSpriteArrayInPlace(self_rv.GetMember("idle_sprites"));
+		}
+	}
+	else if (MMAPI::Engine::StructVariableExists(self_rv, PROCESSED_FISH_TAG))
+	{
+		MMAPI::Engine::InstanceVariableSet(self, "image_speed", DONATABLE_IMAGE_SPEED);
+	}
+}
 
-			RValue items = set.GetMember("items");
-			RValue items_length = g_ModuleInterface->CallBuiltin("array_length", { items });
+// Same idea as OnFishTick — obj_bug uses singular move_sprite / idle_sprite struct fields instead
+// of arrays, and reads item_id directly off the instance rather than via fish_loot.
+void OnBugTick(CInstance* self)
+{
+	if (!self) return;
 
-			for (size_t k = 0; k < items_length.ToInt64(); ++k)
+	YYTK::RValue self_rv = self->ToRValue();
+
+	if (config.highlight_bugs_in_world
+		&& !MMAPI::Engine::StructVariableExists(self_rv, PROCESSED_BUG_TAG)
+		&& MMAPI::Engine::StructVariableExists(self_rv, "item_id"))
+	{
+		MMAPI::Engine::StructVariableSet(self_rv, PROCESSED_BUG_TAG, true);
+
+		int item_id = static_cast<int>(self_rv.GetMember("item_id").ToInt64());
+		if (NeedsDonating(item_id))
+		{
+			if (MMAPI::Engine::StructVariableExists(self_rv, "move_sprite"))
 			{
-				RValue item = g_ModuleInterface->CallBuiltin("array_get", { items, k });
-				donatable_items.insert(item.ToInt64());
+				YYTK::RValue variant = ResolveDonatableSprite(self_rv.GetMember("move_sprite"));
+				if (variant.m_Kind == YYTK::VALUE_REF)
+					MMAPI::Engine::StructVariableSet(self_rv, "move_sprite", variant);
+			}
+			if (MMAPI::Engine::StructVariableExists(self_rv, "idle_sprite"))
+			{
+				YYTK::RValue variant = ResolveDonatableSprite(self_rv.GetMember("idle_sprite"));
+				if (variant.m_Kind == YYTK::VALUE_REF)
+					MMAPI::Engine::StructVariableSet(self_rv, "idle_sprite", variant);
 			}
 		}
 	}
-}
-
-void LoadObjectCategories()
-{
-	RValue object_categories = global_instance->GetMember("__object_category__");
-	RValue object_categories_length = g_ModuleInterface->CallBuiltin("array_length", { object_categories });
-
-	for (size_t i = 0; i < object_categories_length.ToInt64(); ++i)
+	else if (MMAPI::Engine::StructVariableExists(self_rv, PROCESSED_BUG_TAG))
 	{
-		RValue object_category = g_ModuleInterface->CallBuiltin("array_get", { object_categories, i });
-		object_category_to_id_map[object_category.ToString()] = i;
+		MMAPI::Engine::InstanceVariableSet(self, "image_speed", DONATABLE_IMAGE_SPEED);
 	}
 }
 
-bool ItemHasBeenDonated(int item_id)
-{
-	RValue museum_progress_data = global_instance->GetMember("__museum_progress_data");
-	RValue item_donated = g_ModuleInterface->CallBuiltin("array_get", { museum_progress_data, item_id });
-	return item_donated.ToBoolean();
-}
-
-void ObjectCallback(
-	IN FWCodeEvent& CodeEvent
-)
-{
-	auto& [self, other, code, argc, argv] = CodeEvent.Arguments();
-
-	if (!self)
-		return;
-
-	if (!self->m_Object)
-		return;
-
-	if (configuration.highlight_fish_in_world && strstr(self->m_Object->m_Name, "obj_fish") && !StructVariableExists(self, "__donate_it__processed_fish") && StructVariableExists(self, "fish_loot"))
-	{
-		StructVariableSet(self, "__donate_it__processed_fish", true);
-
-		int item_id = self->GetMember("fish_loot").GetMember("item").GetMember("item_id").ToInt64();
-		if (donatable_items.contains(item_id) && !ItemHasBeenDonated(item_id))
-		{
-			// move_sprites
-			RValue move_sprites = self->GetMember("move_sprites");
-			RValue move_sprites_length = g_ModuleInterface->CallBuiltin("array_length", { move_sprites });
-			for (int i = 0; i < move_sprites_length.ToInt64(); i++)
-			{
-				RValue original_move_sprite = g_ModuleInterface->CallBuiltin("array_get", { move_sprites, i });
-				if (original_move_sprite.m_Kind == VALUE_REF)
-				{
-					RValue original_move_sprite_name = g_ModuleInterface->CallBuiltin("sprite_get_name", { original_move_sprite });
-
-					std::string replacement_move_sprite_name = original_move_sprite_name.ToString() + "_donatable";
-					RValue replacement_move_sprite = g_ModuleInterface->CallBuiltin("asset_get_index", { replacement_move_sprite_name.c_str() });
-					if (replacement_move_sprite.m_Kind == VALUE_REF)
-						g_ModuleInterface->CallBuiltin("array_set", { move_sprites, i, replacement_move_sprite });
-				}
-			}
-
-			// idle_sprites
-			RValue idle_sprites = self->GetMember("idle_sprites");
-			RValue idle_sprites_length = g_ModuleInterface->CallBuiltin("array_length", { idle_sprites });
-			for (int i = 0; i < idle_sprites_length.ToInt64(); i++)
-			{
-				RValue original_idle_sprite = g_ModuleInterface->CallBuiltin("array_get", { idle_sprites, i });
-				if (original_idle_sprite.m_Kind == VALUE_REF)
-				{
-					RValue original_idle_sprite_name = g_ModuleInterface->CallBuiltin("sprite_get_name", { original_idle_sprite });
-
-					std::string replacement_idle_sprite_name = original_idle_sprite_name.ToString() + "_donatable";
-					RValue replacement_idle_sprite = g_ModuleInterface->CallBuiltin("asset_get_index", { replacement_idle_sprite_name.c_str() });
-					if (replacement_idle_sprite.m_Kind == VALUE_REF)
-						g_ModuleInterface->CallBuiltin("array_set", { idle_sprites, i, replacement_idle_sprite });
-				}
-			}
-		}
-	}
-	else if (StructVariableExists(self, "__donate_it__processed_fish"))
-		g_ModuleInterface->CallBuiltin("variable_instance_set", { self, "image_speed", 0.125 });
-
-	if (configuration.highlight_bugs_in_world && strstr(self->m_Object->m_Name, "obj_bug") && !StructVariableExists(self, "__donate_it__processed_bug") && StructVariableExists(self, "item_id"))
-	{
-		StructVariableSet(self, "__donate_it__processed_bug", true);
-
-		int item_id = self->GetMember("item_id").ToInt64();
-		if (donatable_items.contains(item_id) && !ItemHasBeenDonated(item_id))
-		{
-			// move_sprite
-			RValue original_move_sprite_name = g_ModuleInterface->CallBuiltin("sprite_get_name", { self->GetMember("move_sprite") });
-			std::string replacement_move_sprite_name = original_move_sprite_name.ToString() + "_donatable";
-			RValue replacement_move_sprite = g_ModuleInterface->CallBuiltin("asset_get_index", { replacement_move_sprite_name.c_str() });
-			if (replacement_move_sprite.m_Kind == VALUE_REF)
-				StructVariableSet(self, "move_sprite", replacement_move_sprite);
-
-			// idle_sprite
-			RValue original_idle_sprite_name = g_ModuleInterface->CallBuiltin("sprite_get_name", { self->GetMember("idle_sprite") });
-			std::string replacement_idle_sprite_name = original_idle_sprite_name.ToString() + "_donatable";
-			RValue replacement_idle_sprite = g_ModuleInterface->CallBuiltin("asset_get_index", { replacement_idle_sprite_name.c_str() });
-			if (replacement_idle_sprite.m_Kind == VALUE_REF)
-				StructVariableSet(self, "idle_sprite", replacement_idle_sprite);
-		}
-	}
-	else if (StructVariableExists(self, "__donate_it__processed_bug"))
-		g_ModuleInterface->CallBuiltin("variable_instance_set", { self, "image_speed", 0.125 });
-}
-
-RValue& GmlScriptGetUiIconCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_GET_ITEM_UI_ICON));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	if (configuration.highlight_items_in_menus && Self != nullptr)
-	{
-		RValue self = Self->ToRValue();
-		if (StructVariableExists(self, "item_id"))
-		{
-			int item_id = self.GetMember("item_id").ToInt64();
-			if (donatable_items.contains(item_id) && !ItemHasBeenDonated(item_id))
-			{
-				RValue type = g_ModuleInterface->CallBuiltin("asset_get_type", { Result });
-				if (type.ToInt64() == 1) // asset_sprite
-				{
-					RValue original_sprite_name = g_ModuleInterface->CallBuiltin("sprite_get_name", { Result });
-					std::string replacement_sprite_name = original_sprite_name.ToString() + "_donatable";
-
-					RValue sprite = g_ModuleInterface->CallBuiltin("asset_get_index", { replacement_sprite_name.c_str() });
-					if (sprite.m_Kind == VALUE_REF)
-						Result = sprite;
-				}
-			}
-		}
-	}
-
-	return Result;
-}
-
-RValue& GmlScriptNodeObjectSetSpriteCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	if (configuration.highlight_forage_in_world)
-	{
-		RValue node = Self->GetMember("node");
-		RValue prototype = node.GetMember("prototype");
-		if (StructVariableExists(prototype, "category_id"))
-		{
-			auto node_ref_map = node.ToRefMap(); // debug
-			auto prototype_ref_map = prototype.ToRefMap(); // debug
-
-			int category_id = prototype.GetMember("category_id").ToInt64();
-			if (category_id == object_category_to_id_map["bush"] || category_id == object_category_to_id_map["crop"])
-			{
-				if (StructVariableExists(prototype, "harvest") && IsNumeric(prototype.GetMember("harvest")))
-				{
-					int item_id = prototype.GetMember("harvest").ToInt64();
-					if (donatable_items.contains(item_id) && !ItemHasBeenDonated(item_id))
-					{
-						if (ArgumentCount > 0 && Arguments[0]->m_Kind == VALUE_REF)
-						{
-							RValue asset_type = g_ModuleInterface->CallBuiltin("asset_get_type", { *Arguments[0] });
-							if (asset_type.ToInt64() == 1) // asset_sprite
-							{
-								RValue original_sprite_name = g_ModuleInterface->CallBuiltin("sprite_get_name", { *Arguments[0] });
-								std::string replacement_sprite_name = original_sprite_name.ToString() + "_donatable";
-
-								RValue sprite = g_ModuleInterface->CallBuiltin("asset_get_index", { replacement_sprite_name.c_str() });
-								if (sprite.m_Kind == VALUE_REF)
-									*Arguments[0] = sprite;
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_NODE_OBJECT_SET_SPRITE));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
-}
-
-RValue& GmlScriptSetupMainScreenCallback(
-	IN CInstance* Self,
-	IN CInstance* Other,
-	OUT RValue& Result,
-	IN int ArgumentCount,
-	IN RValue** Arguments
-)
-{
-	if (load_on_start)
-	{
-		g_ModuleInterface->GetGlobalInstance(&global_instance);
-		LoadItemData();
-		LoadDonatableItems();
-		LoadObjectCategories();
-		CreateOrLoadConfigFile();
-
-		for (int item_id : donatable_items)
-		{
-			if (item_id_to_name_map.contains(item_id))
-				donatable_item_names.insert(item_id_to_name_map[item_id]);
-			else
-				g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Missing item name for item id: %d", MOD_NAME, VERSION, item_id);
-		}
-
-		load_on_start = false;
-	}
-
-	const PFUNC_YYGMLScript original = reinterpret_cast<PFUNC_YYGMLScript>(MmGetHookTrampoline(g_ArSelfModule, GML_SCRIPT_SETUP_MAIN_SCREEN));
-	original(
-		Self,
-		Other,
-		Result,
-		ArgumentCount,
-		Arguments
-	);
-
-	return Result;
-}
-
-void CreateObjectCallback(AurieStatus& status)
-{
-	status = g_ModuleInterface->CreateCallback(
-		g_ArSelfModule,
-		EVENT_OBJECT_CALL,
-		ObjectCallback,
-		0
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook (EVENT_OBJECT_CALL)!", MOD_NAME, VERSION);
-	}
-}
-
-void CreateHookGmlScriptGetUiIcon(AurieStatus& status)
-{
-	CScript* gml_script_get_ui_icon = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_GET_ITEM_UI_ICON,
-		(PVOID*)&gml_script_get_ui_icon
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_ITEM_UI_ICON);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_GET_ITEM_UI_ICON,
-		gml_script_get_ui_icon->m_Functions->m_ScriptFunction,
-		GmlScriptGetUiIconCallback,
-		nullptr
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_GET_ITEM_UI_ICON);
-	}
-}
-
-void CreateHookGmlScriptNodeObjectSetSprite(AurieStatus& status)
-{
-	CScript* gml_script_node_object_set_sprite = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_NODE_OBJECT_SET_SPRITE,
-		(PVOID*)&gml_script_node_object_set_sprite
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_NODE_OBJECT_SET_SPRITE);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_NODE_OBJECT_SET_SPRITE,
-		gml_script_node_object_set_sprite->m_Functions->m_ScriptFunction,
-		GmlScriptNodeObjectSetSpriteCallback,
-		nullptr
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_NODE_OBJECT_SET_SPRITE);
-	}
-}
-
-void CreateHookGmlScriptSetupMainScreen(AurieStatus& status)
-{
-	CScript* gml_script_setup_main_screen = nullptr;
-	status = g_ModuleInterface->GetNamedRoutinePointer(
-		GML_SCRIPT_SETUP_MAIN_SCREEN,
-		(PVOID*)&gml_script_setup_main_screen
-	);
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to get script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SETUP_MAIN_SCREEN);
-	}
-
-	status = MmCreateHook(
-		g_ArSelfModule,
-		GML_SCRIPT_SETUP_MAIN_SCREEN,
-		gml_script_setup_main_screen->m_Functions->m_ScriptFunction,
-		GmlScriptSetupMainScreenCallback,
-		nullptr
-	);
-
-
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Failed to hook script (%s)!", MOD_NAME, VERSION, GML_SCRIPT_SETUP_MAIN_SCREEN);
-	}
-}
-
-EXPORTED AurieStatus ModuleInitialize(
-	IN AurieModule* Module,
-	IN const fs::path& ModulePath
-)
+EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path& ModulePath)
 {
 	UNREFERENCED_PARAMETER(ModulePath);
 
-	AurieStatus status = AURIE_SUCCESS;
-
-	status = ObGetInterface(
-		"YYTK_Main",
-		(AurieInterfaceBase*&)(g_ModuleInterface)
-	);
-
+	YYTKInterface* module_interface = nullptr;
+	AurieStatus status = ObGetInterface("YYTK_Main", (AurieInterfaceBase*&)module_interface);
 	if (!AurieSuccess(status))
 		return AURIE_MODULE_DEPENDENCY_NOT_RESOLVED;
 
-	g_ModuleInterface->Print(CM_LIGHTAQUA, "[%s %s] - Plugin starting...", MOD_NAME, VERSION);
+	module_interface->Print(CM_LIGHTAQUA, "[%s %s] - Plugin starting...", MOD_NAME, VERSION);
 
-	CreateObjectCallback(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
+	CInstance* global_instance = nullptr;
+	module_interface->GetGlobalInstance(&global_instance);
+	MMAPI::Initialize(module_interface, global_instance, g_ArSelfModule, MOD_NAME, VERSION);
 
-	CreateHookGmlScriptGetUiIcon(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
+	MMAPI::Game::Enable();
+	MMAPI::Item::Enable();
+	MMAPI::Object::Enable();
 
-	CreateHookGmlScriptNodeObjectSetSprite(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
+	MMAPI::Game::Hooks::BeforeSetupMainScreen(OnSetupMainScreen);
+	MMAPI::Item::Hooks::AfterGetUiIcon(OnAfterGetUiIcon);
+	MMAPI::Object::Hooks::BeforeNodeRendererSetSprite(OnBeforeNodeRendererSetSprite);
+	MMAPI::Instance::Hooks::OnObjectCall(MMAPI::Instance::Objects::Fish, OnFishTick);
+	MMAPI::Instance::Hooks::OnObjectCall(MMAPI::Instance::Objects::Bug,  OnBugTick);
 
-	CreateHookGmlScriptSetupMainScreen(status);
-	if (!AurieSuccess(status))
-	{
-		g_ModuleInterface->Print(CM_LIGHTRED, "[%s %s] - Exiting due to failure on start!", MOD_NAME, VERSION);
-		return status;
-	}
-
-	g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Plugin started!", MOD_NAME, VERSION);
+	MMAPI::Log::Info("Plugin started!");
 	return AURIE_SUCCESS;
 }
