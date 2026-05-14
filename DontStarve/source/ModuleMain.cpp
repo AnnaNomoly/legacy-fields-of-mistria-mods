@@ -1007,6 +1007,9 @@ EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path&
 	CInstance* global_instance = nullptr;
 	module_interface->GetGlobalInstance(&global_instance);
 	MMAPI::Initialize(module_interface, global_instance, g_ArSelfModule, MOD_NAME, VERSION);
+	MMAPI::Log::SetSinks(MMAPI::Log::Sinks::Console | MMAPI::Log::Sinks::File);
+	MMAPI::Log::SetLevel(MMAPI::Log::Level::Debug);
+	MMAPI::Log::Info("MMAPI log file path: %s", MMAPI::Log::GetFilePath().string().c_str());
 
 	MMAPI::Calendar::Enable();
 	MMAPI::Display::Enable();
@@ -1042,6 +1045,7 @@ EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path&
 	MMAPI::Instance::Hooks::OnObjectCall(MMAPI::Instance::Objects::Ari,     OnAriTick);
 	MMAPI::Instance::Hooks::OnObjectCall(MMAPI::Instance::Objects::Monster, OnMonsterTick);
 
+	MMAPI::Log::DumpDependencyGraphTree();
 	MMAPI::Log::Info("Plugin started!");
 	return AURIE_SUCCESS;
 }

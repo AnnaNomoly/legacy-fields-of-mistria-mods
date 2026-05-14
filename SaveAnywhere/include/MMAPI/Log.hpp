@@ -11,6 +11,7 @@
 #include <fstream>
 #include <map>
 #include <string>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -65,14 +66,26 @@ namespace MMAPI::Log
 
 		// Adjacency list of recorded dependency edges, keyed by caller name (typically a
 		// Hooks::* registrar name or another module's Enable). Populated by the
-		// MMAPI_ENABLE_DEPENDENCY macro and rendered by Log::DumpDependencyGraph(). Edges
-		// are deduplicated so repeated cascades don't bloat the structural view.
+		// MMAPI_ENABLE_DEPENDENCY macro and rendered by Log::DumpDependencyGraphFlat() or
+		// Log::DumpDependencyGraphTree(). Edges are deduplicated per caller so repeated
+		// cascades don't bloat the structural view.
+		//
+		// Two parallel structures so the dumps can render in invocation order:
+		// - `dependency_graph_caller_order` preserves the order in which distinct callers
+		//   first appeared (read top-to-bottom = cascade sequence during init).
+		// - `dependency_graph` provides O(log n) lookup for dedup checks.
+		// Within a caller's adjacency vector, dependency entries are themselves in
+		// invocation order (vector preserves push order).
+		inline std::vector<std::string> dependency_graph_caller_order;
 		inline std::map<std::string, std::vector<std::string>> dependency_graph;
 
 		inline void RecordDependencyEdge(const char* caller, const char* dependency)
 		{
 			if (!caller || !dependency) return;
-			auto& deps = dependency_graph[caller];
+			auto [it, inserted] = dependency_graph.try_emplace(caller);
+			if (inserted)
+				dependency_graph_caller_order.push_back(caller);
+			auto& deps = it->second;
 			if (std::find(deps.begin(), deps.end(), dependency) == deps.end())
 				deps.push_back(dependency);
 		}
@@ -137,17 +150,56 @@ namespace MMAPI::Log
 			file_path_initialized = true;
 		}
 
+		// One-shot console reports on file-sink failure. Without these, an unwritable file path
+		// (e.g. UAC-protected Program Files installs, antivirus blocks, missing permissions)
+		// produces zero file output and zero diagnostics — the user sees "log file missing" with
+		// no way to tell why. Console-only because the file sink is by definition broken at this
+		// point; the reports use module_interface->Print directly to avoid recursion through Dispatch.
+		inline bool file_failure_reported = false;
+
+		inline void ReportFileSinkFailureOnce(const char* what, const std::filesystem::path& path, const std::error_code& ec)
+		{
+			if (file_failure_reported || !MMAPI::Internal::module_interface)
+				return;
+			file_failure_reported = true;
+			MMAPI::Internal::module_interface->Print(
+				YYTK::CM_LIGHTYELLOW,
+				"[%s %s] [WARN ] MMAPI log file sink: %s failed for '%s' (error %d: %s) — file logging disabled",
+				MMAPI::Internal::mod_name.c_str(),
+				MMAPI::Internal::mod_version.c_str(),
+				what,
+				path.string().c_str(),
+				ec.value(),
+				ec.message().c_str()
+			);
+		}
+
 		inline void WriteTimestampedLine(Level level, const char* message)
 		{
 			EnsureFilePathInitialized();
 
-			if (!file_stream.is_open() && !file_path.empty())
+			if (!file_stream.is_open() && !file_path.empty() && !file_failure_reported)
 			{
 				std::error_code ec;
 				std::filesystem::create_directories(file_path.parent_path(), ec);
+				if (ec)
+				{
+					ReportFileSinkFailureOnce("create_directories", file_path.parent_path(), ec);
+					return;
+				}
+
 				// Truncate on first write each session, matching YYTK's log behavior.
 				// Subsequent writes append to the same open stream.
 				file_stream.open(file_path, std::ios::out | std::ios::trunc);
+				if (!file_stream.is_open())
+				{
+					// ofstream::open doesn't surface a std::error_code; we use errno (set by the
+					// underlying libc fopen) and route through std::generic_category for a readable
+					// message. On Windows MSVC, errno is set to EACCES / ENOENT / EBUSY etc.
+					std::error_code open_ec(errno, std::generic_category());
+					ReportFileSinkFailureOnce("ofstream::open", file_path, open_ec);
+					return;
+				}
 			}
 
 			if (!file_stream.is_open())
@@ -285,27 +337,74 @@ namespace MMAPI::Log
 	template <typename... Args>
 	inline void DebugFile(const char* format, Args... args) { Internal::FormatAndDispatchFileOnly(Level::Debug, format, args...); }
 
-	/// Pretty-prints the recorded MMAPI dependency graph to the file sink only. The graph is
-	/// populated by every MMAPI_ENABLE_DEPENDENCY invocation, with edges deduplicated per
-	/// caller. Output groups edges by caller (typically a Hooks::* registrar name or another
-	/// module's Enable) and renders each adjacency list with ASCII tree connectors.
+	namespace Internal
+	{
+		// UTF-8 byte sequences for the tree connectors. Kept as named constants so the bare
+		// byte literals don't appear inline at each printf site.
+		inline constexpr const char* kTreeConnectorMid   = "\xE2\x94\x9C\xE2\x94\x80\xE2\x94\x80";  // ├──
+		inline constexpr const char* kTreeConnectorLast  = "\xE2\x94\x94\xE2\x94\x80\xE2\x94\x80";  // └──
+		inline constexpr const char* kTreeIndentMid      = "\xE2\x94\x82\x20\x20\x20";              // │
+		inline constexpr const char* kTreeIndentLast     = "    ";
+
+		// DFS render of a single node and its subtree. `prefix` accumulates the column-leader
+		// string for this depth (the vertical bars / spaces that connect this row's connector
+		// back to the root). `visited` is shared across the entire dump so shared dependencies
+		// are expanded exactly once; subsequent encounters print "(already enabled)" and stop
+		// recursing — also breaks any defensive cycle that shouldn't normally exist.
+		inline void RenderDependencySubtree(
+			const std::string& node,
+			const std::string& prefix,
+			bool is_last,
+			std::unordered_set<std::string>& visited)
+		{
+			const char* connector = is_last ? kTreeConnectorLast : kTreeConnectorMid;
+			auto [_, first_visit] = visited.insert(node);
+
+			char line[kMessageBufferSize];
+			if (first_visit)
+				std::snprintf(line, sizeof(line), "%s%s %s", prefix.c_str(), connector, node.c_str());
+			else
+				std::snprintf(line, sizeof(line), "%s%s %s (already enabled)", prefix.c_str(), connector, node.c_str());
+			WriteTimestampedLine(Level::Debug, line);
+
+			if (!first_visit) return;
+
+			auto it = dependency_graph.find(node);
+			if (it == dependency_graph.end()) return;  // leaf — no recorded deps
+
+			const auto& deps = it->second;
+			const std::string child_prefix = prefix + (is_last ? kTreeIndentLast : kTreeIndentMid);
+			for (size_t i = 0; i < deps.size(); ++i)
+			{
+				const bool child_is_last = (i + 1 == deps.size());
+				RenderDependencySubtree(deps[i], child_prefix, child_is_last, visited);
+			}
+		}
+	}
+
+	/// Pretty-prints the recorded MMAPI dependency graph to the file sink only — flat form.
+	/// Each caller (Hooks::* registrar or module Enable) gets its own block listing only its
+	/// direct dependencies. Shared dependencies appear once per caller that uses them. Compact
+	/// for shallow audits; the structural cascade is NOT followed.
+	///
+	/// Use `DumpDependencyGraphTree()` instead if you want to see transitive cascades nested
+	/// under each root (depth-first, deduplicated globally).
 	///
 	/// Intended to be called once after the mod's initialization has settled (typically the
 	/// end of ModuleInitialize). No-op if the File sink is not enabled or current_level is
 	/// above Debug. Console output is never emitted regardless of sink config.
 	///
 	/// Sample output:
-	///   === MMAPI Dependency Graph ===
-	///   Recorded 11 edges across 5 callers
+	///   === MMAPI Dependency Graph (flat) ===
+	///   Recorded 11 edges across 5 callers (invocation order)
 	///
-	///   BeforeUseItem
-	///   └── MMAPI::Item
-	///
-	///   Enable
+	///   MMAPI::Item
 	///   ├── MMAPI::Instance
-	///   ├── MMAPI::Text
-	///   └── MMAPI::Weather
-	inline void DumpDependencyGraph()
+	///   └── MMAPI::Text
+	///
+	///   MMAPI::Text
+	///   └── MMAPI::Instance
+	inline void DumpDependencyGraphFlat()
 	{
 		if (static_cast<int>(Level::Debug) < static_cast<int>(Internal::current_level))
 			return;
@@ -316,16 +415,20 @@ namespace MMAPI::Log
 		for (const auto& [_, deps] : Internal::dependency_graph)
 			edge_count += deps.size();
 
-		Internal::WriteTimestampedLine(Level::Debug, "=== MMAPI Dependency Graph ===");
+		Internal::WriteTimestampedLine(Level::Debug, "=== MMAPI Dependency Graph (flat) ===");
 		char header[128];
 		std::snprintf(header, sizeof(header),
-			"Recorded %zu edges across %zu callers",
+			"Recorded %zu edges across %zu callers (invocation order)",
 			edge_count, Internal::dependency_graph.size());
 		Internal::WriteTimestampedLine(Level::Debug, header);
 		Internal::WriteTimestampedLine(Level::Debug, "");
 
-		for (const auto& [caller, deps] : Internal::dependency_graph)
+		// Iterate the parallel order vector instead of the map so callers appear in the
+		// sequence they first recorded an edge — matches the chronological log entries
+		// above and makes init-cascade reasoning natural to read top-to-bottom.
+		for (const auto& caller : Internal::dependency_graph_caller_order)
 		{
+			const auto& deps = Internal::dependency_graph.at(caller);
 			Internal::WriteTimestampedLine(Level::Debug, caller.c_str());
 			for (size_t i = 0; i < deps.size(); ++i)
 			{
@@ -333,9 +436,83 @@ namespace MMAPI::Log
 				char line[Internal::kMessageBufferSize];
 				std::snprintf(line, sizeof(line),
 					"%s %s",
-					is_last ? "\xE2\x94\x94\xE2\x94\x80\xE2\x94\x80" : "\xE2\x94\x9C\xE2\x94\x80\xE2\x94\x80",
+					is_last ? Internal::kTreeConnectorLast : Internal::kTreeConnectorMid,
 					deps[i].c_str());
 				Internal::WriteTimestampedLine(Level::Debug, line);
+			}
+			Internal::WriteTimestampedLine(Level::Debug, "");
+		}
+	}
+
+	/// Pretty-prints the recorded MMAPI dependency graph to the file sink only — nested tree
+	/// form. Each top-level root (a caller that no other caller depends on) is expanded
+	/// depth-first to show the full transitive cascade. Shared dependencies are expanded once
+	/// globally; subsequent encounters are rendered as `<node> (already enabled)` so the dump
+	/// doesn't repeat itself.
+	///
+	/// More useful than the flat form for understanding "what cascade actually happened" — you
+	/// can read top-to-bottom and follow the cascade tree. Tradeoff: shared deps appear once
+	/// fully expanded plus several `(already enabled)` markers in other roots' subtrees, which
+	/// is more lines than the flat form for graphs with lots of shared deps.
+	///
+	/// Use `DumpDependencyGraphFlat()` instead for a per-caller direct-deps view that's more
+	/// compact and easier to grep.
+	///
+	/// Intended to be called once after the mod's initialization has settled (typically the
+	/// end of ModuleInitialize). No-op if the File sink is not enabled or current_level is
+	/// above Debug. Console output is never emitted regardless of sink config.
+	///
+	/// Sample output:
+	///   === MMAPI Dependency Graph (tree) ===
+	///   Recorded 11 edges across 5 callers (depth-first from each root)
+	///
+	///   MMAPI::Item
+	///   ├── MMAPI::Instance
+	///   │   └── MMAPI::Weather
+	///   └── MMAPI::Text
+	///       └── MMAPI::Instance (already enabled)
+	///
+	///   MMAPI::Game
+	///   ├── MMAPI::Instance (already enabled)
+	///   └── MMAPI::Weather (already enabled)
+	inline void DumpDependencyGraphTree()
+	{
+		if (static_cast<int>(Level::Debug) < static_cast<int>(Internal::current_level))
+			return;
+		if (!HasSink(Internal::current_sinks, Sinks::File))
+			return;
+
+		size_t edge_count = 0;
+		for (const auto& [_, deps] : Internal::dependency_graph)
+			edge_count += deps.size();
+
+		Internal::WriteTimestampedLine(Level::Debug, "=== MMAPI Dependency Graph (tree) ===");
+		char header[128];
+		std::snprintf(header, sizeof(header),
+			"Recorded %zu edges across %zu callers (depth-first from each root)",
+			edge_count, Internal::dependency_graph.size());
+		Internal::WriteTimestampedLine(Level::Debug, header);
+		Internal::WriteTimestampedLine(Level::Debug, "");
+
+		// Iterate the caller order vector and render each entry as a top-level subtree IFF it
+		// hasn't already been visited via an earlier expansion. This:
+		// - preserves invocation order at the top level (same as the flat dump)
+		// - skips non-root callers whose subtree was already shown under their parent
+		// - gives every direct-user-call a top-level entry unless it was reached transitively first
+		std::unordered_set<std::string> visited;
+		for (const auto& caller : Internal::dependency_graph_caller_order)
+		{
+			if (visited.contains(caller))
+				continue;
+
+			visited.insert(caller);
+			Internal::WriteTimestampedLine(Level::Debug, caller.c_str());
+
+			const auto& deps = Internal::dependency_graph.at(caller);
+			for (size_t i = 0; i < deps.size(); ++i)
+			{
+				const bool is_last = (i + 1 == deps.size());
+				Internal::RenderDependencySubtree(deps[i], "", is_last, visited);
 			}
 			Internal::WriteTimestampedLine(Level::Debug, "");
 		}

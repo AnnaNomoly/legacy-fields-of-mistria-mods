@@ -4,6 +4,7 @@
 #include "Hook.hpp"
 #include "Log.hpp"
 #include "Status.hpp"
+#include "Weather.hpp"
 
 #include <map>
 #include <string>
@@ -196,6 +197,25 @@ namespace MMAPI::Instance
 		inline std::map<std::string, OnObjectCallCallback> object_call_callbacks;
 		inline bool object_dispatcher_installed = false;
 
+		// Set true on the first get_weather fire per session (via MMAPI's internal game-active
+		// pub/sub in Core), reset to false on return-to-title (via MMAPI's setup_main_screen
+		// pub/sub). Gates user OnObjectCall callbacks so they never run during the load-transition
+		// window where instances exist but the world isn't settled — the same window that produces
+		// `asset_has_tags(undefined, ...)` crashes from room-context GML scripts. Internal handlers
+		// in `internal_object_call_handlers` are NOT gated — MMAPI-internal subscribers are
+		// MMAPI-controlled and tolerate pre-active firing.
+		inline bool game_active = false;
+
+		inline void OnGameActiveSetFlag()
+		{
+			game_active = true;
+		}
+
+		inline void OnReturnToTitleClearFlag(YYTK::CInstance* /*Self*/, YYTK::CInstance* /*Other*/)
+		{
+			game_active = false;
+		}
+
 		// Internal per-object handlers. Multiple modules may subscribe to the same object name
 		// (e.g. Player subscribes to obj_ari for use-action edge detection while Telepop's user
 		// callback also runs for obj_ari). All internal handlers for a matching object fire
@@ -245,6 +265,13 @@ namespace MMAPI::Instance
 
 			// Fire all internal handlers whose object name matches, then the single user callback.
 			// Internal handlers don't short-circuit each other; the user callback runs at most once.
+			//
+			// Internal handlers run regardless of game_active — they're MMAPI-controlled and may have
+			// reasons to track ticks during the load transition (none currently do, but the
+			// architectural seam is preserved). User callbacks are gated on game_active: the load
+			// transition window has obj_* instances ticking against an unsettled world, which is
+			// strictly garbage state from a mod's perspective — and worse, calling room-context
+			// GML helpers there crashes the runner with `asset_has_tags(undefined, ...)`.
 			for (const auto& [registered_name, handlers] : internal_object_call_handlers)
 			{
 				if (IsNamed(self, registered_name))
@@ -253,6 +280,9 @@ namespace MMAPI::Instance
 						handler(self);
 				}
 			}
+
+			if (!game_active)
+				return;
 
 			for (const auto& [registered_name, callback] : object_call_callbacks)
 			{
@@ -338,6 +368,14 @@ namespace MMAPI::Instance
 			return MMAPI::Status::Success;
 
 		MMAPI::Log::Debug("MMAPI::Instance::Enable() called");
+
+		// Cascade to Weather so its get_weather hook fires our game-active handler and its
+		// setup_main_screen hook fires our return-to-title handler. Without this cascade the
+		// game_active flag stays false forever and user OnObjectCall callbacks never dispatch.
+		MMAPI_ENABLE_DEPENDENCY(MMAPI::Instance, MMAPI::Weather);
+
+		MMAPI::Internal::RegisterOnGameActiveHandler(Internal::OnGameActiveSetFlag);
+		MMAPI::Internal::RegisterOnSetupMainScreenHandler(Internal::OnReturnToTitleClearFlag);
 
 		if (!Internal::object_dispatcher_installed)
 		{

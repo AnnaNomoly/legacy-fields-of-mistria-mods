@@ -54,6 +54,22 @@ namespace MMAPI
 			on_setup_main_screen_internal_handlers.push_back(handler);
 		}
 
+		// Internal pub/sub list of handlers invoked when the game first becomes interactive each
+		// session — fired from Weather's get_weather callback alongside the user-facing
+		// MMAPI::Game::Hooks::AfterGameActive registration. Used by modules that need to flip
+		// internal "game is settled" gating without claiming the single-slot user callback.
+		// Reset to "not active" via the setup_main_screen pub/sub on return-to-title.
+		using OnGameActiveHandler = void(*)();
+		inline std::vector<OnGameActiveHandler> on_game_active_internal_handlers;
+
+		inline void RegisterOnGameActiveHandler(OnGameActiveHandler handler)
+		{
+			for (auto existing : on_game_active_internal_handlers)
+				if (existing == handler)
+					return;
+			on_game_active_internal_handlers.push_back(handler);
+		}
+
 		/// Captures a pair of game object instance pointers the first time it is seen.
 		/// Used internally by MMAPI::Instance::Enable()'s EVENT_OBJECT_CALL dispatcher.
 		inline void RegisterInstanceContext(const char* instance_name, YYTK::CInstance* Self, YYTK::CInstance* Other)
@@ -186,7 +202,8 @@ namespace MMAPI
 //
 // On success: emits a DEBUG dependency-edge entry to the file sink only AND records
 // the edge into MMAPI::Log::Internal::dependency_graph for later structured
-// rendering via MMAPI::Log::DumpDependencyGraph(). The console stays quiet — these
+// rendering via MMAPI::Log::DumpDependencyGraphFlat() or DumpDependencyGraphTree().
+// The console stays quiet — these
 // are noisy by design and only useful when debugging initialization order.
 // On failure: emits a WARN entry to both sinks naming the failed dependency and
 // short-circuits the caller with the failure status.

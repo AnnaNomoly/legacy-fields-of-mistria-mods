@@ -285,8 +285,16 @@ namespace MMAPI::Dungeon
 	}
 
 	/// Returns true if the current room is a dungeon room.
+	///
+	/// Safe to call at any point in the mod lifecycle, including before AfterGameActive fires —
+	/// gated by MMAPI::Game::IsRoomReady so the underlying gml_Script_is_dungeon_room (which calls
+	/// `asset_has_tags(room, ...)`) is never invoked with an undefined `room`. Returns false during
+	/// pre-load transitions where no room is set, instead of crashing the runner.
 	inline bool IsDungeonRoom()
 	{
+		if (!MMAPI::Game::IsRoomReady())
+			return false;
+
 		YYTK::CScript* gml_script = nullptr;
 		MMAPI::Internal::module_interface->GetNamedRoutinePointer("gml_Script_is_dungeon_room", reinterpret_cast<PVOID*>(&gml_script));
 

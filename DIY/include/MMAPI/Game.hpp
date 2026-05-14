@@ -519,6 +519,26 @@ namespace MMAPI::Game
 		);
 	}
 
+	/// Returns true when the `room` builtin holds a valid current-room asset_id.
+	///
+	/// Use this as a precondition gate before calling any GML script that implicitly reads
+	/// the `room` builtin and would crash on `undefined` (e.g. `is_dungeon_room` and friends).
+	/// During save-load transitions, before the title screen settles, or between rooms in
+	/// some flows, `room` can be unset/undefined and the underlying scripts will pass it to
+	/// `asset_has_tags(room, ...)` which throws "argument 1 incorrect type (undefined)".
+	///
+	/// MMAPI helpers that wrap such scripts call this first and short-circuit safely; mod
+	/// callers can use it too for early-tick guards.
+	/// @return True if `room` resolves to a non-negative numeric asset_id; false otherwise.
+	inline bool IsRoomReady()
+	{
+		YYTK::RValue room_id;
+		Aurie::AurieStatus status = MMAPI::Internal::module_interface->GetBuiltin("room", nullptr, NULL_INDEX, room_id);
+		if (!Aurie::AurieSuccess(status))
+			return false;
+		return MMAPI::Engine::IsNumeric(room_id) && room_id.ToDouble() >= 0;
+	}
+
 	/// Returns the current GM room name.
 	/// @return The current GM room name, or an empty string if it cannot be read.
 	inline std::string GetCurrentRoomName()

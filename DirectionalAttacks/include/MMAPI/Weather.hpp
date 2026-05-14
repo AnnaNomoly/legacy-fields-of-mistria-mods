@@ -119,11 +119,15 @@ namespace MMAPI::Weather
 			weather_manager_other = Other;
 
 			// First get_weather fire per session signals "game is interactive". Drives the
-			// user-facing Game::Hooks::AfterGameActive hook. Fires exactly once between title
+			// user-facing Game::Hooks::AfterGameActive hook AND the internal pub/sub registered
+			// via MMAPI::Internal::RegisterOnGameActiveHandler (used by Instance::Hooks::OnObjectCall
+			// to gate user dispatch on game-active state). Fires exactly once between title
 			// transitions — game_active_observed_this_session is cleared on return-to-title.
 			if (!game_active_observed_this_session)
 			{
 				game_active_observed_this_session = true;
+				for (auto handler : MMAPI::Internal::on_game_active_internal_handlers)
+					handler();
 				if (game_active_callback)
 					game_active_callback();
 			}
