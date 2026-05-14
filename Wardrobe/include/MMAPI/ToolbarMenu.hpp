@@ -36,9 +36,13 @@ namespace MMAPI::ToolbarMenu
 			IN YYTK::RValue** Arguments
 		)
 		{
-			// Refresh the latched pair every tick.
-			toolbar_menu_self  = Self;
-			toolbar_menu_other = Other;
+			// Latch on first observation only (matches pre-MMAPI DD's pattern for this script).
+			// See StatusEffect's manager-update comment for the failure mode of re-latching.
+			if (!toolbar_menu_self)
+			{
+				toolbar_menu_self  = Self;
+				toolbar_menu_other = Other;
+			}
 
 			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
 				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_UPDATE_TOOLBAR_MENU)

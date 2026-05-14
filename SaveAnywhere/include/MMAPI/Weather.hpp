@@ -114,9 +114,14 @@ namespace MMAPI::Weather
 
 		inline YYTK::RValue& GetWeatherContextCallback(IN YYTK::CInstance* Self, IN YYTK::CInstance* Other, OUT YYTK::RValue& Result, IN int ArgumentCount, IN YYTK::RValue** Arguments)
 		{
-			// Refresh on every fire.
-			weather_manager_self  = Self;
-			weather_manager_other = Other;
+			// Latch on first observation only. The WeatherManager is a singleton; later-tick
+			// Self/Other can feed downstream script calls a context the script doesn't accept —
+			// see StatusEffect's manager-update comment.
+			if (!weather_manager_self)
+			{
+				weather_manager_self  = Self;
+				weather_manager_other = Other;
+			}
 
 			// First get_weather fire per session signals "game is interactive". Drives the
 			// user-facing Game::Hooks::AfterGameActive hook AND the internal pub/sub registered

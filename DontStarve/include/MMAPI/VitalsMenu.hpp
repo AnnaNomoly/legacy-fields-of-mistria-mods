@@ -37,9 +37,13 @@ namespace MMAPI::VitalsMenu
 			IN YYTK::RValue** Arguments
 		)
 		{
-			// Refresh the latched pair every call.
-			vitals_menu_self  = Self;
-			vitals_menu_other = Other;
+			// Latch on first observation only (matches pre-MMAPI DD's pattern for this script).
+			// See StatusEffect's manager-update comment for the failure mode of re-latching.
+			if (!vitals_menu_self)
+			{
+				vitals_menu_self  = Self;
+				vitals_menu_other = Other;
+			}
 
 			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
 				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_SET_MAX_HEALTH)

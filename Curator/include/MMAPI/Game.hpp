@@ -357,10 +357,14 @@ namespace MMAPI::Game
 			IN YYTK::RValue** Arguments
 		)
 		{
-			// Refresh the SceneAudioPlayer Self/Other latch on every fire so TryGetSceneAudioPlayerContext
-			// (and the public StopSceneAudio helper) always has the freshest pair.
-			scene_audio_player_self  = Self;
-			scene_audio_player_other = Other;
+			// Latch on first observation only (matches pre-MMAPI DD's pattern for this script).
+			// Re-latching every tick can feed a later-tick Other into downstream script calls
+			// that the script doesn't accept — see StatusEffect's manager-update comment.
+			if (!scene_audio_player_self)
+			{
+				scene_audio_player_self  = Self;
+				scene_audio_player_other = Other;
+			}
 
 			if (before_play_audio_callback && Arguments && ArgumentCount >= 1 && Arguments[0])
 			{

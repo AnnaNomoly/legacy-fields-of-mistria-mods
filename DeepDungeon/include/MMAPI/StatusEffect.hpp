@@ -50,18 +50,28 @@ namespace MMAPI::StatusEffect
 
 	struct RegisterStatusEffectContext
 	{
-		int    m_status_id = 0;
-		double m_amount    = 0.0;
-		int    m_start     = 0;
-		int    m_finish    = 0;
-		bool   m_cancelled = false;
+		int    m_status_id        = 0;
+		double m_amount           = 0.0;
+		int    m_start            = 0;
+		int    m_finish           = 0;
+		bool   m_cancelled        = false;
+
+		// Tracks whether the user callback explicitly modified the value via Set*. The hook
+		// only writes back to the underlying script args when these are true, which preserves
+		// the original RValue kind (including VALUE_UNDEFINED) when the callback didn't touch
+		// the field. Without this, every register_status_effect call gets its args silently
+		// rebuilt as RValue(double)/RValue(int) — turning undefined amounts (used by effects
+		// like Fairy that have no numeric magnitude) into 0.0, which the game's register
+		// script handles differently and which crashes the hook's own ToDouble read.
+		bool   m_amount_modified  = false;
+		bool   m_finish_modified  = false;
 
 		MMAPI::StatusEffect::Ids GetStatusEffect() const { return static_cast<MMAPI::StatusEffect::Ids>(m_status_id); }
 		double GetAmount() const { return m_amount; }
-		void SetAmount(double amount) { m_amount = amount; }
+		void SetAmount(double amount) { m_amount = amount; m_amount_modified = true; }
 		int GetStart() const { return m_start; }
 		int GetFinish() const { return m_finish; }
-		void SetFinish(int finish) { m_finish = finish; }
+		void SetFinish(int finish) { m_finish = finish; m_finish_modified = true; }
 		void Cancel() { m_cancelled = true; }
 	};
 
@@ -97,10 +107,20 @@ namespace MMAPI::StatusEffect
 
 		inline YYTK::RValue& StatusEffectManagerUpdateContextCallback(IN YYTK::CInstance* Self, IN YYTK::CInstance* Other, OUT YYTK::RValue& Result, IN int ArgumentCount, IN YYTK::RValue** Arguments)
 		{
-			// Refresh the latched pair every tick; the manager is a long-lived singleton but the captured pointer
-			// is invalidated on return-to-title (see ClearStatusEffectManagerOnReturnToTitle).
-			status_effect_manager_self  = Self;
-			status_effect_manager_other = Other;
+			// Latch Self/Other from the FIRST manager update tick we observe and keep them frozen
+			// thereafter (cleared back to nullptr on return-to-title via ClearStatusEffectManagerOnReturnToTitle).
+			//
+			// Re-latching every tick (the previous implementation) caused register_status_effect
+			// calls routed through this pair to leave inner[id] as VALUE_UNDEFINED — the effect's
+			// icon would still show but its lifecycle never set up, so the in-game effect was inert.
+			// The register script is sensitive to which `Other` it receives, and a later-tick Other
+			// is not accepted the same way the first-tick Other is. Pre-MMAPI DD used the same
+			// first-only latch pattern for this script and its registrations worked.
+			if (!status_effect_manager_self)
+			{
+				status_effect_manager_self  = Self;
+				status_effect_manager_other = Other;
+			}
 
 			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE));
 			original(Self, Other, Result, ArgumentCount, Arguments);
@@ -202,9 +222,17 @@ namespace MMAPI::StatusEffect
 		{
 			if (before_register_status_effect_callback && Arguments && ArgumentCount >= 4)
 			{
+				// Safe-read amount: VALUE_UNDEFINED args (e.g. effects like Fairy that have
+				// no numeric magnitude) would crash inside ToDouble's PTR_RValue macro with
+				// "REAL argument incorrect type undefined". Default to 0.0 for the context;
+				// the writeback below only runs if the user callback explicitly sets it, so
+				// the original undefined RValue passes through to the game script untouched.
+				const bool amount_was_undefined = (Arguments[1]->m_Kind == YYTK::VALUE_UNDEFINED);
+				const double amount_for_context = amount_was_undefined ? 0.0 : Arguments[1]->ToDouble();
+
 				MMAPI::StatusEffect::RegisterStatusEffectContext context{
 					static_cast<int>(Arguments[0]->ToInt64()),
-					Arguments[1]->ToDouble(),
+					amount_for_context,
 					static_cast<int>(Arguments[2]->ToInt64()),
 					static_cast<int>(Arguments[3]->ToInt64())
 				};
@@ -213,8 +241,14 @@ namespace MMAPI::StatusEffect
 				if (context.m_cancelled)
 					return Result;
 
-				*Arguments[1] = YYTK::RValue(context.m_amount);
-				*Arguments[3] = YYTK::RValue(context.m_finish);
+				// Conditional writeback — only mutate the original script args if the user
+				// callback explicitly called SetAmount/SetFinish. Preserves the original
+				// RValue kind (including undefined amounts) when the callback didn't touch
+				// the field, instead of silently rebuilding every call's args.
+				if (context.m_amount_modified)
+					*Arguments[1] = YYTK::RValue(context.m_amount);
+				if (context.m_finish_modified)
+					*Arguments[3] = YYTK::RValue(context.m_finish);
 			}
 
 			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(

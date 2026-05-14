@@ -32,9 +32,13 @@ namespace MMAPI::T2
 
 		inline YYTK::RValue& T2ReadContextCallback(IN YYTK::CInstance* Self, IN YYTK::CInstance* Other, OUT YYTK::RValue& Result, IN int ArgumentCount, IN YYTK::RValue** Arguments)
 		{
-			// Refresh on every fire.
-			t2_self  = Self;
-			t2_other = Other;
+			// Latch on first observation only (matches pre-MMAPI DD's pattern for this script).
+			// See StatusEffect's manager-update comment for the failure mode of re-latching.
+			if (!t2_self)
+			{
+				t2_self  = Self;
+				t2_other = Other;
+			}
 
 			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_T2_READ));
 			original(Self, Other, Result, ArgumentCount, Arguments);

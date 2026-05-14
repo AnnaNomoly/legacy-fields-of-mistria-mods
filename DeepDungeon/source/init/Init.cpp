@@ -83,6 +83,8 @@ EXPORTED AurieStatus ModuleInitialize(
         CInstance* mmapi_global = nullptr;
         g_ModuleInterface->GetGlobalInstance(&mmapi_global);
         MMAPI::Initialize(g_ModuleInterface, mmapi_global, g_ArSelfModule, MOD_NAME, MOD_VERSION);
+        MMAPI::Log::SetSinks(MMAPI::Log::Sinks::Console | MMAPI::Log::Sinks::File);
+        MMAPI::Log::SetLevel(MMAPI::Log::Level::Debug);
     }
 
     // MMAPI-managed hooks (the original HOOK_TABLE has been fully migrated).
@@ -179,6 +181,7 @@ EXPORTED AurieStatus ModuleInitialize(
     // Monster batch.
     MMAPI::Monster::Hooks::BeforeMonsterSpawn(BeforeMonsterSpawn);
 
+    MMAPI::Log::DumpDependencyGraphTree();
     g_ModuleInterface->Print(CM_LIGHTGREEN, "[%s %s] - Plugin started!", MOD_NAME, MOD_VERSION);
     return AURIE_SUCCESS;
 }

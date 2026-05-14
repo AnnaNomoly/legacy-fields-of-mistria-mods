@@ -94,9 +94,14 @@ namespace MMAPI::Calendar
 
 		inline YYTK::RValue& UnifiedTimeContextCallback(IN YYTK::CInstance* Self, IN YYTK::CInstance* Other, OUT YYTK::RValue& Result, IN int ArgumentCount, IN YYTK::RValue** Arguments)
 		{
-			// Refresh the latched pair every tick.
-			calendar_self  = Self;
-			calendar_other = Other;
+			// Latch on first observation and freeze. The Calendar is a singleton; later-tick
+			// Self/Other can feed downstream script calls a context the script doesn't accept
+			// (the same pattern that bit StatusEffect's register script).
+			if (!calendar_self)
+			{
+				calendar_self  = Self;
+				calendar_other = Other;
+			}
 
 			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_GET_UNIFIED_TIME));
 			original(Self, Other, Result, ArgumentCount, Arguments);

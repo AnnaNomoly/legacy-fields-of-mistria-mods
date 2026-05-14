@@ -160,9 +160,13 @@ namespace MMAPI::Inventory
 			IN YYTK::RValue** Arguments
 		)
 		{
-			// Refresh on every fire so we always have the freshest Inventory pair.
-			inventory_self  = Self;
-			inventory_other = Other;
+			// Latch on first observation only (matches pre-MMAPI DD's pattern for this script).
+			// See StatusEffect's manager-update comment for the failure mode of re-latching.
+			if (!inventory_self)
+			{
+				inventory_self  = Self;
+				inventory_other = Other;
+			}
 
 			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
 				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_DESERIALIZE_INVENTORY)

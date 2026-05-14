@@ -176,8 +176,13 @@ namespace MMAPI::Dungeon
 			original(Self, Other, Result, ArgumentCount, Arguments);
 
 			// Latch the live DungeonRunner so TryGetDungeonRunnerContext works from any code path.
-			dungeon_runner_self  = Self;
-			dungeon_runner_other = Other;
+			// First observation only — see StatusEffect's manager-update latch comment for why
+			// later-tick Self/Other can feed downstream script calls a context they don't accept.
+			if (!dungeon_runner_self)
+			{
+				dungeon_runner_self  = Self;
+				dungeon_runner_other = Other;
+			}
 
 			if (after_dungeon_room_start_callback)
 			{
