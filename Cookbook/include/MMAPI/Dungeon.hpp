@@ -214,18 +214,14 @@ namespace MMAPI::Dungeon
 
 		MMAPI::Log::Debug("MMAPI::Dungeon::Enable() called");
 
-		MMAPI::Status status = MMAPI::Instance::Enable();
-		if (!MMAPI::IsSuccess(status))
-			return status;
+		MMAPI_ENABLE_DEPENDENCY(MMAPI::Dungeon, MMAPI::Instance);
 
-		status = MMAPI::Location::Enable();
-		if (!MMAPI::IsSuccess(status))
-			return status;
+		MMAPI_ENABLE_DEPENDENCY(MMAPI::Dungeon, MMAPI::Location);
 
 		MMAPI::Internal::RegisterOnSetupMainScreenHandler(Internal::ClearDungeonRunnerOnReturnToTitle);
 		MMAPI::Location::Internal::RegisterOnGoToRoomHandler(Internal::OnGoToRoomUpdateFloor);
 
-		status = MMAPI::Internal::InstallScriptHooks({
+		MMAPI::Status status = MMAPI::Internal::InstallScriptHooks({
 			{ MMAPI::Internal::GML_SCRIPT_SETUP_MAIN_SCREEN, reinterpret_cast<PVOID>(MMAPI::Internal::GmlScriptBeforeSetupMainScreenCallback) },
 			{ Internal::GML_SCRIPT_ON_DUNGEON_ROOM_START,    reinterpret_cast<PVOID>(Internal::GmlScriptAfterDungeonRoomStartCallback) },
 			{ Internal::GML_SCRIPT_SPAWN_LADDER,             reinterpret_cast<PVOID>(Internal::GmlScriptSpawnLadderCallback) },
@@ -332,9 +328,7 @@ namespace MMAPI::Dungeon
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeSpawnLadder(Internal::BeforeSpawnLadderCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Dungeon::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Dungeon::Hooks::BeforeSpawnLadder, MMAPI::Dungeon);
 
 			return MMAPI::Internal::RegisterHook(
 				"Dungeon::BeforeSpawnLadder",
@@ -352,9 +346,7 @@ namespace MMAPI::Dungeon
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterDungeonRoomStart(Internal::AfterDungeonRoomStartCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Dungeon::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Dungeon::Hooks::AfterDungeonRoomStart, MMAPI::Dungeon);
 
 			return MMAPI::Internal::RegisterHook(
 				"Dungeon::AfterDungeonRoomStart",

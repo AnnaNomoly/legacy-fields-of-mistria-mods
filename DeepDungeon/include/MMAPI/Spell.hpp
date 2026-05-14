@@ -212,11 +212,9 @@ namespace MMAPI::Spell
 
 		MMAPI::Log::Debug("MMAPI::Spell::Enable() called");
 
-		MMAPI::Status status = MMAPI::Instance::Enable();
-		if (!MMAPI::IsSuccess(status))
-			return status;
+		MMAPI_ENABLE_DEPENDENCY(MMAPI::Spell, MMAPI::Instance);
 
-		status = MMAPI::Internal::InstallScriptHooks({
+		MMAPI::Status status = MMAPI::Internal::InstallScriptHooks({
 			{ Internal::GML_SCRIPT_CAN_CAST_SPELL, reinterpret_cast<PVOID>(Internal::GmlScriptCanCastSpellCallback) },
 			{ Internal::GML_SCRIPT_CAST_SPELL,     reinterpret_cast<PVOID>(Internal::GmlScriptCastSpellCallback) },
 		});
@@ -278,9 +276,7 @@ namespace MMAPI::Spell
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterCanCastSpell(Internal::AfterCanCastSpellCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Spell::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Spell::Hooks::AfterCanCastSpell, MMAPI::Spell);
 
 			return MMAPI::Internal::RegisterHook(
 				"Spell::AfterCanCastSpell",
@@ -295,9 +291,7 @@ namespace MMAPI::Spell
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeSpellCast(Internal::BeforeSpellCastCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Spell::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Spell::Hooks::BeforeSpellCast, MMAPI::Spell);
 
 			return MMAPI::Internal::RegisterHook(
 				"Spell::BeforeSpellCast",
@@ -313,9 +307,7 @@ namespace MMAPI::Spell
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterSpellCast(Internal::AfterSpellCastCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Spell::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Spell::Hooks::AfterSpellCast, MMAPI::Spell);
 
 			return MMAPI::Internal::RegisterHook(
 				"Spell::AfterSpellCast",

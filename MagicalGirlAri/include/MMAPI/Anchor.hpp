@@ -73,9 +73,7 @@ namespace MMAPI::Anchor
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeBeginStep(Internal::BeforeBeginStepCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Anchor::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Anchor::Hooks::BeforeBeginStep, MMAPI::Anchor);
 
 			return MMAPI::Internal::RegisterHook(
 				"Anchor::BeforeBeginStep",

@@ -376,13 +376,11 @@ namespace MMAPI::Location
 
 		MMAPI::Log::Debug("MMAPI::Location::Enable() called");
 
-		MMAPI::Status status = MMAPI::Instance::Enable();
-		if (!MMAPI::IsSuccess(status))
-			return status;
+		MMAPI_ENABLE_DEPENDENCY(MMAPI::Location, MMAPI::Instance);
 
 		MMAPI::Internal::RegisterOnSetupMainScreenHandler(Internal::BuildMaps);
 
-		status = MMAPI::Internal::InstallScriptHooks({
+		MMAPI::Status status = MMAPI::Internal::InstallScriptHooks({
 			{ MMAPI::Internal::GML_SCRIPT_SETUP_MAIN_SCREEN, reinterpret_cast<PVOID>(MMAPI::Internal::GmlScriptBeforeSetupMainScreenCallback) },
 			{ Internal::GML_SCRIPT_GO_TO_ROOM,               reinterpret_cast<PVOID>(Internal::GmlScriptGoToRoomCallback) },
 			{ Internal::GML_SCRIPT_SHOW_ROOM_TITLE,          reinterpret_cast<PVOID>(Internal::GmlScriptAfterShowRoomTitleCallback) },
@@ -584,9 +582,7 @@ namespace MMAPI::Location
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeGoToRoom(Internal::BeforeGoToRoomCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Location::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Location::Hooks::BeforeGoToRoom, MMAPI::Location);
 
 			return MMAPI::Internal::RegisterHook(
 				"Location::BeforeGoToRoom",
@@ -601,9 +597,7 @@ namespace MMAPI::Location
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterGoToRoom(Internal::AfterGoToRoomCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Location::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Location::Hooks::AfterGoToRoom, MMAPI::Location);
 
 			return MMAPI::Internal::RegisterHook(
 				"Location::AfterGoToRoom",
@@ -622,9 +616,7 @@ namespace MMAPI::Location
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterShowRoomTitle(Internal::AfterShowRoomTitleCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Location::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Location::Hooks::AfterShowRoomTitle, MMAPI::Location);
 
 			return MMAPI::Internal::RegisterHook(
 				"Location::AfterShowRoomTitle",

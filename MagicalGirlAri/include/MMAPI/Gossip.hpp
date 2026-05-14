@@ -153,9 +153,7 @@ namespace MMAPI::Gossip
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterGetSelections(Internal::AfterGetSelectionsCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Gossip::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Gossip::Hooks::AfterGetSelections, MMAPI::Gossip);
 
 			return MMAPI::Internal::RegisterHook(
 				"Gossip::AfterGetSelections",
@@ -171,9 +169,7 @@ namespace MMAPI::Gossip
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterClose(Internal::AfterCloseCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Gossip::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Gossip::Hooks::AfterClose, MMAPI::Gossip);
 
 			return MMAPI::Internal::RegisterHook(
 				"Gossip::AfterClose",

@@ -271,9 +271,7 @@ namespace MMAPI::Inventory
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterSlotPop(Internal::AfterSlotPopCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Inventory::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Inventory::Hooks::AfterSlotPop, MMAPI::Inventory);
 
 			return MMAPI::Internal::RegisterHook(
 				"Inventory::AfterSlotPop",
@@ -294,9 +292,7 @@ namespace MMAPI::Inventory
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterSlotDrain(Internal::AfterSlotDrainCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Inventory::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Inventory::Hooks::AfterSlotDrain, MMAPI::Inventory);
 
 			return MMAPI::Internal::RegisterHook(
 				"Inventory::AfterSlotDrain",

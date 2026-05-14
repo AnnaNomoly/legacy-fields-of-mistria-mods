@@ -386,9 +386,7 @@ namespace MMAPI::Instance
 				return MMAPI::Status::AlreadyRegistered;
 			}
 
-			MMAPI::Status status = MMAPI::Instance::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Instance::Hooks::OnObjectCall, MMAPI::Instance);
 
 			Internal::object_call_callbacks[object_name] = callback;
 			MMAPI::Log::Debug("Registered OnObjectCall for: %s", object_name);
@@ -414,9 +412,7 @@ namespace MMAPI::Instance
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeAttemptInteract(Internal::BeforeAttemptInteractCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Instance::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Instance::Hooks::BeforeAttemptInteract, MMAPI::Instance);
 
 			return MMAPI::Internal::RegisterHook(
 				"Instance::BeforeAttemptInteract",
@@ -439,9 +435,7 @@ namespace MMAPI::Instance
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeInteract(Internal::BeforeInteractCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Instance::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Instance::Hooks::BeforeInteract, MMAPI::Instance);
 
 			return MMAPI::Internal::RegisterHook(
 				"Instance::BeforeInteract",

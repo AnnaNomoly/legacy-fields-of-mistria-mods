@@ -245,9 +245,7 @@ namespace MMAPI::Display
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterDisplayResize(Internal::AfterDisplayResizeCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Display::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Display::Hooks::AfterDisplayResize, MMAPI::Display);
 
 			return MMAPI::Internal::RegisterHook(
 				"Display::AfterDisplayResize",
@@ -266,9 +264,7 @@ namespace MMAPI::Display
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeVertigoDrawWithColor(Internal::BeforeVertigoDrawWithColorCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Display::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Display::Hooks::BeforeVertigoDrawWithColor, MMAPI::Display);
 
 			return MMAPI::Internal::RegisterHook(
 				"Display::BeforeVertigoDrawWithColor",
@@ -284,9 +280,7 @@ namespace MMAPI::Display
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforePlayHealVfx(Internal::BeforePlayHealVfxCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Display::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Display::Hooks::BeforePlayHealVfx, MMAPI::Display);
 
 			return MMAPI::Internal::RegisterHook(
 				"Display::BeforePlayHealVfx",
@@ -302,9 +296,7 @@ namespace MMAPI::Display
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterDrawGui(Internal::AfterDrawGuiCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Display::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Display::Hooks::AfterDrawGui, MMAPI::Display);
 
 			return MMAPI::Internal::RegisterHook(
 				"Display::AfterDrawGui",
@@ -320,9 +312,7 @@ namespace MMAPI::Display
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterHudShouldShow(Internal::AfterHudShouldShowCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Display::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Display::Hooks::AfterHudShouldShow, MMAPI::Display);
 
 			return MMAPI::Internal::RegisterHook(
 				"Display::AfterHudShouldShow",

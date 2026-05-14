@@ -282,9 +282,7 @@ namespace MMAPI::Weather
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeGetWeather(Internal::BeforeGetWeatherCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Weather::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Weather::Hooks::BeforeGetWeather, MMAPI::Weather);
 
 			return MMAPI::Internal::RegisterHook(
 				"Weather::BeforeGetWeather",
@@ -301,9 +299,7 @@ namespace MMAPI::Weather
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterGetWeather(Internal::AfterGetWeatherCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Weather::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Weather::Hooks::AfterGetWeather, MMAPI::Weather);
 
 			return MMAPI::Internal::RegisterHook(
 				"Weather::AfterGetWeather",
@@ -321,9 +317,7 @@ namespace MMAPI::Weather
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterRoomStart(Internal::AfterRoomStartCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Weather::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Weather::Hooks::AfterRoomStart, MMAPI::Weather);
 
 			return MMAPI::Internal::RegisterHook(
 				"Weather::AfterRoomStart",

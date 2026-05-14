@@ -154,6 +154,7 @@ namespace MMAPI::Game
 		inline constexpr const char* GML_SCRIPT_LOAD_GAME               = "gml_Script_load_game";
 		inline constexpr const char* GML_SCRIPT_SAVE_GAME               = "gml_Script_save_game";
 		inline constexpr const char* GML_SCRIPT_SCENE_AUDIO_PLAYER_PLAY = "gml_Script_play@SceneAudioPlayer@SceneAudioPlayer";
+		inline constexpr const char* GML_SCRIPT_SCENE_AUDIO_PLAYER_STOP = "gml_Script_stop@SceneAudioPlayer@SceneAudioPlayer";
 		inline constexpr const char* GML_SCRIPT_JOURNAL_MENU_OPEN       = "gml_Script_initialize@JournalMenu@JournalMenu";
 		inline constexpr const char* GML_SCRIPT_JOURNAL_MENU_CLOSE      = "gml_Script_on_close@JournalMenu@JournalMenu";
 		inline constexpr const char* GML_SCRIPT_STORE_MENU_OPEN         = "gml_Script_init@StoreMenu@StoreMenu";
@@ -188,6 +189,32 @@ namespace MMAPI::Game
 		inline AfterStoreMenuOpenCallback     after_store_menu_open_callback       = nullptr;
 		inline AfterStoreMenuCloseCallback    after_store_menu_close_callback      = nullptr;
 		inline AfterStoreMenuAddItemCallback  after_store_menu_add_item_callback   = nullptr;
+
+		// Live SceneAudioPlayer Self/Other, latched from the play hook.
+		// Used by TryGetSceneAudioPlayerContext for callers that need to invoke follow-up
+		// scripts (e.g. stop@SceneAudioPlayer) outside any hook frame.
+		inline YYTK::CInstance* scene_audio_player_self  = nullptr;
+		inline YYTK::CInstance* scene_audio_player_other = nullptr;
+
+		// Cleared from the setup_main_screen pub/sub when the player returns to the title menu.
+		// Registered by Game::Enable().
+		inline void ClearSceneAudioPlayerOnReturnToTitle(YYTK::CInstance* /*Self*/, YYTK::CInstance* /*Other*/)
+		{
+			scene_audio_player_self  = nullptr;
+			scene_audio_player_other = nullptr;
+		}
+
+		/// Resolves the SceneAudioPlayer's GML calling context, latched from the most recent
+		/// play@SceneAudioPlayer fire. Cleared automatically when the game returns to the title menu.
+		/// @return True if a play has been observed this session, false otherwise.
+		inline bool TryGetSceneAudioPlayerContext(YYTK::CInstance*& Self, YYTK::CInstance*& Other)
+		{
+			if (!scene_audio_player_self)
+				return false;
+			Self  = scene_audio_player_self;
+			Other = scene_audio_player_other;
+			return true;
+		}
 
 		inline constexpr const char* ToGameKey(MMAPI::Game::XpValues value)
 		{
@@ -330,6 +357,11 @@ namespace MMAPI::Game
 			IN YYTK::RValue** Arguments
 		)
 		{
+			// Refresh the SceneAudioPlayer Self/Other latch on every fire so TryGetSceneAudioPlayerContext
+			// (and the public StopSceneAudio helper) always has the freshest pair.
+			scene_audio_player_self  = Self;
+			scene_audio_player_other = Other;
+
 			if (before_play_audio_callback && Arguments && ArgumentCount >= 1 && Arguments[0])
 			{
 				MMAPI::Game::PlayAudioContext context{ Arguments[0]->ToString() };
@@ -567,15 +599,13 @@ namespace MMAPI::Game
 
 		MMAPI::Log::Debug("MMAPI::Game::Enable() called");
 
-		MMAPI::Status status = MMAPI::Instance::Enable();
-		if (!MMAPI::IsSuccess(status))
-			return status;
+		MMAPI_ENABLE_DEPENDENCY(MMAPI::Game, MMAPI::Instance);
 
-		status = MMAPI::Weather::Enable();
-		if (!MMAPI::IsSuccess(status))
-			return status;
+		MMAPI_ENABLE_DEPENDENCY(MMAPI::Game, MMAPI::Weather);
 
-		status = MMAPI::Internal::InstallScriptHooks({
+		MMAPI::Internal::RegisterOnSetupMainScreenHandler(Internal::ClearSceneAudioPlayerOnReturnToTitle);
+
+		MMAPI::Status status = MMAPI::Internal::InstallScriptHooks({
 			{ Internal::GML_SCRIPT_END_DAY,                 reinterpret_cast<PVOID>(Internal::GmlScriptEndDayCallback) },
 			{ Internal::GML_SCRIPT_ARI_ON_NEW_DAY,          reinterpret_cast<PVOID>(Internal::GmlScriptAriBeforeNewDayCallback) },
 			{ Internal::GML_SCRIPT_LOAD_GAME,               reinterpret_cast<PVOID>(Internal::GmlScriptLoadGameCallback) },
@@ -593,6 +623,29 @@ namespace MMAPI::Game
 
 		Internal::enabled = true;
 		return MMAPI::Status::Success;
+	}
+
+	/// Stops the currently-playing SceneAudioPlayer track by invoking the game's
+	/// `stop@SceneAudioPlayer@SceneAudioPlayer` script with the most recently observed
+	/// SceneAudioPlayer Self/Other (latched on every play). Useful for forcing the audio
+	/// system to pick a new track on the next play call (e.g. between dungeon floors).
+	/// @attention Requires MMAPI::Game::Enable() to have been called.
+	/// @return True if the stop script was invoked, false if no play has been observed yet this session.
+	inline bool StopSceneAudio()
+	{
+		MMAPI_REQUIRE_ENABLED("Game", false);
+
+		YYTK::CInstance* Self  = nullptr;
+		YYTK::CInstance* Other = nullptr;
+		if (!Internal::TryGetSceneAudioPlayerContext(Self, Other))
+			return false;
+
+		YYTK::CScript* gml_script = nullptr;
+		MMAPI::Internal::module_interface->GetNamedRoutinePointer(Internal::GML_SCRIPT_SCENE_AUDIO_PLAYER_STOP, reinterpret_cast<PVOID*>(&gml_script));
+
+		YYTK::RValue result;
+		gml_script->m_Functions->m_ScriptFunction(Self, Other, result, 0, nullptr);
+		return true;
 	}
 
 	/// Sells the current shipping bin contents.
@@ -622,9 +675,7 @@ namespace MMAPI::Game
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterEndDay(Internal::EndDayCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Game::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Game::Hooks::AfterEndDay, MMAPI::Game);
 
 			return MMAPI::Internal::RegisterHook(
 				"Game::AfterEndDay",
@@ -638,9 +689,7 @@ namespace MMAPI::Game
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeNewDay(Internal::NewDayCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Game::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Game::Hooks::BeforeNewDay, MMAPI::Game);
 
 			return MMAPI::Internal::RegisterHook(
 				"Game::BeforeNewDay",
@@ -655,9 +704,7 @@ namespace MMAPI::Game
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterLoadGame(Internal::AfterLoadGameCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Game::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Game::Hooks::AfterLoadGame, MMAPI::Game);
 
 			return MMAPI::Internal::RegisterHook(
 				"Game::AfterLoadGame",
@@ -673,9 +720,7 @@ namespace MMAPI::Game
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeSaveGame(Internal::BeforeSaveGameCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Game::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Game::Hooks::BeforeSaveGame, MMAPI::Game);
 
 			return MMAPI::Internal::RegisterHook(
 				"Game::BeforeSaveGame",
@@ -690,9 +735,7 @@ namespace MMAPI::Game
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforePlayAudio(Internal::BeforePlayAudioCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Game::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Game::Hooks::BeforePlayAudio, MMAPI::Game);
 
 			return MMAPI::Internal::RegisterHook(
 				"Game::BeforePlayAudio",
@@ -706,9 +749,7 @@ namespace MMAPI::Game
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterJournalMenuOpen(Internal::AfterJournalMenuOpenCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Game::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Game::Hooks::AfterJournalMenuOpen, MMAPI::Game);
 
 			return MMAPI::Internal::RegisterHook(
 				"Game::AfterJournalMenuOpen",
@@ -722,9 +763,7 @@ namespace MMAPI::Game
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterJournalMenuClose(Internal::AfterJournalMenuCloseCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Game::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Game::Hooks::AfterJournalMenuClose, MMAPI::Game);
 
 			return MMAPI::Internal::RegisterHook(
 				"Game::AfterJournalMenuClose",
@@ -738,9 +777,7 @@ namespace MMAPI::Game
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterStoreMenuOpen(Internal::AfterStoreMenuOpenCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Game::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Game::Hooks::AfterStoreMenuOpen, MMAPI::Game);
 
 			return MMAPI::Internal::RegisterHook(
 				"Game::AfterStoreMenuOpen",
@@ -754,9 +791,7 @@ namespace MMAPI::Game
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterStoreMenuClose(Internal::AfterStoreMenuCloseCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Game::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Game::Hooks::AfterStoreMenuClose, MMAPI::Game);
 
 			return MMAPI::Internal::RegisterHook(
 				"Game::AfterStoreMenuClose",
@@ -775,9 +810,7 @@ namespace MMAPI::Game
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterStoreMenuAddItem(Internal::AfterStoreMenuAddItemCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Game::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Game::Hooks::AfterStoreMenuAddItem, MMAPI::Game);
 
 			return MMAPI::Internal::RegisterHook(
 				"Game::AfterStoreMenuAddItem",
@@ -793,9 +826,7 @@ namespace MMAPI::Game
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeSetupMainScreen(MMAPI::Internal::BeforeSetupMainScreenCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Game::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Game::Hooks::BeforeSetupMainScreen, MMAPI::Game);
 
 			return MMAPI::Internal::RegisterHook(
 				"Game::BeforeSetupMainScreen",
@@ -817,9 +848,7 @@ namespace MMAPI::Game
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterGameActive(MMAPI::Weather::Internal::GameActiveCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Game::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Game::Hooks::AfterGameActive, MMAPI::Game);
 
 			return MMAPI::Internal::RegisterHook(
 				"Game::AfterGameActive",
@@ -835,9 +864,7 @@ namespace MMAPI::Game
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeError(Internal::BeforeErrorCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Game::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Game::Hooks::BeforeError, MMAPI::Game);
 
 			return MMAPI::Internal::RegisterHook(
 				"Game::BeforeError",

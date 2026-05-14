@@ -205,9 +205,7 @@ namespace MMAPI::Perk
 
 		MMAPI::Log::Debug("MMAPI::Perk::Enable() called");
 
-		MMAPI::Status status = MMAPI::Instance::Enable();
-		if (!MMAPI::IsSuccess(status))
-			return status;
+		MMAPI_ENABLE_DEPENDENCY(MMAPI::Perk, MMAPI::Instance);
 
 		Internal::enabled = true;
 		return MMAPI::Status::Success;

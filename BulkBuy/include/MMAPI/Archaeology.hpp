@@ -94,9 +94,7 @@ namespace MMAPI::Archaeology
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterChooseRandomArtifact(Internal::AfterChooseRandomArtifactCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Archaeology::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Archaeology::Hooks::AfterChooseRandomArtifact, MMAPI::Archaeology);
 
 			return MMAPI::Internal::RegisterHook(
 				"Archaeology::AfterChooseRandomArtifact",

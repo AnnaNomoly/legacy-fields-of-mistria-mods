@@ -80,11 +80,9 @@ namespace MMAPI::Bug
 
 		MMAPI::Log::Debug("MMAPI::Bug::Enable() called");
 
-		MMAPI::Status status = MMAPI::Instance::Enable();
-		if (!MMAPI::IsSuccess(status))
-			return status;
+		MMAPI_ENABLE_DEPENDENCY(MMAPI::Bug, MMAPI::Instance);
 
-		status = MMAPI::Internal::InstallScriptHook(
+		MMAPI::Status status = MMAPI::Internal::InstallScriptHook(
 			Internal::GML_SCRIPT_CREATE_BUG,
 			reinterpret_cast<PVOID>(Internal::GmlScriptCreateBugCallback)
 		);
@@ -147,9 +145,7 @@ namespace MMAPI::Bug
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterBugSpawn(Internal::AfterBugSpawnCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Bug::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Bug::Hooks::AfterBugSpawn, MMAPI::Bug);
 
 			return MMAPI::Internal::RegisterHook(
 				"Bug::AfterBugSpawn",

@@ -539,9 +539,7 @@ namespace MMAPI::NPC
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeHeartPointsChange(Internal::BeforeHeartPointsChangeCallback callback)
 		{
-			MMAPI::Status status = MMAPI::NPC::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::NPC::Hooks::BeforeHeartPointsChange, MMAPI::NPC);
 
 			return MMAPI::Internal::RegisterHook(
 				"NPC::BeforeHeartPointsChange",
@@ -555,9 +553,7 @@ namespace MMAPI::NPC
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeReceiveGift(Internal::BeforeReceiveGiftCallback callback)
 		{
-			MMAPI::Status status = MMAPI::NPC::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::NPC::Hooks::BeforeReceiveGift, MMAPI::NPC);
 
 			return MMAPI::Internal::RegisterHook(
 				"NPC::BeforeReceiveGift",
@@ -574,9 +570,7 @@ namespace MMAPI::NPC
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterFindBlipNoise(Internal::AfterFindBlipNoiseCallback callback)
 		{
-			MMAPI::Status status = MMAPI::NPC::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::NPC::Hooks::AfterFindBlipNoise, MMAPI::NPC);
 
 			return MMAPI::Internal::RegisterHook(
 				"NPC::AfterFindBlipNoise",

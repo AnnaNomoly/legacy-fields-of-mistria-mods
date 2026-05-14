@@ -262,13 +262,11 @@ namespace MMAPI::StatusEffect
 
 		MMAPI::Log::Debug("MMAPI::StatusEffect::Enable() called");
 
-		MMAPI::Status status = MMAPI::Calendar::Enable();
-		if (!MMAPI::IsSuccess(status))
-			return status;
+		MMAPI_ENABLE_DEPENDENCY(MMAPI::StatusEffect, MMAPI::Calendar);
 
 		MMAPI::Internal::RegisterOnSetupMainScreenHandler(Internal::ClearStatusEffectManagerOnReturnToTitle);
 
-		status = MMAPI::Internal::InstallScriptHooks({
+		MMAPI::Status status = MMAPI::Internal::InstallScriptHooks({
 			{ MMAPI::Internal::GML_SCRIPT_SETUP_MAIN_SCREEN,        reinterpret_cast<PVOID>(MMAPI::Internal::GmlScriptBeforeSetupMainScreenCallback) },
 			{ Internal::GML_SCRIPT_STATUS_EFFECT_MANAGER_UPDATE,    reinterpret_cast<PVOID>(Internal::StatusEffectManagerUpdateContextCallback) },
 			{ Internal::GML_SCRIPT_REGISTER_STATUS_EFFECT,          reinterpret_cast<PVOID>(Internal::GmlScriptRegisterStatusEffectCallback) },
@@ -362,9 +360,7 @@ namespace MMAPI::StatusEffect
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeRegisterStatusEffect(Internal::BeforeRegisterStatusEffectCallback callback)
 		{
-			MMAPI::Status status = MMAPI::StatusEffect::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::StatusEffect::Hooks::BeforeRegisterStatusEffect, MMAPI::StatusEffect);
 
 			return MMAPI::Internal::RegisterHook(
 				"StatusEffect::BeforeRegisterStatusEffect",
@@ -379,9 +375,7 @@ namespace MMAPI::StatusEffect
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeCancelStatusEffect(Internal::BeforeCancelStatusEffectCallback callback)
 		{
-			MMAPI::Status status = MMAPI::StatusEffect::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::StatusEffect::Hooks::BeforeCancelStatusEffect, MMAPI::StatusEffect);
 
 			return MMAPI::Internal::RegisterHook(
 				"StatusEffect::BeforeCancelStatusEffect",

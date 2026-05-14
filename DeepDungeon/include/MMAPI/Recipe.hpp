@@ -147,16 +147,12 @@ namespace MMAPI::Recipe
 
 		MMAPI::Log::Debug("MMAPI::Recipe::Enable() called");
 
-		MMAPI::Status status = MMAPI::Instance::Enable();
-		if (!MMAPI::IsSuccess(status))
-			return status;
+		MMAPI_ENABLE_DEPENDENCY(MMAPI::Recipe, MMAPI::Instance);
 
 		// Recipe::SetComponentCount/SetComponentDuration call Item::GetItemData, which requires Item::Enable().
-		status = MMAPI::Item::Enable();
-		if (!MMAPI::IsSuccess(status))
-			return status;
+		MMAPI_ENABLE_DEPENDENCY(MMAPI::Recipe, MMAPI::Item);
 
-		status = MMAPI::Internal::InstallScriptHook(
+		MMAPI::Status status = MMAPI::Internal::InstallScriptHook(
 			Internal::GML_SCRIPT_GENERATE_INFUSIONS,
 			reinterpret_cast<PVOID>(Internal::GmlScriptAfterGenerateInfusionsCallback)
 		);
@@ -306,9 +302,7 @@ namespace MMAPI::Recipe
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterGenerateInfusions(Internal::AfterGenerateInfusionsCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Recipe::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Recipe::Hooks::AfterGenerateInfusions, MMAPI::Recipe);
 
 			return MMAPI::Internal::RegisterHook(
 				"Recipe::AfterGenerateInfusions",

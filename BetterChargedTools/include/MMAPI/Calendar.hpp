@@ -403,9 +403,7 @@ namespace MMAPI::Calendar
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeClockUpdate(Internal::BeforeClockUpdateCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Calendar::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Calendar::Hooks::BeforeClockUpdate, MMAPI::Calendar);
 
 			return MMAPI::Internal::RegisterHook(
 				"Calendar::BeforeClockUpdate",
@@ -422,9 +420,7 @@ namespace MMAPI::Calendar
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterClockUpdate(Internal::AfterClockUpdateCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Calendar::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Calendar::Hooks::AfterClockUpdate, MMAPI::Calendar);
 
 			return MMAPI::Internal::RegisterHook(
 				"Calendar::AfterClockUpdate",

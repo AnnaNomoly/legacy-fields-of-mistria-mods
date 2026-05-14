@@ -92,9 +92,7 @@ namespace MMAPI::Fish
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterFishCelebration(Internal::AfterFishCelebrationCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Fish::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Fish::Hooks::AfterFishCelebration, MMAPI::Fish);
 
 			return MMAPI::Internal::RegisterHook(
 				"Fish::AfterFishCelebration",
@@ -111,9 +109,7 @@ namespace MMAPI::Fish
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterDiveCelebration(Internal::AfterDiveCelebrationCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Fish::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Fish::Hooks::AfterDiveCelebration, MMAPI::Fish);
 
 			return MMAPI::Internal::RegisterHook(
 				"Fish::AfterDiveCelebration",

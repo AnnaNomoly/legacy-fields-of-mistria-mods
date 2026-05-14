@@ -133,3 +133,82 @@ namespace MMAPI
 		MMAPI::Internal::mod_version      = mod_version ? mod_version : "";
 	}
 }
+
+// =============================================================================
+// Enable-contract macros.
+//
+// These reference MMAPI::Log::Warn / MMAPI::Log::DebugFile / MMAPI::IsSuccess at
+// expansion site. Every MMAPI module file already includes Log.hpp (which pulls
+// Status.hpp and Core.hpp in turn), so no extra includes are required at any
+// call site.
+// =============================================================================
+
+// Contract enforcement: use at the top of public utility functions to warn when
+// callers invoke the function before the module's Enable(). The Internal::enabled
+// flag must be defined in the surrounding Internal namespace by each module.
+//
+// Non-void return form — provide a fallback return value.
+//   MMAPI_REQUIRE_ENABLED("Animal", false);
+//   MMAPI_REQUIRE_ENABLED("Spell", {});
+#define MMAPI_REQUIRE_ENABLED(module_label, return_value)                          \
+	do {                                                                           \
+		if (!Internal::enabled)                                                    \
+		{                                                                          \
+			MMAPI::Log::Warn("%s called before " module_label "::Enable()",        \
+				__FUNCTION__);                                                     \
+			return return_value;                                                   \
+		}                                                                          \
+	} while (0)
+
+// Void return form.
+//   MMAPI_REQUIRE_ENABLED_VOID("Animal");
+#define MMAPI_REQUIRE_ENABLED_VOID(module_label)                                   \
+	do {                                                                           \
+		if (!Internal::enabled)                                                    \
+		{                                                                          \
+			MMAPI::Log::Warn("%s called before " module_label "::Enable()",        \
+				__FUNCTION__);                                                     \
+			return;                                                                \
+		}                                                                          \
+	} while (0)
+
+// Cascade enabling of a dependency module. Use inside the caller's Enable() body
+// or inside a Hooks::* registrar (where the caller's own Enable must run first).
+//
+// First arg is the caller's fully-qualified identifier (e.g. `MMAPI::Item` for an
+// Enable() body, `MMAPI::Item::Hooks::BeforeUseItem` for a registrar). The arg is
+// stringified for graph keys and log messages — it is not a real C++ identifier
+// reference, so any token sequence will work, but conventionally matches the
+// surrounding scope so the graph rendering is meaningful.
+//
+// Second arg is the dependency module (must be a real namespace expression — the
+// macro emits `<arg>::Enable()`).
+//
+// On success: emits a DEBUG dependency-edge entry to the file sink only AND records
+// the edge into MMAPI::Log::Internal::dependency_graph for later structured
+// rendering via MMAPI::Log::DumpDependencyGraph(). The console stays quiet — these
+// are noisy by design and only useful when debugging initialization order.
+// On failure: emits a WARN entry to both sinks naming the failed dependency and
+// short-circuits the caller with the failure status.
+//
+// The local status is scoped via do-while so adjacent invocations don't collide,
+// and the prefixed name avoids clashing with any caller-local `status` variable.
+//
+//   MMAPI_ENABLE_DEPENDENCY(MMAPI::Item, MMAPI::Instance);
+//   MMAPI_ENABLE_DEPENDENCY(MMAPI::Item, MMAPI::Text);
+//   MMAPI_ENABLE_DEPENDENCY(MMAPI::Item::Hooks::BeforeUseItem, MMAPI::Item);
+#define MMAPI_ENABLE_DEPENDENCY(caller_qualified_name, module_qualified_name)      \
+	do {                                                                           \
+		MMAPI::Log::Internal::RecordDependencyEdge(                                \
+			#caller_qualified_name, #module_qualified_name);                       \
+		MMAPI::Log::DebugFile(                                                     \
+			#caller_qualified_name " -> " #module_qualified_name);                 \
+		MMAPI::Status mmapi_dep_status_ = module_qualified_name::Enable();         \
+		if (!MMAPI::IsSuccess(mmapi_dep_status_))                                  \
+		{                                                                          \
+			MMAPI::Log::Warn(                                                      \
+				#caller_qualified_name ": dependency "                             \
+				#module_qualified_name "::Enable() failed");                       \
+			return mmapi_dep_status_;                                              \
+		}                                                                          \
+	} while (0)

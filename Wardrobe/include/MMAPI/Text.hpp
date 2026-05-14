@@ -259,14 +259,12 @@ namespace MMAPI::Text
 
 		MMAPI::Log::Debug("MMAPI::Text::Enable() called");
 
-		MMAPI::Status status = MMAPI::Instance::Enable();
-		if (!MMAPI::IsSuccess(status))
-			return status;
+		MMAPI_ENABLE_DEPENDENCY(MMAPI::Text, MMAPI::Instance);
 
 		MMAPI::Internal::RegisterOnSetupMainScreenHandler(Internal::ClearLocalizerOnReturnToTitle);
 		MMAPI::Internal::RegisterOnSetupMainScreenHandler(Internal::ClearTextboxMenuOnReturnToTitle);
 
-		status = MMAPI::Internal::InstallScriptHooks({
+		MMAPI::Status status = MMAPI::Internal::InstallScriptHooks({
 			{ MMAPI::Internal::GML_SCRIPT_SETUP_MAIN_SCREEN, reinterpret_cast<PVOID>(MMAPI::Internal::GmlScriptBeforeSetupMainScreenCallback) },
 			{ Internal::GML_SCRIPT_GET_LOCALIZER,            reinterpret_cast<PVOID>(Internal::GmlScriptGetLocalizerCallback) },
 			{ Internal::GML_SCRIPT_PLAY_CONVERSATION,        reinterpret_cast<PVOID>(Internal::GmlScriptPlayConversationCallback) },
@@ -355,9 +353,7 @@ namespace MMAPI::Text
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeLocalizedString(Internal::BeforeLocalizedStringCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Text::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Text::Hooks::BeforeLocalizedString, MMAPI::Text);
 
 			return MMAPI::Internal::RegisterHook(
 				"Text::BeforeLocalizedString",
@@ -372,9 +368,7 @@ namespace MMAPI::Text
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterLocalizedString(Internal::AfterLocalizedStringCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Text::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Text::Hooks::AfterLocalizedString, MMAPI::Text);
 
 			return MMAPI::Internal::RegisterHook(
 				"Text::AfterLocalizedString",
@@ -389,9 +383,7 @@ namespace MMAPI::Text
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforePlayConversation(Internal::BeforePlayConversationCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Text::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Text::Hooks::BeforePlayConversation, MMAPI::Text);
 
 			return MMAPI::Internal::RegisterHook(
 				"Text::BeforePlayConversation",
@@ -408,9 +400,7 @@ namespace MMAPI::Text
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforePlayText(Internal::BeforePlayTextCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Text::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Text::Hooks::BeforePlayText, MMAPI::Text);
 
 			return MMAPI::Internal::RegisterHook(
 				"Text::BeforePlayText",

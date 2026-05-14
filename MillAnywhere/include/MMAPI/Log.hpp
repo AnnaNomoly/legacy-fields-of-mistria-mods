@@ -3,13 +3,16 @@
 #include "Core.hpp"
 #include "Status.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "YYToolkit/YYTK_Shared.hpp"
 
@@ -59,6 +62,20 @@ namespace MMAPI::Log
 		inline std::filesystem::path  file_path;
 		inline std::ofstream          file_stream;
 		inline bool                   file_path_initialized = false;
+
+		// Adjacency list of recorded dependency edges, keyed by caller name (typically a
+		// Hooks::* registrar name or another module's Enable). Populated by the
+		// MMAPI_ENABLE_DEPENDENCY macro and rendered by Log::DumpDependencyGraph(). Edges
+		// are deduplicated so repeated cascades don't bloat the structural view.
+		inline std::map<std::string, std::vector<std::string>> dependency_graph;
+
+		inline void RecordDependencyEdge(const char* caller, const char* dependency)
+		{
+			if (!caller || !dependency) return;
+			auto& deps = dependency_graph[caller];
+			if (std::find(deps.begin(), deps.end(), dependency) == deps.end())
+				deps.push_back(dependency);
+		}
 
 		constexpr YYTK::CmColor LevelColor(Level level) noexcept
 		{
@@ -194,6 +211,31 @@ namespace MMAPI::Log
 
 			Dispatch(level, buffer);
 		}
+
+		/// Like FormatAndDispatch but unconditionally bypasses the console sink — writes only
+		/// to the file sink, gated by current_level and the File sink being in current_sinks.
+		/// Used for high-volume diagnostic output that would clutter the console (e.g. the
+		/// dependency resolution edges emitted by MMAPI_ENABLE_DEPENDENCY).
+		template <typename... Args>
+		inline void FormatAndDispatchFileOnly(Level level, const char* format, Args... args)
+		{
+			if (static_cast<int>(level) < static_cast<int>(current_level))
+				return;
+			if (!HasSink(current_sinks, Sinks::File))
+				return;
+
+			char buffer[kMessageBufferSize];
+			int written = std::snprintf(buffer, sizeof(buffer), format, args...);
+			if (written > 0 && static_cast<size_t>(written) >= sizeof(buffer))
+			{
+				buffer[sizeof(buffer) - 4] = '.';
+				buffer[sizeof(buffer) - 3] = '.';
+				buffer[sizeof(buffer) - 2] = '.';
+				buffer[sizeof(buffer) - 1] = '\0';
+			}
+
+			WriteTimestampedLine(level, buffer);
+		}
 	}
 
 	/// Sets the minimum log level. Messages below this level are dropped before formatting.
@@ -235,33 +277,72 @@ namespace MMAPI::Log
 
 	template <typename... Args>
 	inline void Error(const char* format, Args... args) { Internal::FormatAndDispatch(Level::Error, format, args...); }
+
+	/// Logs a Debug-level message routed only to the File sink, never to Console.
+	/// Gated by current_level filtering and File sink being in current_sinks; drops silently
+	/// otherwise. Useful for diagnostic output that is valuable in a log file but would
+	/// clutter the console — e.g. dependency-graph edges emitted by MMAPI_ENABLE_DEPENDENCY.
+	template <typename... Args>
+	inline void DebugFile(const char* format, Args... args) { Internal::FormatAndDispatchFileOnly(Level::Debug, format, args...); }
+
+	/// Pretty-prints the recorded MMAPI dependency graph to the file sink only. The graph is
+	/// populated by every MMAPI_ENABLE_DEPENDENCY invocation, with edges deduplicated per
+	/// caller. Output groups edges by caller (typically a Hooks::* registrar name or another
+	/// module's Enable) and renders each adjacency list with ASCII tree connectors.
+	///
+	/// Intended to be called once after the mod's initialization has settled (typically the
+	/// end of ModuleInitialize). No-op if the File sink is not enabled or current_level is
+	/// above Debug. Console output is never emitted regardless of sink config.
+	///
+	/// Sample output:
+	///   === MMAPI Dependency Graph ===
+	///   Recorded 11 edges across 5 callers
+	///
+	///   BeforeUseItem
+	///   └── MMAPI::Item
+	///
+	///   Enable
+	///   ├── MMAPI::Instance
+	///   ├── MMAPI::Text
+	///   └── MMAPI::Weather
+	inline void DumpDependencyGraph()
+	{
+		if (static_cast<int>(Level::Debug) < static_cast<int>(Internal::current_level))
+			return;
+		if (!HasSink(Internal::current_sinks, Sinks::File))
+			return;
+
+		size_t edge_count = 0;
+		for (const auto& [_, deps] : Internal::dependency_graph)
+			edge_count += deps.size();
+
+		Internal::WriteTimestampedLine(Level::Debug, "=== MMAPI Dependency Graph ===");
+		char header[128];
+		std::snprintf(header, sizeof(header),
+			"Recorded %zu edges across %zu callers",
+			edge_count, Internal::dependency_graph.size());
+		Internal::WriteTimestampedLine(Level::Debug, header);
+		Internal::WriteTimestampedLine(Level::Debug, "");
+
+		for (const auto& [caller, deps] : Internal::dependency_graph)
+		{
+			Internal::WriteTimestampedLine(Level::Debug, caller.c_str());
+			for (size_t i = 0; i < deps.size(); ++i)
+			{
+				const bool is_last = (i + 1 == deps.size());
+				char line[Internal::kMessageBufferSize];
+				std::snprintf(line, sizeof(line),
+					"%s %s",
+					is_last ? "\xE2\x94\x94\xE2\x94\x80\xE2\x94\x80" : "\xE2\x94\x9C\xE2\x94\x80\xE2\x94\x80",
+					deps[i].c_str());
+				Internal::WriteTimestampedLine(Level::Debug, line);
+			}
+			Internal::WriteTimestampedLine(Level::Debug, "");
+		}
+	}
 }
 
-// Contract enforcement macros. Use at the top of utility functions to warn when callers invoke
-// the function before the module's Enable(). The Internal::enabled flag must be defined in the
-// surrounding Internal namespace by each module.
-//
-// Non-void return form: provide a fallback return value.
-//   MMAPI_REQUIRE_ENABLED("Animal", false);
-//   MMAPI_REQUIRE_ENABLED("Spell", {});
-#define MMAPI_REQUIRE_ENABLED(module_label, return_value)                          \
-	do {                                                                           \
-		if (!Internal::enabled)                                                    \
-		{                                                                          \
-			MMAPI::Log::Warn("%s called before " module_label "::Enable()",        \
-				__FUNCTION__);                                                     \
-			return return_value;                                                   \
-		}                                                                          \
-	} while (0)
-
-// Void return form.
-//   MMAPI_REQUIRE_ENABLED_VOID("Animal");
-#define MMAPI_REQUIRE_ENABLED_VOID(module_label)                                   \
-	do {                                                                           \
-		if (!Internal::enabled)                                                    \
-		{                                                                          \
-			MMAPI::Log::Warn("%s called before " module_label "::Enable()",        \
-				__FUNCTION__);                                                     \
-			return;                                                                \
-		}                                                                          \
-	} while (0)
+// Contract enforcement macros (MMAPI_REQUIRE_ENABLED / _VOID) and the dependency cascade macro
+// (MMAPI_ENABLE_DEPENDENCY) live in Core.hpp. They are infrastructure for the module Enable()
+// contract — not logging primitives. Log.hpp is included transitively by all callers, so the
+// macros' references to MMAPI::Log::Warn and MMAPI::Log::DebugFile resolve at expansion.

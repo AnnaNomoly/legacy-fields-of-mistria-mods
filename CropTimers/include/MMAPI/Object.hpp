@@ -620,9 +620,7 @@ namespace MMAPI::Object
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeFurniturePlaced(Internal::BeforeFurniturePlacedCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Object::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Object::Hooks::BeforeFurniturePlaced, MMAPI::Object);
 
 			return MMAPI::Internal::RegisterHook(
 				"Object::BeforeFurniturePlaced",
@@ -639,9 +637,7 @@ namespace MMAPI::Object
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterFurniturePlaced(Internal::AfterFurniturePlacedCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Object::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Object::Hooks::AfterFurniturePlaced, MMAPI::Object);
 
 			return MMAPI::Internal::RegisterHook(
 				"Object::AfterFurniturePlaced",
@@ -658,9 +654,7 @@ namespace MMAPI::Object
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterObjectErased(Internal::AfterObjectErasedCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Object::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Object::Hooks::AfterObjectErased, MMAPI::Object);
 
 			return MMAPI::Internal::RegisterHook(
 				"Object::AfterObjectErased",
@@ -681,9 +675,7 @@ namespace MMAPI::Object
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeNodeRendererSetSprite(Internal::BeforeNodeRendererSetSpriteCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Object::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Object::Hooks::BeforeNodeRendererSetSprite, MMAPI::Object);
 
 			return MMAPI::Internal::RegisterHook(
 				"Object::BeforeNodeRendererSetSprite",

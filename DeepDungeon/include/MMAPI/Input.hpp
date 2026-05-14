@@ -371,9 +371,7 @@ namespace MMAPI::Input
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterTakePress(Internal::AfterTakePressCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Input::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Input::Hooks::AfterTakePress, MMAPI::Input);
 
 			return MMAPI::Internal::RegisterHook(
 				"Input::AfterTakePress",
@@ -389,9 +387,7 @@ namespace MMAPI::Input
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeCheckValue(Internal::BeforeCheckValueCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Input::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Input::Hooks::BeforeCheckValue, MMAPI::Input);
 
 			return MMAPI::Internal::RegisterHook(
 				"Input::BeforeCheckValue",

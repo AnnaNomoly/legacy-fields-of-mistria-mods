@@ -277,9 +277,7 @@ namespace MMAPI::Damage
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeDamage(Internal::BeforeDamageCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Damage::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Damage::Hooks::BeforeDamage, MMAPI::Damage);
 
 			return MMAPI::Internal::RegisterHook(
 				"Damage::BeforeDamage",
@@ -296,9 +294,7 @@ namespace MMAPI::Damage
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterDamage(Internal::AfterDamageCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Damage::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Damage::Hooks::AfterDamage, MMAPI::Damage);
 
 			return MMAPI::Internal::RegisterHook(
 				"Damage::AfterDamage",

@@ -1222,15 +1222,11 @@ namespace MMAPI::Player
 
 		MMAPI::Log::Debug("MMAPI::Player::Enable() called");
 
-		MMAPI::Status status = MMAPI::Bark::Enable();
-		if (!MMAPI::IsSuccess(status))
-			return status;
+		MMAPI_ENABLE_DEPENDENCY(MMAPI::Player, MMAPI::Bark);
 
-		status = MMAPI::Instance::Enable();
-		if (!MMAPI::IsSuccess(status))
-			return status;
+		MMAPI_ENABLE_DEPENDENCY(MMAPI::Player, MMAPI::Instance);
 
-		status = MMAPI::Internal::InstallScriptHooks({
+		MMAPI::Status status = MMAPI::Internal::InstallScriptHooks({
 			{ Internal::GML_SCRIPT_GET_MOVE_SPEED,      reinterpret_cast<PVOID>(Internal::GmlScriptGetMoveSpeedCallback) },
 			{ Internal::GML_SCRIPT_MODIFY_HEALTH,       reinterpret_cast<PVOID>(Internal::GmlScriptModifyHealthCallback) },
 			{ Internal::GML_SCRIPT_MODIFY_STAMINA,      reinterpret_cast<PVOID>(Internal::GmlScriptModifyStaminaCallback) },
@@ -1273,9 +1269,7 @@ namespace MMAPI::Player
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterMoveSpeed(Internal::AfterMoveSpeedCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Player::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Player::Hooks::AfterMoveSpeed, MMAPI::Player);
 
 			return MMAPI::Internal::RegisterHook(
 				"Player::AfterMoveSpeed",
@@ -1290,9 +1284,7 @@ namespace MMAPI::Player
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeHealthChange(Internal::BeforeHealthChangeCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Player::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Player::Hooks::BeforeHealthChange, MMAPI::Player);
 
 			return MMAPI::Internal::RegisterHook(
 				"Player::BeforeHealthChange",
@@ -1308,9 +1300,7 @@ namespace MMAPI::Player
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterHealthChange(Internal::AfterHealthChangeCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Player::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Player::Hooks::AfterHealthChange, MMAPI::Player);
 
 			return MMAPI::Internal::RegisterHook(
 				"Player::AfterHealthChange",
@@ -1325,9 +1315,7 @@ namespace MMAPI::Player
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeStaminaChange(Internal::BeforeStaminaChangeCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Player::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Player::Hooks::BeforeStaminaChange, MMAPI::Player);
 
 			return MMAPI::Internal::RegisterHook(
 				"Player::BeforeStaminaChange",
@@ -1343,9 +1331,7 @@ namespace MMAPI::Player
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterStaminaChange(Internal::AfterStaminaChangeCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Player::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Player::Hooks::AfterStaminaChange, MMAPI::Player);
 
 			return MMAPI::Internal::RegisterHook(
 				"Player::AfterStaminaChange",
@@ -1362,9 +1348,7 @@ namespace MMAPI::Player
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeToolAction(Internal::BeforeToolActionCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Player::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Player::Hooks::BeforeToolAction, MMAPI::Player);
 
 			return MMAPI::Internal::RegisterHook(
 				"Player::BeforeToolAction",
@@ -1381,9 +1365,7 @@ namespace MMAPI::Player
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterToolAction(Internal::AfterToolActionCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Player::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Player::Hooks::AfterToolAction, MMAPI::Player);
 
 			return MMAPI::Internal::RegisterHook(
 				"Player::AfterToolAction",
@@ -1400,9 +1382,7 @@ namespace MMAPI::Player
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforePickNode(Internal::BeforeNodeInteractionCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Player::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Player::Hooks::BeforePickNode, MMAPI::Player);
 
 			return MMAPI::Internal::RegisterHook(
 				"Player::BeforePickNode",
@@ -1418,9 +1398,7 @@ namespace MMAPI::Player
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeChopNode(Internal::BeforeNodeInteractionCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Player::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Player::Hooks::BeforeChopNode, MMAPI::Player);
 
 			return MMAPI::Internal::RegisterHook(
 				"Player::BeforeChopNode",
@@ -1435,9 +1413,7 @@ namespace MMAPI::Player
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeManaChange(Internal::BeforeManaChangeCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Player::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Player::Hooks::BeforeManaChange, MMAPI::Player);
 
 			return MMAPI::Internal::RegisterHook(
 				"Player::BeforeManaChange",
@@ -1453,9 +1429,7 @@ namespace MMAPI::Player
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeFaceDir(Internal::BeforeFaceDirCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Player::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Player::Hooks::BeforeFaceDir, MMAPI::Player);
 
 			return MMAPI::Internal::RegisterHook(
 				"Player::BeforeFaceDir",
@@ -1472,9 +1446,7 @@ namespace MMAPI::Player
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterHeldItem(Internal::AfterHeldItemCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Player::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Player::Hooks::AfterHeldItem, MMAPI::Player);
 
 			return MMAPI::Internal::RegisterHook(
 				"Player::AfterHeldItem",
@@ -1500,9 +1472,7 @@ namespace MMAPI::Player
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterUseActionComplete(Internal::AfterUseActionCompleteCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Player::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Player::Hooks::AfterUseActionComplete, MMAPI::Player);
 
 			return MMAPI::Internal::RegisterHook(
 				"Player::AfterUseActionComplete",
@@ -1520,9 +1490,7 @@ namespace MMAPI::Player
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterShouldDie(Internal::AfterShouldDieCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Player::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Player::Hooks::AfterShouldDie, MMAPI::Player);
 
 			return MMAPI::Internal::RegisterHook(
 				"Player::AfterShouldDie",

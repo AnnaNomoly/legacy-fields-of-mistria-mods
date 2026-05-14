@@ -263,11 +263,9 @@ namespace MMAPI::Monster
 
 		MMAPI::Log::Debug("MMAPI::Monster::Enable() called");
 
-		MMAPI::Status status = MMAPI::Dungeon::Enable();
-		if (!MMAPI::IsSuccess(status))
-			return status;
+		MMAPI_ENABLE_DEPENDENCY(MMAPI::Monster, MMAPI::Dungeon);
 
-		status = MMAPI::Internal::InstallScriptHooks({
+		MMAPI::Status status = MMAPI::Internal::InstallScriptHooks({
 			{ Internal::GML_SCRIPT_SPAWN_MONSTER, reinterpret_cast<PVOID>(Internal::GmlScriptSpawnMonsterCallback) },
 			{ Internal::GML_SCRIPT_DRAW_MONSTER,  reinterpret_cast<PVOID>(Internal::GmlScriptAfterDrawMonsterCallback) },
 		});
@@ -318,9 +316,7 @@ namespace MMAPI::Monster
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeMonsterSpawn(Internal::BeforeMonsterSpawnCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Monster::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Monster::Hooks::BeforeMonsterSpawn, MMAPI::Monster);
 
 			return MMAPI::Internal::RegisterHook(
 				"Monster::BeforeMonsterSpawn",
@@ -339,9 +335,7 @@ namespace MMAPI::Monster
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterDrawMonster(Internal::AfterDrawMonsterCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Monster::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Monster::Hooks::AfterDrawMonster, MMAPI::Monster);
 
 			return MMAPI::Internal::RegisterHook(
 				"Monster::AfterDrawMonster",

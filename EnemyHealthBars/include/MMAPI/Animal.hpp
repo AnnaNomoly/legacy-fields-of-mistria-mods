@@ -193,11 +193,9 @@ namespace MMAPI::Animal
 
 		MMAPI::Log::Debug("MMAPI::Animal::Enable() called");
 
-		MMAPI::Status status = MMAPI::Instance::Enable();
-		if (!MMAPI::IsSuccess(status))
-			return status;
+		MMAPI_ENABLE_DEPENDENCY(MMAPI::Animal, MMAPI::Instance);
 
-		status = MMAPI::Internal::InstallScriptHooks({
+		MMAPI::Status status = MMAPI::Internal::InstallScriptHooks({
 			{ Internal::GML_SCRIPT_ADD_HEART_POINTS, reinterpret_cast<PVOID>(Internal::GmlScriptAddHeartPointsCallback) },
 			{ Internal::GML_SCRIPT_PUT_DOWN,         reinterpret_cast<PVOID>(Internal::GmlScriptPutDownCallback) },
 			{ Internal::GML_SCRIPT_ON_PET,           reinterpret_cast<PVOID>(Internal::GmlScriptAfterPetCallback) },
@@ -409,9 +407,7 @@ namespace MMAPI::Animal
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeHeartPointsChange(Internal::BeforeHeartPointsChangeCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Animal::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Animal::Hooks::BeforeHeartPointsChange, MMAPI::Animal);
 
 			return MMAPI::Internal::RegisterHook(
 				"Animal::BeforeHeartPointsChange",
@@ -425,9 +421,7 @@ namespace MMAPI::Animal
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterPutDown(Internal::AfterPutDownCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Animal::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Animal::Hooks::AfterPutDown, MMAPI::Animal);
 
 			return MMAPI::Internal::RegisterHook(
 				"Animal::AfterPutDown",
@@ -441,9 +435,7 @@ namespace MMAPI::Animal
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterPet(Internal::AfterPetCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Animal::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Animal::Hooks::AfterPet, MMAPI::Animal);
 
 			return MMAPI::Internal::RegisterHook(
 				"Animal::AfterPet",

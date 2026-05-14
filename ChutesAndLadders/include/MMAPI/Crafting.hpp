@@ -297,9 +297,7 @@ namespace MMAPI::Crafting
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterMenuOpen(Internal::AfterMenuOpenCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Crafting::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Crafting::Hooks::AfterMenuOpen, MMAPI::Crafting);
 
 			return MMAPI::Internal::RegisterHook(
 				"Crafting::AfterMenuOpen",
@@ -315,9 +313,7 @@ namespace MMAPI::Crafting
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterMenuClose(Internal::AfterMenuCloseCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Crafting::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Crafting::Hooks::AfterMenuClose, MMAPI::Crafting);
 
 			return MMAPI::Internal::RegisterHook(
 				"Crafting::AfterMenuClose",
@@ -333,9 +329,7 @@ namespace MMAPI::Crafting
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforePayComponentCosts(Internal::BeforePayComponentCostsCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Crafting::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Crafting::Hooks::BeforePayComponentCosts, MMAPI::Crafting);
 
 			return MMAPI::Internal::RegisterHook(
 				"Crafting::BeforePayComponentCosts",
@@ -351,9 +345,7 @@ namespace MMAPI::Crafting
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterMaximumCrafts(Internal::AfterMaximumCraftsCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Crafting::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Crafting::Hooks::AfterMaximumCrafts, MMAPI::Crafting);
 
 			return MMAPI::Internal::RegisterHook(
 				"Crafting::AfterMaximumCrafts",
@@ -369,9 +361,7 @@ namespace MMAPI::Crafting
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterCheckItemCraftable(Internal::AfterCheckItemCraftableCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Crafting::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Crafting::Hooks::AfterCheckItemCraftable, MMAPI::Crafting);
 
 			return MMAPI::Internal::RegisterHook(
 				"Crafting::AfterCheckItemCraftable",

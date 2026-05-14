@@ -51,9 +51,7 @@ namespace MMAPI::Skill
 
 		MMAPI::Log::Debug("MMAPI::Skill::Enable() called");
 
-		MMAPI::Status status = MMAPI::Instance::Enable();
-		if (!MMAPI::IsSuccess(status))
-			return status;
+		MMAPI_ENABLE_DEPENDENCY(MMAPI::Skill, MMAPI::Instance);
 
 		Internal::enabled = true;
 		return MMAPI::Status::Success;

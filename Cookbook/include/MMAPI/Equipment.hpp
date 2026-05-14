@@ -178,9 +178,7 @@ namespace MMAPI::Equipment
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterGetEquipmentBonus(Internal::AfterGetEquipmentBonusCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Equipment::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Equipment::Hooks::AfterGetEquipmentBonus, MMAPI::Equipment);
 
 			return MMAPI::Internal::RegisterHook(
 				"Equipment::AfterGetEquipmentBonus",

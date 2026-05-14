@@ -1114,15 +1114,11 @@ namespace MMAPI::Item
 
 		MMAPI::Log::Debug("MMAPI::Item::Enable() called");
 
-		MMAPI::Status status = MMAPI::Instance::Enable();
-		if (!MMAPI::IsSuccess(status))
-			return status;
+		MMAPI_ENABLE_DEPENDENCY(MMAPI::Item, MMAPI::Instance);
 
-		status = MMAPI::Text::Enable();
-		if (!MMAPI::IsSuccess(status))
-			return status;
+		MMAPI_ENABLE_DEPENDENCY(MMAPI::Item, MMAPI::Text);
 
-		status = MMAPI::Internal::InstallScriptHooks({
+		MMAPI::Status status = MMAPI::Internal::InstallScriptHooks({
 			{ Internal::GML_SCRIPT_USE_ITEM,                       reinterpret_cast<PVOID>(Internal::GmlScriptUseItemCallback) },
 			{ Internal::GML_SCRIPT_DROP_ITEM,                      reinterpret_cast<PVOID>(Internal::GmlScriptBeforeDropItemCallback) },
 			{ Internal::GML_SCRIPT_GIVE_ITEM,                      reinterpret_cast<PVOID>(Internal::GmlScriptBeforeGiveItemCallback) },
@@ -1310,9 +1306,7 @@ namespace MMAPI::Item
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeUseItem(Internal::BeforeUseItemCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Item::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Item::Hooks::BeforeUseItem, MMAPI::Item);
 
 			return MMAPI::Internal::RegisterHook(
 				"Item::BeforeUseItem",
@@ -1329,9 +1323,7 @@ namespace MMAPI::Item
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterGetUiIcon(Internal::AfterGetUiIconCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Item::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Item::Hooks::AfterGetUiIcon, MMAPI::Item);
 
 			return MMAPI::Internal::RegisterHook(
 				"Item::AfterGetUiIcon",
@@ -1348,9 +1340,7 @@ namespace MMAPI::Item
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterGetDisplayName(Internal::AfterGetDisplayNameCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Item::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Item::Hooks::AfterGetDisplayName, MMAPI::Item);
 
 			return MMAPI::Internal::RegisterHook(
 				"Item::AfterGetDisplayName",
@@ -1366,9 +1356,7 @@ namespace MMAPI::Item
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterGetDisplayDescription(Internal::AfterGetDisplayDescriptionCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Item::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Item::Hooks::AfterGetDisplayDescription, MMAPI::Item);
 
 			return MMAPI::Internal::RegisterHook(
 				"Item::AfterGetDisplayDescription",
@@ -1385,9 +1373,7 @@ namespace MMAPI::Item
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status AfterCreateItemPrototypes(Internal::AfterCreateItemPrototypesCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Item::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Item::Hooks::AfterCreateItemPrototypes, MMAPI::Item);
 
 			return MMAPI::Internal::RegisterHook(
 				"Item::AfterCreateItemPrototypes",
@@ -1405,9 +1391,7 @@ namespace MMAPI::Item
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeGetTreasure(Internal::BeforeGetTreasureCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Item::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Item::Hooks::BeforeGetTreasure, MMAPI::Item);
 
 			return MMAPI::Internal::RegisterHook(
 				"Item::BeforeGetTreasure",
@@ -1426,9 +1410,7 @@ namespace MMAPI::Item
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeDropItem(Internal::BeforeDropItemCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Item::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Item::Hooks::BeforeDropItem, MMAPI::Item);
 
 			return MMAPI::Internal::RegisterHook(
 				"Item::BeforeDropItem",
@@ -1448,9 +1430,7 @@ namespace MMAPI::Item
 		/// @return Status::Success if the hook was installed; Status::AlreadyRegistered if a callback is already registered; otherwise a failure status.
 		inline MMAPI::Status BeforeGiveItem(Internal::BeforeGiveItemCallback callback)
 		{
-			MMAPI::Status status = MMAPI::Item::Enable();
-			if (!MMAPI::IsSuccess(status))
-				return status;
+			MMAPI_ENABLE_DEPENDENCY(MMAPI::Item::Hooks::BeforeGiveItem, MMAPI::Item);
 
 			return MMAPI::Internal::RegisterHook(
 				"Item::BeforeGiveItem",

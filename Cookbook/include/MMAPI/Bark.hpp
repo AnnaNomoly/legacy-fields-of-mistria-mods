@@ -207,13 +207,11 @@ namespace MMAPI::Bark
 
 		MMAPI::Log::Debug("MMAPI::Bark::Enable() called");
 
-		MMAPI::Status status = MMAPI::Instance::Enable();
-		if (!MMAPI::IsSuccess(status))
-			return status;
+		MMAPI_ENABLE_DEPENDENCY(MMAPI::Bark, MMAPI::Instance);
 
 		MMAPI::Internal::RegisterOnSetupMainScreenHandler(Internal::ClearBarkEmitterOnReturnToTitle);
 
-		status = MMAPI::Internal::InstallScriptHooks({
+		MMAPI::Status status = MMAPI::Internal::InstallScriptHooks({
 			{ MMAPI::Internal::GML_SCRIPT_SETUP_MAIN_SCREEN, reinterpret_cast<PVOID>(MMAPI::Internal::GmlScriptBeforeSetupMainScreenCallback) },
 			{ Internal::GML_SCRIPT_BARK_EMITTER,             reinterpret_cast<PVOID>(Internal::BarkEmitterContextCallback) },
 		});
