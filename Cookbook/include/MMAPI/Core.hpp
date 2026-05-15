@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 AnnaNomoly
+// Mistria Modding API (MMAPI)
+// https://github.com/AnnaNomoly/mistria-modding-api
+
 #pragma once
 
 #include "Status.hpp"
@@ -11,6 +16,14 @@
 
 namespace MMAPI
 {
+	/// MMAPI library version. Bump on each release. Mirrored by the NuGet package version
+	/// in MMAPI.nuspec — keep them in sync. Available to mods at compile time for feature
+	/// gating (`if constexpr (MMAPI::VersionMajor >= 1) { ... }`) or runtime reporting.
+	inline constexpr int         VersionMajor  = 0;
+	inline constexpr int         VersionMinor  = 1;
+	inline constexpr int         VersionPatch  = 0;
+	inline constexpr const char* VersionString = "0.1.0";
+
 	namespace Internal
 	{
 		inline uint64_t GetCurrentSystemTime()
@@ -110,44 +123,9 @@ namespace MMAPI
 		}
 	}
 
-	/// Initializes MMAPI. Call once from ModuleInitialize.
-	/// @param module_interface The YYTKInterface pointer received in ModuleInitialize.
-	/// @param global The GML global instance pointer obtained from GetGlobalInstance.
-	/// @param module The Aurie module pointer received in ModuleInitialize.
-	/// @param mod_name The mod's name, used for log attribution and the per-mod log file path.
-	/// @param mod_version The mod's version string, used in console log prefixes.
-	inline void Initialize(
-		YYTK::YYTKInterface* module_interface,
-		YYTK::CInstance* global,
-		Aurie::AurieModule* module,
-		const char* mod_name,
-		const char* mod_version
-	)
-	{
-		// Diagnostic: surface missing pointers loudly. Without these, every downstream MMAPI call is a
-		// silent no-op (utility functions fail their preconditions; hook installs return NotInitialized).
-		// Bypass MMAPI::Log here because Log itself reads module_interface — if that's the missing one,
-		// Log has nowhere to write. Fall back to YYTK Print directly when possible.
-		if (!module_interface || !global || !module)
-		{
-			if (module_interface)
-			{
-				module_interface->Print(YYTK::CM_LIGHTRED,
-					"[MMAPI::Initialize] missing required pointer "
-					"(module_interface=%p, global=%p, module=%p) -- downstream MMAPI calls will fail",
-					static_cast<void*>(module_interface),
-					static_cast<void*>(global),
-					static_cast<void*>(module));
-			}
-			// No interface at all means we can't log; the only signal will be downstream failures.
-		}
-
-		MMAPI::Internal::module_interface = module_interface;
-		MMAPI::Internal::global_instance  = global;
-		MMAPI::Internal::self_module      = module;
-		MMAPI::Internal::mod_name         = mod_name    ? mod_name    : "";
-		MMAPI::Internal::mod_version      = mod_version ? mod_version : "";
-	}
+	// MMAPI::Initialize lives in Init.hpp (loaded after Log.hpp via MMAPI.hpp) so the startup
+	// banner it emits can route through Log infrastructure. Core.hpp can't include Log.hpp
+	// because Log.hpp itself depends on Core.hpp.
 }
 
 // =============================================================================
@@ -200,11 +178,11 @@ namespace MMAPI
 // Second arg is the dependency module (must be a real namespace expression — the
 // macro emits `<arg>::Enable()`).
 //
-// On success: emits a DEBUG dependency-edge entry to the file sink only AND records
-// the edge into MMAPI::Log::Internal::dependency_graph for later structured
+// On success: emits a TRACE dependency-edge entry (file-only by TRACE policy) AND
+// records the edge into MMAPI::Log::Internal::dependency_graph for later structured
 // rendering via MMAPI::Log::DumpDependencyGraphFlat() or DumpDependencyGraphTree().
-// The console stays quiet — these
-// are noisy by design and only useful when debugging initialization order.
+// Console stays quiet regardless of sink config — these are noisy by design and only
+// useful when debugging initialization order.
 // On failure: emits a WARN entry to both sinks naming the failed dependency and
 // short-circuits the caller with the failure status.
 //
@@ -218,7 +196,7 @@ namespace MMAPI
 	do {                                                                           \
 		MMAPI::Log::Internal::RecordDependencyEdge(                                \
 			#caller_qualified_name, #module_qualified_name);                       \
-		MMAPI::Log::DebugFile(                                                     \
+		MMAPI::Log::Trace(                                                         \
 			#caller_qualified_name " -> " #module_qualified_name);                 \
 		MMAPI::Status mmapi_dep_status_ = module_qualified_name::Enable();         \
 		if (!MMAPI::IsSuccess(mmapi_dep_status_))                                  \

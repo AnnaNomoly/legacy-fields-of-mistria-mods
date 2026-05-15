@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 AnnaNomoly
+// Mistria Modding API (MMAPI)
+// https://github.com/AnnaNomoly/mistria-modding-api
+
 #pragma once
 
 #include "Core.hpp"
@@ -54,7 +59,7 @@ namespace MMAPI::Internal
 		}
 
 		owned_script_hook_installed_map[script_name] = true;
-		MMAPI::Log::Debug("Installed script hook: %s", script_name);
+		MMAPI::Log::Trace("Installed script hook: %s", script_name);
 		return MMAPI::Status::Success;
 	}
 

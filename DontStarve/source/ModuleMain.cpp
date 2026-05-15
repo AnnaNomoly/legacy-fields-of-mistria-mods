@@ -554,7 +554,7 @@ void OnAfterClockUpdate(MMAPI::Calendar::ClockUpdateContext& /*ctx*/)
 {
 	if (!game_is_active) return;
 
-	int now = MMAPI::Game::GetCurrentTimeInSeconds();
+	int now = MMAPI::Calendar::GetCurrentTimeInSeconds();
 
 	// Latch first observed time as the baseline so day-start doesn't trigger an immediate tick.
 	if (time_of_last_hunger_tick == 0) time_of_last_hunger_tick = now;
@@ -890,8 +890,8 @@ void OnBeforeLocalizedString(MMAPI::Text::LocalizedStringContext& /*ctx*/)
 void OnAfterDisplayResize(MMAPI::Display::DisplayResizeContext& ctx)
 {
 	bool regenerate = false;
-	int new_w = static_cast<int>(ctx.m_window_width);
-	int new_h = static_cast<int>(ctx.m_window_height);
+	int new_w = static_cast<int>(ctx.GetWindowWidth());
+	int new_h = static_cast<int>(ctx.GetWindowHeight());
 	if (window_width != 0 && window_width != new_w)  { regenerate = true; window_width  = new_w; }
 	if (window_height != 0 && window_height != new_h) { regenerate = true; window_height = new_h; }
 	if (regenerate) GenerateNoiseMasks(false);

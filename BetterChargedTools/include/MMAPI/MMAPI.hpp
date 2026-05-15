@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 AnnaNomoly
+// Mistria Modding API (MMAPI)
+// https://github.com/AnnaNomoly/mistria-modding-api
+
 #pragma once
 
 #include "Status.hpp"
@@ -49,3 +54,7 @@
 #include "Tutorial.hpp"
 #include "VitalsMenu.hpp"
 #include "Weather.hpp"
+
+// Init.hpp must come last so MMAPI::Initialize can reference Log::Internal helpers — Log.hpp
+// can't be included from Core.hpp (cyclic), so Initialize lives here instead of in Core.
+#include "Init.hpp"

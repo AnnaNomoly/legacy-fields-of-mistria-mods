@@ -82,9 +82,9 @@ EXPORTED AurieStatus ModuleInitialize(
     {
         CInstance* mmapi_global = nullptr;
         g_ModuleInterface->GetGlobalInstance(&mmapi_global);
-        MMAPI::Initialize(g_ModuleInterface, mmapi_global, g_ArSelfModule, MOD_NAME, MOD_VERSION);
         MMAPI::Log::SetSinks(MMAPI::Log::Sinks::Console | MMAPI::Log::Sinks::File);
-        MMAPI::Log::SetLevel(MMAPI::Log::Level::Debug);
+        MMAPI::Log::SetLevel(MMAPI::Log::Level::Trace);
+        MMAPI::Initialize(g_ModuleInterface, mmapi_global, g_ArSelfModule, MOD_NAME, MOD_VERSION);
     }
 
     // MMAPI-managed hooks (the original HOOK_TABLE has been fully migrated).

@@ -253,7 +253,7 @@ void HandleAri(CInstance* self)
 
 void HandleFarmBell(CInstance* self)
 {
-	int time = MMAPI::Game::GetCurrentTimeInSeconds();
+	int time = MMAPI::Calendar::GetCurrentTimeInSeconds();
 	bool is_sunny = MMAPI::Weather::IsSunny();
 
 	if (config.auto_bell_in)

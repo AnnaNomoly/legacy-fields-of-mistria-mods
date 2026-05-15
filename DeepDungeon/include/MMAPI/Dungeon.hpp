@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 AnnaNomoly
+// Mistria Modding API (MMAPI)
+// https://github.com/AnnaNomoly/mistria-modding-api
+
 #pragma once
 
 #include "Core.hpp"
@@ -137,6 +142,20 @@ namespace MMAPI::Dungeon
 			current_floor_number = 0;
 		}
 
+		inline constexpr const char* GML_SCRIPT_IS_DUNGEON_ROOM = "gml_Script_is_dungeon_room";
+
+		// Cached result of the most recent gml_Script_is_dungeon_room invocation. The vanilla
+		// game fires this script very frequently (including on the title screen), so the cache
+		// stays fresh without MMAPI ever invoking the script itself — calling that script with
+		// any Self we've tried (nullptr, global_instance, DungeonRunner) crashes the runner.
+		// Defaults to false until the first observation; cleared on return-to-title.
+		inline bool is_dungeon_room_cached = false;
+
+		inline void ClearIsDungeonRoomCacheOnReturnToTitle(YYTK::CInstance* /*Self*/, YYTK::CInstance* /*Other*/)
+		{
+			is_dungeon_room_cached = false;
+		}
+
 		inline YYTK::RValue& GmlScriptSpawnLadderCallback(
 			IN YYTK::CInstance* Self,
 			IN YYTK::CInstance* Other,
@@ -193,6 +212,24 @@ namespace MMAPI::Dungeon
 			return Result;
 		}
 
+		inline YYTK::RValue& GmlScriptIsDungeonRoomCallback(
+			IN YYTK::CInstance* Self,
+			IN YYTK::CInstance* Other,
+			OUT YYTK::RValue& Result,
+			IN int ArgumentCount,
+			IN YYTK::RValue** Arguments
+		)
+		{
+			const auto original = reinterpret_cast<YYTK::PFUNC_YYGMLScript>(
+				Aurie::MmGetHookTrampoline(MMAPI::Internal::self_module, GML_SCRIPT_IS_DUNGEON_ROOM)
+			);
+			original(Self, Other, Result, ArgumentCount, Arguments);
+
+			// The game's script reliably returns VALUE_BOOL — cache it for the public IsDungeonRoom().
+			is_dungeon_room_cached = Result.ToBoolean();
+			return Result;
+		}
+
 		/// Resolves the DungeonRunner's GML calling context, latched from the most recent on_room_start hook.
 		/// Cleared automatically when the game returns to the title menu.
 		/// @return True if a DungeonRunner has been observed this session, false otherwise.
@@ -224,12 +261,14 @@ namespace MMAPI::Dungeon
 		MMAPI_ENABLE_DEPENDENCY(MMAPI::Dungeon, MMAPI::Location);
 
 		MMAPI::Internal::RegisterOnSetupMainScreenHandler(Internal::ClearDungeonRunnerOnReturnToTitle);
+		MMAPI::Internal::RegisterOnSetupMainScreenHandler(Internal::ClearIsDungeonRoomCacheOnReturnToTitle);
 		MMAPI::Location::Internal::RegisterOnGoToRoomHandler(Internal::OnGoToRoomUpdateFloor);
 
 		MMAPI::Status status = MMAPI::Internal::InstallScriptHooks({
 			{ MMAPI::Internal::GML_SCRIPT_SETUP_MAIN_SCREEN, reinterpret_cast<PVOID>(MMAPI::Internal::GmlScriptBeforeSetupMainScreenCallback) },
 			{ Internal::GML_SCRIPT_ON_DUNGEON_ROOM_START,    reinterpret_cast<PVOID>(Internal::GmlScriptAfterDungeonRoomStartCallback) },
 			{ Internal::GML_SCRIPT_SPAWN_LADDER,             reinterpret_cast<PVOID>(Internal::GmlScriptSpawnLadderCallback) },
+			{ Internal::GML_SCRIPT_IS_DUNGEON_ROOM,          reinterpret_cast<PVOID>(Internal::GmlScriptIsDungeonRoomCallback) },
 		});
 		if (!MMAPI::IsSuccess(status))
 			return status;
@@ -289,27 +328,32 @@ namespace MMAPI::Dungeon
 		gml_script->m_Functions->m_ScriptFunction(Self, Other, result, 3, arguments);
 	}
 
-	/// Returns true if the current room is a dungeon room.
+	/// Returns true if the current room is a dungeon room — the *permissive* definition,
+	/// matching what the vanilla game's `is_dungeon_room` script reports. This includes
+	/// seal/boss rooms (e.g. `rm_ruins_seal`, `rm_void_seal`) alongside regular floors.
+	/// Use IsCurrentRoomDungeonFloor() instead for the stricter "fightable mines floor only"
+	/// check that excludes seals and the mines entry.
 	///
-	/// Safe to call at any point in the mod lifecycle, including before AfterGameActive fires —
-	/// gated by MMAPI::Game::IsRoomReady so the underlying gml_Script_is_dungeon_room (which calls
-	/// `asset_has_tags(room, ...)`) is never invoked with an undefined `room`. Returns false during
-	/// pre-load transitions where no room is set, instead of crashing the runner.
+	/// Implementation: MMAPI never invokes `gml_Script_is_dungeon_room` itself — that script
+	/// crashes when called with any Self context we've tried (nullptr, global_instance, even
+	/// the DungeonRunner latch). Instead, MMAPI hooks the script and caches its Result every
+	/// time the game fires it. The game fires it constantly (including on the title screen),
+	/// so the cache stays fresh without any work from us.
+	/// @attention Requires MMAPI::Dungeon::Enable() to have been called. Returns false before
+	/// the game has fired the script at least once this session; cleared on return-to-title.
 	inline bool IsDungeonRoom()
 	{
-		if (!MMAPI::Game::IsRoomReady())
-			return false;
-
-		YYTK::CScript* gml_script = nullptr;
-		MMAPI::Internal::module_interface->GetNamedRoutinePointer("gml_Script_is_dungeon_room", reinterpret_cast<PVOID*>(&gml_script));
-
-		YYTK::RValue result;
-		gml_script->m_Functions->m_ScriptFunction(nullptr, nullptr, result, 0, nullptr);
-		return result.ToBoolean();
+		MMAPI_REQUIRE_ENABLED("Dungeon", false);
+		return Internal::is_dungeon_room_cached;
 	}
 
-	/// Returns true if the current room is an active dungeon floor (excludes the dungeon entry and seal rooms).
-	/// Stricter than IsDungeonRoom: matches the rooms where dungeon-run gameplay actually happens.
+	/// Returns true if the current room is an active dungeon floor — the *stricter* definition
+	/// where dungeon-run gameplay actually happens. Excludes the mines entry (`rm_mines_entry`)
+	/// and all seal/boss rooms (anything with "seal" in the name). Use IsDungeonRoom() instead
+	/// for the permissive "any dungeon-tagged room" check that matches vanilla semantics.
+	///
+	/// Script-free implementation — substring matches on the current room name, so this is safe
+	/// to call at any point in the mod lifecycle and doesn't depend on Dungeon::Enable().
 	inline bool IsCurrentRoomDungeonFloor()
 	{
 		std::string room = MMAPI::Game::GetCurrentRoomName();

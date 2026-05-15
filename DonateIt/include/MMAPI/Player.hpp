@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 AnnaNomoly
+// Mistria Modding API (MMAPI)
+// https://github.com/AnnaNomoly/mistria-modding-api
+
 #pragma once
 
 #include "Bark.hpp"
@@ -570,7 +575,7 @@ namespace MMAPI::Player
 			IN YYTK::RValue** Arguments
 		)
 		{
-			if (before_face_dir_callback && Arguments && ArgumentCount >= 1 && Arguments[0])
+			if (before_face_dir_callback && Arguments && ArgumentCount >= 1 && Arguments[0] && MMAPI::Engine::IsNumeric(*Arguments[0]))
 			{
 				MMAPI::Player::FaceDirContext context{ Arguments[0]->ToDouble() };
 				before_face_dir_callback(context);

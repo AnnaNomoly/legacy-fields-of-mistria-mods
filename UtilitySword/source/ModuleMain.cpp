@@ -107,8 +107,7 @@ static bool AriIsInMistria()
 
 static bool AriIsInMines()
 {
-	return MMAPI::Game::CurrentRoomNameContains("rm_mines")
-	    && !MMAPI::Game::IsCurrentRoom("rm_mines_entry");
+	return MMAPI::Dungeon::IsCurrentRoomDungeonFloor();
 }
 
 static bool LocationIsEnabled()

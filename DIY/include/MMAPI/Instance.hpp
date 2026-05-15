@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 AnnaNomoly
+// Mistria Modding API (MMAPI)
+// https://github.com/AnnaNomoly/mistria-modding-api
+
 #pragma once
 
 #include "Core.hpp"
@@ -427,7 +432,7 @@ namespace MMAPI::Instance
 			MMAPI_ENABLE_DEPENDENCY(MMAPI::Instance::Hooks::OnObjectCall, MMAPI::Instance);
 
 			Internal::object_call_callbacks[object_name] = callback;
-			MMAPI::Log::Debug("Registered OnObjectCall for: %s", object_name);
+			MMAPI::Log::Trace("Registered OnObjectCall for: %s", object_name);
 			return MMAPI::Status::Success;
 		}
 

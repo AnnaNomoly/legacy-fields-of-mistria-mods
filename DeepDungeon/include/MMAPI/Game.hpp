@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 AnnaNomoly
+// Mistria Modding API (MMAPI)
+// https://github.com/AnnaNomoly/mistria-modding-api
+
 #pragma once
 
 #include "Core.hpp"
@@ -512,17 +517,6 @@ namespace MMAPI::Game
 		return pause_status.ToInt64() > 0;
 	}
 
-	/// Returns the current game clock time in seconds from MMAPI::Internal::global_instance.__clock.time.
-	inline int GetCurrentTimeInSeconds()
-	{
-		return static_cast<int>(
-			MMAPI::Internal::global_instance
-				->GetMember("__clock")
-				.GetMember("time")
-				.ToInt64()
-		);
-	}
-
 	/// Returns true when the `room` builtin holds a valid current-room asset_id.
 	///
 	/// Use this as a precondition gate before calling any GML script that implicitly reads
@@ -533,14 +527,17 @@ namespace MMAPI::Game
 	///
 	/// MMAPI helpers that wrap such scripts call this first and short-circuit safely; mod
 	/// callers can use it too for early-tick guards.
-	/// @return True if `room` resolves to a non-negative numeric asset_id; false otherwise.
+	/// @return True if `room` is a VALUE_REF (a real asset reference); false otherwise.
 	inline bool IsRoomReady()
 	{
 		YYTK::RValue room_id;
 		Aurie::AurieStatus status = MMAPI::Internal::module_interface->GetBuiltin("room", nullptr, NULL_INDEX, room_id);
 		if (!Aurie::AurieSuccess(status))
 			return false;
-		return MMAPI::Engine::IsNumeric(room_id) && room_id.ToDouble() >= 0;
+		// `room` in modern GameMaker comes back as VALUE_REF (an asset reference) when the room
+		// is valid, and VALUE_UNDEFINED / VALUE_UNSET during pre-load transitions. Checking
+		// explicitly for VALUE_REF matches what real game scripts expect downstream.
+		return room_id.m_Kind == YYTK::VALUE_REF;
 	}
 
 	/// Returns the current GM room name.

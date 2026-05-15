@@ -82,7 +82,7 @@ void OnAfterClockUpdate(MMAPI::Calendar::ClockUpdateContext& ctx)
 	if (!AriIsIndoors()) return;
 
 	int64_t old_time = ctx.GetOldTime();
-	int64_t new_time = static_cast<int64_t>(MMAPI::Game::GetCurrentTimeInSeconds());
+	int64_t new_time = static_cast<int64_t>(MMAPI::Calendar::GetCurrentTimeInSeconds());
 	if (new_time == old_time) return;
 
 	// Revert the clock advance by writing the pre-update value back to __clock.time. Raw ref

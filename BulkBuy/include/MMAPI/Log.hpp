@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 AnnaNomoly
+// Mistria Modding API (MMAPI)
+// https://github.com/AnnaNomoly/mistria-modding-api
+
 #pragma once
 
 #include "Core.hpp"
@@ -164,13 +169,32 @@ namespace MMAPI::Log
 			file_failure_reported = true;
 			MMAPI::Internal::module_interface->Print(
 				YYTK::CM_LIGHTYELLOW,
-				"[%s %s] [WARN ] MMAPI log file sink: %s failed for '%s' (error %d: %s) — file logging disabled",
+				"[%s %s] [WARN] MMAPI log file sink: %s failed for '%s' (error %d: %s) — file logging disabled",
 				MMAPI::Internal::mod_name.c_str(),
 				MMAPI::Internal::mod_version.c_str(),
 				what,
 				path.string().c_str(),
 				ec.value(),
 				ec.message().c_str()
+			);
+		}
+
+		// One-shot console warning when TRACE is enabled (level passes the filter) but the File
+		// sink is off — TRACE is file-only by policy, so without File the message is dropped.
+		// Without this warning, a user setting SetLevel(Trace) without SetSinks(... | File) sees
+		// nothing in either sink and has no signal that messages are being silently discarded.
+		inline bool trace_without_file_reported = false;
+
+		inline void ReportTraceWithoutFileSinkOnce()
+		{
+			if (trace_without_file_reported || !MMAPI::Internal::module_interface)
+				return;
+			trace_without_file_reported = true;
+			MMAPI::Internal::module_interface->Print(
+				YYTK::CM_LIGHTYELLOW,
+				"[%s %s] [WARN] MMAPI Log: Trace level is active but File sink is disabled — TRACE messages are being dropped. Call MMAPI::Log::SetSinks(MMAPI::Log::Sinks::Console | MMAPI::Log::Sinks::File) to capture them.",
+				MMAPI::Internal::mod_name.c_str(),
+				MMAPI::Internal::mod_version.c_str()
 			);
 		}
 
@@ -225,7 +249,14 @@ namespace MMAPI::Log
 
 		inline void Dispatch(Level level, const char* message)
 		{
-			if (HasSink(current_sinks, Sinks::Console) && MMAPI::Internal::module_interface)
+			// TRACE is file-only by policy — regardless of Sinks bitmask, TRACE messages never
+			// reach the console. Reserved for high-volume diagnostic plumbing (dependency edges,
+			// individual script-hook installations, etc.) that would drown the console.
+			const bool console_enabled = level != Level::Trace
+				&& HasSink(current_sinks, Sinks::Console)
+				&& MMAPI::Internal::module_interface;
+
+			if (console_enabled)
 			{
 				MMAPI::Internal::module_interface->Print(
 					LevelColor(level),
@@ -239,6 +270,8 @@ namespace MMAPI::Log
 
 			if (HasSink(current_sinks, Sinks::File))
 				WriteTimestampedLine(level, message);
+			else if (level == Level::Trace)
+				ReportTraceWithoutFileSinkOnce();
 		}
 
 		/// Formats the message into a stack buffer and dispatches to active sinks.
@@ -365,7 +398,7 @@ namespace MMAPI::Log
 				std::snprintf(line, sizeof(line), "%s%s %s", prefix.c_str(), connector, node.c_str());
 			else
 				std::snprintf(line, sizeof(line), "%s%s %s (already enabled)", prefix.c_str(), connector, node.c_str());
-			WriteTimestampedLine(Level::Debug, line);
+			WriteTimestampedLine(Level::Trace, line);
 
 			if (!first_visit) return;
 
@@ -392,7 +425,7 @@ namespace MMAPI::Log
 	///
 	/// Intended to be called once after the mod's initialization has settled (typically the
 	/// end of ModuleInitialize). No-op if the File sink is not enabled or current_level is
-	/// above Debug. Console output is never emitted regardless of sink config.
+	/// above Trace. Console output is never emitted regardless of sink config.
 	///
 	/// Sample output:
 	///   === MMAPI Dependency Graph (flat) ===
@@ -406,7 +439,7 @@ namespace MMAPI::Log
 	///   └── MMAPI::Instance
 	inline void DumpDependencyGraphFlat()
 	{
-		if (static_cast<int>(Level::Debug) < static_cast<int>(Internal::current_level))
+		if (static_cast<int>(Level::Trace) < static_cast<int>(Internal::current_level))
 			return;
 		if (!HasSink(Internal::current_sinks, Sinks::File))
 			return;
@@ -415,13 +448,13 @@ namespace MMAPI::Log
 		for (const auto& [_, deps] : Internal::dependency_graph)
 			edge_count += deps.size();
 
-		Internal::WriteTimestampedLine(Level::Debug, "=== MMAPI Dependency Graph (flat) ===");
+		Internal::WriteTimestampedLine(Level::Trace, "=== MMAPI Dependency Graph (flat) ===");
 		char header[128];
 		std::snprintf(header, sizeof(header),
 			"Recorded %zu edges across %zu callers (invocation order)",
 			edge_count, Internal::dependency_graph.size());
-		Internal::WriteTimestampedLine(Level::Debug, header);
-		Internal::WriteTimestampedLine(Level::Debug, "");
+		Internal::WriteTimestampedLine(Level::Trace, header);
+		Internal::WriteTimestampedLine(Level::Trace, "");
 
 		// Iterate the parallel order vector instead of the map so callers appear in the
 		// sequence they first recorded an edge — matches the chronological log entries
@@ -429,7 +462,7 @@ namespace MMAPI::Log
 		for (const auto& caller : Internal::dependency_graph_caller_order)
 		{
 			const auto& deps = Internal::dependency_graph.at(caller);
-			Internal::WriteTimestampedLine(Level::Debug, caller.c_str());
+			Internal::WriteTimestampedLine(Level::Trace, caller.c_str());
 			for (size_t i = 0; i < deps.size(); ++i)
 			{
 				const bool is_last = (i + 1 == deps.size());
@@ -438,9 +471,9 @@ namespace MMAPI::Log
 					"%s %s",
 					is_last ? Internal::kTreeConnectorLast : Internal::kTreeConnectorMid,
 					deps[i].c_str());
-				Internal::WriteTimestampedLine(Level::Debug, line);
+				Internal::WriteTimestampedLine(Level::Trace, line);
 			}
-			Internal::WriteTimestampedLine(Level::Debug, "");
+			Internal::WriteTimestampedLine(Level::Trace, "");
 		}
 	}
 
@@ -460,7 +493,7 @@ namespace MMAPI::Log
 	///
 	/// Intended to be called once after the mod's initialization has settled (typically the
 	/// end of ModuleInitialize). No-op if the File sink is not enabled or current_level is
-	/// above Debug. Console output is never emitted regardless of sink config.
+	/// above Trace. Console output is never emitted regardless of sink config.
 	///
 	/// Sample output:
 	///   === MMAPI Dependency Graph (tree) ===
@@ -477,7 +510,7 @@ namespace MMAPI::Log
 	///   └── MMAPI::Weather (already enabled)
 	inline void DumpDependencyGraphTree()
 	{
-		if (static_cast<int>(Level::Debug) < static_cast<int>(Internal::current_level))
+		if (static_cast<int>(Level::Trace) < static_cast<int>(Internal::current_level))
 			return;
 		if (!HasSink(Internal::current_sinks, Sinks::File))
 			return;
@@ -486,13 +519,13 @@ namespace MMAPI::Log
 		for (const auto& [_, deps] : Internal::dependency_graph)
 			edge_count += deps.size();
 
-		Internal::WriteTimestampedLine(Level::Debug, "=== MMAPI Dependency Graph (tree) ===");
+		Internal::WriteTimestampedLine(Level::Trace, "=== MMAPI Dependency Graph (tree) ===");
 		char header[128];
 		std::snprintf(header, sizeof(header),
 			"Recorded %zu edges across %zu callers (depth-first from each root)",
 			edge_count, Internal::dependency_graph.size());
-		Internal::WriteTimestampedLine(Level::Debug, header);
-		Internal::WriteTimestampedLine(Level::Debug, "");
+		Internal::WriteTimestampedLine(Level::Trace, header);
+		Internal::WriteTimestampedLine(Level::Trace, "");
 
 		// Iterate the caller order vector and render each entry as a top-level subtree IFF it
 		// hasn't already been visited via an earlier expansion. This:
@@ -506,7 +539,7 @@ namespace MMAPI::Log
 				continue;
 
 			visited.insert(caller);
-			Internal::WriteTimestampedLine(Level::Debug, caller.c_str());
+			Internal::WriteTimestampedLine(Level::Trace, caller.c_str());
 
 			const auto& deps = Internal::dependency_graph.at(caller);
 			for (size_t i = 0; i < deps.size(); ++i)
@@ -514,7 +547,7 @@ namespace MMAPI::Log
 				const bool is_last = (i + 1 == deps.size());
 				Internal::RenderDependencySubtree(deps[i], "", is_last, visited);
 			}
-			Internal::WriteTimestampedLine(Level::Debug, "");
+			Internal::WriteTimestampedLine(Level::Trace, "");
 		}
 	}
 }

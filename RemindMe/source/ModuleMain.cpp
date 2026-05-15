@@ -418,7 +418,7 @@ static bool IsAnyFarmAnimalOutside()
 
 static bool ConditionsMatch(const Reminder& r)
 {
-	int current_time = MMAPI::Game::GetCurrentTimeInSeconds();
+	int current_time = MMAPI::Calendar::GetCurrentTimeInSeconds();
 
 	if (r.time_seconds)
 	{
@@ -495,7 +495,7 @@ static void TickReminders()
 	if (MMAPI::Game::IsPaused()) return;
 	if (MMAPI::Cutscene::IsRunning()) return;
 
-	int current_time = MMAPI::Game::GetCurrentTimeInSeconds();
+	int current_time = MMAPI::Calendar::GetCurrentTimeInSeconds();
 	UpdateNpcTrackers(current_time);
 
 	for (Reminder& r : reminders)
@@ -568,7 +568,7 @@ static void OnNpcTick(YYTK::CInstance* npc_instance)
 	if (!MMAPI::Engine::StructVariableExists(npc_rv, "me")) return;
 
 	NpcTracker& tracker = npc_trackers[it->second];
-	tracker.time_last_checked = MMAPI::Game::GetCurrentTimeInSeconds();
+	tracker.time_last_checked = MMAPI::Calendar::GetCurrentTimeInSeconds();
 	tracker.is_nearby         = true;
 }
 
