@@ -35,9 +35,6 @@
     <ClInclude Include="resource.h">
       <Filter>Hlavičkové soubory</Filter>
     </ClInclude>
-    <ClInclude Include="include\nlohmann\json.hpp">
-      <Filter>Hlavičkové soubory</Filter>
-    </ClInclude>
     <ClInclude Include="include\YYToolkit\YYTK_Shared.hpp">
       <Filter>Hlavičkové soubory</Filter>
     </ClInclude>

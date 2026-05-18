@@ -57,7 +57,7 @@ void OnAfterClockUpdate(MMAPI::Calendar::ClockUpdateContext& /*ctx*/)
 {
 	if (notification_sent) return;
 	if (!MMAPI::Calendar::IsWeekday(MMAPI::Calendar::Weekdays::Friday)) return;
-	if (MMAPI::Calendar::GetCurrentTimeInSeconds() < notification_time) return;
+	if (MMAPI::Game::GetCurrentTimeInSeconds() < notification_time) return;
 
 	MMAPI::Game::CreateNotification(/*ignore_cooldown=*/false, VISIT_THE_INN_NOTIFICATION_KEY);
 	notification_sent = true;
