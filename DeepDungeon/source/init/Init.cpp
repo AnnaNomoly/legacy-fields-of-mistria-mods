@@ -91,8 +91,32 @@ EXPORTED AurieStatus ModuleInitialize(
     // Per-tick obj_ari / obj_monster handlers — replaces the legacy single EVENT_OBJECT_CALL
     // dispatcher. MMAPI's internal dispatcher handles null-check, pause-skip, and the
     // INSTANCE_OBJ_ARI latch automatically.
-    MMAPI::Instance::Hooks::OnObjectCall("obj_ari", OnObjAriCall);
-    MMAPI::Instance::Hooks::OnObjectCall("obj_monster", OnObjMonsterCall);
+    MMAPI::Instance::Hooks::OnObjectCall(MMAPI::Instance::Objects::Ari, OnObjAriCall);
+
+    // 0.2.0 removed the umbrella Objects::Monster in favor of per-subtype enums. The
+    // original "obj_monster" string never resolved to a real object — this callback
+    // wasn't firing under bundled 0.1.0. Expanding to every primary monster type
+    // (plus Mimic, which OnObjMonsterCall specializes via monster_id) so the
+    // dispatcher actually delivers ticks now. Excluded:
+    //   - Barrel: a destructible, not a combat monster
+    //   - *Projectile / *Bomb / Bat sonic variants / MiteSecondary / Stars:
+    //     projectiles and secondary effects, no meaningful HP behavior
+    const MMAPI::Instance::Objects monster_types[] = {
+        MMAPI::Instance::Objects::MonsterBat,
+        MMAPI::Instance::Objects::MonsterCat,
+        MMAPI::Instance::Objects::MonsterClod,
+        MMAPI::Instance::Objects::MonsterEnchantern,
+        MMAPI::Instance::Objects::MonsterMimic,
+        MMAPI::Instance::Objects::MonsterMite,
+        MMAPI::Instance::Objects::MonsterRockStack,
+        MMAPI::Instance::Objects::MonsterSap,
+        MMAPI::Instance::Objects::MonsterShroom,
+        MMAPI::Instance::Objects::MonsterSpirit,
+        MMAPI::Instance::Objects::MonsterStatue,
+        MMAPI::Instance::Objects::MonsterTome,
+    };
+    for (auto obj : monster_types)
+        MMAPI::Instance::Hooks::OnObjectCall(obj, OnObjMonsterCall);
     MMAPI::Anchor::Hooks::BeforeBeginStep(BeforeBeginStep);
     MMAPI::NPC::Hooks::AfterFindBlipNoise(AfterFindBlipNoise);
     MMAPI::Equipment::Hooks::AfterGetEquipmentBonus(AfterGetEquipmentBonus);

@@ -302,9 +302,6 @@
     <ClInclude Include="include\magic_enum\magic_enum.hpp">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\nlohmann\json.hpp">
-      <Filter>include</Filter>
-    </ClInclude>
     <ClInclude Include="include\pcg\pcg_extras.hpp">
       <Filter>include</Filter>
     </ClInclude>
