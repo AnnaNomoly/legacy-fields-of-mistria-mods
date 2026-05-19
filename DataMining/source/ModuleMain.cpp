@@ -1,7 +1,9 @@
 #include <map>
 #include <iostream>
 #include <fstream>
+#include <chrono>
 #include <unordered_map>
+#include <excpt.h>
 #include <YYToolkit/YYTK_Shared.hpp> // YYTK v4
 using namespace Aurie;
 using namespace YYTK;
@@ -133,6 +135,23 @@ static void WriteDumpHeader(std::ofstream& outfile, const std::string& descripti
 // entirely and produce the full Dumper.cpp-style depth-bounded tree (cycles included).
 static void DumpInstanceRecursive(std::ofstream& out, const RValue& Instance, int32_t Depth, std::unordered_map<void*, int32_t>* seen);
 static void DumpArrayRecursive(std::ofstream& out, const std::string& Name, const RValue& Value, int32_t Depth, std::unordered_map<void*, int32_t>* seen);
+
+// Pivot: the layered SEH/try-catch/sidecar defenses around the full global dump are kept in
+// the source for reference but disabled. They consistently failed to prevent a hard crash
+// inside __npc_database[33]'s post-walk cleanup path. WriteFullGlobalDump below is now a
+// minimal reference-Dumper.cpp-style walk: depth-limited, no `seen` map (cycles handled by
+// DUMP_MAX_DEPTH alone), no SEH, no try/catch, no sidecar. If it still crashes, we'll know
+// the walk itself is the issue and not anything the defenses were doing.
+#if 0
+static bool TryDumpRValueSafe(std::ofstream& out, int32_t depth, const std::string& name, const RValue& value, std::unordered_map<void*, int32_t>* seen);
+static void WriteSidecarPath(const std::string& current_path);
+
+// File-scope state for the diagnostic sidecar file used by WriteFullGlobalDump. When non-empty,
+// WriteSidecarPath truncate-writes the current dump path to this file at shallow recursion
+// boundaries so a hard crash that escapes SEH still leaves a breadcrumb on disk. WriteGlobalDump
+// (the per-member dumps) doesn't set this, so the sidecar is a no-op for those paths.
+static std::string g_dump_sidecar_path;
+#endif
 
 // Walks the runner's script table to find the CScript whose YYC function pointer matches the one
 // owned by a CScriptRef. Returns nullptr if no match. O(N) over script count; only called for
@@ -284,6 +303,250 @@ static void WriteGlobalDump(const std::string& filename, const char* global_key,
 	DumpRValue(outfile, 0, global_key, val, &seen);
 	outfile << "```\n";
 	outfile.close();
+}
+
+// ---- Disabled defensive infrastructure for the full global dump ----
+//
+// Kept in source for reference but compiled out (#if 0). These were progressively added to
+// survive a hard crash in the full global walk and consistently failed to prevent it:
+//   - TryDumpRValueSeh: SEH __except wrapper. Catches access violations but not C++ exceptions
+//     under /EHsc and not engine fast-fail / TerminateProcess paths.
+//   - TryDumpRValueSafe: C++ try/catch around the SEH wrapper, to catch bad_alloc and similar.
+//   - WriteSidecarPath / g_dump_sidecar_path: a sidecar text file truncate-rewritten at shallow
+//     recursion boundaries so a crash that escaped both layers still left a breadcrumb.
+//   - The previous WriteFullGlobalDump (also disabled below): iterated a ToMap snapshot,
+//     wrapped each top-level member in TryDumpRValueSafe, flushed and updated the sidecar
+//     per member, reported progress on a 5-second cadence.
+//
+// Three diagnostics-grade runs with these in place crashed at three different points
+// (__world_mods, __pad, __npc_database[33]), the last consistently — each crash bypassed
+// every defensive layer. The reference Dumper.cpp from YYTK examples walks instances with
+// nothing more than a depth cap and works on its targets; pivoting WriteFullGlobalDump to
+// that minimal form to see whether the defenses themselves were destabilizing the walk.
+#if 0
+static int TryDumpRValueSeh(
+	std::ofstream* out,
+	int32_t depth,
+	const std::string* name,
+	const RValue* value,
+	std::unordered_map<void*, int32_t>* seen
+)
+{
+	__try
+	{
+		DumpRValue(*out, depth, *name, *value, seen);
+		return 1;
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		return 0;
+	}
+}
+
+// Outer layer of crash protection: C++ try/catch around the SEH wrapper. With /EHsc (this
+// project's default), __except catches structured exceptions like access violations but NOT
+// C++ exceptions. Memory exhaustion in ToVector/ToMap (bad_alloc) is the most plausible way
+// an exception escapes SEH, and that's exactly what was suspected to have killed a 38MB dump
+// mid-__world_mods with no SEH marker written. Two-layer wrapping closes that gap.
+static bool TryDumpRValueSafe(
+	std::ofstream& out,
+	int32_t depth,
+	const std::string& name,
+	const RValue& value,
+	std::unordered_map<void*, int32_t>* seen
+)
+{
+	try
+	{
+		return TryDumpRValueSeh(&out, depth, &name, &value, seen) != 0;
+	}
+	catch (...)
+	{
+		return false;
+	}
+}
+
+// Diagnostic breadcrumb: truncate-writes the path of the value currently being dumped to a
+// sidecar file at top-level and first-level-element boundaries. If a crash escapes both SEH
+// and the C++ catch (process termination, stack-overflow handler unable to allocate), the
+// sidecar file is the last record of where the dumper was. Open-write-close per call so each
+// update is fully flushed to disk before continuing. No-op when g_dump_sidecar_path is empty.
+static void WriteSidecarPath(const std::string& current_path)
+{
+	if (g_dump_sidecar_path.empty()) return;
+	std::ofstream sidecar(g_dump_sidecar_path, std::ios::out | std::ios::trunc);
+	if (sidecar.is_open())
+		sidecar << current_path << "\n";
+}
+
+// Dumps every top-level member of the GameMaker global instance to a single markdown file.
+// This is the most expensive DataMining dump by orders of magnitude (millions of lines for a
+// fully-loaded save), so progress is reported to the YYTK console roughly every 5 seconds with
+// elapsed and estimated-remaining time.
+//
+// Iteration strategy: hold the ToMap snapshot alive for the entire walk; deferring all RValue
+// destructors to one batch at function exit. We tried fetching a fresh RValue via GetMember
+// per iteration (mirroring WriteGlobalDump exactly); that crashed inside __npc_database[33]
+// while the standalone WriteGlobalDump on the same data — called immediately before — finished
+// cleanly. The difference is that the per-iteration variant runs the RValue destructor (which
+// calls FREE_RValue into the GML runtime) hundreds of times in sequence; the snapshot variant
+// runs them in one batch at the end. Whatever cumulative state pressure that destructor churn
+// puts on GML's allocator is what's tipping it over, so we avoid creating it.
+//
+// `seen` is still per-member (fresh per top-level), since the shared seen map across members
+// is a known cycle-detection-vs-realloc hazard and the per-walk cost of cross-member dedup
+// isn't worth it for a diagnostic dump.
+//
+// Crash protection has three layers, in case any individual member dump goes bad anyway:
+//   1. SEH (__except) catches access violations and similar structured exceptions.
+//   2. A C++ try/catch around the SEH wrapper catches bad_alloc and other std exceptions.
+//   3. A sidecar text file is open-truncate-written at top-level and first-level-element
+//      boundaries so even a hard process termination (engine fast-fail) leaves a breadcrumb.
+// The ofstream is also flushed after every top-level member so the partial dump survives.
+static void WriteFullGlobalDump(const std::string& filename, const std::string& description)
+{
+	CInstance* global_instance = nullptr;
+	g_ModuleInterface->GetGlobalInstance(&global_instance);
+	if (!global_instance) return;
+
+	std::string path = data_mining_folder + "\\" + filename;
+	std::remove(path.c_str());
+	std::ofstream outfile(path, std::ios::out);
+	if (!outfile.is_open()) return;
+
+	// Sidecar lives next to the dump file and shares its base name with a ".current.txt" suffix.
+	// Cleared up front so a stale breadcrumb from a previous successful run can't mislead.
+	g_dump_sidecar_path = path + ".current.txt";
+	std::remove(g_dump_sidecar_path.c_str());
+
+	// One-shot snapshot of all top-level members. The RValues inside live until this function
+	// returns; their destructors run in one batch at end of scope, not per-iteration. See the
+	// big comment above for why that matters.
+	RValue global_rval = global_instance->ToRValue();
+	auto members = global_rval.ToMap();
+	const size_t total = members.size();
+
+	WriteDumpHeader(outfile, description);
+	outfile << "```\n";
+
+	const auto start_time = std::chrono::steady_clock::now();
+	auto last_log = start_time;
+	size_t done = 0;
+
+	g_ModuleInterface->Print(CM_LIGHTAQUA,
+		"[%s %s] - Full global dump started (%zu top-level members, expect large output)",
+		MOD_NAME, VERSION, total);
+
+	size_t failed = 0;
+	for (const auto& [name, value] : members)
+	{
+		WriteSidecarPath(name);
+
+		// Fresh seen map per member: prevents cycle-detection from pointing into memory that
+		// was freed and reused since an earlier top-level walk recorded it.
+		std::unordered_map<void*, int32_t> seen;
+
+		if (!TryDumpRValueSafe(outfile, 0, name, value, &seen))
+		{
+			outfile << " - !! Crashed while dumping " << name << " !!\n";
+			g_ModuleInterface->Print(CM_LIGHTRED,
+				"[%s %s] - SEH/C++ exception while dumping global member '%s', skipping",
+				MOD_NAME, VERSION, name.c_str());
+			failed++;
+		}
+		done++;
+
+		// Flush after each member so partial output survives a hard crash. The cost is small
+		// (once per top-level member, not per row), and being able to see which member was
+		// being dumped at the time of a crash is invaluable for diagnostics.
+		outfile.flush();
+
+		// Report progress when it's been at least ~5 seconds since the last log line. Coarser
+		// than per-member because some members (e.g. __npc_database) take noticeably longer
+		// than others and we don't want a wall of console spam from the cheap ones.
+		auto now = std::chrono::steady_clock::now();
+		auto since_last_log = std::chrono::duration_cast<std::chrono::seconds>(now - last_log).count();
+		if (since_last_log >= 5 && done < total)
+		{
+			auto elapsed_sec = std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count();
+			int64_t est_total_sec = (done > 0) ? (elapsed_sec * static_cast<int64_t>(total) / static_cast<int64_t>(done)) : 0;
+			int64_t est_remaining_sec = est_total_sec - elapsed_sec;
+			int percent = static_cast<int>((done * 100) / total);
+			g_ModuleInterface->Print(CM_LIGHTAQUA,
+				"[%s %s] - Full global dump progress: %zu/%zu (%d%%), elapsed %llds, est. remaining %llds, just finished '%s'",
+				MOD_NAME, VERSION, done, total, percent,
+				static_cast<long long>(elapsed_sec), static_cast<long long>(est_remaining_sec),
+				name.c_str());
+			last_log = now;
+		}
+	}
+
+	outfile << "```\n";
+	outfile.close();
+
+	// Reaching this point means the loop completed without process termination, so the sidecar
+	// is no longer useful — remove it and clear the path so DumpArrayRecursive stops writing.
+	// Any future call to WriteFullGlobalDump will set it again. (If the process crashes inside
+	// the loop, neither runs, and the last sidecar contents stay on disk as the breadcrumb.)
+	std::remove(g_dump_sidecar_path.c_str());
+	g_dump_sidecar_path.clear();
+
+	auto end_time = std::chrono::steady_clock::now();
+	auto total_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+	if (failed > 0)
+	{
+		g_ModuleInterface->Print(CM_LIGHTYELLOW,
+			"[%s %s] - Full global dump complete with skips: %zu/%zu members succeeded (%zu skipped due to SEH/C++) in %lld ms",
+			MOD_NAME, VERSION, total - failed, total, failed, static_cast<long long>(total_ms));
+	}
+	else
+	{
+		g_ModuleInterface->Print(CM_LIGHTGREEN,
+			"[%s %s] - Full global dump complete: %zu top-level members in %lld ms",
+			MOD_NAME, VERSION, total, static_cast<long long>(total_ms));
+	}
+}
+#endif // disabled defensive WriteFullGlobalDump
+
+// Minimal reference-Dumper.cpp-style full global dump. Writes every top-level member of the
+// GameMaker global instance to one markdown file, depth-capped via DUMP_MAX_DEPTH, no
+// `seen` map (cycles are truncated by the depth cap), no SEH, no try/catch, no sidecar.
+//
+// Rationale for the bare-bones approach: see the long #if 0 block above for what's been
+// tried and disabled. The reference dumper's bare style works on its targets; if it crashes
+// here too, the issue is something fundamental about walking `global` that no amount of
+// wrapper machinery can paper over (in which case the next move is a denylist of top-level
+// member names that are known to be unsafe to walk).
+static void WriteFullGlobalDump(const std::string& filename, const std::string& description)
+{
+	CInstance* global_instance = nullptr;
+	g_ModuleInterface->GetGlobalInstance(&global_instance);
+	if (!global_instance) return;
+
+	std::string path = data_mining_folder + "\\" + filename;
+	std::remove(path.c_str());
+	std::ofstream outfile(path, std::ios::out);
+	if (!outfile.is_open()) return;
+
+	WriteDumpHeader(outfile, description);
+	outfile << "```\n";
+
+	RValue global_rval = global_instance->ToRValue();
+	auto members = global_rval.ToMap();
+
+	g_ModuleInterface->Print(CM_LIGHTAQUA,
+		"[%s %s] - Full global dump started (%zu top-level members, expect large output)",
+		MOD_NAME, VERSION, members.size());
+
+	for (const auto& [name, value] : members)
+		DumpRValue(outfile, 0, name, value, nullptr);
+
+	outfile << "```\n";
+	outfile.close();
+
+	g_ModuleInterface->Print(CM_LIGHTGREEN,
+		"[%s %s] - Full global dump complete: %zu top-level members",
+		MOD_NAME, VERSION, members.size());
 }
 
 RValue GetLocalizedString(CInstance* Self, CInstance* Other, std::string localization_key)
@@ -688,6 +951,11 @@ RValue& GmlScriptGetWeatherCallback(
 		WriteGlobalDump("pet.md",          "__pet",          "Pet singleton state (populated after the player acquires a pet)");
 		WriteGlobalDump("grids.md",        "__grids",        "Live grid instance state (only present for locations the player has entered this session)");
 		WriteGlobalDump("npc_database.md", "__npc_database", "Per-NPC runtime database (populated once the world has loaded)");
+
+		// Comprehensive dump of every member of the global instance. Slow (multi-MB output)
+		// and intentionally runs last so all the focused per-key dumps finish first. Progress
+		// is reported to the YYTK console.
+		WriteFullGlobalDump("global_namespace_dump.md", "Recursive dump of every member of the GameMaker global instance");
 	}
 
 	return Result;
