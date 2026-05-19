@@ -375,7 +375,28 @@ EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path&
 	MMAPI::Damage::Hooks::BeforeDamage(OnBeforeDamage);
 	MMAPI::Monster::Hooks::BeforeMonsterSpawn(OnBeforeMonsterSpawn);
 	MMAPI::Location::Hooks::AfterGoToRoom(OnAfterGoToRoom);
-	MMAPI::Instance::Hooks::OnObjectCall(MMAPI::Instance::Objects::Monster, OnMonsterTick);
+	// Subscribe to every primary monster object type. 0.2.0 removed the umbrella
+	// Objects::Monster in favor of per-subtype enums; we expand the registration
+	// here. Excluded:
+	//   - Barrel: a destructible, not a combat monster
+	//   - *Projectile / *Bomb / Bat sonic variants / MiteSecondary: projectiles
+	//     and secondary effects, no meaningful aggro or HP behavior for sigils
+	const MMAPI::Instance::Objects monster_types[] = {
+		MMAPI::Instance::Objects::MonsterBat,
+		MMAPI::Instance::Objects::MonsterCat,
+		MMAPI::Instance::Objects::MonsterClod,
+		MMAPI::Instance::Objects::MonsterEnchantern,
+		MMAPI::Instance::Objects::MonsterMimic,
+		MMAPI::Instance::Objects::MonsterMite,
+		MMAPI::Instance::Objects::MonsterRockStack,
+		MMAPI::Instance::Objects::MonsterSap,
+		MMAPI::Instance::Objects::MonsterShroom,
+		MMAPI::Instance::Objects::MonsterSpirit,
+		MMAPI::Instance::Objects::MonsterStatue,
+		MMAPI::Instance::Objects::MonsterTome,
+	};
+	for (auto obj : monster_types)
+		MMAPI::Instance::Hooks::OnObjectCall(obj, OnMonsterTick);
 
 	MMAPI::Log::Info("Plugin started!");
 	return AURIE_SUCCESS;
