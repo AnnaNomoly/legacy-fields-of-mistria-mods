@@ -1042,8 +1042,35 @@ EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path&
 	MMAPI::Weather::Hooks::AfterRoomStart(OnAfterRoomStart);
 	MMAPI::Weather::Hooks::AfterGetWeather(OnAfterGetWeather);
 	MMAPI::Display::Hooks::AfterDisplayResize(OnAfterDisplayResize);
-	MMAPI::Instance::Hooks::OnObjectCall(MMAPI::Instance::Objects::Ari,     OnAriTick);
-	MMAPI::Instance::Hooks::OnObjectCall(MMAPI::Instance::Objects::Monster, OnMonsterTick);
+	MMAPI::Instance::Hooks::OnObjectCall(MMAPI::Instance::Objects::Ari, OnAriTick);
+
+	// Subscribe to every concrete monster object type except Barrel (a destructible,
+	// not a defeated-in-combat enemy). 0.2.0 removed the umbrella Objects::Monster
+	// in favor of per-subtype enums; we expand the registration here.
+	const MMAPI::Instance::Objects monster_types[] = {
+		MMAPI::Instance::Objects::MonsterBat,
+		MMAPI::Instance::Objects::MonsterBatSonicAttack,
+		MMAPI::Instance::Objects::MonsterBatSonicBoom,
+		MMAPI::Instance::Objects::MonsterCat,
+		MMAPI::Instance::Objects::MonsterClod,
+		MMAPI::Instance::Objects::MonsterClodBomb,
+		MMAPI::Instance::Objects::MonsterClodProjectile,
+		MMAPI::Instance::Objects::MonsterEnchantern,
+		MMAPI::Instance::Objects::MonsterEnchanternProjectile,
+		MMAPI::Instance::Objects::MonsterMimic,
+		MMAPI::Instance::Objects::MonsterMite,
+		MMAPI::Instance::Objects::MonsterMiteSecondary,
+		MMAPI::Instance::Objects::MonsterRockStack,
+		MMAPI::Instance::Objects::MonsterSap,
+		MMAPI::Instance::Objects::MonsterShroom,
+		MMAPI::Instance::Objects::MonsterSpirit,
+		MMAPI::Instance::Objects::MonsterSpiritProjectile,
+		MMAPI::Instance::Objects::MonsterStars,
+		MMAPI::Instance::Objects::MonsterStatue,
+		MMAPI::Instance::Objects::MonsterTome,
+	};
+	for (auto obj : monster_types)
+		MMAPI::Instance::Hooks::OnObjectCall(obj, OnMonsterTick);
 
 	MMAPI::Log::DumpDependencyGraphTree();
 	MMAPI::Log::Info("Plugin started!");
