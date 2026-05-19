@@ -429,8 +429,32 @@ EXPORTED AurieStatus ModuleInitialize(IN AurieModule* Module, IN const fs::path&
 	MMAPI::Spell::Hooks::BeforeSpellCast(OnBeforeSpellCast);
 	MMAPI::Spell::Hooks::AfterSpellCast(OnAfterSpellCast);
 	MMAPI::Player::Hooks::BeforeManaChange(OnBeforeManaChange);
-	MMAPI::Instance::Hooks::OnObjectCall(MMAPI::Instance::Objects::Ari,          OnAriTick);
-	MMAPI::Instance::Hooks::OnObjectCall(MMAPI::Instance::Objects::Monster,      OnMonsterTick);
+	MMAPI::Instance::Hooks::OnObjectCall(MMAPI::Instance::Objects::Ari, OnAriTick);
+
+	// Subscribe to every primary monster object type except MonsterMimic — that one
+	// has a dedicated handler below that respects `config.ignore_mimics`. 0.2.0
+	// removed the umbrella Objects::Monster in favor of per-subtype enums; we
+	// expand the registration here. Excluded:
+	//   - Barrel: a destructible, not a combat monster
+	//   - MonsterMimic: dedicated handler below
+	//   - *Projectile / *Bomb / Bat sonic variants / MiteSecondary / Stars:
+	//     projectiles and secondary effects, no meaningful HP behavior to damage
+	const MMAPI::Instance::Objects monster_types[] = {
+		MMAPI::Instance::Objects::MonsterBat,
+		MMAPI::Instance::Objects::MonsterCat,
+		MMAPI::Instance::Objects::MonsterClod,
+		MMAPI::Instance::Objects::MonsterEnchantern,
+		MMAPI::Instance::Objects::MonsterMite,
+		MMAPI::Instance::Objects::MonsterRockStack,
+		MMAPI::Instance::Objects::MonsterSap,
+		MMAPI::Instance::Objects::MonsterShroom,
+		MMAPI::Instance::Objects::MonsterSpirit,
+		MMAPI::Instance::Objects::MonsterStatue,
+		MMAPI::Instance::Objects::MonsterTome,
+	};
+	for (auto obj : monster_types)
+		MMAPI::Instance::Hooks::OnObjectCall(obj, OnMonsterTick);
+
 	MMAPI::Instance::Hooks::OnObjectCall(MMAPI::Instance::Objects::MonsterMimic, OnMonsterMimicTick);
 
 	MMAPI::Log::Info("Plugin started!");
