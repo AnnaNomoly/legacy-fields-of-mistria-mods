@@ -1,4 +1,8 @@
-# Fields of Mistria Mods
+# (Legacy) Fields of Mistria Mods
+
+> [!CAUTION]
+> This repository has been **deprecated and archived**. It contains code for the old "legacy" game engine. It will no longer receive updates. For current mods see my [fields-of-mistria-mods](https://github.com/AnnaNomoly/fields-of-mistria-mods) repository instead.
+
 This repository is a collection of my mods for [Fields of Mistria](https://store.steampowered.com/app/2142790/Fields_of_Mistria/) that use [YYTK](https://github.com/AurieFramework/YYToolkit) and [Aurie](https://github.com/AurieFramework/Aurie) to dynamically inject code into GameMaker games built using the YoYo Compiler at runtime. For more information about these technologies see the [Frequently Asked Questions](#frequently-asked-questions) section.
 
 ## Mod Status
